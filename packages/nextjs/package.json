@@ -1,0 +1,13 @@
+{
+  "name": "mesh-nextjs",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "peerDependencies": {
+    "@jwhenry123/mesh": "workspace:*",
+    "react": "^19.3.0"
+  }
+}

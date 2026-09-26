@@ -1,0 +1,20 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ESNext", "DOM", "WebWorker"],
+    "strict": true,
+    "noEmit": true,
+    "isolatedModules": true,
+    "jsx": "react-jsx",
+    "skipLibCheck": true,
+    "paths": {
+      "@jwhenry123/mesh/react": ["../react/src/index.ts"],
+      "@jwhenry123/mesh/sdk": ["../../src/sdk/index.ts"],
+      "@jwhenry123/mesh/sdk/*": ["../../src/sdk/*"],
+      "react": ["../../node_modules/@types/react/index.d.ts"]
+    }
+  },
+  "include": ["src", "../react/src"]
+}

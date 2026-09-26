@@ -1,0 +1,76 @@
+# Builds the docs sites + static framework examples and deploys the assembled
+# dist-pages/ tree to GitHub Pages:
+#   /           docs site
+#   /react/ …   framework demo builds (embedded by docs iframes)
+#   /consumer/  docs-consumer site (+ its own demo mounts)
+#
+# NOTE: GitHub Pages cannot set COOP/COEP response headers, so
+# SharedArrayBuffer is unavailable there — the embedded live demos and the
+# in-page playground will not run on Pages. The docs content deploys fine.
+name: Deploy docs to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/**'
+      - 'docs-consumer/**'
+      - 'examples/**'
+      - 'packages/**'
+      - 'src/sdk/**'
+      - 'scripts/**'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            docs/package-lock.json
+            docs-consumer/package-lock.json
+            examples/react/package-lock.json
+            examples/vue/package-lock.json
+            examples/solid/package-lock.json
+            examples/svelte/package-lock.json
+            examples/angular/package-lock.json
+
+      - name: Install dependencies
+        run: |
+          set -e
+          for d in docs docs-consumer examples/react examples/vue examples/solid examples/svelte examples/angular; do
+            echo "=== npm ci: $d ==="
+            (cd "$d" && npm ci)
+          done
+
+      - name: Build and assemble Pages artifact
+        run: node scripts/build-pages.mjs
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist-pages
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

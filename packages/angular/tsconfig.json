@@ -1,0 +1,20 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ESNext", "DOM", "WebWorker"],
+    "strict": true,
+    "noEmit": true,
+    "isolatedModules": true,
+    "experimentalDecorators": true,
+    "skipLibCheck": true,
+    "paths": {
+      "@jwhenry123/mesh/sdk": ["../../src/sdk/index.ts"],
+      "@jwhenry123/mesh/sdk/*": ["../../src/sdk/*"],
+      "@angular/core": ["../../examples/angular/node_modules/@angular/core/types/core.d.ts"],
+      "tslib": ["../../examples/angular/node_modules/tslib/tslib.d.ts"]
+    }
+  },
+  "include": ["src"]
+}

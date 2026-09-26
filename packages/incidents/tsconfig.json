@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ESNext", "DOM", "WebWorker"],
+    "strict": true,
+    "noEmit": true,
+    "isolatedModules": true,
+    "skipLibCheck": true,
+    "paths": {
+      "@jwhenry123/mesh/sdk": ["../../src/sdk/index.ts"],
+      "@jwhenry123/mesh/sdk/*": ["../../src/sdk/*"]
+    }
+  },
+  "include": ["src"]
+}

@@ -1,0 +1,96 @@
+@if (!ready()) {
+  <main>
+    <h1>Telecom Incident Explorer</h1>
+    <p class="subtitle">Seeding 1,000,000 incident records into shared memory…</p>
+    <div class="progress"><div class="progress-fill" [style.width.%]="seedProgress()"></div></div>
+    <p class="subtitle">{{ fmtInt(seedProgress()) }}% — {{ fmtInt(seedProgress() * 10_000) }} records</p>
+  </main>
+} @else {
+  <main class="wide">
+    <h1>Telecom Incident Explorer</h1>
+    <p class="subtitle">
+      {{ fmtInt(total()) }} fixed-layout records in shared memory — the worker filters, sorts, and aggregates;
+      only the visible page crosses postMessage.
+    </p>
+
+    <div class="metrics">
+      <div class="metric"><span class="metric-value">{{ metrics() ? fmtInt(metrics()!.total) : '—' }}</span><span>total</span></div>
+      <div class="metric"><span class="metric-value st-open">{{ metrics() ? fmtInt(metrics()!.open) : '—' }}</span><span>open</span></div>
+      <div class="metric"><span class="metric-value st-ack">{{ metrics() ? fmtInt(metrics()!.acknowledged) : '—' }}</span><span>acknowledged</span></div>
+      <div class="metric"><span class="metric-value st-resolved">{{ metrics() ? fmtInt(metrics()!.resolved) : '—' }}</span><span>resolved</span></div>
+      <div class="metric"><span class="metric-value sev-critical">{{ metrics() ? fmtInt(metrics()!.critical) : '—' }}</span><span>critical</span></div>
+      <div class="metric"><span class="metric-value">{{ metrics() ? fmtInt(metrics()!.customersAffected) : '—' }}</span><span>customers</span></div>
+      <div class="metric"><span class="metric-value">{{ metrics() ? fmtDur(metrics()!.avgDurationMin) : '—' }}</span><span>avg duration</span></div>
+    </div>
+    @if (metrics(); as m) {
+      <p class="subtitle">metrics aggregated by worker in {{ m.scanMs.toFixed(0) }}ms{{ timing() ? ' · last query: ' + timing() : '' }}</p>
+    }
+
+    <div class="toolbar">
+      <select [value]="severity()" (change)="onFilter(severity, $event)">
+        <option value="">all severities</option>
+        @for (s of SEVERITIES; track s; let i = $index) {
+          <option [value]="i">{{ s }}</option>
+        }
+      </select>
+      <select [value]="status()" (change)="onFilter(status, $event)">
+        <option value="">all statuses</option>
+        @for (s of STATUSES; track s; let i = $index) {
+          <option [value]="i">{{ s }}</option>
+        }
+      </select>
+      <select [value]="region()" (change)="onFilter(region, $event)">
+        <option value="">all regions</option>
+        @for (s of REGIONS; track s; let i = $index) {
+          <option [value]="i">{{ s }}</option>
+        }
+      </select>
+      <select [value]="service()" (change)="onFilter(service, $event)">
+        <option value="">all services</option>
+        @for (s of SERVICES; track s; let i = $index) {
+          <option [value]="i">{{ s }}</option>
+        }
+      </select>
+      <input type="text" placeholder="search site…" [value]="search()" (input)="onSearch($event)" />
+      <span class="filtered">{{ fmtInt(filtered()) }} matching{{ isFetching() ? ' · updating…' : '' }}</span>
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          @for (col of columns; track col.key) {
+            <th class="sortable" (click)="toggleSort(col.key)">
+              {{ col.label }}@if (sortBy() === col.key) {{{ sortDesc() ? ' ▼' : ' ▲' }}}
+            </th>
+          }
+        </tr>
+      </thead>
+      <tbody>
+        @for (row of rows(); track row.id) {
+          <tr>
+            @for (col of columns; track col.key) {
+              <td>
+                @if (col.badge) {
+                  <span class="badge" [class]="'badge ' + col.badge(row)">{{ col.text(row) }}</span>
+                } @else {
+                  {{ col.text(row) }}
+                }
+              </td>
+            }
+          </tr>
+        }
+      </tbody>
+    </table>
+
+    <div class="pager">
+      <button (click)="prevPage()" [disabled]="pageIndex() === 0">‹ prev</button>
+      <span>page {{ pageIndex() + 1 }} / {{ pageCount() }}</span>
+      <button (click)="nextPage()" [disabled]="pageIndex() >= pageCount() - 1">next ›</button>
+      <select [value]="pageSize()" (change)="onPageSize($event)">
+        @for (s of pageSizes; track s) {
+          <option [value]="s">{{ s }} / page</option>
+        }
+      </select>
+    </div>
+  </main>
+}

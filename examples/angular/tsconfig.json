@@ -1,0 +1,33 @@
+{
+  "compileOnSave": false,
+  "compilerOptions": {
+    "rootDir": "../..",
+    "outDir": "./dist/out-tsc",
+    "strict": true,
+    "noImplicitOverride": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "sourceMap": true,
+    "declaration": false,
+    "experimentalDecorators": true,
+    "importHelpers": true,
+    "target": "ES2022",
+    "module": "ES2022",
+    "moduleResolution": "bundler",
+    "lib": ["ESNext", "dom", "webworker"],
+    "skipLibCheck": true,
+    "paths": {
+      "@jwhenry123/mesh/angular": ["../../packages/angular/src/index.ts"],
+      "@angular/core": ["./node_modules/@angular/core"],
+      "tslib": ["./node_modules/tslib"],
+      "@jwhenry123/mesh/incidents": ["../../packages/incidents/src/index.ts"],
+      "@jwhenry123/mesh/sdk": ["../../src/sdk/index.ts"],
+      "@jwhenry123/mesh/sdk/*": ["../../src/sdk/*"]
+    }
+  },
+  "angularCompilerOptions": {
+    "strictInjectionParameters": true,
+    "strictInputAccessModifiers": true,
+    "strictTemplates": true
+  }
+}

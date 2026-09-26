@@ -1,0 +1,13 @@
+{
+  "name": "mesh-angular",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "peerDependencies": {
+    "@angular/core": "^22.2.0",
+    "@jwhenry123/mesh": "workspace:*"
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "name": "mesh-incidents",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "peerDependencies": {
+    "@jwhenry123/mesh": "workspace:*",
+    "zod": "^4.6.5"
+  }
+}
