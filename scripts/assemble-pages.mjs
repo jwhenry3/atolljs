@@ -1,16 +1,18 @@
 // Assembles the GitHub Pages artifact into dist-pages/:
 //
 //   dist-pages/
-//     index.html                  docs site (site root)
-//     react/ vue/ solid/ svelte/ angular/   demos embedded by docs iframes
+//     index.html                  landing page (pages-landing/)
+//     sdk/                        docs site
+//       react/ vue/ solid/ svelte/ angular/   demos embedded by docs iframes
 //     consumer/                   docs-consumer site
-//       react/ vue/ solid/ svelte/ angular/ demos embedded by consumer iframes
+//       react/ vue/ solid/ svelte/ angular/   demos embedded by consumer iframes
 //     .nojekyll                   skip Jekyll processing
-//     404.html                    copy of the docs index (deep-link fallback)
+//     404.html                    copy of the landing page (deep-link fallback)
 //
 // Both docs apps embed demos via relative ./<id>/ iframe URLs, so demos are
 // mounted inside each site's own folder — the tree works under any Pages
-// base path (user.github.io/<repo>/).
+// base path (user.github.io/<repo>/). The landing page likewise links to
+// ./sdk/ and ./consumer/ relatively.
 //
 // Usage: node scripts/assemble-pages.mjs   (run after `npm run build` in each app)
 import { cpSync, existsSync, rmSync, writeFileSync, copyFileSync } from 'node:fs';
@@ -20,6 +22,7 @@ import { join } from 'node:path';
 const root = fileURLToPath(new URL('..', import.meta.url));
 const out = join(root, 'dist-pages');
 
+const landingSrc = join(root, 'pages-landing');
 const docsSrc = join(root, 'docs/dist');
 const consumerSrc = join(root, 'docs-consumer/dist');
 const demos = [
@@ -36,6 +39,10 @@ for (const dir of [docsSrc, consumerSrc]) {
     process.exit(1);
   }
 }
+if (!existsSync(join(landingSrc, 'index.html'))) {
+  console.error('assemble-pages: pages-landing/index.html missing');
+  process.exit(1);
+}
 for (const [, dir] of demos) {
   if (!existsSync(join(root, dir))) {
     console.error(`assemble-pages: ${dir} missing — build it first`);
@@ -44,19 +51,19 @@ for (const [, dir] of demos) {
 }
 
 rmSync(out, { recursive: true, force: true });
-cpSync(docsSrc, out, { recursive: true });
-console.log('mounted docs/dist -> dist-pages/');
+cpSync(landingSrc, out, { recursive: true });
+console.log('mounted pages-landing/ -> dist-pages/');
 
 for (const [name, dir] of demos) {
-  cpSync(join(root, dir), join(out, name), { recursive: true });
+  cpSync(join(root, dir), join(out, 'sdk', name), { recursive: true });
 }
-console.log('mounted demos -> dist-pages/<name>/');
+cpSync(docsSrc, join(out, 'sdk'), { recursive: true });
+console.log('mounted docs/dist -> dist-pages/sdk/ (+ demos)');
 
-const consumerOut = join(out, 'consumer');
-cpSync(consumerSrc, consumerOut, { recursive: true });
 for (const [name, dir] of demos) {
-  cpSync(join(root, dir), join(consumerOut, name), { recursive: true });
+  cpSync(join(root, dir), join(out, 'consumer', name), { recursive: true });
 }
+cpSync(consumerSrc, join(out, 'consumer'), { recursive: true });
 console.log('mounted docs-consumer/dist -> dist-pages/consumer/ (+ demos)');
 
 // .nojekyll: serve everything as-is; 404.html: GitHub Pages serves it for

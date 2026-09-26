@@ -1,7 +1,7 @@
 # Builds the docs sites + static framework examples and deploys the assembled
 # dist-pages/ tree to GitHub Pages:
-#   /           docs site
-#   /react/ …   framework demo builds (embedded by docs iframes)
+#   /           landing page (links to both docs sites)
+#   /sdk/       docs site (+ demo mounts embedded by its iframes)
 #   /consumer/  docs-consumer site (+ its own demo mounts)
 #
 # NOTE: GitHub Pages cannot set COOP/COEP response headers, so

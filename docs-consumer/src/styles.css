@@ -34,6 +34,18 @@ code { font-family: 'Cascadia Code', 'JetBrains Mono', Consolas, monospace; font
   margin-bottom: 20px;
 }
 .brand-sub { color: var(--muted); font-weight: 400; margin-left: 6px; font-size: 0.85rem; }
+.site-switch {
+  width: 100%;
+  margin: -10px 0 20px;
+  padding: 5px 8px;
+  background: var(--panel);
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font: inherit;
+  font-size: 0.8rem;
+}
+.site-switch:hover, .site-switch:focus { border-color: var(--accent); color: var(--text); }
 .nav-section { margin-bottom: 18px; }
 .nav-section h3 {
   font-size: 0.7rem;

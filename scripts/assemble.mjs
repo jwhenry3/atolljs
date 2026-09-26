@@ -1,7 +1,7 @@
 // Copies each built app into dist/<name>/ under the root dist, so one static
 // server can reach every app's index.html by path:
 //   /            root dashboard (dist/index.html)
-//   /docs/       docs site
+//   /sdk/        docs site        /consumer/   docs-consumer site
 //   /react/ /vue/ /solid/ /svelte/ /angular/   framework examples
 // (Next.js is server-rendered — it isn't copied; `next start` serves it.)
 import { cpSync, existsSync, rmSync } from 'node:fs';
@@ -11,8 +11,8 @@ import { join } from 'node:path';
 const root = fileURLToPath(new URL('..', import.meta.url));
 
 const mounts = [
-  ['docs', 'docs/dist'],
-  ['docs-consumer', 'docs-consumer/dist'],
+  ['sdk', 'docs/dist'],
+  ['consumer', 'docs-consumer/dist'],
   ['react', 'examples/react/dist'],
   ['vue', 'examples/vue/dist'],
   ['solid', 'examples/solid/dist'],
@@ -39,7 +39,7 @@ for (const [name, dir] of mounts) {
 
 // The docs sites embed the framework demos via relative ./<id>/ iframe URLs,
 // so each docs mount also gets its own copy of the demo builds.
-const docsSites = ['docs', 'docs-consumer'];
+const docsSites = ['sdk', 'consumer'];
 const demoDirs = mounts.filter(([name]) => !docsSites.includes(name));
 for (const site of docsSites) {
   for (const [name, dir] of demoDirs) {

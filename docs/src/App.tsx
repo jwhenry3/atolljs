@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
+import { SiteSwitch } from './components/SiteSwitch';
 import { FRAMEWORKS } from './frameworks';
 import { FrameworkPage } from './pages/FrameworkPage';
 import { Isolation } from './pages/Isolation';
@@ -66,6 +67,7 @@ export function App() {
         <a className="brand" href="#/overview">
           mesh<span className="brand-sub">sdk docs</span>
         </a>
+        <SiteSwitch current="sdk" />
         {SECTIONS.map((section) => (
           <nav key={section.label} className="nav-section">
             <h3>{section.label}</h3>

@@ -12,8 +12,8 @@ interface Demo {
 }
 
 const FRAMEWORKS = [
-  { id: 'docs', name: 'Docs', port: 4180, detail: 'SDK docs, guides & live playground' },
-  { id: 'docs-consumer', name: 'Package Docs', port: 4181, detail: 'npm consumer guide & API reference' },
+  { id: 'sdk', name: 'SDK Docs', port: 4180, detail: 'SDK internals, guides & live playground' },
+  { id: 'consumer', name: 'Package Docs', port: 4181, detail: 'npm consumer guide & API reference' },
   { id: 'react', name: 'React', port: 5173, detail: 'useSyncExternalStore hooks + TanStack Table' },
   { id: 'vue', name: 'Vue', port: 5174, detail: 'Composition API refs + watchers' },
   { id: 'solid', name: 'SolidJS', port: 5175, detail: 'Signals + reactive effects' },
