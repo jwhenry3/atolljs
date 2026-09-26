@@ -42,6 +42,7 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: |
+            package-lock.json
             docs/package-lock.json
             docs-consumer/package-lock.json
             examples/react/package-lock.json
@@ -53,6 +54,10 @@ jobs:
       - name: Install dependencies
         run: |
           set -e
+          # Root deps first: every project aliases @jwhenry123/mesh/* to the
+          # root source tree, whose imports (react, zod, msgpackr, solid-js,
+          # node:* types) resolve upward to the root node_modules.
+          npm ci
           for d in docs docs-consumer examples/react examples/vue examples/solid examples/svelte examples/angular; do
             echo "=== npm ci: $d ==="
             (cd "$d" && npm ci)
