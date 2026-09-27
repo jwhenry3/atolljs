@@ -1,0 +1,50 @@
+# Publish — creating a GitHub Release publishes every package at the
+# release tag's version (lockstep; repo files keep version "0.0.0" — the
+# release artifact carries the stamped version).
+#
+# Auth: a granular NPM_TOKEN repo secret (Settings → Secrets → Actions).
+# id-token: write is still granted so `npm publish --provenance` can
+# attach Sigstore provenance to each package.
+name: Publish
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # npm provenance
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            examples/nestjs/package-lock.json
+            examples/nextjs/package-lock.json
+
+      - name: Install dependencies
+        run: |
+          set -e
+          npm ci
+          # e2e suites exercise the real example toolchains
+          (cd examples/nestjs && npm ci)
+          (cd examples/nextjs && npm ci)
+
+      - name: Test — all suites (don't publish a red tree)
+        run: npx vitest run
+
+      - name: Build core package (dist/index.js + index.d.ts)
+        run: npx vite build && npx tsc -p tsconfig.build.json
+
+      - name: Stamp versions + publish all packages
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: node scripts/publish.mjs "${{ github.event.release.tag_name }}"

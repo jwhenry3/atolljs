@@ -1,0 +1,13 @@
+{
+  // Publish build — declaration emit only, paired with `vite build` which
+  // produces dist/index.js. The main tsconfig is noEmit:true, so nothing
+  // else ever generates the dist/index.d.ts that package.json points at.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "emitDeclarationOnly": true,
+    "rootDir": "src/sdk",
+    "outDir": "dist"
+  },
+  "include": ["src/sdk/index.ts"]
+}

@@ -33,6 +33,14 @@ Full docs deploy to GitHub Pages on every push to `master`:
 `/sdk/` is the internals/SDK site (source: `docs/`), `/consumer/` the
 package-usage site (source: `docs-consumer/`).
 
+## Releasing
+
+Create a GitHub Release tagged `v<semver>` — `.github/workflows/publish.yml`
+runs the full test suite, builds the core `dist`, stamps every publishable
+package at the tag's version (lockstep; `packages/incidents` stays private),
+and publishes to npm with provenance. Requires a granular `NPM_TOKEN` repo
+secret. Preview the plan locally: `node scripts/publish.mjs v0.1.0 --dry-run`.
+
 ## Layout
 
 ```
