@@ -10,8 +10,10 @@
     "skipLibCheck": true,
     "paths": {
       "@jwhenry123/mesh/sdk": ["../../src/sdk/index.ts"],
-      "@jwhenry123/mesh/sdk/*": ["../../src/sdk/*"]
+      "@jwhenry123/mesh/sdk/*": ["../../src/sdk/*"],
+      "@jwhenry123/mesh-incidents": ["./src/index.ts"],
+      "@jwhenry123/mesh-incidents/*": ["./src/*"]
     }
   },
-  "include": ["src"]
+  "include": ["src", "test"]
 }

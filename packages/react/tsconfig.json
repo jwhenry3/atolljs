@@ -7,11 +7,12 @@
     "strict": true,
     "noEmit": true,
     "isolatedModules": true,
+    "jsx": "react-jsx",
     "skipLibCheck": true,
     "paths": {
       "@jwhenry123/mesh/sdk": ["../../src/sdk/index.ts"],
       "@jwhenry123/mesh/sdk/*": ["../../src/sdk/*"]
     }
   },
-  "include": ["src"]
+  "include": ["src", "test"]
 }

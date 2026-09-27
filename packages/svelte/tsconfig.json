@@ -17,5 +17,5 @@
     // depend on an example app's install.
     "types": ["svelte"]
   },
-  "include": ["src"]
+  "include": ["src", "test"]
 }

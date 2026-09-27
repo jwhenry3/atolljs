@@ -15,5 +15,5 @@
       "@jwhenry123/mesh/sdk/*": ["../../src/sdk/*"]
     }
   },
-  "include": ["src", "../react/src"]
+  "include": ["src", "test", "../react/src"]
 }

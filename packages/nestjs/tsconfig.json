@@ -17,5 +17,5 @@
       "@jwhenry123/mesh-node/*": ["../../packages/node/src/*"]
     }
   },
-  "include": ["src"]
+  "include": ["src", "test"]
 }

@@ -50,7 +50,7 @@ describe('createSharedValue', () => {
 describe('createTask', () => {
   it('exposes a state accessor and run triggers', async () => {
     const task = defineTask(async (n: number) => n - 1);
-    let t!: { state: () => { data: number | null; settled: boolean } };
+    let t!: { state: () => { data: number | null; settled: boolean }; run: (n: number) => void };
     createRoot(() => {
       t = createTask(task) as typeof t;
     });
@@ -60,7 +60,7 @@ describe('createTask', () => {
   });
 
   it('accepts a plain async fn and reaches settled', async () => {
-    let t!: { state: () => { data: number | null; settled: boolean } };
+    let t!: { state: () => { data: number | null; settled: boolean }; run: (n: number) => void };
     createRoot(() => {
       t = createTask(async (n: number) => n * 2) as typeof t;
     });

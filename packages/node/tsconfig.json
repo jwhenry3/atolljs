@@ -14,5 +14,5 @@
       "@jwhenry123/mesh/sdk/*": ["../../src/sdk/*"]
     }
   },
-  "include": ["src"]
+  "include": ["src", "test"]
 }

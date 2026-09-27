@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { act } from 'react';
+import { act, type ReactElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { defineSharedMemory, defineTask, field, observe } from '@jwhenry123/mesh/sdk';
@@ -10,7 +10,7 @@ import { useObservable, useSharedValue, useTask } from '../src/index';
 const mem = defineSharedMemory({ n: field.number(), label: field.string({ maxBytes: 64 }) });
 mem.bind(new SharedArrayBuffer(mem.totalBytes));
 
-const render = (el: JSX.Element) => {
+const render = (el: ReactElement) => {
   const container = document.createElement('div');
   document.body.appendChild(container);
   const root = createRoot(container);

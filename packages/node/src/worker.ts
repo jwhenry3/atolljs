@@ -1,6 +1,11 @@
 import { Worker as NodeWorker } from 'node:worker_threads';
 
-type EventHandler = (event: { data?: unknown; type?: string; message?: string; error?: unknown }) => void;
+export interface WorkerErrorEvent {
+  type: 'error';
+  message: string;
+  error?: unknown;
+}
+type EventHandler = (event: any) => void;
 type NodeEvent = 'message' | 'error' | 'exit';
 
 /**
@@ -27,6 +32,8 @@ export class NodeWorkerAdapter {
     void this.worker.terminate();
   }
 
+  addEventListener(type: 'message', handler: (event: { data: unknown }) => void): void;
+  addEventListener(type: 'error', handler: (event: WorkerErrorEvent) => void): void;
   addEventListener(type: 'message' | 'error', handler: EventHandler): void {
     let map = this.listeners.get(handler);
     if (!map) this.listeners.set(handler, (map = new Map()));
@@ -49,6 +56,8 @@ export class NodeWorkerAdapter {
     }
   }
 
+  removeEventListener(type: 'message', handler: (event: { data: unknown }) => void): void;
+  removeEventListener(type: 'error', handler: (event: WorkerErrorEvent) => void): void;
   removeEventListener(type: 'message' | 'error', handler: EventHandler): void {
     const map = this.listeners.get(handler);
     if (!map) return;

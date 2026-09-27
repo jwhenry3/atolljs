@@ -28,16 +28,20 @@ export function getMeshTaskMeta(proto: object, key: string | symbol): MeshTaskMe
 // undefined, so offloaded methods without a bound instance must not depend
 // on injected members. Resolution happens at CALL time, so binding order
 // never matters.
-const workerInstances = new Map<new () => object, object>();
+type Ctor = abstract new (...args: any[]) => object;
+
+const workerInstances = new Map<Ctor, object>();
 
 /** Binds the DI-resolved instance that a class's worker-side handlers run on. */
-export function bindMeshWorkerInstance(ctor: new () => object, instance: object): void {
+export function bindMeshWorkerInstance(ctor: Ctor, instance: object): void {
   workerInstances.set(ctor, instance);
 }
 
-const workerInstance = (ctor: new () => object) => {
+const workerInstance = (ctor: Ctor) => {
   let inst = workerInstances.get(ctor);
-  if (!inst) workerInstances.set(ctor, (inst = new ctor()));
+  // The lazy `new ctor()` fallback only applies to dep-less classes — a class
+  // with constructor params must be bound via bindMeshWorkerInstance (DI).
+  if (!inst) workerInstances.set(ctor, (inst = new (ctor as new () => object)()));
   return inst;
 };
 
@@ -90,7 +94,7 @@ export function MeshTask(
     // In a worker context, loading this module registers the real body —
     // the pool's EXECUTE_TASK dispatch finds it via TaskRegistry.
     if (!isMainThread) {
-      const ctor = proto.constructor as new () => object;
+      const ctor = proto.constructor as Ctor;
       TaskRegistry.register(contract, (...args: unknown[]) =>
         original.apply(workerInstance(ctor), args),
       );

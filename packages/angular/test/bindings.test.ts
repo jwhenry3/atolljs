@@ -7,10 +7,11 @@ const mem = defineSharedMemory({ n: field.number(), label: field.string({ maxByt
 mem.bind(new SharedArrayBuffer(mem.totalBytes));
 
 let env: EnvironmentInjector;
-const inCtx = <T>(fn: () => T): T => {
-  env ??= createEnvironmentInjector([], null);
-  return runInInjectionContext(env, fn);
-};
+// Angular's type requires an EnvironmentInjector parent; runtime accepts null.
+const ROOT_PARENT = null as unknown as EnvironmentInjector;
+const rootEnv = (): EnvironmentInjector =>
+  (env ??= createEnvironmentInjector([], ROOT_PARENT));
+const inCtx = <T>(fn: () => T): T => runInInjectionContext(rootEnv(), fn);
 
 describe('observableSignal', () => {
   it('returns a signal tracking the observable', async () => {
@@ -55,7 +56,7 @@ describe('provideMesh / injectMeshPool', () => {
     const pool = { terminate: vi.fn() } as unknown as WorkerPool;
     const injector = createEnvironmentInjector(
       [provideMesh({ pools: [{ name: 'x', pool: () => pool }] })],
-      null,
+      rootEnv(),
     );
     const injected = runInInjectionContext(injector, () => injectMeshPool('x'));
     expect(injected).toBe(pool);
@@ -92,7 +93,7 @@ describe('provideMesh / injectMeshPool', () => {
           ],
         }),
       ],
-      null,
+      rootEnv(),
     );
     try {
       const pool = runInInjectionContext(injector, () => injectMeshPool('inline'));
@@ -108,7 +109,7 @@ describe('provideMesh / injectMeshPool', () => {
 
   it('defaults the first pool name to "default"', () => {
     const pool = { terminate: vi.fn() } as unknown as WorkerPool;
-    const injector = createEnvironmentInjector([provideMesh({ pools: [{ pool: () => pool }] })], null);
+    const injector = createEnvironmentInjector([provideMesh({ pools: [{ pool: () => pool }] })], rootEnv());
     expect(runInInjectionContext(injector, () => injectMeshPool())).toBe(pool);
     injector.destroy();
   });
