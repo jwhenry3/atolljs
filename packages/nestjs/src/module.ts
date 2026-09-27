@@ -112,7 +112,7 @@ export interface MeshPoolAsyncOptions {
  *     name: 'incidents',
  *     worker: () => new Worker(new URL('./incidents.worker.ts', import.meta.url)),
  *     sharedMemory: incidentsMemory,
- *     tasks: incidentsTasks,
+ *     tasks: incidentsService.tasks,
  *   })] })
  *
  * Each pool becomes an injectable provider under `MESH_POOL:<name>`

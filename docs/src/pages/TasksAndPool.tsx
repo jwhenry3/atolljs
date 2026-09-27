@@ -1,5 +1,5 @@
 import { CodeBlock } from '../components/CodeBlock';
-import taskContracts from '../../../packages/incidents/src/contract/task.contracts.ts?raw';
+import taskContracts from '../../../packages/incidents/src/contract/incidents.service.ts?raw';
 import poolSource from '../../../packages/incidents/src/pool.ts?raw';
 import workerSource from '../../../packages/incidents/src/worker/incidents.worker.ts?raw';
 
@@ -8,19 +8,21 @@ export function TasksAndPool() {
     <article>
       <h1>Worker pool &amp; tasks</h1>
       <p className="lead">
-        Tasks are the only message-passing boundary. <code>TaskContract</code>s are
-        typed declarations; <code>TaskRegistry</code> implements them in the worker;{' '}
-        <code>WorkerPool</code> turns them into first-class promise-returning methods
-        on the main thread.
+        Tasks are the only message-passing boundary. A <code>defineService</code>{' '}
+        contract is declared once and shared by both threads;{' '}
+        <code>implementService</code> binds worker handlers to it (higher-order
+        functions, no decorators); <code>WorkerPool</code> or{' '}
+        <code>createClient</code> turns it into promise-returning methods on the
+        main thread.
       </p>
 
-      <h2>Task contracts</h2>
-      <CodeBlock code={taskContracts} file="packages/incidents/src/contract/task.contracts.ts" />
+      <h2>Service contract</h2>
+      <CodeBlock code={taskContracts} file="packages/incidents/src/contract/incidents.service.ts" />
       <p>
         <code>argsSchema</code>/<code>resultSchema</code> are optional zod validation at
-        the thread boundary. The generic signature{' '}
-        <code>TaskContract&lt;Args, Result&gt;</code> is what flows into the pool's
-        method types.
+        the thread boundary. Wire ids derive as <code>service.method</code> so they
+        can't drift between threads — override with an explicit{' '}
+        <code>taskId</code> only to interop with pre-existing ids.
       </p>
 
       <h2>Worker side</h2>
@@ -28,8 +30,10 @@ export function TasksAndPool() {
       <p>
         The <code>@jwhenry123/mesh/sdk/worker/workerBootstrap</code> import installs the
         message loop: it binds shared memory on <code>INIT_MEMORY</code> and dispatches{' '}
-        <code>EXECUTE_TASK</code> messages to registered handlers. Handlers read and
-        write shared memory directly — results return via <code>postMessage</code>.
+        <code>EXECUTE_TASK</code> messages to registered handlers.{' '}
+        <code>implementService</code> registers every handler against the contract —
+        missing methods throw at bind time. Handlers read and write shared memory
+        directly — results return via <code>postMessage</code>.
       </p>
 
       <h2>Pool</h2>

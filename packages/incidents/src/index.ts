@@ -13,7 +13,7 @@ export {
   queryResultSchema,
 } from './contract/memory.contracts';
 export type { Incident, IncidentRow, Metrics, QueryArgs, QueryResult } from './contract/memory.contracts';
-export { ComputeMetrics, QueryIncidents, SeedIncidents } from './contract/task.contracts';
+export { incidentsService } from './contract/incidents.service';
 export { fmtDate, fmtDur, fmtInt } from './format';
 export { getIncidentsPool, incidentsTasks } from './pool';
 export type { IncidentsPool } from './pool';

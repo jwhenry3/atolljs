@@ -48,6 +48,19 @@ export { connectSharedWorker } from './shared/sharedWorkerClient';
 export type { SharedWorkerClient } from './shared/sharedWorkerClient';
 export { sharedWorkerHost } from './shared/sharedWorkerHost';
 
+/* ── Service — framework-neutral RPC contracts shared by both threads ────── */
+
+export { createClient, defineService, implementService, rpc } from './service';
+export type {
+  RpcMethodDef,
+  RpcMethodMap,
+  ServiceClient,
+  ServiceContract,
+  ServiceHandlers,
+  ServiceImpl,
+  TaskRunner,
+} from './service';
+
 /* ── Worker — worker-side runtime ───────────────────────────────────────── */
 
 export { TaskRegistry } from './worker/registry';

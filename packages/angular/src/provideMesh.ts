@@ -91,7 +91,7 @@ export function injectMeshPool<T extends WorkerPool<any, any> = WorkerPool>(name
  *         name: 'incidents',
  *         worker: () => new Worker(new URL('./incidents.worker.ts', import.meta.url)),
  *         sharedMemory: incidentsMemory,
- *         tasks: incidentsTasks,
+ *         tasks: incidentsService.tasks,
  *         poolSize: 'auto',
  *       }] }),
  *     ],

@@ -11,8 +11,14 @@ vi.mock('node:worker_threads', async (importOriginal) => {
 
 import { Injectable, Module } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
-import { defineSharedMemory, field, TaskRegistry } from '@jwhenry123/mesh/sdk';
-import { bindMeshWorkerInstance, MeshTask } from '../src/decorators';
+import {
+  defineService,
+  defineSharedMemory,
+  field,
+  rpc,
+  TaskRegistry,
+} from '@jwhenry123/mesh/sdk';
+import { bindMeshWorkerInstance, MeshService, MeshTask } from '../src/decorators';
 import { MeshModule } from '../src/module';
 import { getMeshPoolToken } from '../src/pools';
 
@@ -49,6 +55,39 @@ describe('worker-side @MeshTask delegation', () => {
       }
     }
     await expect(TaskRegistry.execute('Unbound.read')).resolves.toBe('lazy');
+  });
+});
+
+describe('worker-side @MeshService delegation', () => {
+  const calcService = defineService('calc', {
+    read: rpc<[], number>(),
+    unbound: rpc<[], string>(), // declared but not implemented below
+  });
+
+  @Injectable()
+  @MeshService(calcService, { pool: 'p' })
+  class CalcService {
+    constructor(private readonly dep: Dep) {}
+
+    read() {
+      return this.dep.n + 1;
+    }
+
+    untouched() {
+      return 'plain';
+    }
+  }
+
+  it('registers service methods and delegates them to the DI-bound instance', async () => {
+    const di = new CalcService(new Dep());
+    bindMeshWorkerInstance(CalcService, di);
+    await expect(TaskRegistry.execute('calc.read')).resolves.toBe(101);
+  });
+
+  it('leaves service methods the class does not implement unregistered', async () => {
+    await expect(TaskRegistry.execute('calc.unbound')).rejects.toThrow(
+      /handler not found/i,
+    );
   });
 });
 

@@ -2,7 +2,11 @@
 // Method metadata lives in a WeakMap (no Reflect.metadata dependency —
 // bundlers like esbuild don't emit design:paramtypes anyway).
 import { isMainThread } from 'node:worker_threads';
-import { TaskRegistry, type TaskContract } from '@jwhenry123/mesh/sdk';
+import {
+  TaskRegistry,
+  type ServiceContract,
+  type TaskContract,
+} from '@jwhenry123/mesh/sdk';
 import { getMeshPool } from './pools';
 
 export interface MeshTaskMeta {
@@ -97,5 +101,44 @@ export function MeshTask(
       return pool ? pool.runTask(contract, ...args) : original.apply(this, args);
     };
     return descriptor;
+  };
+}
+
+/**
+ * Binds a whole {@link ServiceContract} to a provider class — the NestJS
+ * adapter over the framework-neutral `defineService`/`implementService`
+ * pair. Every method whose name matches a service task is wrapped with the
+ * same dispatch as @MeshTask: main-thread calls route to the named pool,
+ * worker-side calls run the real body on the DI-resolved instance.
+ *
+ *   @Injectable()
+ *   @MeshService(incidentsService, { pool: 'incidents' })
+ *   export class IncidentsRpc {
+ *     seedIncidents() { …scan shared memory… return ms; }
+ *     queryIncidents(q: QueryArgs) { …return page; }
+ *   }
+ *
+ * `pool` defaults to the service name. Methods not declared in the service
+ * are untouched; service methods missing on the class are NOT bound (the
+ * worker entry should compose `implementService` directly for those, or the
+ * call surfaces as "handler not found" on dispatch — same as a missing
+ * @MeshTask registration).
+ */
+export function MeshService(
+  service: ServiceContract,
+  options: { pool?: string } = {},
+): ClassDecorator {
+  const pool = options.pool ?? service.name;
+  return (ctor) => {
+    const proto = ctor.prototype as object;
+    for (const key of Object.getOwnPropertyNames(proto)) {
+      if (key === 'constructor') continue;
+      const contract = service.tasks[key];
+      if (!contract) continue;
+      const descriptor = Object.getOwnPropertyDescriptor(proto, key);
+      if (!descriptor || typeof descriptor.value !== 'function') continue;
+      const applied = MeshTask(contract, { pool })(proto, key, descriptor);
+      if (applied) Object.defineProperty(proto, key, applied);
+    }
   };
 }

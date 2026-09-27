@@ -4,7 +4,7 @@ import {
   incidentsMemory,
   queryArgsSchema,
 } from '../src/contract/memory.contracts';
-import { ComputeMetrics, QueryIncidents, SeedIncidents } from '../src/contract/task.contracts';
+import { incidentsService } from '../src/contract/incidents.service';
 import { incidentsTasks } from '../src/pool';
 
 const validQuery = {
@@ -12,23 +12,24 @@ const validQuery = {
   severity: null, status: null, region: null, service: null, search: '',
 };
 
-describe('task contracts', () => {
-  it('expose stable taskIds and validate their shapes', () => {
-    expect(SeedIncidents.taskId).toBe('inc-seed');
-    expect(QueryIncidents.taskId).toBe('inc-query');
-    expect(ComputeMetrics.taskId).toBe('inc-metrics');
+describe('incidentsService', () => {
+  it('derives stable wire ids from the service name', () => {
+    expect(incidentsService.name).toBe('incidents');
+    expect(incidentsService.tasks.seedIncidents.taskId).toBe('incidents.seedIncidents');
+    expect(incidentsService.tasks.queryIncidents.taskId).toBe('incidents.queryIncidents');
+    expect(incidentsService.tasks.computeMetrics.taskId).toBe('incidents.computeMetrics');
   });
 
   it('queryIncidents validates args against the zod schema', () => {
     expect(() => queryArgsSchema.parse(validQuery)).not.toThrow();
     expect(() => queryArgsSchema.parse({ ...validQuery, limit: 'many' })).toThrow();
-    expect(() => QueryIncidents.argsSchema!.parse([validQuery])).not.toThrow();
-    expect(() => QueryIncidents.argsSchema!.parse([{ bad: true }])).toThrow();
+    expect(() => incidentsService.tasks.queryIncidents.argsSchema!.parse([validQuery])).not.toThrow();
+    expect(() => incidentsService.tasks.queryIncidents.argsSchema!.parse([{ bad: true }])).toThrow();
   });
 
   it('rejects metric results missing required aggregates', () => {
     expect(() =>
-      ComputeMetrics.resultSchema!.parse({ total: 1 })
+      incidentsService.tasks.computeMetrics.resultSchema!.parse({ total: 1 })
     ).toThrow();
   });
 });
@@ -40,9 +41,7 @@ describe('incidentsMemory', () => {
 });
 
 describe('incidentsTasks', () => {
-  it('maps method names to their contracts', () => {
-    expect(incidentsTasks.seedIncidents).toBe(SeedIncidents);
-    expect(incidentsTasks.queryIncidents).toBe(QueryIncidents);
-    expect(incidentsTasks.computeMetrics).toBe(ComputeMetrics);
+  it('is the service contract in TaskMap shape', () => {
+    expect(incidentsTasks).toBe(incidentsService.tasks);
   });
 });

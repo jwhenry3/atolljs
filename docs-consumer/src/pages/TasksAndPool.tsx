@@ -9,39 +9,45 @@ export function TasksAndPool() {
         they touch stays in shared memory.
       </p>
 
-      <h2>TaskContract</h2>
+      <h2>Service contract — declared once, shared by both threads</h2>
       <p>
-        A plain object describing one task: an id plus optional zod schemas that
-        validate args and results at the boundary.
+        <code>defineService</code> bundles RPC methods with optional zod schemas.
+        Wire ids derive as <code>service.method</code>, so worker and main can
+        never disagree about them.
       </p>
       <CodeBlock
-        code={`import type { TaskContract } from '@jwhenry123/mesh/sdk';
+        file="incidents.service.ts"
+        code={`import { defineService, rpc } from '@jwhenry123/mesh/sdk';
 import { z } from 'zod';
 
-export const QueryIncidents: TaskContract<[query: QueryArgs], QueryResult> = {
-  taskId: 'inc-query',
-  argsSchema: z.tuple([queryArgsSchema]),
-  resultSchema: queryResultSchema,
-};`}
+export const incidentsService = defineService('incidents', {
+  queryIncidents: rpc<[query: QueryArgs], QueryResult>({
+    argsSchema: z.tuple([queryArgsSchema]),
+    resultSchema: queryResultSchema,
+  }),
+});`}
       />
 
-      <h2>Worker side — register handlers</h2>
+      <h2>Worker side — implement the service</h2>
       <CodeBlock
         file="incidents.worker.ts"
         code={`import '@jwhenry123/mesh/sdk/worker/workerBootstrap';  // handles INIT_MEMORY / EXECUTE_TASK
-import { TaskRegistry } from '@jwhenry123/mesh/sdk';
-import { QueryIncidents } from './task.contracts';
+import { implementService } from '@jwhenry123/mesh/sdk';
+import { incidentsService } from './incidents.service';
 
-// Runs inside the worker; shared fields are already bound when this fires.
-TaskRegistry.register(QueryIncidents, (query) => {
-  // scan/sort shared struct rows in place, return only the visible page
-  return runQuery(query);
+// Higher-order binding, no decorators — missing methods throw at bind time.
+export const incidentsImpl = implementService(incidentsService, {
+  queryIncidents(query) {
+    // scan/sort shared struct rows in place, return only the visible page
+    return runQuery(query);
+  },
 });`}
       />
 
       <h2>Main thread — WorkerPool</h2>
       <CodeBlock
         code={`import { WorkerPool } from '@jwhenry123/mesh/sdk';
+import { incidentsService } from './incidents.service';
 
 const pool = new WorkerPool({
   // Preferred: bundler-detectable worker factory
@@ -49,11 +55,16 @@ const pool = new WorkerPool({
   // Alternative: workerUrl: new URL('./worker.ts', import.meta.url)
   sharedMemory: incidentsMemory,
   poolSize: 'auto',            // 'auto' = navigator.hardwareConcurrency ?? 4
-  tasks: { queryIncidents: QueryIncidents, seedIncidents: SeedIncidents },
+  tasks: incidentsService.tasks,   // contract bundle → pool methods
 });
 
 // Tasks become first-class methods — fully typed:
-const page = await pool.queryIncidents({ offset: 0, limit: 50 });`}
+const page = await pool.queryIncidents({ offset: 0, limit: 50 });
+
+// Or keep the pool opaque and hand out a typed client:
+import { createClient } from '@jwhenry123/mesh/sdk';
+const api = createClient(incidentsService, pool);
+await api.queryIncidents({ offset: 0, limit: 50 });`}
       />
 
       <h2>WorkerPoolConfig</h2>

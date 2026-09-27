@@ -1,6 +1,6 @@
 export { MeshModule } from './module';
 export type { MeshModuleAsyncOptions, MeshPoolAsyncOptions } from './module';
-export { MeshTask, getMeshTaskMeta } from './decorators';
+export { MeshService, MeshTask, getMeshTaskMeta } from './decorators';
 export type { MeshTaskMeta } from './decorators';
 export { bindMeshWorkerInstance } from './decorators';
 export { registerMeshHandlers } from './handlers';

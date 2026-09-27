@@ -1,12 +1,9 @@
 import { WorkerPool } from '@jwhenry123/mesh/sdk';
+import { incidentsService } from './contract/incidents.service';
 import { incidentsMemory } from './contract/memory.contracts';
-import { ComputeMetrics, QueryIncidents, SeedIncidents } from './contract/task.contracts';
 
-export const incidentsTasks = {
-  seedIncidents: SeedIncidents,
-  queryIncidents: QueryIncidents,
-  computeMetrics: ComputeMetrics,
-};
+/** The service's contracts as a TaskMap — same object, pool-config shape. */
+export const incidentsTasks = incidentsService.tasks;
 
 function createIncidentsPool() {
   return new WorkerPool({
@@ -14,7 +11,7 @@ function createIncidentsPool() {
       new Worker(new URL('./worker/incidents.worker.ts', import.meta.url), { type: 'module' }),
     sharedMemory: incidentsMemory,
     poolSize: 1,
-    tasks: incidentsTasks,
+    tasks: incidentsService.tasks,
   });
 }
 
