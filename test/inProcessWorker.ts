@@ -17,7 +17,10 @@ export class InProcessWorker {
 
   public executed: any[] = [];
   public terminated = false;
-  private listeners = new Set<(event: { data: any }) => void>();
+  private listeners = {
+    message: new Set<(event: { data: any }) => void>(),
+    error: new Set<(event: any) => void>(),
+  };
   private ready: Promise<unknown> | null = null;
 
   constructor(public url: URL, public options?: any) {
@@ -29,6 +32,12 @@ export class InProcessWorker {
   }
 
   private async handle(data: any) {
+    if (data.type === 'INIT') {
+      // Message-only pool — ready without binding a shared buffer.
+      this.ready ??= Promise.resolve();
+      await this.ready;
+      return;
+    }
     if (data.type === 'INIT_MEMORY') {
       this.ready ??= (async () => {
         // workerBootstrap assigns self.onmessage at module load — provide a
@@ -56,11 +65,23 @@ export class InProcessWorker {
   }
 
   private emit(msg: any) {
-    for (const l of this.listeners) l({ data: msg });
+    for (const l of this.listeners.message) l({ data: msg });
   }
 
-  addEventListener(_t: string, l: (event: { data: any }) => void) { this.listeners.add(l); }
-  removeEventListener(_t: string, l: (event: { data: any }) => void) { this.listeners.delete(l); }
+  /** Simulates a worker crash: fires 'error' listeners like a real worker's error event. */
+  crash(message = 'simulated crash') {
+    const event = { type: 'error', message, error: new Error(message) };
+    for (const l of this.listeners.error) l(event);
+  }
+
+  addEventListener(type: string, l: (event: any) => void) {
+    if (type === 'error') this.listeners.error.add(l);
+    else this.listeners.message.add(l);
+  }
+  removeEventListener(type: string, l: (event: any) => void) {
+    if (type === 'error') this.listeners.error.delete(l);
+    else this.listeners.message.delete(l);
+  }
   terminate() { this.terminated = true; }
 }
 

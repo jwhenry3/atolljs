@@ -55,8 +55,9 @@ export type MeshPoolDeclaration<
        * The contract this pool shares with its workers. Typed as SharedMemory<S>
        * (not the config field's intersection) so declarations for heterogeneous
        * specs coexist — access fields through the contract const, not the pool.
+       * Omit for message-only pools.
        */
-      sharedMemory: SharedMemory<S>;
+      sharedMemory?: SharedMemory<S>;
     })
   | {
       /**
@@ -143,7 +144,9 @@ export function provideMesh(
           const { name: _name, worker, sharedMemory, ...rest } = cfg;
           return new WorkerPool({
             ...rest,
-            sharedMemory: sharedMemory as SharedMemory<SharedSpec> & SharedAccess<SharedSpec>,
+            ...(sharedMemory
+              ? { sharedMemory: sharedMemory as SharedMemory<SharedSpec> & SharedAccess<SharedSpec> }
+              : {}),
             createWorker: worker,
           });
         },

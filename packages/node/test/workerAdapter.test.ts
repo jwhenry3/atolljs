@@ -57,6 +57,42 @@ describe('NodeWorkerAdapter', () => {
     expect(b).toEqual([1]);
   });
 
+  it('forwards Node error events to error listeners', () => {
+    const w = fakeWorker();
+    const adapter = new NodeWorkerAdapter(w);
+    const got: unknown[] = [];
+    adapter.addEventListener('error', (e) => got.push(e));
+    w.emit('error', new Error('kaboom'));
+    expect(got).toHaveLength(1);
+    expect((got[0] as { type: string }).type).toBe('error');
+    expect((got[0] as { message: string }).message).toBe('kaboom');
+  });
+
+  it('forwards nonzero exit as an error event but ignores exit(0)', () => {
+    const w = fakeWorker();
+    const adapter = new NodeWorkerAdapter(w);
+    const got: unknown[] = [];
+    adapter.addEventListener('error', (e) => got.push(e));
+    w.emit('exit', 0);
+    expect(got).toEqual([]);
+    w.emit('exit', 1);
+    expect(got).toHaveLength(1);
+    expect((got[0] as { message: string }).message).toMatch(/exit/);
+  });
+
+  it('removeEventListener detaches error and exit listeners', () => {
+    const w = fakeWorker();
+    const adapter = new NodeWorkerAdapter(w);
+    const got: unknown[] = [];
+    const handler = (e: unknown) => got.push(e);
+    adapter.addEventListener('error', handler);
+    adapter.removeEventListener('error', handler);
+    expect(w.listenerCount('error')).toBe(0);
+    expect(w.listenerCount('exit')).toBe(0);
+    w.emit('exit', 1); // emitting 'error' with no listeners throws on EventEmitter
+    expect(got).toEqual([]);
+  });
+
   it('forwards terminate', () => {
     const w = fakeWorker();
     new NodeWorkerAdapter(w).terminate();

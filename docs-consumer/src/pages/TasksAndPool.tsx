@@ -74,21 +74,48 @@ const api = workerClient<IncidentsWorker>(pool);`}
           <tr><th>Option</th><th>Meaning</th></tr>
         </thead>
         <tbody>
-          <tr><td><code>sharedMemory</code></td><td>The contract to bind on the main thread and ship to workers — type-checked against the worker's declaration.</td></tr>
           <tr><td><code>worker</code></td><td>Factory <code>() =&gt; new Worker(new URL(...))</code> — required for esbuild/webpack/turbopack to detect the entry. A <code>URL</code> also works where the bundler emits one (Vite).</td></tr>
+          <tr><td><code>sharedMemory</code></td><td><em>Optional.</em> A contract to bind on the main thread and ship to workers — type-checked against the worker's declaration. Omit for a message-only pool: no <code>SharedArrayBuffer</code>, no COOP/COEP headers required.</td></tr>
           <tr><td><code>poolSize</code></td><td>A number, or <code>'auto'</code> (default) for <code>navigator.hardwareConcurrency ?? 4</code>.</td></tr>
+          <tr><td><code>concurrency</code></td><td>Max in-flight calls per worker (default 1). Dispatch is least-busy; when every worker is at the cap, calls queue FIFO.</td></tr>
+          <tr><td><code>maxQueue</code></td><td>Queue bound (default unbounded). A full queue rejects immediately with <code>PoolQueueFullError</code> — backpressure instead of unbounded growth.</td></tr>
+          <tr><td><code>taskTimeout</code></td><td>Default per-call timeout in ms, measured from enqueue (queue wait + run). Rejects with <code>TaskTimeoutError</code>.</td></tr>
+          <tr><td><code>respawn</code></td><td>Default <code>true</code> — a crashed worker is replaced and its in-flight calls reject with <code>WorkerCrashedError</code>. <code>false</code> shrinks the pool instead.</td></tr>
           <tr><td><code>memory</code></td><td>Buffer growth: <code>maximumPages</code> (default 16384 = 1 GB), <code>growthFactor</code>.</td></tr>
           <tr><td><code>lazy</code></td><td>Default <code>true</code> — spawn on first call (SSR-safe import). <code>false</code> spawns at construction.</td></tr>
         </tbody>
       </table>
+
+      <h2>Cancellation, timeouts, backpressure</h2>
+      <CodeBlock
+        code={`// Per-call controls ride on .with() — the same typed surface
+const ctrl = new AbortController();
+const page = incidents.with({ signal: ctrl.signal, timeout: 2_000 }).queryIncidents(q);
+ctrl.abort();   // queued → dropped; in-flight → rejects now, the worker's late reply is discarded
+
+// Observe the pool
+incidents.pool?.stats();
+// { workers, idle, inFlight, queued, completed, failed, aborted,
+//   waitMs: { count, mean, max }, runMs: { count, mean, max } }
+
+await incidents.pool?.close();   // drain the queue, then terminate`}
+      />
+      <p>
+        JavaScript can't interrupt a running function, so an in-flight abort
+        rejects the caller and holds the worker's slot until its reply arrives —
+        the next call goes to a genuinely free worker. For a hard stop, call{' '}
+        <code>terminate()</code>.
+      </p>
+
       <p>
         Client members <code>start()</code>, <code>terminate()</code>,{' '}
-        <code>pool</code>, <code>sharedMemory</code> are reserved — a worker method
-        by those names is a compile error. Under the hood <code>connectWorker</code>{' '}
-        builds a <code>WorkerPool</code>; the explicit-contract API
-        (<code>TaskContract</code> + <code>TaskRegistry.register</code> +{' '}
-        <code>WorkerPool</code>'s <code>tasks</code>) remains available when both
-        threads need the contract object at runtime.
+        <code>with()</code>, <code>pool</code>, <code>sharedMemory</code> are
+        reserved — a worker method by those names is a compile error. Under the
+        hood <code>connectWorker</code> builds a <code>WorkerPool</code>; the
+        explicit-contract API (<code>TaskContract</code> +{' '}
+        <code>TaskRegistry.register</code> + <code>WorkerPool</code>'s{' '}
+        <code>tasks</code>) remains available when both threads need the contract
+        object at runtime.
       </p>
 
       <h2>defineTask — latest-wins runners</h2>

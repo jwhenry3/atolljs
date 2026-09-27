@@ -902,3 +902,8 @@ export function bindSharedMemories(buffer: SharedArrayBuffer): void {
   }
   memLog.info(`bound ${definedSharedMemories.length} contract(s) — ${fmtBytes(buffer.byteLength)} buffer`);
 }
+
+/** How many shared-memory contracts this module graph has defined. */
+export function getDefinedSharedMemoryCount(): number {
+  return definedSharedMemories.length;
+}

@@ -38,8 +38,9 @@ export interface MeshPoolConfig<S extends SharedSpec = SharedSpec, T extends Tas
    * so heterogeneous pool configs coexist — a bound contract's connector
    * surface can't satisfy the generic index signature SharedAccess<SharedSpec>
    * produces. Callers access fields through their own contract const anyway.
+   * Omit for message-only pools — the SharedArrayBuffer check is skipped.
    */
-  sharedMemory: SharedMemory<S>;
+  sharedMemory?: SharedMemory<S>;
 }
 
 export interface MeshModuleOptions {
@@ -75,6 +76,8 @@ export function buildMeshPool<S extends SharedSpec, T extends TaskMap>(
     workerFile,
     worker,
     createWorker,
-    sharedMemory: sharedMemory as SharedMemory<S> & SharedAccess<S>,
+    ...(sharedMemory
+      ? { sharedMemory: sharedMemory as SharedMemory<S> & SharedAccess<S> }
+      : {}),
   });
 }

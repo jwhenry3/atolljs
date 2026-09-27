@@ -1,5 +1,5 @@
 import { TaskRegistry } from './registry';
-import { bindSharedMemories } from '../contract/sharedMemory';
+import { bindSharedMemories, getDefinedSharedMemoryCount } from '../contract/sharedMemory';
 import { fmtBytes, scoped } from '../log';
 
 const workerLog = scoped('worker');
@@ -13,6 +13,17 @@ if (typeof self === 'undefined') {
 } else {
   self.onmessage = async (event) => {
   const data = event.data;
+
+  if (data.type === 'INIT') {
+    memoryInitialized = true;
+    if (getDefinedSharedMemoryCount() > 0) {
+      workerLog.warn(
+        'pool sent INIT without memory, but shared-memory contracts are defined — field access will throw until bound',
+      );
+    }
+    workerLog.info('initialized (message-only pool — no shared memory)');
+    return;
+  }
 
   if (data.type === 'INIT_MEMORY') {
     const memory = data.memory as WebAssembly.Memory;

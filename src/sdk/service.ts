@@ -246,6 +246,16 @@ export interface TaskRunner {
     contract: TaskContract<Args, Result>,
     ...args: Args
   ): Promise<Result>;
+  /**
+   * Options-aware dispatch (abort/timeout). When present, `workerClient`
+   * `client.with(options)` calls route through it; otherwise they fall back
+   * to runTask and the options are ignored.
+   */
+  dispatch?<Args extends any[], Result>(
+    contract: TaskContract<Args, Result>,
+    args: Args,
+    options?: { signal?: AbortSignal; timeout?: number },
+  ): Promise<Result>;
 }
 
 /** The callable RPC surface a service client exposes. */

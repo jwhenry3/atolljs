@@ -1,6 +1,6 @@
 /* ── Contract — shared memory declarations (both threads) ───────────────── */
 
-export { defineSharedMemory, field, jsonCodec, registerConnectorFactory } from './contract/sharedMemory';
+export { defineSharedMemory, field, getDefinedSharedMemoryCount, jsonCodec, registerConnectorFactory } from './contract/sharedMemory';
 export { mz } from './contract/mz';
 export type {
   Codec,
@@ -53,6 +53,13 @@ export type {
 
 export { MemoryManager } from './pool/memory';
 export { WorkerPool } from './pool/workerPool';
+export type { PoolStats, RunOptions } from './pool/workerPool';
+export {
+  PoolQueueFullError,
+  TaskAbortedError,
+  TaskTimeoutError,
+  WorkerCrashedError,
+} from './pool/errors';
 export { connectWorker, workerClient } from './pool/workerClient';
 export type {
   ClientMethods,

@@ -86,7 +86,16 @@ export function App() {
         see <a href="#/tasks">Worker pool &amp; tasks</a>.
       </p>
 
-      <h2>Required: cross-origin isolation</h2>
+      <h2>Shared memory is opt-in</h2>
+      <p>
+        Leave <code>sharedMemory</code> out of both <code>defineWorker</code> and{' '}
+        <code>connectWorker</code> and you have a typed, pooled, cancellable
+        worker RPC that runs anywhere Workers do — no isolation headers needed.
+        Add the contract when a worker owns state the UI should observe without
+        copying.
+      </p>
+
+      <h2>With shared memory: cross-origin isolation</h2>
       <p>
         <code>SharedArrayBuffer</code> only exists when the page is
         cross-origin isolated. Vite example:

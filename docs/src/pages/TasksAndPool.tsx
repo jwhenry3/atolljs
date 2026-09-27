@@ -57,12 +57,24 @@ export function TasksAndPool() {
           <tr><th>Option</th><th>Notes</th></tr>
         </thead>
         <tbody>
-          <tr><td><code>sharedMemory</code></td><td>The contract to bind on the main thread and ship to workers. Type-checked against the worker's declared <code>sharedMemory</code>.</td></tr>
           <tr><td><code>worker</code></td><td>Factory <code>() =&gt; new Worker(new URL(..., import.meta.url), {'{ type: "module" }'})</code> — bundlers only emit worker chunks for the inline form. A <code>URL</code> also works.</td></tr>
+          <tr><td><code>sharedMemory</code></td><td><em>Optional.</em> The contract to bind on the main thread and ship to workers, type-checked against the worker's declared <code>sharedMemory</code>. Omit for a message-only pool — no <code>SharedArrayBuffer</code> or COOP/COEP requirement; the handshake becomes a bare <code>INIT</code>.</td></tr>
           <tr><td><code>poolSize</code></td><td>A number, or <code>'auto'</code> (default) for <code>navigator.hardwareConcurrency ?? 4</code>.</td></tr>
+          <tr><td><code>concurrency</code></td><td>In-flight cap per worker (default 1); least-busy dispatch, FIFO queue beyond the cap.</td></tr>
+          <tr><td><code>maxQueue</code></td><td>Queue bound; a full queue rejects with <code>PoolQueueFullError</code>.</td></tr>
+          <tr><td><code>taskTimeout</code></td><td>Default timeout from enqueue (queue wait + run) → <code>TaskTimeoutError</code>. Override per call via <code>client.with({'{ timeout }'})</code>.</td></tr>
+          <tr><td><code>respawn</code></td><td>Default <code>true</code>: crashed workers are replaced; in-flight calls reject with <code>WorkerCrashedError</code>.</td></tr>
           <tr><td><code>lazy</code></td><td>Default <code>true</code>. <code>false</code> spawns at construction.</td></tr>
         </tbody>
       </table>
+      <p>
+        <code>client.with({'{ signal, timeout }'})</code> returns the same typed
+        surface with per-call controls; <code>pool.stats()</code> exposes
+        queue/in-flight counts and wait/run aggregates; <code>pool.close()</code>{' '}
+        drains then terminates. An in-flight abort rejects the caller but holds the
+        worker's slot until its reply arrives — JS can't interrupt a running task,
+        so the pool never double-books a busy worker.
+      </p>
 
       <h2>Under the hood</h2>
       <p>

@@ -1,7 +1,7 @@
 import type { ServiceMethod, TaskRunner } from '../service';
 import type { SharedAccess, SharedMemory, SharedSpec } from '../contract/sharedMemory';
 import type { MemoryConfig, Prettify } from '../contract/types';
-import { WorkerPool } from './workerPool';
+import { WorkerPool, type RunOptions } from './workerPool';
 import type {
   WorkerDefinition,
   WorkerMethodMap,
@@ -27,12 +27,16 @@ export type WorkerMethods<W extends WorkerDefinition> = ClientMethods<W['methods
   [K in keyof W['services']]: W['services'][K] extends infer M extends WorkerMethodMap
     ? ClientMethods<M>
     : never;
+} & {
+  /** Per-call options — `client.with({ signal, timeout }).method(args)`. */
+  with(options: RunOptions): WorkerMethods<W>;
 };
 
 const makeClientProxy = (
   path: string[],
   resolveRunner: () => TaskRunner,
   reserved?: Record<string, unknown>,
+  options?: RunOptions,
 ): unknown => {
   // Cache nested proxies so `client.method` is referentially stable across
   // accesses — matters for memoized bindings (e.g. useTask's [source] deps).
@@ -42,18 +46,28 @@ const makeClientProxy = (
       // `then` and symbols return undefined so the proxy is never mistaken
       // for a thenable (await client, Promise.resolve(client), assimilation).
       if (prop === 'then' || typeof prop === 'symbol') return undefined;
+      if (prop === 'with') {
+        // client.with({ signal, timeout }) — same surface, calls dispatch
+        // with RunOptions. Root-level only makes sense, but works anywhere.
+        return (opts: RunOptions) =>
+          makeClientProxy(path, resolveRunner, reserved, opts);
+      }
       if (path.length === 0 && reserved && prop in reserved) {
         return Reflect.get(reserved, prop);
       }
       let child = children.get(prop);
       if (!child) {
-        child = makeClientProxy([...path, prop], resolveRunner, reserved);
+        child = makeClientProxy([...path, prop], resolveRunner, reserved, options);
         children.set(prop, child);
       }
       return child;
     },
     apply(_, __, args: unknown[]) {
-      return resolveRunner().runTask({ taskId: path.join('.') }, ...args);
+      const runner = resolveRunner();
+      const contract = { taskId: path.join('.') };
+      return runner.dispatch
+        ? runner.dispatch(contract, args, options)
+        : runner.runTask(contract, ...args);
     },
   });
 };
@@ -76,7 +90,8 @@ export function workerClient<W extends WorkerDefinition>(
 }
 
 export interface ConnectWorkerConfig<S extends SharedSpec> {
-  sharedMemory: SharedMemory<S> & Prettify<SharedAccess<S>>;
+  /** Omit for a message-only pool — the SharedArrayBuffer check is skipped. */
+  sharedMemory?: SharedMemory<S> & Prettify<SharedAccess<S>>;
   /**
    * Bundler-detectable factory `() => new Worker(new URL('./x.worker.ts', import.meta.url), { type: 'module' })`,
    * or a URL.
@@ -84,6 +99,14 @@ export interface ConnectWorkerConfig<S extends SharedSpec> {
   worker: (() => Worker) | URL;
   poolSize?: number | 'auto';
   memory?: MemoryConfig;
+  /** Max in-flight tasks per worker (default 1); excess calls queue FIFO. */
+  concurrency?: number;
+  /** Max queued calls (default Infinity); a full queue rejects with PoolQueueFullError. */
+  maxQueue?: number;
+  /** Default true — a crashed worker is replaced and its in-flight calls reject. */
+  respawn?: boolean;
+  /** Default per-call timeout ms (`client.with({ timeout })` overrides). */
+  taskTimeout?: number;
   /** Default true: pool spawns on first method call (or start()). False spawns immediately. */
   lazy?: boolean;
 }
@@ -95,7 +118,7 @@ export type WorkerClient<W extends WorkerDefinition, S extends SharedSpec> = Wor
   /** Terminate the pool; the next method call re-spawns it. */
   terminate(): void;
   readonly pool: WorkerPool<S> | null;
-  readonly sharedMemory: ConnectWorkerConfig<S>['sharedMemory'];
+  readonly sharedMemory: ConnectWorkerConfig<S>['sharedMemory'] | undefined;
 };
 
 /**
@@ -130,6 +153,10 @@ export function connectWorker<
           : () => new Worker(config.worker as URL, { type: 'module' }),
       poolSize: config.poolSize,
       memory: config.memory,
+      concurrency: config.concurrency,
+      maxQueue: config.maxQueue,
+      respawn: config.respawn,
+      taskTimeout: config.taskTimeout,
     }));
 
   if (config.lazy === false) spawn();

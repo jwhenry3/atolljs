@@ -53,7 +53,7 @@ export interface WorkerDefinition<
  * `pool` or `then` would collide with {@link connectWorker}'s API (or make
  * the client look like a thenable).
  */
-export const RESERVED_CLIENT_KEYS = ['start', 'terminate', 'pool', 'sharedMemory', 'then'] as const;
+export const RESERVED_CLIENT_KEYS = ['start', 'terminate', 'pool', 'sharedMemory', 'then', 'with'] as const;
 
 const isUnit = (x: unknown): x is ServiceMethod<any[], any> =>
   typeof x === 'object' && x !== null && 'run' in x;

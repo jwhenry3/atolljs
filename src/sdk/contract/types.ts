@@ -36,10 +36,26 @@ export interface WorkerPoolConfig<S extends SharedSpec = SharedSpec, T extends T
    * One of `workerUrl` / `createWorker` is required.
    */
   createWorker?: () => Worker;
-  sharedMemory: SharedMemory<S> & Prettify<SharedAccess<S>>;
+  /**
+   * The contract the pool binds and hands to each worker via INIT_MEMORY.
+   * Omit for message-only workers — the SharedArrayBuffer/isolation check is
+   * skipped and workers receive a plain `{ type: 'INIT' }` handshake.
+   */
+  sharedMemory?: SharedMemory<S> & Prettify<SharedAccess<S>>;
   /** Worker count — a number, or 'auto' (the default) for navigator.hardwareConcurrency ?? 4. */
   poolSize?: number | 'auto';
   memory?: MemoryConfig;
+  /** Max in-flight tasks per worker (default 1); excess tasks queue FIFO. */
+  concurrency?: number;
+  /** Max queued tasks (default Infinity); a full queue rejects with PoolQueueFullError. */
+  maxQueue?: number;
+  /** Default true — a worker 'error' rejects its in-flight tasks and spawns a replacement. */
+  respawn?: boolean;
+  /**
+   * Default per-task timeout in ms (per-call `options.timeout` overrides).
+   * The timer starts at enqueue, so it bounds queue-wait + execution together.
+   */
+  taskTimeout?: number;
   /**
    * Named task contracts. Keys become first-class pool methods:
    * `tasks: { queryIncidents: QueryIncidents }` → `pool.queryIncidents(q)`.

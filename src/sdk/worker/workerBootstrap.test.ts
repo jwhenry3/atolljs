@@ -48,6 +48,31 @@ describe('workerBootstrap', () => {
     ]);
   });
 
+  it('accepts INIT (message-only) and executes tasks without shared memory', async () => {
+    const { posted, fakeSelf, TaskRegistry } = await boot();
+    TaskRegistry.register({ taskId: 'ping' }, () => 'pong');
+    await fakeSelf.onmessage!({ data: { type: 'INIT' } });
+    await fakeSelf.onmessage!({ data: { type: 'EXECUTE_TASK', messageId: 'm1', taskId: 'ping', args: [] } });
+    expect(posted).toEqual([{ messageId: 'm1', success: true, result: 'pong' }]);
+  });
+
+  it('warns on INIT when shared memory contracts are defined but none was sent', async () => {
+    const { posted, fakeSelf, shared, TaskRegistry } = await boot();
+    const log = await import('../log');
+    const entries: { level: string; message: string }[] = [];
+    log.setLogSink((e) => entries.push(e));
+
+    shared.defineSharedMemory({ counter: shared.field.number() });
+    TaskRegistry.register({ taskId: 'noop' }, () => 1);
+    await fakeSelf.onmessage!({ data: { type: 'INIT' } });
+
+    const warn = entries.find((e) => e.level === 'warn');
+    expect(warn?.message).toMatch(/without memory|contracts are defined/i);
+    await fakeSelf.onmessage!({ data: { type: 'EXECUTE_TASK', messageId: 'm1', taskId: 'noop', args: [] } });
+    expect(posted[0]).toEqual({ messageId: 'm1', success: true, result: 1 });
+    log.setLogSink(null);
+  });
+
   it('rejects EXECUTE_TASK before INIT_MEMORY', async () => {
     const { posted, fakeSelf } = await boot();
     await fakeSelf.onmessage!({ data: { type: 'EXECUTE_TASK', messageId: 'm1', taskId: 'x', args: [] } });
