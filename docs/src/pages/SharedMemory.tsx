@@ -23,10 +23,10 @@ export function SharedMemory() {
         <tbody>
           <tr><td><code>field.number()</code></td><td><code>number</code></td><td>8 bytes (f64)</td></tr>
           <tr><td><code>field.boolean()</code></td><td><code>boolean</code></td><td>1 byte stored, descriptor reserves 8</td></tr>
-          <tr><td><code>field.string(maxBytes)</code></td><td><code>string</code></td><td>4-byte length + inline UTF-8</td></tr>
+          <tr><td><code>field.string({ maxBytes: maxBytes })</code></td><td><code>string</code></td><td>4-byte length + inline UTF-8</td></tr>
           <tr><td><code>field.object(maxBytes, schema?)</code></td><td><code>T</code></td><td>4-byte length + codec-encoded payload</td></tr>
           <tr><td><code>field.array(maxBytes, schema?)</code></td><td><code>T[]</code></td><td>same, element schema optional</td></tr>
-          <tr><td><code>field.int32Array(n)</code> / <code>float64Array(n)</code> / <code>bigInt64Array(n)</code> / <code>uint8Array(n)</code></td><td>typed array</td><td>raw view — <code>read()</code> is zero-copy</td></tr>
+          <tr><td><code>field.int32Array({ length: n })</code> / <code>float64Array(n)</code> / <code>bigInt64Array(n)</code> / <code>uint8Array(n)</code></td><td>typed array</td><td>raw view — <code>read()</code> is zero-copy</td></tr>
           <tr><td><code>field.struct(spec, count)</code></td><td>record array</td><td>fixed-layout records; scalar fields + inline <code>{'{ string: n }'}</code></td></tr>
         </tbody>
       </table>

@@ -17,12 +17,12 @@ export type Entity = z.infer<typeof entitySchema>;
  * that both threads read and mutate through the same typed connectors.
  */
 export const simMemory = defineSharedMemory({
-  entities: field.array(8192, z.array(entitySchema)),
+  entities: field.array({ maxBytes: 8192, schema: z.array(entitySchema) }),
   tick: field.number(),
-  status: field.string(64),
-  stats: field.object(256, z.object({
+  status: field.string({ maxBytes: 64 }),
+  stats: field.object({ maxBytes: 256, schema: z.object({
     ticks: z.number(),
     movedLastTick: z.number(),
     updatedBy: z.string(),
-  })),
+  }) }),
 }, { codec: msgpackCodec });

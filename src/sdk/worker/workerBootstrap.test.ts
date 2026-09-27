@@ -160,7 +160,7 @@ describe('workerBootstrap', () => {
   it('keeps tasks rejected when INIT_MEMORY binding fails (undersized buffer)', async () => {
     const { posted, fakeSelf, shared, TaskRegistry } = await boot();
     // 2MB field vs the 1MB fake buffer — bind() throws, the flag stays false.
-    shared.defineSharedMemory({ huge: shared.field.string(2 * 1024 * 1024) });
+    shared.defineSharedMemory({ huge: shared.field.string({ maxBytes: 2 * 1024 * 1024 }) });
     TaskRegistry.register({ taskId: 'noop' }, () => 'ok');
 
     await expect(

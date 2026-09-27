@@ -17,7 +17,7 @@ const QUICKSTART = `import { defineSharedMemory, field, WorkerPool } from '@jwhe
 // 1. One contract, imported by both threads.
 export const memory = defineSharedMemory({
   counter: field.number(),
-  stats: field.object(2048), // 2KB encoded budget
+  stats: field.object({ maxBytes: 2048 }), // 2KB encoded budget
 });
 
 // 2. A task contract + a pool that binds the contract.

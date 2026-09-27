@@ -3,7 +3,7 @@ import { createEnvironmentInjector, runInInjectionContext, type EnvironmentInjec
 import { defineSharedMemory, defineTask, field, observe, WorkerPool } from '@jwhenry123/mesh/sdk';
 import { injectMeshPool, observableSignal, provideMesh, sharedValue, taskState } from '../src/index';
 
-const mem = defineSharedMemory({ n: field.number(), label: field.string(64) });
+const mem = defineSharedMemory({ n: field.number(), label: field.string({ maxBytes: 64 }) });
 mem.bind(new SharedArrayBuffer(mem.totalBytes));
 
 let env: EnvironmentInjector;

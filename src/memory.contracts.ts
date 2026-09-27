@@ -7,9 +7,9 @@ import { defineSharedMemory, field } from './sdk/contract/sharedMemory';
  * workers so both sides read and write memory identically.
  */
 export const appMemory = defineSharedMemory({
-  values: field.float64Array(100_000),
-  lastResult: field.object(256, z.object({
+  values: field.float64Array({ length: 100_000 }),
+  lastResult: field.object({ maxBytes: 256, schema: z.object({
     sum: z.number(),
     computedBy: z.string(),
-  })),
+  }) }),
 });

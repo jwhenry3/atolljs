@@ -7,7 +7,7 @@ import { useObservable, useSharedValue, useTask } from '../src/index';
 
 (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
 
-const mem = defineSharedMemory({ n: field.number(), label: field.string(64) });
+const mem = defineSharedMemory({ n: field.number(), label: field.string({ maxBytes: 64 }) });
 mem.bind(new SharedArrayBuffer(mem.totalBytes));
 
 const render = (el: JSX.Element) => {

@@ -3,7 +3,7 @@ import { defineSharedMemory, defineTask, field, observe } from '@jwhenry123/mesh
 import { observableValue, sharedValue, taskState } from '../src/reactivity.svelte';
 import { inRoot } from './root.svelte';
 
-const mem = defineSharedMemory({ n: field.number(), label: field.string(64) });
+const mem = defineSharedMemory({ n: field.number(), label: field.string({ maxBytes: 64 }) });
 mem.bind(new SharedArrayBuffer(mem.totalBytes));
 
 describe('observableValue', () => {

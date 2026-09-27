@@ -3,7 +3,7 @@ import { createRoot } from 'solid-js';
 import { defineSharedMemory, defineTask, field, observe } from '@jwhenry123/mesh/sdk';
 import { createObservable, createSharedValue, createTask } from '../src/index';
 
-const mem = defineSharedMemory({ n: field.number(), label: field.string(64) });
+const mem = defineSharedMemory({ n: field.number(), label: field.string({ maxBytes: 64 }) });
 mem.bind(new SharedArrayBuffer(mem.totalBytes));
 
 describe('createObservable', () => {

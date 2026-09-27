@@ -58,6 +58,6 @@ export type ScreenHit = z.infer<typeof screenHitSchema>;
    for the main thread to observe reactively.                               */
 
 export const marketMemory = defineSharedMemory({
-  quotes: field.struct(quoteSpec, 10_000),
-  stats: field.object(2048, marketStatsSchema),
+  quotes: field.struct({ fields: quoteSpec, count: 10_000 }),
+  stats: field.object({ maxBytes: 2048, schema: marketStatsSchema }),
 }, { codec: msgpackrCodec });

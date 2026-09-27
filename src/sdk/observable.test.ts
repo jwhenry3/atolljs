@@ -24,7 +24,7 @@ describe('observe', () => {
   });
 
   it('get() returns the current value and undefined before writes', () => {
-    const mem = boundMem({ o: field.object<{ v: number }>(64) });
+    const mem = boundMem({ o: field.object<{ v: number }>({ maxBytes: 64 }) });
     const obs = observe(mem, 'o');
     expect(obs.get()).toBeUndefined();
     mem.connector('o').write({ v: 3 });
@@ -32,7 +32,7 @@ describe('observe', () => {
   });
 
   it('slice form: get() returns the selected slice', () => {
-    const spec = { m: field.object<{ v: number; tag: string }>(128) };
+    const spec = { m: field.object<{ v: number; tag: string }>({ maxBytes: 128 }) };
     const mem = boundMem(spec);
     const obs = observe(mem, 'm', (m) => m.v);
     mem.connector('m').write({ v: 7, tag: 'x' });
@@ -40,7 +40,7 @@ describe('observe', () => {
   });
 
   it('slice form: emits only when the selected slice changes', async () => {
-    const spec = { m: field.object<{ v: number; tag: string }>(128) };
+    const spec = { m: field.object<{ v: number; tag: string }>({ maxBytes: 128 }) };
     const mem = boundMem(spec);
     const obs = observe(mem, 'm', (m) => m.v);
     const seen: (number | undefined)[] = [];
@@ -55,7 +55,7 @@ describe('observe', () => {
   });
 
   it('slice + equals: custom comparator controls emission', async () => {
-    const spec = { m: field.object<{ v: number; tag: string }>(128) };
+    const spec = { m: field.object<{ v: number; tag: string }>({ maxBytes: 128 }) };
     const mem = boundMem(spec);
     const obs = observe(
       mem,
@@ -75,7 +75,7 @@ describe('observe', () => {
   });
 
   it('get() keeps the same reference while the comparator says unchanged', async () => {
-    const spec = { m: field.object<{ v: number; tag: string }>(128) };
+    const spec = { m: field.object<{ v: number; tag: string }>({ maxBytes: 128 }) };
     const mem = boundMem(spec);
     const obs = observe(mem, 'm', (m) => ({ v: m.v }), { equals: shallowEqual });
     const unsub = obs.subscribe(() => {});

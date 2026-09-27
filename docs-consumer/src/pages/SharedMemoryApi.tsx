@@ -17,9 +17,9 @@ export function SharedMemoryApi() {
 export const memory = defineSharedMemory({
   count:    field.number(),                    // f64 scalar
   running:  field.boolean(),                   // flag byte
-  label:    field.string(128),                 // UTF-8, ≤128 bytes payload
-  metrics:  field.object(2048, metricsSchema), // codec-encoded + optional zod schema
-  samples:  field.float64Array(1024),          // typed view, zero-copy
+  label:    field.string({ maxBytes: 128 }),                 // UTF-8, ≤128 bytes payload
+  metrics:  field.object({ maxBytes: 2048, schema: metricsSchema }), // codec-encoded + optional zod schema
+  samples:  field.float64Array({ length: 1024 }),          // typed view, zero-copy
   records:  field.struct({ id: 'u32', score: 'f64' }, 1_000_000),
 });`}
       />
@@ -32,10 +32,10 @@ export const memory = defineSharedMemory({
         <tbody>
           <tr><td><code>field.number()</code></td><td>8 bytes (f64)</td><td><code>read() / write(v)</code></td></tr>
           <tr><td><code>field.boolean()</code></td><td>8 bytes</td><td><code>read() / write(v)</code></td></tr>
-          <tr><td><code>field.string(maxBytes)</code></td><td>4-byte length + payload</td><td><code>read() / write(v)</code></td></tr>
+          <tr><td><code>field.string({ maxBytes: maxBytes })</code></td><td>4-byte length + payload</td><td><code>read() / write(v)</code></td></tr>
           <tr><td><code>field.object(maxBytes, schema?)</code></td><td>codec-encoded blob</td><td><code>read() / write(v)</code></td></tr>
           <tr><td><code>field.array(maxBytes, schema?)</code></td><td>codec-encoded blob</td><td><code>read() / write(v)</code></td></tr>
-          <tr><td><code>field.int32Array(n)</code> · <code>float64Array(n)</code> · <code>bigInt64Array(n)</code> · <code>uint8Array(n)</code></td><td>n × element size</td><td>typed-array views — direct indexed access, zero copy</td></tr>
+          <tr><td><code>field.int32Array({ length: n })</code> · <code>float64Array(n)</code> · <code>bigInt64Array(n)</code> · <code>uint8Array(n)</code></td><td>n × element size</td><td>typed-array views — direct indexed access, zero copy</td></tr>
           <tr><td><code>field.struct(fields, count)</code></td><td>fixed-size records</td><td><code>readAt(i)</code>, <code>writeAt(i, rec)</code>, <code>commit()</code></td></tr>
         </tbody>
       </table>

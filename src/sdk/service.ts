@@ -54,13 +54,13 @@ export type RpcMethodMap = Record<string, RpcMethodDef<any[], any>>;
  * a no-arg method); an rpc<A,R>() declaration's type args carry the rest.
  */
 type MethodContract<D> =
-  D extends { argsSchema: Schema<infer A> }
+  D extends { argsSchema: Schema<infer A extends any[]> }
     ? D extends { resultSchema: Schema<infer R> }
       ? TaskContract<A, R>
       : TaskContract<A, any>
     : D extends { resultSchema: Schema<infer R> }
       ? TaskContract<[], R>
-      : D extends RpcMethodDef<infer A, infer R>
+      : D extends RpcMethodDef<infer A extends any[], infer R>
         ? TaskContract<A, R>
         : TaskContract<any[], any>;
 

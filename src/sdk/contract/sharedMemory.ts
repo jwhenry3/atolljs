@@ -158,19 +158,19 @@ const structFieldAlign = (spec: StructFieldSpec) => (typeof spec === 'string' ? 
 export const field = {
   number: (): FieldDescriptor<number> => ({ kind: 'number', byteLength: 8 }),
   boolean: (): FieldDescriptor<boolean> => ({ kind: 'boolean', byteLength: 8 }),
-  string: (maxBytes: number): FieldDescriptor<string> => ({ kind: 'string', byteLength: 4 + maxBytes }),
-  object: <T = unknown>(maxBytes: number, schema?: Schema<T>): FieldDescriptor<T> => ({ kind: 'object', byteLength: 4 + maxBytes, schema }),
-  array: <T = unknown>(maxBytes: number, schema?: Schema<T[]>): FieldDescriptor<T[]> => ({ kind: 'array', byteLength: 4 + maxBytes, schema }),
-  int32Array: (length: number): FieldDescriptor<Int32Array> => ({ kind: 'Int32', byteLength: length * 4 }),
-  float64Array: (length: number): FieldDescriptor<Float64Array> => ({ kind: 'Float64', byteLength: length * 8 }),
-  bigInt64Array: (length: number): FieldDescriptor<BigInt64Array> => ({ kind: 'BigInt64', byteLength: length * 8 }),
-  uint8Array: (length: number): FieldDescriptor<Uint8Array> => ({ kind: 'Uint8', byteLength: length }),
+  string: ({ maxBytes }: { maxBytes: number }): FieldDescriptor<string> => ({ kind: 'string', byteLength: 4 + maxBytes }),
+  object: <T = unknown>({ maxBytes, schema }: { maxBytes: number; schema?: Schema<T> }): FieldDescriptor<T> => ({ kind: 'object', byteLength: 4 + maxBytes, schema }),
+  array: <T = unknown>({ maxBytes, schema }: { maxBytes: number; schema?: Schema<T[]> }): FieldDescriptor<T[]> => ({ kind: 'array', byteLength: 4 + maxBytes, schema }),
+  int32Array: ({ length }: { length: number }): FieldDescriptor<Int32Array> => ({ kind: 'Int32', byteLength: length * 4 }),
+  float64Array: ({ length }: { length: number }): FieldDescriptor<Float64Array> => ({ kind: 'Float64', byteLength: length * 8 }),
+  bigInt64Array: ({ length }: { length: number }): FieldDescriptor<BigInt64Array> => ({ kind: 'BigInt64', byteLength: length * 8 }),
+  uint8Array: ({ length }: { length: number }): FieldDescriptor<Uint8Array> => ({ kind: 'Uint8', byteLength: length }),
   /**
    * A fixed-layout array of `count` records. Every record occupies `recordSize`
    * bytes at a computable offset — reads and writes are direct memory access,
    * no serialization. `{ string: n }` fields store UTF-8 inline, zero-padded.
    */
-  struct: <F extends StructSpec>(fields: F, count: number): StructDescriptor<F> => {
+  struct: <F extends StructSpec>({ fields, count }: { fields: F; count: number }): StructDescriptor<F> => {
     const offsets = {} as Record<keyof F, number>;
     let offset = 0;
     for (const key of Object.keys(fields) as (keyof F)[]) {

@@ -136,8 +136,8 @@ describe('WorkerPool integration', () => {
   it('shares structured fields between main and worker sides', async () => {
     vi.stubGlobal('Worker', FakeWorker);
     const mem = defineSharedMemory({
-      entities: field.array(512, z.array(z.object({ id: z.number(), x: z.number() }))),
-      status: field.string(64),
+      entities: field.array({ maxBytes: 512, schema: z.array(z.object({ id: z.number(), x: z.number() })) }),
+      status: field.string({ maxBytes: 64 }),
     });
     const contract: TaskContract<[], number> = { taskId: 'it-tick' };
     TaskRegistry.register(contract, () => {

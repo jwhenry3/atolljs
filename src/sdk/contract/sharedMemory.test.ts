@@ -12,7 +12,7 @@ function bound<S extends SharedSpec>(spec: S) {
 
 describe('SharedMemory layout', () => {
   it('assigns aligned offsets deterministically', () => {
-    const spec = { a: field.number(), b: field.uint8Array(3), c: field.number() };
+    const spec = { a: field.number(), b: field.uint8Array({ length: 3 }), c: field.number() };
     const m1 = new SharedMemory(spec);
     const m2 = new SharedMemory(spec);
     // a@0 (8B), b@8 (3B), c@16 (8B), fields end at 24, version block 3*4B aligned to 16
@@ -37,37 +37,37 @@ describe('connectors', () => {
   });
 
   it('round-trips strings including unicode', () => {
-    const c = bound({ s: field.string(64) }).connector('s');
+    const c = bound({ s: field.string({ maxBytes: 64 }) }).connector('s');
     expect(c.read()).toBe('');
     c.write('héllo ✓');
     expect(c.read()).toBe('héllo ✓');
   });
 
   it('rejects strings exceeding capacity', () => {
-    const c = bound({ s: field.string(4) }).connector('s');
+    const c = bound({ s: field.string({ maxBytes: 4 }) }).connector('s');
     expect(() => c.write('more than four bytes')).toThrow(/capacity/);
   });
 
   it('returns undefined for unwritten object/array fields', () => {
-    const mem = bound({ o: field.object(64), a: field.array(64) });
+    const mem = bound({ o: field.object({ maxBytes: 64 }), a: field.array({ maxBytes: 64 }) });
     expect(mem.connector('o').read()).toBeUndefined();
     expect(mem.connector('a').read()).toBeUndefined();
   });
 
   it('round-trips objects', () => {
-    const c = bound({ o: field.object<{ x: number }>(64) }).connector('o');
+    const c = bound({ o: field.object<{ x: number }>({ maxBytes: 64 }) }).connector('o');
     c.write({ x: 1 });
     expect(c.read()).toEqual({ x: 1 });
   });
 
   it('round-trips arrays', () => {
-    const c = bound({ a: field.array<number>(64) }).connector('a');
+    const c = bound({ a: field.array<number>({ maxBytes: 64 }) }).connector('a');
     c.write([1, 2, 3]);
     expect(c.read()).toEqual([1, 2, 3]);
   });
 
   it('exposes typed arrays as live zero-copy views', () => {
-    const c = bound({ v: field.float64Array(4) }).connector('v');
+    const c = bound({ v: field.float64Array({ length: 4 }) }).connector('v');
     const view = c.read();
     expect(view).toBeInstanceOf(Float64Array);
     view[0] = 42.5;
@@ -75,18 +75,18 @@ describe('connectors', () => {
   });
 
   it('throws when a typed-array write exceeds the region', () => {
-    const c = bound({ v: field.int32Array(2) }).connector('v');
+    const c = bound({ v: field.int32Array({ length: 2 }) }).connector('v');
     expect(() => c.write(new Int32Array([1, 2, 3]))).toThrow();
   });
 
   it('validates object writes against the schema', () => {
-    const c = bound({ o: field.object(128, z.object({ n: z.number() })) }).connector('o');
+    const c = bound({ o: field.object({ maxBytes: 128, schema: z.object({ n: z.number() }) }) }).connector('o');
     expect(() => c.write({ n: 'nope' } as any)).toThrow();
     expect(() => c.write({ wrong: true } as any)).toThrow();
   });
 
   it('validates object reads against the schema', () => {
-    const mem = new SharedMemory({ o: field.object(128, z.object({ n: z.number() })) });
+    const mem = new SharedMemory({ o: field.object({ maxBytes: 128, schema: z.object({ n: z.number() }) }) });
     const buf = new SharedArrayBuffer(mem.totalBytes);
     mem.bind(buf);
     const c = mem.connector('o');
@@ -123,7 +123,7 @@ describe('codecs', () => {
     const encode = vi.fn((v: unknown) => new TextEncoder().encode(JSON.stringify(v)));
     const decode = vi.fn((b: Uint8Array) => JSON.parse(new TextDecoder().decode(b)));
     const codec: Codec = { encode, decode };
-    const mem = new SharedMemory({ o: field.object<{ x: number }>(64) }, { codec });
+    const mem = new SharedMemory({ o: field.object<{ x: number }>({ maxBytes: 64 }) }, { codec });
     mem.bind(new SharedArrayBuffer(mem.totalBytes));
 
     mem.connector('o').write({ x: 9 });
@@ -134,7 +134,7 @@ describe('codecs', () => {
 
   it('round-trips values through msgpack, including types JSON cannot express', () => {
     const mem = new SharedMemory(
-      { blob: field.object<{ bytes: Uint8Array; nested: { ok: boolean } }>(256) },
+      { blob: field.object<{ bytes: Uint8Array; nested: { ok: boolean } }>({ maxBytes: 256 }) },
       { codec: msgpackCodec }
     );
     mem.bind(new SharedArrayBuffer(mem.totalBytes));
@@ -162,7 +162,7 @@ describe('codecs', () => {
 
   it('still validates msgpack-decoded values against the field schema', () => {
     const mem = new SharedMemory(
-      { o: field.object(128, z.object({ n: z.number() })) },
+      { o: field.object({ maxBytes: 128, schema: z.object({ n: z.number() }) }) },
       { codec: msgpackCodec }
     );
     const buf = new SharedArrayBuffer(mem.totalBytes);
@@ -190,9 +190,9 @@ describe('browser restrictions', () => {
     vi.stubGlobal('TextDecoder', StrictDecoder);
     try {
       const mem = bound({
-        s: field.string(64),
-        o: field.object<{ x: number }>(64),
-        a: field.array<number>(64),
+        s: field.string({ maxBytes: 64 }),
+        o: field.object<{ x: number }>({ maxBytes: 64 }),
+        a: field.array<number>({ maxBytes: 64 }),
       });
       mem.connector('s').write('hello');
       expect(mem.connector('s').read()).toBe('hello');
@@ -208,7 +208,7 @@ describe('browser restrictions', () => {
 
 describe('cross-instance sharing (simulated threads)', () => {
   it('sees writes made through a second binding of the same contract', () => {
-    const spec = { n: field.number(), o: field.object<{ v: string }>(64) };
+    const spec = { n: field.number(), o: field.object<{ v: string }>({ maxBytes: 64 }) };
     const a = new SharedMemory(spec);
     const b = new SharedMemory(spec);
     const buffer = new SharedArrayBuffer(a.totalBytes);
@@ -244,7 +244,7 @@ describe('struct fields (fixed-layout records)', () => {
   } as const;
 
   it('computes a deterministic, naturally-aligned record layout', () => {
-    const d = field.struct(recordSpec, 10);
+    const d = field.struct({ fields: recordSpec, count: 10 });
     // id@0(4) → pad→ price@8(8) → quantity@16(2) → active@18(1) → tag@19(12) → 31, align8 → 32
     expect(d.struct.offsets).toEqual({ id: 0, price: 8, quantity: 16, active: 18, tag: 19 });
     expect(d.struct.recordSize).toBe(32);
@@ -252,7 +252,7 @@ describe('struct fields (fixed-layout records)', () => {
   });
 
   it('reads and writes individual records with zero serialization', () => {
-    const mem = bound({ recs: field.struct(recordSpec, 4) });
+    const mem = bound({ recs: field.struct({ fields: recordSpec, count: 4 }) });
     mem.recs.writeAt(1, { id: 42, price: 9.5, quantity: 3, active: 1, tag: 'sku-0001' });
     mem.recs.writeAt(3, { id: 7, price: -2.25, quantity: 65535, active: 0, tag: 'x' });
 
@@ -263,13 +263,13 @@ describe('struct fields (fixed-layout records)', () => {
   });
 
   it('supports bigint via i64/u64 fields', () => {
-    const mem = bound({ recs: field.struct({ ts: 'u64', delta: 'i64' }, 2) });
+    const mem = bound({ recs: field.struct({ fields: { ts: 'u64', delta: 'i64' }, count: 2 }) });
     mem.recs.writeAt(0, { ts: 1764000000000000000n, delta: -5n });
     expect(mem.recs.readAt(0)).toEqual({ ts: 1764000000000000000n, delta: -5n });
   });
 
   it('readAt can reuse an output object for allocation-free scans', () => {
-    const mem = bound({ recs: field.struct({ v: 'i32' }, 3) });
+    const mem = bound({ recs: field.struct({ fields: { v: 'i32' }, count: 3 }) });
     mem.recs.writeAt(0, { v: 10 });
     mem.recs.writeAt(2, { v: 30 });
     const out = { v: 0 };
@@ -279,7 +279,7 @@ describe('struct fields (fixed-layout records)', () => {
   });
 
   it('enforces index bounds and inline string capacity', () => {
-    const mem = bound({ recs: field.struct(recordSpec, 2) });
+    const mem = bound({ recs: field.struct({ fields: recordSpec, count: 2 }) });
     expect(() => mem.recs.writeAt(2, { id: 1, price: 0, quantity: 0, active: 0, tag: '' })).toThrow(RangeError);
     expect(() =>
       mem.recs.writeAt(0, { id: 1, price: 0, quantity: 0, active: 0, tag: 'this-tag-is-far-too-long' })
@@ -287,14 +287,14 @@ describe('struct fields (fixed-layout records)', () => {
   });
 
   it('write() persists a whole array and rejects overflow', () => {
-    const mem = bound({ recs: field.struct({ v: 'i32' }, 2) });
+    const mem = bound({ recs: field.struct({ fields: { v: 'i32' }, count: 2 }) });
     mem.recs.write([{ v: 1 }, { v: 2 }]);
     expect(mem.recs.read()).toEqual([{ v: 1 }, { v: 2 }]);
     expect(() => mem.recs.write([{ v: 1 }, { v: 2 }, { v: 3 }])).toThrow(/capacity/);
   });
 
   it('is visible across separately bound instances on the same buffer', () => {
-    const spec = { recs: field.struct({ v: 'i32', flag: 'u8' }, 4) };
+    const spec = { recs: field.struct({ fields: { v: 'i32', flag: 'u8' }, count: 4 }) };
     const buf = new SharedArrayBuffer(new SharedMemory(spec).totalBytes);
     const a = new SharedMemory(spec);
     const b = new SharedMemory(spec);
@@ -305,7 +305,7 @@ describe('struct fields (fixed-layout records)', () => {
   });
 
   it('writeAt is pure memory access; commit() bumps the version counter', () => {
-    const mem = bound({ recs: field.struct({ v: 'i32' }, 2) });
+    const mem = bound({ recs: field.struct({ fields: { v: 'i32' }, count: 2 }) });
     const { view, index } = mem.recs._version!;
     const before = view[index];
     mem.recs.writeAt(0, { v: 1 });
@@ -315,14 +315,14 @@ describe('struct fields (fixed-layout records)', () => {
   });
 
   it('readAt supports field projection', () => {
-    const mem = bound({ recs: field.struct(recordSpec, 2) });
+    const mem = bound({ recs: field.struct({ fields: recordSpec, count: 2 }) });
     mem.recs.writeAt(0, { id: 5, price: 1.5, quantity: 2, active: 1, tag: 'abc' });
     const partial = mem.recs.readAt(0, {}, ['id', 'price']);
     expect(partial).toEqual({ id: 5, price: 1.5 });
   });
 
   it('writeAt with a field list updates only those fields', () => {
-    const mem = bound({ recs: field.struct(recordSpec, 2) });
+    const mem = bound({ recs: field.struct({ fields: recordSpec, count: 2 }) });
     mem.recs.writeAt(0, { id: 5, price: 1.5, quantity: 2, active: 1, tag: 'abc' });
     mem.recs.writeAt(0, { price: 9.9, quantity: 7 }, ['price', 'quantity']);
     expect(mem.recs.readAt(0)).toEqual({ id: 5, price: 9.9, quantity: 7, active: 1, tag: 'abc' });
@@ -339,7 +339,7 @@ describe('struct fields (fixed-layout records)', () => {
     expect(() => schema.parse({ ...rec, tag: 'this-tag-is-too-long' })).toThrow();
     // inferred type is identical to the connector's record type — parsed
     // output is directly assignable to writeAt
-    const mem = bound({ recs: field.struct(recordSpec, 1) });
+    const mem = bound({ recs: field.struct({ fields: recordSpec, count: 1 }) });
     mem.recs.writeAt(0, schema.parse(rec));
     expect(mem.recs.readAt(0)).toEqual(rec);
   });
@@ -376,7 +376,7 @@ describe('connector factory plugins', () => {
 
 describe('edge coverage', () => {
   it('supports bigInt64Array fields', () => {
-    const c = bound({ v: field.bigInt64Array(2) }).connector('v');
+    const c = bound({ v: field.bigInt64Array({ length: 2 }) }).connector('v');
     expect(c.read()).toBeInstanceOf(BigInt64Array);
     c.write(new BigInt64Array([7n, -9n]));
     expect(Array.from(c.read())).toEqual([7n, -9n]);
@@ -391,29 +391,29 @@ describe('edge coverage', () => {
   });
 
   it('string connector throws when the encoded value exceeds capacity', () => {
-    const c = bound({ s: field.string(8) }).connector('s');
+    const c = bound({ s: field.string({ maxBytes: 8 }) }).connector('s');
     expect(() => c.write('x'.repeat(64))).toThrow(/exceeds field capacity/);
   });
 
   it('structured connector throws when the encoded value exceeds capacity', () => {
-    const c = bound({ o: field.object<Record<string, unknown>>(16) }).connector('o');
+    const c = bound({ o: field.object<Record<string, unknown>>({ maxBytes: 16 }) }).connector('o');
     expect(() => c.write({ pad: 'x'.repeat(64) })).toThrow(/exceeds field capacity/);
   });
 
   it('struct connector reads and writes i8, i16, and f32 scalars', () => {
-    const mem = bound({ r: field.struct({ a: 'i8', b: 'i16', c: 'f32' }, 2) });
+    const mem = bound({ r: field.struct({ fields: { a: 'i8', b: 'i16', c: 'f32' }, count: 2 }) });
     mem.r.writeAt(0, { a: -8, b: -300, c: 1.5 });
     expect(mem.r.readAt(0)).toEqual({ a: -8, b: -300, c: 1.5 });
   });
 
   it('struct readString uses max length when the field is exactly full', () => {
-    const mem = bound({ r: field.struct({ tag: { string: 8 } }, 1) });
+    const mem = bound({ r: field.struct({ fields: { tag: { string: 8 } }, count: 1 }) });
     mem.r.writeAt(0, { tag: '12345678' }); // fills the field — no zero byte inside max
     expect(mem.r.readAt(0)).toEqual({ tag: '12345678' });
   });
 
   it('readAt rejects negative indexes', () => {
-    const mem = bound({ r: field.struct({ v: 'i32' }, 2) });
+    const mem = bound({ r: field.struct({ fields: { v: 'i32' }, count: 2 }) });
     expect(() => mem.r.readAt(-1)).toThrow(RangeError);
   });
 

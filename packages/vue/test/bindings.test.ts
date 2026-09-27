@@ -3,7 +3,7 @@ import { effectScope } from 'vue';
 import { defineSharedMemory, defineTask, field, observe } from '@jwhenry123/mesh/sdk';
 import { useObservable, useSharedValue, useTask } from '../src/index';
 
-const mem = defineSharedMemory({ n: field.number(), label: field.string(64) });
+const mem = defineSharedMemory({ n: field.number(), label: field.string({ maxBytes: 64 }) });
 mem.bind(new SharedArrayBuffer(mem.totalBytes));
 
 describe('useObservable', () => {

@@ -63,14 +63,14 @@ export type Analysis = z.infer<typeof analysisSchema>;
    serialized (msgpackr + zod) vs fixed-layout records.                     */
 
 export const benchMemory = defineSharedMemory({
-  counters: field.int32Array(64),
-  payload: field.object(2048, z.object({
+  counters: field.int32Array({ length: 64 }),
+  payload: field.object({ maxBytes: 2048, schema: z.object({
     seq: z.number(),
     values: z.array(z.number()),
     label: z.string(),
-  })),
+  }) }),
   checksum: field.number(),
-  records: field.array(200_000_000, orderArraySchema), // ~200MB of structured records
-  recordsFlat: field.struct(flatRecordSpec, 2_000_000), // 2M × 32B = 64MB, zero-serialization layout
-  analysis: field.object(512, analysisSchema),
+  records: field.array({ maxBytes: 200_000_000, schema: orderArraySchema }), // ~200MB of structured records
+  recordsFlat: field.struct({ fields: flatRecordSpec, count: 2_000_000 }), // 2M × 32B = 64MB, zero-serialization layout
+  analysis: field.object({ maxBytes: 512, schema: analysisSchema }),
 }, { codec: msgpackrCodec });

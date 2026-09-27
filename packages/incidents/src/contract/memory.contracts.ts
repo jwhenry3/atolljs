@@ -64,7 +64,7 @@ export type QueryResult = z.infer<typeof queryResultSchema>;
 export type Metrics = z.infer<typeof metricsSchema>;
 
 export const incidentsMemory = defineSharedMemory({
-  incidents: field.struct(incidentSpec, 1_000_000),
-  metrics: field.object(2048, metricsSchema),
+  incidents: field.struct({ fields: incidentSpec, count: 1_000_000 }),
+  metrics: field.object({ maxBytes: 2048, schema: metricsSchema }),
   seedProgress: field.number(),
 });

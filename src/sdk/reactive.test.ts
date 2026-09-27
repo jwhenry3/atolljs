@@ -51,7 +51,7 @@ describe('reactive connector', () => {
   });
 
   it('reflects remote object writes', async () => {
-    const spec = { o: field.object<{ v: number }>(128) };
+    const spec = { o: field.object<{ v: number }>({ maxBytes: 128 }) };
     const local = new SharedMemory(spec);
     const remote = new SharedMemory(spec);
     const buffer = new SharedArrayBuffer(local.totalBytes);
@@ -104,7 +104,7 @@ describe('reactive connector', () => {
   });
 
   it('watch() with a selector only fires when the slice changes', async () => {
-    const spec = { o: field.object<{ v: number; tag: string }>(128) };
+    const spec = { o: field.object<{ v: number; tag: string }>({ maxBytes: 128 }) };
     const local = new SharedMemory(spec);
     const remote = new SharedMemory(spec);
     const buffer = new SharedArrayBuffer(local.totalBytes);
@@ -123,7 +123,7 @@ describe('reactive connector', () => {
   });
 
   it('watch() with equals controls what counts as a slice change', async () => {
-    const spec = { m: field.object<{ v: number; tag: string }>(128) };
+    const spec = { m: field.object<{ v: number; tag: string }>({ maxBytes: 128 }) };
     const local = new SharedMemory(spec);
     const remote = new SharedMemory(spec);
     const buffer = new SharedArrayBuffer(local.totalBytes);
