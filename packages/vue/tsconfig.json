@@ -10,8 +10,7 @@
     "skipLibCheck": true,
     "paths": {
       "@jwhenry123/mesh/sdk": ["../../src/sdk/index.ts"],
-      "@jwhenry123/mesh/sdk/*": ["../../src/sdk/*"],
-      "vue": ["../../examples/vue/node_modules/vue/dist/vue.d.ts"]
+      "@jwhenry123/mesh/sdk/*": ["../../src/sdk/*"]
     }
   },
   "include": ["src"]

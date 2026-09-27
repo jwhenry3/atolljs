@@ -11,7 +11,11 @@
     "paths": {
       "@jwhenry123/mesh/sdk": ["../../src/sdk/index.ts"],
       "@jwhenry123/mesh/sdk/*": ["../../src/sdk/*"]
-    }
+    },
+    // Rune globals ($state, $effect) come from svelte's ambient types —
+    // resolved from the root node_modules so a publishable package doesn't
+    // depend on an example app's install.
+    "types": ["svelte"]
   },
-  "include": ["src", "../../examples/svelte/node_modules/svelte/types/index.d.ts"]
+  "include": ["src"]
 }

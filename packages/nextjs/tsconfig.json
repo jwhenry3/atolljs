@@ -12,8 +12,7 @@
     "paths": {
       "@jwhenry123/mesh-react": ["../react/src/index.ts"],
       "@jwhenry123/mesh/sdk": ["../../src/sdk/index.ts"],
-      "@jwhenry123/mesh/sdk/*": ["../../src/sdk/*"],
-      "react": ["../../node_modules/@types/react/index.d.ts"]
+      "@jwhenry123/mesh/sdk/*": ["../../src/sdk/*"]
     }
   },
   "include": ["src", "../react/src"]
