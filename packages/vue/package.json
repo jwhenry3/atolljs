@@ -1,7 +1,7 @@
 {
   "name": "@jwhenry123/mesh-vue",
-  "version": "0.0.0",
-  "description": "Vue bindings \u2014 useObservable, useSharedValue, useTask",
+  "version": "0.1.0",
+  "description": "Vue bindings — useObservable, useSharedValue, useTask",
   "type": "module",
   "exports": {
     ".": "./src/index.ts"
@@ -13,7 +13,7 @@
     "access": "public"
   },
   "peerDependencies": {
-    "@jwhenry123/mesh": "0.0.0",
+    "@jwhenry123/mesh": "0.1.0",
     "vue": "^3.5.43"
   }
 }

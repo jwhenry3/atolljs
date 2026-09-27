@@ -1,7 +1,7 @@
 {
   "name": "@jwhenry123/mesh-svelte",
-  "version": "0.0.0",
-  "description": "Svelte 5 bindings \u2014 observableValue, sharedValue, taskState",
+  "version": "0.1.0",
+  "description": "Svelte 5 bindings — observableValue, sharedValue, taskState",
   "type": "module",
   "exports": {
     ".": "./src/index.ts"
@@ -13,7 +13,7 @@
     "access": "public"
   },
   "peerDependencies": {
-    "@jwhenry123/mesh": "0.0.0",
+    "@jwhenry123/mesh": "0.1.0",
     "svelte": "^5.57.1"
   }
 }

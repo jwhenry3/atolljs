@@ -1,7 +1,7 @@
 {
   "name": "@jwhenry123/mesh-nextjs",
-  "version": "0.0.0",
-  "description": "Next.js bindings \u2014 React hooks for client components",
+  "version": "0.1.0",
+  "description": "Next.js bindings — React hooks for client components",
   "type": "module",
   "exports": {
     ".": "./src/index.ts"
@@ -13,8 +13,8 @@
     "access": "public"
   },
   "peerDependencies": {
-    "@jwhenry123/mesh": "0.0.0",
-    "@jwhenry123/mesh-react": "0.0.0",
+    "@jwhenry123/mesh": "0.1.0",
+    "@jwhenry123/mesh-react": "0.1.0",
     "react": "^19.3.0"
   }
 }

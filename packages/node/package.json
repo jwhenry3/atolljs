@@ -1,7 +1,7 @@
 {
   "name": "@jwhenry123/mesh-node",
-  "version": "0.0.0",
-  "description": "Node runtime adapter \u2014 node:worker_threads pools, no framework",
+  "version": "0.1.0",
+  "description": "Node runtime adapter — node:worker_threads pools, no framework",
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
@@ -14,6 +14,6 @@
     "access": "public"
   },
   "peerDependencies": {
-    "@jwhenry123/mesh": "0.0.0"
+    "@jwhenry123/mesh": "0.1.0"
   }
 }

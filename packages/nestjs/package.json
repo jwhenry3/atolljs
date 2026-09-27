@@ -1,7 +1,7 @@
 {
   "name": "@jwhenry123/mesh-nestjs",
-  "version": "0.0.0",
-  "description": "NestJS integration \u2014 MeshModule, MeshTask, InjectMeshPool",
+  "version": "0.1.0",
+  "description": "NestJS integration — MeshModule, MeshTask, InjectMeshPool",
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
@@ -16,8 +16,8 @@
     "access": "public"
   },
   "peerDependencies": {
-    "@jwhenry123/mesh": "0.0.0",
-    "@jwhenry123/mesh-node": "0.0.0",
+    "@jwhenry123/mesh": "0.1.0",
+    "@jwhenry123/mesh-node": "0.1.0",
     "@nestjs/common": "^11.1.0",
     "@nestjs/core": "^11.1.0",
     "reflect-metadata": "^0.2.0",
