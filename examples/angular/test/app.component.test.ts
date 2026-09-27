@@ -7,6 +7,8 @@
 import { TestBed } from '@angular/core/testing';
 import { BrowserDynamicTestingModule, platformBrowserDynamicTesting } from '@angular/platform-browser-dynamic/testing';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
+import { provideMesh } from '@jwhenry123/mesh-angular';
+import { getIncidentsPool } from '@jwhenry123/mesh-incidents';
 import { InProcessWorker } from '../../../test/inProcessWorker';
 
 vi.stubGlobal('Worker', InProcessWorker);
@@ -22,6 +24,10 @@ beforeAll(async () => {
 describe('AppComponent (angular example)', () => {
   it('seeds, reports progress, and serves table pages', async () => {
     TestBed.initTestEnvironment(BrowserDynamicTestingModule, platformBrowserDynamicTesting());
+    // Mirror main.ts: the domain-owned pool singleton under DI.
+    TestBed.configureTestingModule({
+      providers: [provideMesh({ pools: [{ name: 'incidents', pool: getIncidentsPool }] })],
+    });
     const comp = TestBed.runInInjectionContext(() => new AppComponent());
     const c = comp as unknown as {
       ready(): boolean; seedProgress(): number;

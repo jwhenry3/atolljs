@@ -1,9 +1,9 @@
 // Node worker entry — bundled standalone to dist/incidents.worker.js.
-// node/shim MUST be first: it binds self = parentPort before workerBootstrap
-// wires INIT_MEMORY / EXECUTE_TASK onto the MessagePort.
-import '@jwhenry123/mesh-node/shim';
-import '@jwhenry123/mesh-incidents/worker/incidents.worker';
+// mesh-nestjs/worker is self-contained: its first imports bind self =
+// parentPort and wire INIT_MEMORY / EXECUTE_TASK, so the entry is just the
+// binding import + contract tasks + the module to bootstrap.
 import { runMeshWorker } from '@jwhenry123/mesh-nestjs/worker';
+import '@jwhenry123/mesh-incidents/worker/incidents.worker';
 import { IncidentsMeshModule } from './shared/incidents-mesh.module';
 
 // Boot a Nest application context inside this worker: IncidentsAnalytics and

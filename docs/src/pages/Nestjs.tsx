@@ -19,12 +19,13 @@ const ENDPOINTS = [
 ];
 
 const APIS = [
-  { name: 'MeshModule.forRoot', signature: 'forRoot({ pools: MeshPoolConfig[] })', desc: 'One WorkerPool per entry: name, workerFile, sharedMemory, poolSize, tasks. Pools become injectable providers and terminate on module destroy.' },
+  { name: 'MeshModule.forRoot', signature: 'forRoot({ pools? }) / forRootAsync(...)', desc: 'Global mesh infrastructure once — validator, discovery, lifecycle. Optional pools for simple apps; feature modules prefer registerPool.' },
+  { name: 'MeshModule.registerPool', signature: 'registerPool(config) / registerPoolAsync(...)', desc: 'Bull-style module-level pool registration inside the feature module that owns the worker: name, worker, sharedMemory, poolSize, tasks. Injectable provider, terminated on module destroy.' },
   { name: '@MeshTask', signature: '@MeshTask(taskId | contract | { pool })', desc: 'RPC-style offload — main-thread calls dispatch to the named pool; the body executes inside the worker’s Nest context on the DI-resolved instance.' },
   { name: '@InjectMeshPool', signature: '@InjectMeshPool(name)', desc: 'Parameter decorator injecting a configured pool for first-class task methods / runTask.' },
-  { name: 'runMeshWorker', signature: 'runMeshWorker(module): Promise<INestApplicationContext>', desc: 'Worker-side bootstrap — creates a Nest application context, discovers @MeshTask providers via DiscoveryService, binds them into TaskRegistry.' },
+  { name: 'runMeshWorker', signature: 'runMeshWorker(module): Promise<INestApplicationContext>', desc: 'Worker-side bootstrap — self-contained (shim + bootstrap inside). Creates a Nest application context, discovers @MeshTask providers via DiscoveryService, binds them into TaskRegistry.' },
   { name: 'registerMeshHandlers', signature: 'registerMeshHandlers(...instances)', desc: 'Explicit registration for instances created outside a worker Nest context.' },
-  { name: 'createNodeWorker', signature: 'createNodeWorker(source | worker): Worker', desc: 'Adapts node:worker_threads.Worker (EventEmitter) to the DOM Worker surface the pool expects — or wraps an existing Worker so `new Worker(new URL(...))` stays webpack-detectable.' },
+  { name: 'worker spec', signature: 'worker: path | URL | (() => Worker | NodeWorker)', desc: 'Pool worker declaration — a factory may return node:worker_threads.Worker directly; it is adapted internally, so `new Worker(new URL(...))` stays webpack-detectable without adapter ceremony.' },
 ];
 
 /**
@@ -117,23 +118,24 @@ export function Nestjs() {
 
       <h2>Worker entry</h2>
       <p>
-        Each pool’s worker is a few lines: <code>node/shim</code> first (binds{' '}
-        <code>self = parentPort</code>), the bootstrap import, then{' '}
-        <code>runMeshWorker</code> on the shared module.
+        Each pool’s worker is two imports: <code>runMeshWorker</code> (whose
+        module self-contains the <code>self = parentPort</code> shim and the
+        SDK bootstrap) plus the feature module to bootstrap — optionally any
+        contract-task registrations.
       </p>
       <CodeBlock code={workerEntrySrc} file="examples/nestjs/src/digest.worker.ts" />
 
       <h2>Build — plain <code>nest build</code></h2>
       <p>
         No custom build script: <code>nest-cli.json</code> enables webpack. The
-        pool config's <code>createWorker</code> factory wraps{' '}
+        pool config's <code>worker:</code> factory returns{' '}
         <code>new Worker(new URL('./x.worker.ts', import.meta.url))</code> —
         webpack detects the pattern, compiles each worker entry as its own
         chunk, and rewrites the URL to the emitted file, so the config
         references the TS source directly. The factory only needs{' '}
-        <code>TsconfigPathsPlugin</code> for the mesh aliases, and{' '}
-        <code>node/shim</code> as each worker's first import binds{' '}
-        <code>self = parentPort</code> — no bundler banner needed.
+        <code>TsconfigPathsPlugin</code> for the mesh aliases; the
+        node:worker_threads shim and bootstrap are self-contained in{' '}
+        <code>mesh-nestjs/worker</code> — no bundler banner needed.
       </p>
       <CodeBlock code={nestCliSrc} file="examples/nestjs/nest-cli.json" language="json" />
       <CodeBlock code={webpackConfigSrc} file="examples/nestjs/webpack.config.js" language="javascript" />

@@ -1,9 +1,8 @@
 import { ChangeDetectionStrategy, Component, computed, effect, signal, type WritableSignal } from '@angular/core';
-import { sharedValue, taskState } from '@jwhenry123/mesh-angular';
+import { injectMeshPool, sharedValue, taskState } from '@jwhenry123/mesh-angular';
 import {
   fmtDur,
   fmtInt,
-  getIncidentsPool,
   incidentColumns as columns,
   initIncidentsTask,
   incidentsMemory,
@@ -12,6 +11,7 @@ import {
   SERVICES,
   SEVERITIES,
   STATUSES,
+  type IncidentsPool,
   type QueryArgs,
 } from '@jwhenry123/mesh-incidents';
 
@@ -83,9 +83,12 @@ export class AppComponent {
 
   private debounce: ReturnType<typeof setTimeout> | undefined;
 
+  // The DI-registered pool — spawned eagerly by provideMesh in main.ts, the
+  // same instance the domain task helpers dispatch through.
+  private readonly pool = injectMeshPool<IncidentsPool>('incidents');
+
   constructor() {
-    // Bind the contract + spawn the worker pool, then kick off seeding.
-    getIncidentsPool();
+    // Kick off seeding — the pool is already up via provideMesh.
     initIncidentsTask.runOnce();
     // Latest-wins page fetch: re-runs on query changes once seeded; stale
     // responses are dropped by the task runner.

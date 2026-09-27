@@ -18,11 +18,19 @@ export function getMeshTaskMeta(proto: object, key: string | symbol): MeshTaskMe
   return metaStore.get(proto)?.get(key);
 }
 
-// Worker-side: lazily-instantiated instances of decorated classes. Handlers
-// run against `new Cls()` — constructor params arrive undefined, so offloaded
-// methods must not depend on injected members; they get their inputs from
-// args plus shared memory.
+// Worker-side: instances decorated handlers run against. registerMeshHandlers
+// (via runMeshWorker) binds the DI-resolved instance here; until then calls
+// delegate to a lazily-instantiated `new Cls()` — constructor params arrive
+// undefined, so offloaded methods without a bound instance must not depend
+// on injected members. Resolution happens at CALL time, so binding order
+// never matters.
 const workerInstances = new Map<new () => object, object>();
+
+/** Binds the DI-resolved instance that a class's worker-side handlers run on. */
+export function bindMeshWorkerInstance(ctor: new () => object, instance: object): void {
+  workerInstances.set(ctor, instance);
+}
+
 const workerInstance = (ctor: new () => object) => {
   let inst = workerInstances.get(ctor);
   if (!inst) workerInstances.set(ctor, (inst = new ctor()));

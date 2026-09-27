@@ -1,17 +1,10 @@
 import { Injectable, Module, OnApplicationBootstrap } from '@nestjs/common';
-import { Worker } from 'node:worker_threads';
 import { InjectMeshPool, MeshModule } from '@jwhenry123/mesh-nestjs';
-import { createNodeWorker } from '@jwhenry123/mesh-node';
-import {
-  incidentsMemory,
-  incidentsTasks,
-  type IncidentsPool,
-} from '@jwhenry123/mesh-incidents';
+import { type IncidentsPool } from '@jwhenry123/mesh-incidents';
 import { IncidentsController } from './incidents.controller';
 import { IncidentsMeshModule } from './shared/incidents-mesh.module';
 import { DigestMeshModule } from './digest/digest.module';
 import { DigestController } from './digest/digest.controller';
-import { digestMemory } from './digest/digest.service';
 
 /**
  * The shared buffer lives in process memory — every restart (including
@@ -28,36 +21,9 @@ class SeedOnBootstrap implements OnApplicationBootstrap {
 
 @Module({
   imports: [
-    MeshModule.forRoot({
-      pools: [
-        {
-          name: 'incidents',
-          // Worker factory pointing at the TS source — webpack detects
-          // `new Worker(new URL(...))`, compiles the entry as its own chunk,
-          // and rewrites the URL to the emitted file. No dist filename
-          // coupling; the source IS the reference.
-          createWorker: () =>
-            createNodeWorker(
-              new Worker(new URL('./incidents.worker.ts', import.meta.url)),
-            ),
-          sharedMemory: incidentsMemory,
-          poolSize: 'auto',
-          tasks: incidentsTasks,
-        },
-        // Second pool — that's the whole integration cost: a worker entry,
-        // a shared contract, a module, and this config block.
-        {
-          name: 'digest',
-          createWorker: () =>
-            createNodeWorker(
-              new Worker(new URL('./digest.worker.ts', import.meta.url)),
-            ),
-          sharedMemory: digestMemory,
-          poolSize: 2,
-        },
-      ],
-    }),
-    // Same modules the workers bootstrap — services resolve on both sides.
+    // Global mesh infrastructure once — pool registration stays inside the
+    // feature modules that own each worker domain (registerPool).
+    MeshModule.forRoot(),
     IncidentsMeshModule,
     DigestMeshModule,
   ],

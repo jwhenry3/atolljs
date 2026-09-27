@@ -2,7 +2,7 @@ import 'reflect-metadata';
 import { describe, expect, it } from 'vitest';
 import { Inject, Injectable, Module } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
-import { defineSharedMemory, field, TaskRegistry, WorkerPool } from '@jwhenry123/mesh/sdk';
+import { defineSharedMemory, field, setLogSink, TaskRegistry, WorkerPool, type LogEntry } from '@jwhenry123/mesh/sdk';
 import { InjectMeshPool } from '../src/injectPool';
 import { MeshModule } from '../src/module';
 import { MeshTask } from '../src/decorators';
@@ -102,6 +102,168 @@ describe('runMeshWorker', () => {
       }
     } finally {
       await app.close();
+    }
+  });
+});
+
+describe('MeshModule.registerPool', () => {
+  it('registers the pool inside the feature module and re-exports its token', async () => {
+    InProcessWorker.created = [];
+    const entries: LogEntry[] = [];
+    setLogSink((e) => entries.push(e));
+    try {
+      @Injectable()
+      class FeatService {
+        @MeshTask({ pool: 'feat' })
+        work() {
+          return 'feat';
+        }
+      }
+
+      @Injectable()
+      class FeatConsumer {
+        constructor(@InjectMeshPool('feat') readonly pool: WorkerPool) {}
+      }
+
+      // The feature module owns its worker domain — pool config lives here,
+      // not at the root; the token is re-exported via `exports: [MeshModule]`.
+      @Module({
+        imports: [
+          MeshModule.registerPool({
+            name: 'feat',
+            sharedMemory: mem,
+            poolSize: 1,
+            worker: () => new InProcessWorker(new URL('https://t.test/f.js')) as unknown as Worker,
+          }),
+        ],
+        providers: [FeatService],
+        exports: [MeshModule, FeatService],
+      })
+      class FeatureModule {}
+
+      @Module({ imports: [MeshModule.forRoot(), FeatureModule], providers: [FeatConsumer] })
+      class FeatApp {}
+
+      const app = await NestFactory.createApplicationContext(FeatApp, { logger: false });
+      try {
+        const pool = app.get(FeatConsumer).pool;
+        expect(pool).toBeInstanceOf(WorkerPool);
+        expect(getMeshPool('feat')).toBe(pool);
+        // Pool wiring ran without a validator warning — 'feat' was registered.
+        expect(entries.every((e) => !e.message.includes('"feat"'))).toBe(true);
+      } finally {
+        await app.close();
+      }
+      expect(getMeshPool('feat')).toBeUndefined();
+      expect(InProcessWorker.created[0].terminated).toBe(true);
+    } finally {
+      setLogSink(null);
+    }
+  });
+});
+
+describe('MeshModule async registration', () => {
+  it('forRootAsync resolves pool config through injected dependencies', async () => {
+    InProcessWorker.created = [];
+    const POOL_SIZE = 'POOL_SIZE';
+    // useFactory deps resolve through options.imports — same contract as
+    // TypeOrmModule.forRootAsync({ imports: [ConfigModule] }).
+    @Module({ providers: [{ provide: POOL_SIZE, useValue: 2 }], exports: [POOL_SIZE] })
+    class SizeModule {}
+
+    @Module({
+      imports: [
+        MeshModule.forRootAsync({
+          imports: [SizeModule],
+          useFactory: (size: number) => ({
+            pools: [{ name: 'async', sharedMemory: mem, poolSize: size, createWorker: newWorker }],
+          }),
+          inject: [POOL_SIZE],
+        }),
+      ],
+    })
+    class AsyncApp {}
+
+    const app = await NestFactory.createApplicationContext(AsyncApp, { logger: false });
+    try {
+      expect(getMeshPool('async')).toBeInstanceOf(WorkerPool);
+      expect(InProcessWorker.created).toHaveLength(2);
+    } finally {
+      await app.close();
+    }
+    expect(getMeshPool('async')).toBeUndefined();
+  });
+
+  it('registerPoolAsync keeps the MESH_POOL token injectable', async () => {
+    const CFG = 'CFG';
+    @Module({ providers: [{ provide: CFG, useValue: { size: 1 } }], exports: [CFG] })
+    class CfgModule {}
+
+    @Injectable()
+    class AsyncConsumer {
+      constructor(@InjectMeshPool('cfg') readonly pool: WorkerPool) {}
+    }
+
+    @Module({
+      imports: [
+        MeshModule.registerPoolAsync({
+          name: 'cfg',
+          imports: [CfgModule],
+          useFactory: (cfg: { size: number }) => ({
+            sharedMemory: mem,
+            poolSize: cfg.size,
+            createWorker: newWorker,
+          }),
+          inject: [CFG],
+        }),
+      ],
+      providers: [AsyncConsumer],
+      exports: [MeshModule],
+    })
+    class AsyncFeature {}
+
+    @Module({ imports: [MeshModule.forRoot(), AsyncFeature] })
+    class AsyncRoot {}
+
+    const app = await NestFactory.createApplicationContext(AsyncRoot, { logger: false });
+    try {
+      const featCtx = app.get(AsyncConsumer, { strict: false });
+      expect(featCtx.pool).toBeInstanceOf(WorkerPool);
+      expect(getMeshPool('cfg')).toBe(featCtx.pool);
+    } finally {
+      await app.close();
+    }
+  });
+});
+
+describe('MeshPoolValidator', () => {
+  it('warns when an @MeshTask targets a pool nothing registered', async () => {
+    const entries: LogEntry[] = [];
+    setLogSink((e) => entries.push(e));
+    try {
+      @Injectable()
+      class MissingPoolService {
+        @MeshTask({ pool: 'missing' })
+        work() {
+          return 'local';
+        }
+      }
+
+      @Module({ imports: [MeshModule.forRoot()], providers: [MissingPoolService] })
+      class WarnApp {}
+
+      const app = await NestFactory.createApplicationContext(WarnApp, { logger: false });
+      await app.close();
+      expect(
+        entries.some(
+          (e) =>
+            e.level === 'warn' &&
+            e.message.includes('unregistered pool') &&
+            e.message.includes('"missing"'),
+        ),
+      ).toBe(true);
+    } finally {
+      setLogSink(null);
     }
   });
 });

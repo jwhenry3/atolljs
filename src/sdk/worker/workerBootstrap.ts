@@ -6,7 +6,12 @@ const workerLog = scoped('worker');
 
 let memoryInitialized = false;
 
-self.onmessage = async (event) => {
+if (typeof self === 'undefined') {
+  // Imported outside a worker context (e.g. a Nest entry that shares the
+  // mesh-nestjs barrel with the worker entry) — nothing to wire.
+  workerLog.warn('workerBootstrap: no worker global found — skipping message wiring');
+} else {
+  self.onmessage = async (event) => {
   const data = event.data;
 
   if (data.type === 'INIT_MEMORY') {
@@ -35,5 +40,6 @@ self.onmessage = async (event) => {
       workerLog.warn(`task ${taskId} failed: ${err.message || String(err)}`);
       self.postMessage({ messageId, success: false, error: err.message || String(err) });
     }
-  }
-};
+    }
+  };
+}

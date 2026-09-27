@@ -142,6 +142,8 @@ export const FRAMEWORKS: FrameworkDoc[] = [
     summary:
       'Signal adapter for zoneless Angular. Call in an injection context (field initializer or constructor) so subscriptions release on destroy.',
     apis: [
+      { name: 'provideMesh', signature: 'provideMesh({ pools: MeshPoolDeclaration[] })', desc: 'Register worker pools as environment providers — spawned eagerly, terminated on injector destroy.' },
+      { name: 'injectMeshPool', signature: 'injectMeshPool<T>(name): T', desc: 'Inject a pool registered by provideMesh inside an injection context.' },
       { name: 'observableSignal', signature: 'observableSignal(source: ObservableValue<T>): Signal<T>', desc: 'Subscribe to any observable snapshot (task or field).' },
       VALUE_API('sharedValue', 'sharedValue(memory, key): Signal<T | undefined>', 'returns the field value as a Signal'),
       { name: 'taskState', signature: 'taskState(task): { state: Signal<TaskSnapshot>, run, runOnce }', desc: 'Bind an AsyncTask to a Signal and get its triggers.' },

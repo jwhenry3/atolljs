@@ -41,3 +41,6 @@ export function sharedValue<S extends SharedSpec, K extends keyof S, Sel>(
 export function taskState<A, R>(task: AsyncTask<A, R>) {
   return { state: observableSignal(task), run: task.run, runOnce: task.runOnce };
 }
+
+export { provideMesh, injectMeshPool, getMeshPoolToken } from './provideMesh';
+export type { MeshPoolDeclaration, MeshFeature } from './provideMesh';

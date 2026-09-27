@@ -152,14 +152,29 @@ export function App() {
     summary:
       'Signal adapter for zoneless Angular. Call in an injection context (field initializer or constructor) so subscriptions release on destroy.',
     apis: [
+      { name: 'provideMesh', signature: 'provideMesh({ pools: MeshPoolDeclaration[] }, ...features)', desc: 'Register worker pools as environment providers — spawned eagerly, terminated on injector destroy; also usable at route level.' },
+      { name: 'injectMeshPool', signature: 'injectMeshPool<T>(name): T', desc: 'Inject a pool registered by provideMesh inside an injection context; mockable via TestBed.' },
       { name: 'observableSignal', signature: 'observableSignal(source: ObservableValue<T>): Signal<T>', desc: 'Subscribe to any observable snapshot.' },
       { name: 'sharedValue', signature: 'sharedValue(memory, key, select?, options?): Signal<T | undefined>', desc: 'Bind one shared-memory field to a Signal; optional selector + equality.' },
       { name: 'taskState', signature: 'taskState(task): { state: Signal<TaskSnapshot>, run, runOnce }', desc: 'Bind an AsyncTask to a Signal and get its triggers.' },
     ],
-    usageFile: 'app.component.ts',
+    usageFile: 'main.ts + app.component.ts',
     usageLanguage: 'typescript',
-    usage: `import { Component, effect } from '@angular/core';
-import { sharedValue, taskState } from '@jwhenry123/mesh-angular';
+    usage: `// main.ts — pools register as DI providers, terminating on app teardown
+bootstrapApplication(AppComponent, {
+  providers: [
+    provideZonelessChangeDetection(),
+    provideMesh({ pools: [{
+      name: 'counter',
+      worker: () => new Worker(new URL('./counter.worker.ts', import.meta.url)),
+      sharedMemory: counterMemory,
+    }] }),
+  ],
+});
+
+// app.component.ts
+import { Component, effect } from '@angular/core';
+import { injectMeshPool, sharedValue, taskState } from '@jwhenry123/mesh-angular';
 import { counterMemory, incrementTask, initTask } from './counter.contract';
 
 @Component({
@@ -168,6 +183,7 @@ import { counterMemory, incrementTask, initTask } from './counter.contract';
     count: {{ count() ?? '…' }}</button>\`,
 })
 export class AppComponent {
+  private readonly pool = injectMeshPool('counter');
   count = sharedValue(counterMemory, 'count');
   init = taskState(initTask).state;
   increment = taskState(incrementTask);

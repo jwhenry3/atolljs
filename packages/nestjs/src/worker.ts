@@ -1,5 +1,11 @@
 // Worker-side Nest bootstrap — builds a real application context inside the
 // worker so @MeshTask services resolve their constructor dependencies there.
+// The first two imports are load-bearing and ORDER-SENSITIVE: the shim binds
+// `self = parentPort` (Node workers have no worker global), then the SDK
+// bootstrap wires INIT_MEMORY / EXECUTE_TASK onto it. Both are no-ops on the
+// main thread, so this module is also safe to pull in via the package barrel.
+import '@jwhenry123/mesh-node/shim';
+import '@jwhenry123/mesh/sdk/worker/workerBootstrap';
 import { DiscoveryModule, DiscoveryService, NestFactory } from '@nestjs/core';
 import { Module, type INestApplicationContext, type Type } from '@nestjs/common';
 import { scoped } from '@jwhenry123/mesh/sdk';
@@ -11,11 +17,12 @@ const log = scoped('mesh-worker');
 /**
  * Bootstraps a Nest application context inside the worker and registers every
  * provider's @MeshTask methods — bound to the DI-resolved instance — as
- * TaskRegistry handlers. Call from the worker entry after workerBootstrap:
+ * TaskRegistry handlers. The worker entry needs only this import (the shim
+ * and SDK bootstrap are self-contained above — keep this import first):
  *
  *   // incidents.worker.ts
- *   import '@jwhenry123/mesh-incidents/worker/incidents.worker';
  *   import { runMeshWorker } from '@jwhenry123/mesh-nestjs/worker';
+ *   import '@jwhenry123/mesh-incidents/worker/incidents.worker'; // contract tasks
  *   import { IncidentsMeshModule } from './shared/incidents-mesh.module';
  *   void runMeshWorker(IncidentsMeshModule);
  *

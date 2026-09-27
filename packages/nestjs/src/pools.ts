@@ -2,6 +2,7 @@
 // The main thread registers pools via MeshModule providers; @MeshTask
 // dispatch looks them up here. In a worker context the registry stays empty,
 // so decorated methods fall through to their real bodies.
+import type { Worker as NodeWorker } from 'node:worker_threads';
 import {
   WorkerPool,
   type SharedAccess,
@@ -19,10 +20,16 @@ export interface MeshPoolConfig<S extends SharedSpec = SharedSpec, T extends Tas
   /** Bundled worker entry (e.g. dist/incidents.worker.js). */
   workerFile?: string;
   /**
+   * Worker spec — the preferred form. A path/URL behaves like workerFile; a
+   * factory may return a node:worker_threads Worker (auto-adapted) or a
+   * DOM-style Worker — the bundler-detectable literal stays in app code while
+   * the adapter wrapping disappears:
+   *   worker: () => new Worker(new URL('./x.worker.ts', import.meta.url))
+   */
+  worker?: string | URL | (() => Worker | NodeWorker);
+  /**
    * Worker factory — defaults to the node:worker_threads adapter on
-   * workerFile. Prefer the bundler-detectable form so the config references
-   * the TS source and webpack emits the chunk automatically:
-   *   () => createNodeWorker(new Worker(new URL('./x.worker.ts', import.meta.url)))
+   * workerFile/worker.
    */
   createWorker?: () => Worker;
   /**
@@ -37,7 +44,7 @@ export interface MeshPoolConfig<S extends SharedSpec = SharedSpec, T extends Tas
 
 export interface MeshModuleOptions {
   /** Each pool may carry a different shared-memory spec and task map. */
-  pools: MeshPoolConfig[];
+  pools?: MeshPoolConfig[];
 }
 
 export const getMeshPoolToken = (name = 'default') => `MESH_POOL:${name}`;
@@ -59,13 +66,14 @@ export function getMeshPool(name = 'default'): WorkerPool | undefined {
 export function buildMeshPool<S extends SharedSpec, T extends TaskMap>(
   config: MeshPoolConfig<S, T>,
 ): WorkerPool<S, T> {
-  if (!config.createWorker && !config.workerFile) {
-    throw new Error(`MeshPool "${config.name ?? 'default'}" requires workerFile or createWorker.`);
+  if (!config.createWorker && !config.workerFile && !config.worker) {
+    throw new Error(`MeshPool "${config.name ?? 'default'}" requires worker, workerFile or createWorker.`);
   }
-  const { name: _name, workerFile, createWorker, sharedMemory, ...rest } = config;
+  const { name: _name, workerFile, worker, createWorker, sharedMemory, ...rest } = config;
   return createNodePool({
     ...rest,
     workerFile,
+    worker,
     createWorker,
     sharedMemory: sharedMemory as SharedMemory<S> & SharedAccess<S>,
   });

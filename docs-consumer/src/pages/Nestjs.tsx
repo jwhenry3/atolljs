@@ -4,40 +4,42 @@ const port = 3100;
 const apiBase = `${window.location.protocol}//${window.location.hostname}:${port}`;
 
 const APIS = [
-  { name: 'MeshModule.forRoot', signature: 'forRoot({ pools: MeshPoolConfig[] })', desc: 'Configure named worker pools: workerFile, sharedMemory, poolSize, tasks. Pools are injectable providers, terminated on module destroy.' },
+  { name: 'MeshModule.forRoot', signature: 'forRoot({ pools? }) / forRootAsync(...)', desc: 'Global mesh infrastructure — validator, discovery, lifecycle. Optional pools for simple apps; feature modules prefer registerPool.' },
+  { name: 'MeshModule.registerPool', signature: 'registerPool(config) / registerPoolAsync(...)', desc: 'Bull-style module-level pool registration inside the feature module that owns the worker: name, worker, sharedMemory, poolSize, tasks. Injectable provider, terminated on module destroy.' },
   { name: '@MeshTask', signature: '@MeshTask(taskId | contract | { pool })', desc: 'RPC-style offload — calls on the API thread dispatch to the pool; the method body executes inside the worker’s own Nest context.' },
   { name: '@InjectMeshPool', signature: '@InjectMeshPool(name)', desc: 'Inject a configured pool directly (first-class task methods / runTask).' },
-  { name: 'runMeshWorker', signature: 'runMeshWorker(module)', desc: 'Worker entry point — boots a Nest application context inside the worker and registers every @MeshTask method on its DI-resolved provider.' },
+  { name: 'runMeshWorker', signature: 'runMeshWorker(module)', desc: 'Worker entry point — self-contained (shim + bootstrap inside), boots a Nest application context inside the worker and registers every @MeshTask method on its DI-resolved provider.' },
   { name: 'registerMeshHandlers', signature: 'registerMeshHandlers(...instances)', desc: 'Explicit task registration for instances created outside a worker Nest context.' },
-  { name: 'createNodeWorker', signature: 'createNodeWorker(source | worker): Worker', desc: 'Adapts node:worker_threads.Worker to the DOM Worker surface. Wrap a `new Worker(new URL(...))` to keep webpack’s worker-chunk detection.' },
+  { name: 'worker spec', signature: 'worker: path | URL | (() => Worker | NodeWorker)', desc: 'Pool worker declaration — a factory may return node:worker_threads.Worker directly; it is adapted internally, keeping `new Worker(new URL(...))` webpack-detectable without adapter ceremony.' },
 ];
 
 const USAGE_MODULE = `import { Module } from '@nestjs/common';
 import { Worker } from 'node:worker_threads';
 import { MeshModule } from '@jwhenry123/mesh-nestjs';
-import { createNodeWorker } from '@jwhenry123/mesh-node';
 import { digestMemory } from './digest/digest.service';
-import { DigestMeshModule } from './digest/digest.module';
+import { DigestService } from './digest/digest.service';
 
+// The feature module owns its worker domain — the pool registers here,
+// not in AppModule. The same module is bootstrapped inside each worker
+// by runMeshWorker, where the pool provider resolves to null.
 @Module({
   imports: [
-    MeshModule.forRoot({
-      pools: [{
-        name: 'digest',
-        // The factory references the TS source — webpack detects
-        // new Worker(new URL(...)) and emits it as its own chunk.
-        createWorker: () => createNodeWorker(
-          new Worker(new URL('./digest.worker.ts', import.meta.url)),
-        ),
-        sharedMemory: digestMemory,
-        poolSize: 2,
-      }],
+    MeshModule.registerPool({
+      name: 'digest',
+      // webpack detects new Worker(new URL(...)) and emits the entry
+      // as its own chunk — the config references the TS source.
+      worker: () => new Worker(new URL('../digest.worker.ts', import.meta.url)),
+      sharedMemory: digestMemory,
+      poolSize: 2,
     }),
-    DigestMeshModule,   // imported by the app AND bootstrapped in each worker
   ],
-  controllers: [DigestController],
+  providers: [DigestService],
+  exports: [DigestService, MeshModule],   // re-exports the pool token
 })
-export class AppModule {}`;
+export class DigestMeshModule {}
+
+// app.module.ts — global infrastructure once, zero pool config at root:
+//   imports: [MeshModule.forRoot(), DigestMeshModule, IncidentsMeshModule]`;
 
 const USAGE_SERVICE = `import { Inject, Injectable } from '@nestjs/common';
 import { MeshTask } from '@jwhenry123/mesh-nestjs/decorators';
@@ -62,7 +64,8 @@ export class DigestService {
 }`;
 
 const USAGE_WORKER = `// src/digest.worker.ts — bundled standalone to dist/digest.worker.js
-import '@jwhenry123/mesh/sdk/worker/workerBootstrap';
+// mesh-nestjs/worker is self-contained: its own first imports bind
+// self = parentPort and wire INIT_MEMORY / EXECUTE_TASK.
 import { runMeshWorker } from '@jwhenry123/mesh-nestjs/worker';
 import { DigestMeshModule } from './digest/digest.module';
 
@@ -119,11 +122,11 @@ export function Nestjs() {
         <code>webpackConfigFactory</code>. Worker chunks need no configuration:
         webpack detects each <code>new Worker(new URL('./x.worker.ts',
         import.meta.url))</code> in the pool config and compiles it as its own
-        chunk, so the factory points at the TS source — never a dist filename.
-        The <code>@jwhenry123/mesh-node/shim</code> first-import in each
-        worker entry binds <code>self = parentPort</code> so the SDK's worker
-        bootstrap wires onto <code>node:worker_threads</code>. The node pieces
-        (<code>createNodeWorker</code>, the shim,{' '}
+        chunk, so the <code>worker:</code> factory points at the TS source —
+        never a dist filename. <code>mesh-nestjs/worker</code> self-contains
+        the <code>node:worker_threads</code> shim + bootstrap — worker entries
+        are a couple of imports. The lower-level node pieces (
+        <code>createNodeWorker</code>, the shim,{' '}
         <code>createNodePool</code>) live in{' '}
         <code>@jwhenry123/mesh-node</code> — usable in plain Node programs with
         no Nest at all.

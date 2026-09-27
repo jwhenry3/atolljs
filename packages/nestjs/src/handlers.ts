@@ -1,6 +1,6 @@
 // Framework-free worker-side registration — safe inside worker bundles.
 import { TaskRegistry } from '@jwhenry123/mesh/sdk';
-import { getMeshTaskMeta } from './decorators';
+import { bindMeshWorkerInstance, getMeshTaskMeta } from './decorators';
 
 /**
  * Registers every @MeshTask method on the given targets as a TaskRegistry
@@ -21,6 +21,10 @@ export function registerMeshHandlers(
   for (const target of targets) {
     const instance =
       typeof target === 'function' ? new (target as new () => object)() : target;
+    // Handlers the decorator auto-registered on module load now delegate to
+    // this instance too — registration order between module imports and
+    // runMeshWorker stops mattering.
+    bindMeshWorkerInstance(instance.constructor as new () => object, instance);
     const proto = Object.getPrototypeOf(instance);
     for (const key of Object.getOwnPropertyNames(proto)) {
       if (key === 'constructor') continue;
