@@ -193,4 +193,32 @@ describe('reactive connector', () => {
     const bare: Connector<number> = { byteOffset: 0, byteLength: 8, read: () => 0, write: () => undefined };
     expect(() => reactive(bare).observeRemote()).toThrow(/remote observation/);
   });
+
+  it('falls back to a 50ms poll when Atomics.waitAsync is unavailable', async () => {
+    const spec = { n: field.number() };
+    const local = new SharedMemory(spec);
+    const remote = new SharedMemory(spec);
+    const buffer = new SharedArrayBuffer(local.totalBytes);
+    local.bind(buffer);
+    remote.bind(buffer);
+
+    // Real Atomics with waitAsync hidden — connector writes still use the
+    // prototype's add/notify, reactive.ts takes the polling branch.
+    const withoutWaitAsync = Object.create(Atomics);
+    withoutWaitAsync.waitAsync = undefined;
+    vi.stubGlobal('Atomics', withoutWaitAsync);
+    try {
+      const rc = reactive(local.connector('n'));
+      const stop = rc.observeRemote();
+      remote.connector('n').write(33);
+      await vi.waitFor(() => expect(rc.get()).toBe(33), { timeout: 2000 });
+
+      stop(); // clears the interval
+      remote.connector('n').write(44);
+      await new Promise((r) => setTimeout(r, 150));
+      expect(rc.get()).toBe(33);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
 });

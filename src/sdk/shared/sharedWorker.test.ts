@@ -106,4 +106,109 @@ describe('sharedWorker', () => {
       connectSharedWorker({ port: port2, sharedMemory: mem, connectTimeoutMs: 50 })
     ).rejects.toThrow(/timed out/);
   });
+
+  it('rejects when no port, workerUrl, or createWorker is configured', async () => {
+    const { shared, connectSharedWorker } = await boot();
+    const mem = shared.defineSharedMemory({ n: shared.field.number() });
+    await expect(connectSharedWorker({ sharedMemory: mem })).rejects.toThrow(/workerUrl.*createWorker.*port/);
+  });
+
+  it('rejects outside a cross-origin isolated context', async () => {
+    const { shared, connectSharedWorker, link } = await boot();
+    vi.stubGlobal('crossOriginIsolated', false);
+    const mem = shared.defineSharedMemory({ n: shared.field.number() });
+    await expect(
+      connectSharedWorker({ port: link(), sharedMemory: mem })
+    ).rejects.toThrow(/cross-origin isolated/);
+  });
+
+  it('connects through a createWorker factory', async () => {
+    const { shared, connectSharedWorker, link } = await boot();
+    const mem = shared.defineSharedMemory({ n: shared.field.number() });
+    const client = await connectSharedWorker({
+      createWorker: () => ({ port: link() }) as SharedWorker,
+      sharedMemory: mem,
+    });
+    expect(client.clientIndex).toBe(1);
+    mem.n.write(11);
+    expect(mem.n.read()).toBe(11);
+  });
+
+  it('rejects runTask when the host handler throws', async () => {
+    const { shared, TaskRegistry, connectSharedWorker, link } = await boot();
+    TaskRegistry.register({ taskId: 'boom' }, () => {
+      throw new Error('kaboom');
+    });
+    const mem = shared.defineSharedMemory({ n: shared.field.number() });
+    const client = await connectSharedWorker({ port: link(), sharedMemory: mem });
+    await expect(client.runTask({ taskId: 'boom' })).rejects.toThrow('kaboom');
+  });
+
+  it('skips task names that collide with client members', async () => {
+    const { shared, TaskRegistry, connectSharedWorker, link } = await boot();
+    TaskRegistry.register({ taskId: 'inc' }, (x: number) => x);
+    const mem = shared.defineSharedMemory({ n: shared.field.number() });
+    const client = await connectSharedWorker({
+      port: link(),
+      sharedMemory: mem,
+      tasks: { runTask: { taskId: 'inc' }, inc: { taskId: 'inc' } },
+    });
+    // The collision guard kept the real runTask; the other method installed fine.
+    expect(await client.runTask({ taskId: 'inc' }, 4)).toBe(4);
+    expect(await client.inc(2)).toBe(2);
+  });
+
+  it('disconnect() notifies the host and closes the port', async () => {
+    const { shared, connectSharedWorker } = await boot();
+    const { attachSharedPort } = await import('./sharedWorkerHost');
+    const channel = new MessageChannel();
+    attachSharedPort(channel.port1);
+    const closeSpy = vi.spyOn(channel.port1, 'close');
+
+    const mem = shared.defineSharedMemory({ n: shared.field.number() });
+    const client = await connectSharedWorker({ port: channel.port2, sharedMemory: mem });
+    client.disconnect();
+    await new Promise((r) => setTimeout(r, 50));
+    expect(closeSpy).toHaveBeenCalled();
+  });
+
+  it('warns when a later client requests more memory than the first allocated', async () => {
+    const { connectSharedWorker } = await boot();
+    const { attachSharedPort } = await import('./sharedWorkerHost');
+    const { setLogSink } = await import('../log');
+    const entries: { message: string }[] = [];
+    setLogSink((e) => entries.push(e));
+    try {
+      // Drive the host with a raw port — the client-side bind of an oversized
+      // contract would throw, but the warn happens on the host either way.
+      const channel = new MessageChannel();
+      attachSharedPort(channel.port1);
+      channel.port2.start();
+      channel.port2.postMessage({ type: 'SHARED_CONNECT', memoryBytes: 64 });
+      await new Promise((r) => setTimeout(r, 50));
+      // First client's MemoryManager allocates its 16-page (1MB) default, so
+      // the second request must exceed that to hit the capacity warn.
+      channel.port2.postMessage({ type: 'SHARED_CONNECT', memoryBytes: 2 << 20 });
+      await new Promise((r) => setTimeout(r, 50));
+      expect(entries.some((e) => /first client's capacity wins/.test(e.message))).toBe(true);
+    } finally {
+      setLogSink(null);
+    }
+  });
+
+  it('sharedWorkerHost() attaches ports delivered via onconnect', async () => {
+    const { shared, connectSharedWorker } = await boot();
+    const { sharedWorkerHost } = await import('./sharedWorkerHost');
+    vi.stubGlobal('self', {} as WorkerGlobalScope);
+    sharedWorkerHost();
+    const channel = new MessageChannel();
+    (globalThis.self as unknown as { onconnect(e: { ports: MessagePort[] }): void })
+      .onconnect({ ports: [channel.port1] });
+
+    const mem = shared.defineSharedMemory({ n: shared.field.number() });
+    const client = await connectSharedWorker({ port: channel.port2, sharedMemory: mem });
+    expect(client.clientIndex).toBe(1);
+    mem.n.write(9);
+    expect(mem.n.read()).toBe(9);
+  });
 });
