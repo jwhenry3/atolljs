@@ -1,0 +1,45 @@
+# Continuous integration — typechecks + unit tests.
+#
+# The root vitest config runs every suite in the repo: src/sdk plus all
+# packages/*/test (bindings, incidents domain, node/nestjs adapters).
+# Typechecks run per-tsconfig so each publishable package is verified against
+# only its own declared peer dependency graph.
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck — core SDK + app sources
+        run: npx tsc --noEmit
+
+      - name: Typecheck — publishable packages
+        run: |
+          set -e
+          for pkg in react vue solidjs svelte angular nextjs node nestjs incidents; do
+            echo "--- packages/$pkg"
+            npx tsc -p "packages/$pkg/tsconfig.json"
+          done
+
+      - name: Test — all suites (vitest)
+        run: npm test
