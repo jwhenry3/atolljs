@@ -25,10 +25,19 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: package-lock.json
+          cache-dependency-path: |
+            package-lock.json
+            examples/nestjs/package-lock.json
+            examples/nextjs/package-lock.json
 
       - name: Install dependencies
-        run: npm ci
+        run: |
+          set -e
+          npm ci
+          # e2e suites exercise the real example toolchains — they resolve
+          # `nest` (build step) and `next/server` from the example installs.
+          (cd examples/nestjs && npm ci)
+          (cd examples/nextjs && npm ci)
 
       - name: Typecheck — core SDK + app sources
         run: npx tsc --noEmit
