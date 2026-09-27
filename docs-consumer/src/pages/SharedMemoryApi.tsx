@@ -94,6 +94,30 @@ defineSharedMemory(spec, { codec: jsonCodec });  // opt out of the default`}
         <code>WorkerPoolConfig.memory</code> (<code>maximumPages</code>,{' '}
         <code>growthFactor</code>).
       </p>
+
+      <h2>Custom connectors &amp; manual allocation</h2>
+      <p>
+        A field kind is just a registered <code>ConnectorFactory</code>:{' '}
+        <code>(descriptor, ctx, byteOffset) =&gt; Connector</code>. The context
+        hands the factory the <code>SharedArrayBuffer</code>, the contract's
+        codec, and the field's slot in the shared version counter; the returned
+        connector's <code>read()</code>/<code>write(v)</code> own that region.{' '}
+        <code>registerConnectorFactory(kind, factory)</code> registers a custom
+        storage backend SDK-wide;{' '}
+        <code>defineSharedMemory(spec, {'{ plugins: { kind: factory } }'})</code>{' '}
+        overrides per contract.
+      </p>
+      <p>
+        Underneath the pool sits <code>MemoryManager</code> — the allocator it
+        wraps when <code>sharedMemory</code> is configured. It owns a shared{' '}
+        <code>WebAssembly.Memory</code> (<code>initialPages</code> 16 = 1 MB,{' '}
+        <code>maximumPages</code> 16384 = 1 GB by default), grows it via{' '}
+        <code>ensureCapacity(bytes)</code>, and exposes the storage with{' '}
+        <code>getView(type, byteOffset?, length?)</code> and{' '}
+        <code>getBuffer()</code>. Reach for it directly only when you manage the
+        buffer yourself — e.g. a SharedWorker host allocating once for all
+        clients.
+      </p>
     </article>
   );
 }

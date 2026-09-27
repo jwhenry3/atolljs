@@ -10,6 +10,12 @@ export function Hosting() {
         is the gate, and your host must opt the document into it on every
         response.
       </p>
+      <p>
+        This page applies only when your pool uses <code>sharedMemory</code>. A
+        message-only <code>connectWorker</code>/<code>WorkerPool</code> (no{' '}
+        <code>sharedMemory</code> contract) needs none of these headers —{' '}
+        <code>SharedArrayBuffer</code> is never touched.
+      </p>
 
       <h2>Required response headers</h2>
       <CodeBlock

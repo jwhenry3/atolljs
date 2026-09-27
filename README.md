@@ -10,7 +10,7 @@ layouts, first-class task methods, and cross-thread reactive state.
 
 | Package | What it is |
 |---|---|
-| `@jwhenry123/mesh` | Core SDK — contracts, `WorkerPool`, `TaskRegistry`, `watch`/`observe`, codecs |
+| `@jwhenry123/mesh` | Core SDK — `defineWorker`/`connectWorker` typed worker clients over `WorkerPool`, shared-memory contracts, `watch`/`observe`, codecs |
 | `@jwhenry123/mesh-react` | React hooks — `useObservable`, `useSharedValue`, `useTask` |
 | `@jwhenry123/mesh-vue` | Vue composables — `useObservable`, `useSharedValue`, `useTask` |
 | `@jwhenry123/mesh-solidjs` | Solid primitives — `createObservable`, `createSharedValue`, `createTask` |
@@ -25,6 +25,13 @@ Framework bindings are published independently — install only the one you use:
 ```bash
 npm install @jwhenry123/mesh @jwhenry123/mesh-react
 ```
+
+## Documentation
+
+Full docs deploy to GitHub Pages on every push to `master`:
+[jwhenry3.github.io/mesh](https://jwhenry3.github.io/mesh/) —
+`/sdk/` is the internals/SDK site (source: `docs/`), `/consumer/` the
+package-usage site (source: `docs-consumer/`).
 
 ## Layout
 

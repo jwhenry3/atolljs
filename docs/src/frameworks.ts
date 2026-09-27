@@ -15,6 +15,9 @@ import svelteView from '../../examples/svelte/src/App.svelte?raw';
 import angularBinding from '../../packages/angular/src/index.ts?raw';
 import angularGlue from '../../examples/angular/src/app.component.ts?raw';
 import angularView from '../../examples/angular/src/app.component.html?raw';
+import nextjsBinding from '../../packages/nextjs/src/index.ts?raw';
+import nextjsGlue from '../../examples/nextjs/src/useIncidents.ts?raw';
+import nextjsView from '../../examples/nextjs/src/IncidentsApp.tsx?raw';
 
 export interface FrameworkDoc {
   id: string;
@@ -181,6 +184,31 @@ export class IncidentsService {
     notes: [
       'Composition happens right in the component: signals for fields, an effect() to re-run the page query.',
       'Works with OnPush + zoneless change detection out of the box.',
+    ],
+  },
+  {
+    id: 'nextjs',
+    name: 'Next.js',
+    port: 3001,
+    binding: '@jwhenry123/mesh-nextjs',
+    summary:
+      'React re-export for App Router apps — the same hooks, packaged so client components import them under a \'use client\' boundary while server components never touch Worker.',
+    apis: [
+      { name: 'useObservable', signature: 'useObservable(source: ObservableValue<T>): T', desc: 'Subscribe to any observable snapshot (task or field).' },
+      VALUE_API('useSharedValue', 'useSharedValue(memory, key): T | undefined', 'returns the field value as React state'),
+      { name: 'useTask', signature: 'useTask(task | asyncFn): { data, pending, settled, elapsedMs, error, run, runOnce }', desc: 'Bind an AsyncTask — or any async fn (e.g. a client method) — to state and get its triggers.' },
+    ],
+    bindingSource: nextjsBinding,
+    bindingFile: 'packages/nextjs/src/index.ts',
+    glueSource: nextjsGlue,
+    glueFile: 'examples/nextjs/src/useIncidents.ts',
+    viewSource: nextjsView,
+    viewFile: 'examples/nextjs/src/IncidentsApp.tsx',
+    viewLanguage: 'tsx',
+    notes: [
+      'Components using the hooks carry the \'use client\' directive — IncidentsApp is the boundary; app/page.tsx stays a server component that just renders it.',
+      'Importing the connectWorker client is SSR-safe: the pool spawns lazily on the first method call, never during a server render.',
+      'The COOP/COEP headers() in next.config.ts are only needed because this pool uses sharedMemory — a message-only pool needs neither the headers nor SharedArrayBuffer.',
     ],
   },
 ];

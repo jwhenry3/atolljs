@@ -91,7 +91,8 @@ const api = workerClient<IncidentsWorker>(pool);`}
         code={`// Per-call controls ride on .with() — the same typed surface
 const ctrl = new AbortController();
 const page = incidents.with({ signal: ctrl.signal, timeout: 2_000 }).queryIncidents(q);
-ctrl.abort();   // queued → dropped; in-flight → rejects now, the worker's late reply is discarded
+ctrl.abort();   // rejects with TaskAbortedError — queued → dropped;
+                // in-flight → rejects now, the worker's late reply is discarded
 
 // Observe the pool
 incidents.pool?.stats();
@@ -101,10 +102,13 @@ incidents.pool?.stats();
 await incidents.pool?.close();   // drain the queue, then terminate`}
       />
       <p>
-        JavaScript can't interrupt a running function, so an in-flight abort
-        rejects the caller and holds the worker's slot until its reply arrives —
-        the next call goes to a genuinely free worker. For a hard stop, call{' '}
-        <code>terminate()</code>.
+        A <code>signal</code> abort rejects with <code>TaskAbortedError</code>{' '}
+        (exported from <code>@jwhenry123/mesh/sdk</code>, alongside{' '}
+        <code>PoolQueueFullError</code>, <code>TaskTimeoutError</code>, and{' '}
+        <code>WorkerCrashedError</code>). JavaScript can't interrupt a running
+        function, so an in-flight abort rejects the caller and holds the worker's
+        slot until its reply arrives — the next call goes to a genuinely free
+        worker. For a hard stop, call <code>terminate()</code>.
       </p>
 
       <p>
@@ -117,6 +121,27 @@ await incidents.pool?.close();   // drain the queue, then terminate`}
         <code>tasks</code>) remains available when both threads need the contract
         object at runtime.
       </p>
+
+      <h2>Explicit service contracts (advanced)</h2>
+      <p>
+        <code>defineWorker</code>/<code>connectWorker</code> build on a lower,
+        framework-neutral layer — the same one the NestJS binding dispatches
+        through. Reach for it when both threads need the contract object at
+        runtime (a hand-built <code>WorkerPool</code>, a DI provider, a test
+        stub):
+      </p>
+      <table className="doc-table">
+        <thead>
+          <tr><th>Export</th><th>What it does</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>defineService(name, methods)</code></td><td>Declares the contract bundle once — <code>{'{ method: { argsSchema?, resultSchema? } }'}</code>. Wire ids derive as <code>service.method</code>; signatures infer from the schemas (<code>argsSchema: z.tuple(...)</code> → args, <code>resultSchema</code> → return type).</td></tr>
+          <tr><td><code>implementService(service, handlers)</code></td><td>Worker-side registration; throws at bind time on a missing method.</td></tr>
+          <tr><td><code>createClient(service, runner)</code></td><td>Typed proxy over any <code>TaskRunner</code> — a pool, a SharedWorker client, or a test stub.</td></tr>
+          <tr><td><code>service.tasks</code></td><td>A <code>TaskMap</code> you can feed straight to <code>new WorkerPool({'{ tasks }'})</code>.</td></tr>
+          <tr><td><code>rpc&lt;A, R&gt;({'{ taskId? }'})</code></td><td>Escape hatch for schema-less methods or explicit wire ids.</td></tr>
+        </tbody>
+      </table>
 
       <h2>defineTask — latest-wins runners</h2>
       <p>
@@ -137,6 +162,30 @@ import { defineTask } from '@jwhenry123/mesh/sdk';
 const queryTask = defineTask((q: QueryArgs) => incidents.queryIncidents(q));
 queryTask.subscribe((snap) => render(snap));`}
       />
+
+      <h2>Node workers</h2>
+      <p>
+        <code>WorkerPool</code>/<code>connectWorker</code> run on{' '}
+        <code>node:worker_threads</code> unchanged —{' '}
+        <code>@jwhenry123/mesh-node</code> adapts Node's <code>Worker</code> to
+        the DOM surface the pool expects.{' '}
+        <code>createNodePool({'{ workerFile | worker | createWorker, … }'})</code>{' '}
+        is <code>WorkerPool</code> with the adapter baked in; its{' '}
+        <code>worker:</code> factory may return a{' '}
+        <code>node:worker_threads.Worker</code> directly (adapted internally),
+        which keeps the bundler-detectable{' '}
+        <code>new Worker(new URL('./x.worker.ts', import.meta.url))</code>{' '}
+        literal usable on Node. For <code>connectWorker</code> or{' '}
+        <code>new WorkerPool</code> directly, wrap the spawn yourself with{' '}
+        <code>createNodeWorker</code>.
+      </p>
+      <p>
+        A Node worker entry imports <code>@jwhenry123/mesh-node/shim</code>{' '}
+        first — it binds <code>self = parentPort</code> before{' '}
+        <code>defineWorker</code>'s bootstrap evaluates.{' '}
+        <code>SharedArrayBuffer</code> works in Node with no headers: isolation
+        is a browser-only requirement.
+      </p>
     </article>
   );
 }

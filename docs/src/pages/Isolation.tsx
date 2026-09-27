@@ -10,6 +10,14 @@ export function Isolation() {
         is the gate, and every page in this repo (apps, docs, embedded demos)
         has to satisfy it independently.
       </p>
+      <p>
+        Everything on this page is opt-in: it applies only when a pool or
+        worker uses <code>sharedMemory</code>. A message-only{' '}
+        <code>connectWorker</code>/<code>WorkerPool</code> (no{' '}
+        <code>sharedMemory</code> contract) needs no COOP/COEP headers and no{' '}
+        <code>SharedArrayBuffer</code> — the handshake becomes a bare{' '}
+        <code>INIT</code> and this page doesn't apply.
+      </p>
 
       <h2>Top-level documents</h2>
       <p>A document becomes cross-origin isolated by sending two headers:</p>

@@ -71,9 +71,12 @@ export function TasksAndPool() {
         <code>client.with({'{ signal, timeout }'})</code> returns the same typed
         surface with per-call controls; <code>pool.stats()</code> exposes
         queue/in-flight counts and wait/run aggregates; <code>pool.close()</code>{' '}
-        drains then terminates. An in-flight abort rejects the caller but holds the
-        worker's slot until its reply arrives — JS can't interrupt a running task,
-        so the pool never double-books a busy worker.
+        drains then terminates. A <code>signal</code> abort rejects the call with{' '}
+        <code>TaskAbortedError</code> (all four errors are exported from{' '}
+        <code>@jwhenry123/mesh/sdk</code>): a queued call is dropped, an in-flight
+        one rejects the caller but holds the worker's slot until its reply arrives —
+        JS can't interrupt a running task, so the pool never double-books a busy
+        worker.
       </p>
 
       <h2>Under the hood</h2>
@@ -84,6 +87,77 @@ export function TasksAndPool() {
         stub. The explicit-contract path (<code>TaskContract</code>,{' '}
         <code>TaskRegistry.register</code>, <code>defineService</code>) remains for
         cases where both threads need the contract object at runtime.
+      </p>
+
+      <h2>Explicit service contracts (advanced)</h2>
+      <p>
+        <code>defineWorker</code>/<code>connectWorker</code> build on a lower,
+        framework-neutral layer (<code>src/sdk/service.ts</code>) — the same one
+        the NestJS binding dispatches through. Reach for it when both threads need
+        the contract object at runtime — feeding a hand-built{' '}
+        <code>WorkerPool</code>, a DI provider, or a test stub:
+      </p>
+      <table className="doc-table">
+        <thead>
+          <tr><th>Export</th><th>What it does</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>defineService(name, methods)</code></td><td>Declares the contract bundle once — <code>{'{ method: { argsSchema?, resultSchema? } }'}</code>. Wire ids derive as <code>service.method</code>; signatures infer from the schemas (<code>argsSchema: z.tuple(...)</code> → args, <code>resultSchema</code> → return type).</td></tr>
+          <tr><td><code>implementService(service, handlers)</code></td><td>Worker-side registration into <code>TaskRegistry</code>; throws at bind time on a missing method instead of surfacing "handler not found" on the far thread.</td></tr>
+          <tr><td><code>createClient(service, runner)</code></td><td>The main-thread half — a typed proxy over any <code>TaskRunner</code>: a pool, a SharedWorker client, or a test stub.</td></tr>
+          <tr><td><code>service.tasks</code></td><td>A <code>TaskMap</code> — feed it straight to <code>new WorkerPool({'{ tasks }'})</code> or a SharedWorker config.</td></tr>
+          <tr><td><code>rpc&lt;A, R&gt;({'{ taskId? }'})</code></td><td>Escape hatch for method declarations schemas can't carry — typed args with no validation, or an explicit wire id for interop.</td></tr>
+        </tbody>
+      </table>
+      <CodeBlock
+        code={`import { defineService, implementService, createClient, rpc } from '@jwhenry123/mesh/sdk';
+
+// Both threads import the same object — ids can never drift:
+export const pricing = defineService('pricing', {
+  reprice: { argsSchema: z.tuple([z.string()]), resultSchema: z.number() },
+  ping: rpc<[], string>(),                  // no schemas — types declared
+});
+// pricing.tasks.reprice.taskId === 'pricing.reprice'
+
+// worker side — a missing method throws here, at bind time:
+implementService(pricing, { reprice: (sku) => …, ping: () => 'pong' });
+
+// main thread — over any TaskRunner:
+const client = createClient(pricing, pool);
+await client.reprice('SKU-1');`}
+      />
+
+      <h2>Node workers</h2>
+      <p>
+        <code>WorkerPool</code>/<code>connectWorker</code> run on{' '}
+        <code>node:worker_threads</code> unchanged —{' '}
+        <code>@jwhenry123/mesh-node</code> adapts Node's <code>Worker</code> (an
+        EventEmitter) to the DOM surface the pool expects. The worker entry's
+        first import is <code>@jwhenry123/mesh-node/shim</code>, which binds{' '}
+        <code>self = parentPort</code> before <code>defineWorker</code>'s
+        bootstrap evaluates.
+      </p>
+      <CodeBlock
+        code={`import { createNodePool, createNodeWorker } from '@jwhenry123/mesh-node';
+import { Worker } from 'node:worker_threads';
+
+// createNodePool = new WorkerPool + the adapter baked in. Its worker:
+// factory may return a node:worker_threads.Worker directly — adapted
+// internally — keeping the bundler-detectable new URL(...) literal:
+const pool = createNodePool({
+  sharedMemory: memory,
+  tasks: pricing.tasks,
+  worker: () => new Worker(new URL('./incidents.worker.ts', import.meta.url)),
+});
+
+// connectWorker / new WorkerPool need the DOM surface — wrap explicitly:
+connectWorker<IncidentsWorker>({
+  worker: () => createNodeWorker(new Worker('./dist/incidents.worker.js')),
+});`}
+      />
+      <p>
+        <code>SharedArrayBuffer</code> works in Node with no headers —
+        cross-origin isolation is a browser-only requirement.
       </p>
     </article>
   );

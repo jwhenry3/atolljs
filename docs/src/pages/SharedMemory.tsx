@@ -103,6 +103,31 @@ export function SharedMemory() {
         <code>SharedMemoryOptions.plugins</code>.
       </p>
 
+      <h2>Custom connectors &amp; the allocator</h2>
+      <p>
+        A field kind is just a registered <code>ConnectorFactory</code> —{' '}
+        <code>(descriptor: FieldDescriptor, ctx: ConnectorContext, byteOffset)
+        =&gt; Connector</code> (<code>src/sdk/contract/sharedMemory.ts</code>).
+        The context hands the factory the <code>SharedArrayBuffer</code>, the
+        contract's codec, and the field's slot in the shared version counter;
+        the returned connector's <code>read()</code>/<code>write(v)</code> own
+        that region. <code>registerConnectorFactory(kind, factory)</code>{' '}
+        registers a custom storage backend SDK-wide;{' '}
+        <code>plugins</code> overrides per contract.
+      </p>
+      <p>
+        Underneath the pool sits <code>MemoryManager</code> (
+        <code>src/sdk/pool/memory.ts</code>) — the allocator it wraps when{' '}
+        <code>sharedMemory</code> is configured. It owns a shared{' '}
+        <code>WebAssembly.Memory</code> (<code>initialPages</code> 16 = 1 MB,{' '}
+        <code>maximumPages</code> 16384 = 1 GB by default), grows it via{' '}
+        <code>ensureCapacity(bytes)</code>, and exposes storage through{' '}
+        <code>getView(type, byteOffset?, length?)</code> and{' '}
+        <code>getBuffer()</code>. Both the <code>WorkerPool</code> and the
+        SharedWorker host use it; you only need it directly when managing
+        buffers yourself.
+      </p>
+
       <h2>Binding lifecycle</h2>
       <p>
         <code>memory.bind(buffer)</code> installs connectors. Reading a field before
