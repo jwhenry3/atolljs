@@ -23,6 +23,8 @@ export interface FrameworkDoc {
   binding: string;
   summary: string;
   apis: { name: string; signature: string; desc: string }[];
+  /** Optional NgModule-form section (Angular) — mirrors the NestJS page's MeshModule block. */
+  moduleSnippet?: { title: string; blurb: string; code: string; file: string };
   bindingSource: string;
   bindingFile: string;
   glueSource: string;
@@ -140,14 +142,35 @@ export const FRAMEWORKS: FrameworkDoc[] = [
     port: 4201,
     binding: '@jwhenry123/mesh-angular',
     summary:
-      'Signal adapter for zoneless Angular. Call in an injection context (field initializer or constructor) so subscriptions release on destroy.',
+      'Signal adapter for zoneless Angular. Call in an injection context (field initializer or constructor) so subscriptions release on destroy. NgModule apps get the same pools through MeshModule — the NestJS binding\'s forRoot/registerPool vocabulary.',
     apis: [
       { name: 'provideMesh', signature: 'provideMesh({ pools: MeshPoolDeclaration[] })', desc: 'Register worker pools or connectWorker clients ({ name, client }) as environment providers — terminated on injector destroy.' },
       { name: 'injectMeshPool', signature: 'injectMeshPool<T>(name): T', desc: 'Inject a pool registered by provideMesh inside an injection context.' },
+      { name: 'MeshModule', signature: 'MeshModule.forRoot({pools?}) / forRootAsync / registerPool(decl) / registerPoolAsync', desc: 'NgModule alternative to provideMesh — same pool tokens + lifecycle, declared on the importing module; async forms resolve their factory before bootstrap.' },
+      { name: 'InjectMeshPool', signature: '@InjectMeshPool(name)', desc: 'Constructor-parameter decorator form of injectMeshPool for @Injectable() classes.' },
       { name: 'observableSignal', signature: 'observableSignal(source: ObservableValue<T>): Signal<T>', desc: 'Subscribe to any observable snapshot (task or field).' },
       VALUE_API('sharedValue', 'sharedValue(memory, key): Signal<T | undefined>', 'returns the field value as a Signal'),
       { name: 'taskState', signature: 'taskState(task | asyncFn): { state: Signal<TaskSnapshot>, run, runOnce }', desc: 'Bind an AsyncTask — or any async fn — to a Signal and get its triggers.' },
     ],
+    moduleSnippet: {
+      title: 'NgModule form — MeshModule',
+      blurb:
+        'Apps still on NgModule bootstrap register the same pools through MeshModule — forRoot once at the root, registerPool inside the feature module that owns the worker. Async forms await their factory (fed by injected deps) before bootstrap completes.',
+      file: 'app.module.ts',
+      code: `@NgModule({
+  imports: [
+    MeshModule.forRoot(),       // or forRoot({ pools: [{ name: 'incidents', client: incidents }] })
+    IncidentsModule,            // imports MeshModule.registerPool({ name: 'incidents', client: incidents })
+  ],
+})
+export class AppModule {}
+
+@Injectable()
+export class IncidentsService {
+  // parameter-decorator form of injectMeshPool
+  constructor(@InjectMeshPool('incidents') private readonly pool: IncidentsClient) {}
+}`,
+    },
     bindingSource: angularBinding,
     bindingFile: 'packages/angular/src/index.ts',
     glueSource: angularGlue,

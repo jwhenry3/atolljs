@@ -145,10 +145,12 @@ export function App() {
     pkg: '@jwhenry123/mesh-angular',
     install: 'npm install @jwhenry123/mesh @jwhenry123/mesh-angular',
     summary:
-      'Signal adapter for zoneless Angular. Call in an injection context (field initializer or constructor) so subscriptions release on destroy.',
+      'Signal adapter for zoneless Angular. Call in an injection context (field initializer or constructor) so subscriptions release on destroy. NgModule apps get the same pools through MeshModule — the NestJS binding\'s forRoot/registerPool vocabulary.',
     apis: [
       { name: 'provideMesh', signature: 'provideMesh({ pools: MeshPoolDeclaration[] }, ...features)', desc: 'Register worker pools or connectWorker clients ({ name, client }) as environment providers — terminated on injector destroy; also usable at route level.' },
       { name: 'injectMeshPool', signature: 'injectMeshPool<T>(name): T', desc: 'Inject a pool registered by provideMesh inside an injection context; mockable via TestBed.' },
+      { name: 'MeshModule', signature: 'MeshModule.forRoot({pools?}) / forRootAsync / registerPool(decl) / registerPoolAsync', desc: 'NgModule alternative to provideMesh — same pool tokens + lifecycle, declared on the importing module; async forms resolve their factory before bootstrap.' },
+      { name: 'InjectMeshPool', signature: '@InjectMeshPool(name)', desc: 'Constructor-parameter decorator form of injectMeshPool for @Injectable() classes.' },
       { name: 'observableSignal', signature: 'observableSignal(source: ObservableValue<T>): Signal<T>', desc: 'Subscribe to any observable snapshot.' },
       { name: 'sharedValue', signature: 'sharedValue(memory, key, select?, options?): Signal<T | undefined>', desc: 'Bind one shared-memory field to a Signal; optional selector + equality.' },
       { name: 'taskState', signature: 'taskState(task | asyncFn): { state: Signal<TaskSnapshot>, run, runOnce }', desc: 'Bind an AsyncTask — or any async fn — to a Signal and get its triggers.' },

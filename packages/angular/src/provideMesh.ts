@@ -30,7 +30,9 @@ type AnyWorkerClient = {
 };
 
 /**
- * One pool's declaration inside provideMesh — three forms:
+ * One pool's shape minus its registry name — also the return type of the
+ * async pool factories MeshModule.forRootAsync/registerPoolAsync accept.
+ * Three forms:
  *
  *   // inline: the worker factory keeps the bundler-detectable literal so the
  *   // TS source is the reference
@@ -44,10 +46,10 @@ type AnyWorkerClient = {
  *   // for DI + lifecycle (terminate() on destroy; it re-spawns lazily)
  *   { client: incidents }
  */
-export type MeshPoolDeclaration<
+export type MeshPoolSpec<
   S extends SharedSpec = SharedSpec,
   T extends TaskMap = TaskMap,
-> = { name?: string } & (
+> =
   | (Omit<WorkerPoolConfig<S, T>, 'workerUrl' | 'createWorker' | 'sharedMemory'> & {
       /** Spawns one pool worker — usually `() => new Worker(new URL('./x.worker.ts', import.meta.url))`. */
       worker: () => Worker;
@@ -77,8 +79,22 @@ export type MeshPoolDeclaration<
        * next call.
        */
       client: AnyWorkerClient;
-    }
-);
+    };
+
+/**
+ * One pool's declaration inside provideMesh — a named MeshPoolSpec. The name
+ * selects the injection token (`MESH_POOL:<name>`); the first pool defaults
+ * to "default".
+ */
+export type MeshPoolDeclaration<
+  S extends SharedSpec = SharedSpec,
+  T extends TaskMap = TaskMap,
+> = { name?: string } & MeshPoolSpec<S, T>;
+
+/** provideMesh / MeshModule.forRoot options. */
+export interface MeshProvideOptions {
+  pools?: MeshPoolDeclaration[];
+}
 
 /**
  * Composable feature for provideMesh — the withX pattern. Reserved for
@@ -108,6 +124,58 @@ export function injectMeshPool<T = WorkerPool>(name = 'default'): T {
   return inject(getMeshPoolToken(name)) as unknown as T;
 }
 
+type NamedPoolDeclaration = MeshPoolDeclaration & { name: string };
+
+const defaultName = (cfg: MeshPoolDeclaration, i: number) =>
+  cfg.name ?? (i === 0 ? 'default' : `pool${i}`);
+
+/** @internal Instantiate whatever a declaration describes — client / existing pool / inline config. */
+export function buildMeshPool(cfg: NamedPoolDeclaration): WorkerPool {
+  if ('client' in cfg) return cfg.client as unknown as WorkerPool;
+  if ('pool' in cfg) return cfg.pool() as unknown as WorkerPool;
+  const { name: _name, worker, sharedMemory, ...rest } = cfg;
+  return new WorkerPool({
+    ...rest,
+    ...(sharedMemory
+      ? { sharedMemory: sharedMemory as SharedMemory<SharedSpec> & SharedAccess<SharedSpec> }
+      : {}),
+    createWorker: worker,
+  });
+}
+
+/**
+ * @internal The provider list both provideMesh and MeshModule's statics are
+ * built from — keeps the declaration-union handling in one place. Appends an
+ * ENVIRONMENT_INITIALIZER that eagerly spawns each pool and terminates it
+ * when the owning injector is destroyed (app teardown / HMR).
+ */
+export function meshProviders(
+  pools: MeshPoolDeclaration[],
+  features: MeshFeature[] = [],
+): Provider[] {
+  const named = pools.map((cfg, i) => ({ ...cfg, name: defaultName(cfg, i) }));
+  return [
+    ...named.map(
+      (cfg): Provider => ({
+        provide: getMeshPoolToken(cfg.name),
+        useFactory: () => buildMeshPool(cfg),
+      }),
+    ),
+    {
+      provide: ENVIRONMENT_INITIALIZER,
+      multi: true,
+      useValue: () => {
+        const destroyRef = inject(DestroyRef);
+        for (const cfg of named) {
+          const pool = inject(getMeshPoolToken(cfg.name)); // force eager spawn
+          destroyRef.onDestroy(() => pool.terminate());
+        }
+      },
+    },
+    ...features.flatMap((f) => f.providers),
+  ];
+}
+
 /**
  * Registers mesh worker pools as Angular providers — the provideHttpClient
  * analog:
@@ -126,43 +194,8 @@ export function injectMeshPool<T = WorkerPool>(name = 'default'): T {
  * `Route.providers` for lazily-scoped pools.
  */
 export function provideMesh(
-  options: { pools?: MeshPoolDeclaration[] },
+  options: MeshProvideOptions,
   ...features: MeshFeature[]
 ): EnvironmentProviders {
-  const pools = (options.pools ?? []).map((cfg, i) => ({
-    ...cfg,
-    name: cfg.name ?? (i === 0 ? 'default' : `pool${i}`),
-  }));
-
-  return makeEnvironmentProviders([
-    ...pools.map(
-      (cfg): Provider => ({
-        provide: getMeshPoolToken(cfg.name),
-        useFactory: () => {
-          if ('client' in cfg) return cfg.client as unknown as WorkerPool;
-          if ('pool' in cfg) return cfg.pool() as unknown as WorkerPool;
-          const { name: _name, worker, sharedMemory, ...rest } = cfg;
-          return new WorkerPool({
-            ...rest,
-            ...(sharedMemory
-              ? { sharedMemory: sharedMemory as SharedMemory<SharedSpec> & SharedAccess<SharedSpec> }
-              : {}),
-            createWorker: worker,
-          });
-        },
-      }),
-    ),
-    {
-      provide: ENVIRONMENT_INITIALIZER,
-      multi: true,
-      useValue: () => {
-        const destroyRef = inject(DestroyRef);
-        for (const cfg of pools) {
-          const pool = inject(getMeshPoolToken(cfg.name)); // force eager spawn
-          destroyRef.onDestroy(() => pool.terminate());
-        }
-      },
-    },
-    ...features.flatMap((f) => f.providers),
-  ]);
+  return makeEnvironmentProviders(meshProviders(options.pools ?? [], features));
 }

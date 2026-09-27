@@ -46,4 +46,6 @@ export function taskState<A, R>(source: AsyncTask<A, R> | ((input: A) => Promise
 }
 
 export { provideMesh, injectMeshPool, getMeshPoolToken } from './provideMesh';
-export type { MeshPoolDeclaration, MeshFeature } from './provideMesh';
+export type { MeshPoolDeclaration, MeshPoolSpec, MeshProvideOptions, MeshFeature } from './provideMesh';
+export { MeshModule, InjectMeshPool } from './meshModule';
+export type { MeshModuleAsyncOptions, MeshPoolAsyncOptions, MeshPoolAsyncDecl } from './meshModule';

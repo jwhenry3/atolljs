@@ -29,6 +29,14 @@ export function FrameworkPage({ fw }: { fw: FrameworkDoc }) {
         </tbody>
       </table>
 
+      {fw.moduleSnippet && (
+        <>
+          <h2>{fw.moduleSnippet.title}</h2>
+          <p>{fw.moduleSnippet.blurb}</p>
+          <CodeBlock code={fw.moduleSnippet.code} file={fw.moduleSnippet.file} />
+        </>
+      )}
+
       <h2>The binding itself</h2>
       <p>
         Bindings contain zero domain code — they adapt the sdk's{' '}
