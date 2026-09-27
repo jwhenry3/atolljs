@@ -14,6 +14,15 @@ const svcLog = scoped('service');
  * One RPC method's declaration. Identical fields to {@link TaskContract}
  * except `taskId` is optional — when omitted the wire id is derived as
  * `${serviceName}.${methodName}` so it can't drift between threads.
+ *
+ * Most methods need no wrapper — write the object inline and defineService
+ * infers Args/Result from the schemas:
+ *
+ *   seedIncidents: { resultSchema: z.number() },          // → () => number
+ *   queryIncidents: { argsSchema, resultSchema },          // → (q) => Result
+ *
+ * Use {@link rpc} only to declare types a method's schemas can't carry —
+ * e.g. typed args with no validation: `rpc<[QueryArgs], QueryResult>()`.
  */
 export interface RpcMethodDef<Args extends any[] = any[], Result = any> {
   /** Explicit wire id — only needed to interop with pre-existing taskIds. */
@@ -26,7 +35,11 @@ export interface RpcMethodDef<Args extends any[] = any[], Result = any> {
   resultSchema?: Schema<Result>;
 }
 
-/** Declares one RPC method's args/result types and optional schemas. */
+/**
+ * Explicit type carrier for method declarations — an identity function.
+ * Needed only when schemas are absent or don't express the full signature;
+ * schema-typed methods infer automatically inside defineService.
+ */
 export function rpc<Args extends any[] = any[], Result = any>(
   def: RpcMethodDef<Args, Result> = {},
 ): RpcMethodDef<Args, Result> {
@@ -35,10 +48,24 @@ export function rpc<Args extends any[] = any[], Result = any>(
 
 export type RpcMethodMap = Record<string, RpcMethodDef<any[], any>>;
 
+/**
+ * Resolves a method declaration to its TaskContract type. Schemas win when
+ * present (argsSchema+resultSchema → full signature; resultSchema alone →
+ * a no-arg method); an rpc<A,R>() declaration's type args carry the rest.
+ */
+type MethodContract<D> =
+  D extends { argsSchema: Schema<infer A> }
+    ? D extends { resultSchema: Schema<infer R> }
+      ? TaskContract<A, R>
+      : TaskContract<A, any>
+    : D extends { resultSchema: Schema<infer R> }
+      ? TaskContract<[], R>
+      : D extends RpcMethodDef<infer A, infer R>
+        ? TaskContract<A, R>
+        : TaskContract<any[], any>;
+
 type MethodsToContracts<M extends RpcMethodMap> = {
-  [K in keyof M]: M[K] extends RpcMethodDef<infer A, infer R>
-    ? TaskContract<A, R>
-    : never;
+  [K in keyof M]: MethodContract<M[K]>;
 };
 
 /**
@@ -57,11 +84,11 @@ export interface ServiceContract<M extends RpcMethodMap = RpcMethodMap> {
  * `createClient` / pool config):
  *
  *   export const incidentsService = defineService('incidents', {
- *     seedIncidents: rpc<[], number>({ resultSchema: z.number() }),
- *     queryIncidents: rpc<[QueryArgs], QueryResult>({
+ *     seedIncidents: { resultSchema: z.number() },
+ *     queryIncidents: {
  *       argsSchema: z.tuple([queryArgsSchema]),
  *       resultSchema: queryResultSchema,
- *     }),
+ *     },
  *   });
  */
 export function defineService<M extends RpcMethodMap>(
@@ -82,7 +109,7 @@ export function defineService<M extends RpcMethodMap>(
 
 /** The handler signatures a service implementation must provide. */
 export type ServiceHandlers<M extends RpcMethodMap> = {
-  [K in keyof M]: M[K] extends RpcMethodDef<infer A, infer R>
+  [K in keyof M]: MethodContract<M[K]> extends TaskContract<infer A, infer R>
     ? (...args: A) => R | Promise<R>
     : never;
 };
@@ -146,7 +173,7 @@ export interface TaskRunner {
 
 /** The callable RPC surface a service client exposes. */
 export type ServiceClient<M extends RpcMethodMap> = {
-  [K in keyof M]: M[K] extends RpcMethodDef<infer A, infer R>
+  [K in keyof M]: MethodContract<M[K]> extends TaskContract<infer A, infer R>
     ? (...args: A) => Promise<R>
     : never;
 };

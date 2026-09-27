@@ -17,14 +17,15 @@ export function TasksAndPool() {
       </p>
       <CodeBlock
         file="incidents.service.ts"
-        code={`import { defineService, rpc } from '@jwhenry123/mesh/sdk';
+        code={`import { defineService } from '@jwhenry123/mesh/sdk';
 import { z } from 'zod';
 
 export const incidentsService = defineService('incidents', {
-  queryIncidents: rpc<[query: QueryArgs], QueryResult>({
+  // Signatures infer from the schemas — no wrappers or type args.
+  queryIncidents: {
     argsSchema: z.tuple([queryArgsSchema]),
     resultSchema: queryResultSchema,
-  }),
+  },
 });`}
       />
 

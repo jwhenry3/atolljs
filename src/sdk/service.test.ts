@@ -10,11 +10,11 @@ import {
 import { TaskRegistry } from './worker/registry';
 
 const echo = defineService('echo', {
-  ping: rpc<[], string>(),
-  add: rpc<[a: number, b: number], number>({
+  ping: rpc<[], string>(), // no schemas — rpc() carries the signature
+  add: {
     argsSchema: z.tuple([z.number(), z.number()]),
     resultSchema: z.number(),
-  }),
+  }, // types infer straight from the schemas — no rpc() needed
 });
 
 describe('defineService', () => {
@@ -56,6 +56,18 @@ describe('implementService', () => {
         { ping: () => 'pong' } as never,
       ),
     ).toThrow(/missing handlers.*add/);
+  });
+
+  it('infers handler signatures from schemas — wrong types fail compile', () => {
+    implementService(echo, {
+      ping: () => 'pong',
+      // @ts-expect-error — add's schema pins args to [number, number]
+      add: (a: string, b: number) => 0,
+    });
+    implementService(defineService('ret', { n: { resultSchema: z.number() } }), {
+      // @ts-expect-error — resultSchema pins the return type to number
+      n: () => 'not a number',
+    });
   });
 
   it('binds handlers to the handlers object so siblings are reachable via this', async () => {

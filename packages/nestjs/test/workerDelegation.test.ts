@@ -11,11 +11,11 @@ vi.mock('node:worker_threads', async (importOriginal) => {
 
 import { Injectable, Module } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
+import { z } from 'zod';
 import {
   defineService,
   defineSharedMemory,
   field,
-  rpc,
   TaskRegistry,
 } from '@jwhenry123/mesh/sdk';
 import { bindMeshWorkerInstance, MeshService, MeshTask } from '../src/decorators';
@@ -60,8 +60,8 @@ describe('worker-side @MeshTask delegation', () => {
 
 describe('worker-side @MeshService delegation', () => {
   const calcService = defineService('calc', {
-    read: rpc<[], number>(),
-    unbound: rpc<[], string>(), // declared but not implemented below
+    read: { resultSchema: z.number() }, // () => number — inferred
+    unbound: {}, // declared but not implemented below
   });
 
   @Injectable()
