@@ -1,4 +1,4 @@
-import type { Connector, SharedAccess, SharedMemory, SharedSpec } from './contract/sharedMemory';
+import type { Connector, PathConnector, SharedMemory, SharedSpec, SpecPath } from './contract/sharedMemory';
 import { watch, type SliceOptions } from './reactive';
 import { scoped } from './log';
 
@@ -25,29 +25,29 @@ type FieldValue<C> = C extends Connector<infer T> ? T : never;
  * The underlying `watch` starts on the first subscriber and stops when the
  * last one leaves.
  */
-export function observe<S extends SharedSpec, K extends keyof S>(
+export function observe<S extends SharedSpec, K extends SpecPath<S>>(
   memory: SharedMemory<S>,
   key: K
-): ObservableValue<FieldValue<SharedAccess<S>[K]> | undefined>;
+): ObservableValue<FieldValue<PathConnector<S, K>> | undefined>;
 /**
  * Slice form: `observe(memory, 'metrics', m => m.critical)` — the observable
  * emits only when the selected slice changes. Slice equality defaults to
  * `Object.is`; pass `{ equals }` to define what counts as a change —
  * `shallowEqual` for object slices, or any `(prev, next) => boolean`.
  */
-export function observe<S extends SharedSpec, K extends keyof S, Sel>(
+export function observe<S extends SharedSpec, K extends SpecPath<S>, Sel>(
   memory: SharedMemory<S>,
   key: K,
-  select: (value: FieldValue<SharedAccess<S>[K]>) => Sel,
+  select: (value: FieldValue<PathConnector<S, K>>) => Sel,
   options?: SliceOptions<Sel>
 ): ObservableValue<Sel | undefined>;
-export function observe<S extends SharedSpec, K extends keyof S, Sel>(
+export function observe<S extends SharedSpec, K extends SpecPath<S>, Sel>(
   memory: SharedMemory<S>,
   key: K,
-  select?: (value: FieldValue<SharedAccess<S>[K]>) => Sel,
+  select?: (value: FieldValue<PathConnector<S, K>>) => Sel,
   options?: SliceOptions<Sel>
 ): ObservableValue<unknown> {
-  type T = FieldValue<SharedAccess<S>[K]>;
+  type T = FieldValue<PathConnector<S, K>>;
   type Out = T | Sel;
   const selectFn = (select ?? ((v: T) => v)) as (value: T) => Out;
   const equals = (options?.equals ?? Object.is) as (a: Out, b: Out) => boolean;
@@ -61,7 +61,7 @@ export function observe<S extends SharedSpec, K extends keyof S, Sel>(
     if (unwatch || pendingBind) return;
     let connector: Connector<T>;
     try {
-      connector = memory.connector(key) as Connector<T>;
+      connector = memory.connector(String(key)) as Connector<T>;
     } catch {
       // Not bound on this thread yet — activate when it is.
       pendingBind = memory.onBound(() => {
@@ -99,7 +99,7 @@ export function observe<S extends SharedSpec, K extends keyof S, Sel>(
       // structured field on every snapshot check would be wasted work.
       if (unwatch || memory.bound) {
         try {
-          const connector = memory.connector(key) as Connector<T>;
+          const connector = memory.connector(String(key)) as Connector<T>;
           const version = connector._version ? Atomics.load(connector._version.view, connector._version.index) : 0;
           if (version !== lastVersion) {
             lastVersion = version;

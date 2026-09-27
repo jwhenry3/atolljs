@@ -1,6 +1,6 @@
 import { DestroyRef, inject, signal, type Signal } from '@angular/core';
-import { observe } from '@jwhenry123/mesh/sdk';
-import type { AsyncTask, ObservableValue, SharedAccess, SharedMemory, SharedSpec, SliceOptions } from '@jwhenry123/mesh/sdk';
+import { observe, toTask } from '@jwhenry123/mesh/sdk';
+import type { AsyncTask, ObservableValue, PathConnector, SharedMemory, SharedSpec, SpecPath, SliceOptions, TaskSnapshot } from '@jwhenry123/mesh/sdk';
 
 function unhook(stop: () => void) {
   inject(DestroyRef, { optional: true })?.onDestroy(stop);
@@ -21,14 +21,14 @@ export function observableSignal<T>(source: ObservableValue<T>): Signal<T> {
  * Bind one shared-memory field to a Signal. Stays `undefined` until the
  * contract is bound and the field written; updates on every write.
  */
-export function sharedValue<S extends SharedSpec, K extends keyof S>(memory: SharedMemory<S>, key: K): Signal<(SharedAccess<S>[K] extends { read(): infer T } ? T : never) | undefined>;
-export function sharedValue<S extends SharedSpec, K extends keyof S, Sel>(
+export function sharedValue<S extends SharedSpec, K extends SpecPath<S>>(memory: SharedMemory<S>, key: K): Signal<(PathConnector<S, K> extends { read(): infer T } ? T : never) | undefined>;
+export function sharedValue<S extends SharedSpec, K extends SpecPath<S>, Sel>(
   memory: SharedMemory<S>,
   key: K,
-  select: (value: SharedAccess<S>[K] extends { read(): infer T } ? T : never) => Sel,
+  select: (value: PathConnector<S, K> extends { read(): infer T } ? T : never) => Sel,
   options?: SliceOptions<Sel>
 ): Signal<Sel | undefined>;
-export function sharedValue<S extends SharedSpec, K extends keyof S, Sel>(
+export function sharedValue<S extends SharedSpec, K extends SpecPath<S>, Sel>(
   memory: SharedMemory<S>,
   key: K,
   select?: (value: never) => Sel,
@@ -37,8 +37,11 @@ export function sharedValue<S extends SharedSpec, K extends keyof S, Sel>(
   return observableSignal(observe(memory, key, select as never, options as never));
 }
 
-/** Bind an AsyncTask: `{ state }` is a Signal of its snapshot; `run`/`runOnce` trigger it. */
-export function taskState<A, R>(task: AsyncTask<A, R>) {
+/** Bind an AsyncTask or plain async fn (via toTask): `{ state }` is a Signal of its snapshot; `run`/`runOnce` trigger it. */
+export function taskState<R>(source: AsyncTask<void, R> | (() => Promise<R>)): { state: Signal<TaskSnapshot<R>>; run: AsyncTask<void, R>['run']; runOnce: AsyncTask<void, R>['runOnce'] };
+export function taskState<A, R>(source: AsyncTask<A, R> | ((input: A) => Promise<R>)): { state: Signal<TaskSnapshot<R>>; run: AsyncTask<A, R>['run']; runOnce: AsyncTask<A, R>['runOnce'] };
+export function taskState<A, R>(source: AsyncTask<A, R> | ((input: A) => Promise<R>)) {
+  const task = toTask(source);
   return { state: observableSignal(task), run: task.run, runOnce: task.runOnce };
 }
 

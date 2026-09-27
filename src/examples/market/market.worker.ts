@@ -17,7 +17,7 @@ const rand = mulberry32((Math.random() * 0xffffffff) | 0);
 const rec = {} as Quote;
 
 // Feed handler: each tick is a random-access read-modify-write on one quote
-// record — the access pattern struct fields are built for. No serialization
+// record — the access pattern list fields are built for. No serialization
 // anywhere on the hot path; symbol/open are never touched.
 TaskRegistry.register(FeedTicks, (ticks) => {
   const quotes = marketMemory.quotes;

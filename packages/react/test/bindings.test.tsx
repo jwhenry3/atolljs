@@ -73,4 +73,20 @@ describe('useTask', () => {
       expect(container.querySelector('output')!.textContent).toBe('10')
     );
   });
+
+  it('accepts a plain async fn and reaches settled', async () => {
+    const plus2 = async (n: number) => n + 2; // stable identity — one task
+    let run!: (n: number) => void;
+    function C() {
+      const t = useTask(plus2);
+      run = t.run;
+      return <output>{t.settled ? String(t.data) : t.pending ? 'pending' : 'idle'}</output>;
+    }
+    const { container } = render(<C />);
+    expect(container.querySelector('output')!.textContent).toBe('idle');
+    await act(async () => run(5));
+    await vi.waitFor(() =>
+      expect(container.querySelector('output')!.textContent).toBe('7')
+    );
+  });
 });

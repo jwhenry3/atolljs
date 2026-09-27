@@ -1,5 +1,5 @@
-import { observe } from '@jwhenry123/mesh/sdk';
-import type { AsyncTask, ObservableValue, SharedAccess, SharedMemory, SharedSpec, SliceOptions } from '@jwhenry123/mesh/sdk';
+import { observe, toTask } from '@jwhenry123/mesh/sdk';
+import type { AsyncTask, ObservableValue, PathConnector, SharedMemory, SharedSpec, SpecPath, SliceOptions } from '@jwhenry123/mesh/sdk';
 
 /**
  * Wrap any sdk ObservableValue in rune-backed state. Call during component
@@ -25,14 +25,14 @@ export function observableValue<T>(source: ObservableValue<T>) {
  * Bind one shared-memory field to rune state. Stays `undefined` until the
  * contract is bound and the field written; updates on every write.
  */
-export function sharedValue<S extends SharedSpec, K extends keyof S>(memory: SharedMemory<S>, key: K): { readonly value: (SharedAccess<S>[K] extends { read(): infer T } ? T : never) | undefined };
-export function sharedValue<S extends SharedSpec, K extends keyof S, Sel>(
+export function sharedValue<S extends SharedSpec, K extends SpecPath<S>>(memory: SharedMemory<S>, key: K): { readonly value: (PathConnector<S, K> extends { read(): infer T } ? T : never) | undefined };
+export function sharedValue<S extends SharedSpec, K extends SpecPath<S>, Sel>(
   memory: SharedMemory<S>,
   key: K,
-  select: (value: SharedAccess<S>[K] extends { read(): infer T } ? T : never) => Sel,
+  select: (value: PathConnector<S, K> extends { read(): infer T } ? T : never) => Sel,
   options?: SliceOptions<Sel>
 ): { readonly value: Sel | undefined };
-export function sharedValue<S extends SharedSpec, K extends keyof S, Sel>(
+export function sharedValue<S extends SharedSpec, K extends SpecPath<S>, Sel>(
   memory: SharedMemory<S>,
   key: K,
   select?: (value: never) => Sel,
@@ -41,8 +41,19 @@ export function sharedValue<S extends SharedSpec, K extends keyof S, Sel>(
   return observableValue(observe(memory, key, select as never, options as never));
 }
 
-/** Bind an AsyncTask to rune state, exposing its snapshot fields plus `run`/`runOnce`. */
-export function taskState<A, R>(task: AsyncTask<A, R>) {
+/** Bind an AsyncTask — or a plain async fn, wrapped via toTask — to rune state, exposing its snapshot fields plus `run`/`runOnce`. */
+export function taskState<R>(source: AsyncTask<void, R> | (() => Promise<R>)): {
+  readonly data: R | null; readonly pending: boolean; readonly settled: boolean;
+  readonly elapsedMs: number | null; readonly error: unknown;
+  run: AsyncTask<void, R>['run']; runOnce: AsyncTask<void, R>['runOnce'];
+};
+export function taskState<A, R>(source: AsyncTask<A, R> | ((input: A) => Promise<R>)): {
+  readonly data: R | null; readonly pending: boolean; readonly settled: boolean;
+  readonly elapsedMs: number | null; readonly error: unknown;
+  run: AsyncTask<A, R>['run']; runOnce: AsyncTask<A, R>['runOnce'];
+};
+export function taskState<A, R>(source: AsyncTask<A, R> | ((input: A) => Promise<R>)) {
+  const task = toTask(source);
   const s = observableValue(task);
   return {
     get data() {

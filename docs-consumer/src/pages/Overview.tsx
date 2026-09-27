@@ -2,15 +2,15 @@ import { CodeBlock } from '../components/CodeBlock';
 
 const DIAGRAM = `main thread                                    worker(s)
 ┌─────────────────────────────┐   postMessage   ┌──────────────────────────┐
-│ WorkerPool                  │ ─── task ─────▶ │ TaskRegistry handlers    │
-│   pool.query(args)          │ ◀── result ──── │   scan / sort / mutate   │
+│ connectWorker client        │ ─── task ─────▶ │ defineWorker methods     │
+│   counter.increment(n)      │ ◀── result ──── │   scan / sort / mutate   │
 │                             │                 │        │                 │
 │ connector reads / watches   │                 │        ▼                 │
 └──────────────┬──────────────┘                 └──────────┬───────────────┘
                │               SharedArrayBuffer           │
                ▼        (same bytes, zero copy)            ▼
         ┌─────────────────────────────────────────────────────────┐
-        │  contract: struct rows · strings · objects · numbers    │
+        │  contract: list rows · strings · objects · numbers    │
         └─────────────────────────────────────────────────────────┘`;
 
 export function Overview() {
@@ -40,8 +40,9 @@ export function Overview() {
       <p>
         Three layers: <strong>contracts</strong> (<code>defineSharedMemory</code>{' '}
         + <code>field.*</code>) declare the memory layout once for both threads;
-        the <strong>pool</strong> (<code>WorkerPool</code> +{' '}
-        <code>TaskRegistry</code> + worker bootstrap) dispatches typed tasks;{' '}
+        the <strong>worker pair</strong> (<code>defineWorker</code> on the worker
+        side, <code>connectWorker</code> on the main thread) dispatches typed
+        method calls over a lazily-spawned pool;{' '}
         <strong>reactivity</strong> (<code>observe</code>, <code>watch</code>,{' '}
         <code>defineTask</code>) turns shared fields and task runs into
         subscribable snapshots the framework bindings adapt.

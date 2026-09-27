@@ -49,4 +49,11 @@ describe('taskState', () => {
     expect(t.settled).toBe(true);
     expect(t.pending).toBe(false);
   });
+
+  it('accepts a plain async fn and reaches settled', async () => {
+    const { value: t } = inRoot(() => taskState(async (n: number) => n + 1));
+    t.run(9);
+    await vi.waitFor(() => expect(t.settled).toBe(true));
+    expect(t.data).toBe(10);
+  });
 });

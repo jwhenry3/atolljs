@@ -1,61 +1,77 @@
 import { CodeBlock } from '../components/CodeBlock';
-import taskContracts from '../../../packages/incidents/src/contract/incidents.service.ts?raw';
-import poolSource from '../../../packages/incidents/src/pool.ts?raw';
+import taskFile from '../../../packages/incidents/src/service/queryIncidents.ts?raw';
 import workerSource from '../../../packages/incidents/src/worker/incidents.worker.ts?raw';
+import clientSource from '../../../packages/incidents/src/incidents.ts?raw';
 
 export function TasksAndPool() {
   return (
     <article>
       <h1>Worker pool &amp; tasks</h1>
       <p className="lead">
-        Tasks are the only message-passing boundary. A <code>defineService</code>{' '}
-        contract is declared once and shared by both threads;{' '}
-        <code>implementService</code> binds worker handlers to it (higher-order
-        functions, no decorators); <code>WorkerPool</code> or{' '}
-        <code>createClient</code> turns it into promise-returning methods on the
-        main thread.
+        Tasks are the only message-passing boundary, and they're split the way
+        tRPC splits a router: the <em>worker script</em> owns the runtime and the
+        method list via <code>defineWorker</code>; the main thread imports only
+        its <code>typeof</code> and drives it through a <code>connectWorker</code>{' '}
+        Proxy client. Method names are listed exactly once.
       </p>
 
-      <h2>Service contract</h2>
-      <CodeBlock code={taskContracts} file="packages/incidents/src/contract/incidents.service.ts" />
+      <h2>One file per method</h2>
       <p>
-        <code>argsSchema</code>/<code>resultSchema</code> are optional zod validation at
-        the thread boundary. Wire ids derive as <code>service.method</code> so they
-        can't drift between threads — override with an explicit{' '}
-        <code>taskId</code> only to interop with pre-existing ids.
+        Each task owns one file under <code>service/</code> containing its wire
+        schemas and its worker implementation as a <code>serviceMethod</code> unit.
+        The schemas type <code>run</code>'s parameters — nothing to annotate:
+      </p>
+      <CodeBlock code={taskFile} file="packages/incidents/src/service/queryIncidents.ts" />
+      <p>
+        <code>argsSchema</code>/<code>resultSchema</code> validate at the thread
+        boundary inside the worker — the trust boundary is the message. Plain
+        functions work too (<code>methods: {'{ ping: () => "pong" }'}</code>) when
+        no validation is needed; their signature types the client directly.
       </p>
 
-      <h2>Worker side</h2>
+      <h2>Worker side — the whole entry</h2>
       <CodeBlock code={workerSource} file="packages/incidents/src/worker/incidents.worker.ts" />
       <p>
-        The <code>@jwhenry123/mesh/sdk/worker/workerBootstrap</code> import installs the
-        message loop: it binds shared memory on <code>INIT_MEMORY</code> and dispatches{' '}
-        <code>EXECUTE_TASK</code> messages to registered handlers.{' '}
-        <code>implementService</code> registers every handler against the contract —
-        missing methods throw at bind time. Handlers read and write shared memory
-        directly — results return via <code>postMessage</code>.
+        <code>defineWorker</code> installs the message loop (binds shared memory on{' '}
+        <code>INIT_MEMORY</code>, dispatches <code>EXECUTE_TASK</code>) and registers
+        every method under its own name. <code>services: {'{ pricing: { … } }'}</code>{' '}
+        namespaces methods as <code>pricing.reprice</code> when one worker hosts
+        several domains. The exported <code>IncidentsWorker</code> type is all the
+        main thread ever imports from this file.
       </p>
 
-      <h2>Pool</h2>
-      <CodeBlock code={poolSource} file="packages/incidents/src/pool.ts" />
+      <h2>Main thread — the client</h2>
+      <CodeBlock code={clientSource} file="packages/incidents/src/incidents.ts" />
+      <p>
+        <code>import type</code> keeps worker code out of the main bundle. The
+        client is a Proxy: <code>incidents.queryIncidents(q)</code> dispatches{' '}
+        <code>taskId "queryIncidents"</code> to the pool — typed by the worker's
+        method signatures. The pool spawns lazily on the first call, so importing
+        the client is SSR-safe; <code>start()</code> spawns eagerly,{' '}
+        <code>terminate()</code> drops the pool and the next call re-spawns.
+      </p>
 
-      <h3>WorkerPoolConfig</h3>
+      <h3>connectWorker config</h3>
       <table className="doc-table">
         <thead>
           <tr><th>Option</th><th>Notes</th></tr>
         </thead>
         <tbody>
-          <tr><td><code>sharedMemory</code></td><td>The contract to bind on the main thread and ship to workers.</td></tr>
-          <tr><td><code>createWorker()</code></td><td>Worker factory. Prefer this — bundlers only emit worker chunks for inline <code>new Worker(new URL(..., import.meta.url))</code>.</td></tr>
-          <tr><td><code>workerUrl</code></td><td>Alternative: a prebuilt worker URL (works when the bundler already emits one).</td></tr>
+          <tr><td><code>sharedMemory</code></td><td>The contract to bind on the main thread and ship to workers. Type-checked against the worker's declared <code>sharedMemory</code>.</td></tr>
+          <tr><td><code>worker</code></td><td>Factory <code>() =&gt; new Worker(new URL(..., import.meta.url), {'{ type: "module" }'})</code> — bundlers only emit worker chunks for the inline form. A <code>URL</code> also works.</td></tr>
           <tr><td><code>poolSize</code></td><td>A number, or <code>'auto'</code> (default) for <code>navigator.hardwareConcurrency ?? 4</code>.</td></tr>
-          <tr><td><code>tasks</code></td><td>Map of named contracts; keys become pool methods: <code>tasks: {'{ queryIncidents }'}</code> → <code>pool.queryIncidents(q)</code>.</td></tr>
+          <tr><td><code>lazy</code></td><td>Default <code>true</code>. <code>false</code> spawns at construction.</td></tr>
         </tbody>
       </table>
 
+      <h2>Under the hood</h2>
       <p>
-        Construction binds the contract and posts <code>INIT_MEMORY</code> to each
-        worker, so field access is legal the moment the pool exists.
+        <code>connectWorker</code> builds a <code>WorkerPool</code>; <code>workerClient(runner)</code>{' '}
+        is the bare Proxy over any <code>TaskRunner</code> — a pool you already
+        hold (Nest's <code>@InjectMeshPool</code>), a SharedWorker client, or a test
+        stub. The explicit-contract path (<code>TaskContract</code>,{' '}
+        <code>TaskRegistry.register</code>, <code>defineService</code>) remains for
+        cases where both threads need the contract object at runtime.
       </p>
     </article>
   );

@@ -159,7 +159,7 @@ export async function runBenchmark(log: Logger = console.log) {
     log(`codec ${name.padEnd(7)}: encode ${eMs.toFixed(0)}ms, decode ${dMs.toFixed(0)}ms, ${fmtMB(encoded.byteLength)} @ ${fmtInt(N)} records`);
   }
 
-  // Phase 9 — fixed-layout struct records: same 2M dataset, zero serialization.
+  // Phase 9 — fixed-layout list records: same 2M dataset, zero serialization.
   // Persist is per-record DataView writes; the worker scan is direct reads.
   const flat = benchMemory.recordsFlat;
   t0 = performance.now();
@@ -176,7 +176,7 @@ export async function runBenchmark(log: Logger = console.log) {
   }
   flat.commit(); // one version bump for the whole batch
   ms = performance.now() - t0;
-  log(`flat persist       : ${fmtInt(N)} struct records (${fmtMB(flat.byteLength)} raw) in ${ms.toFixed(1)}ms — no validate/encode/copy`);
+  log(`flat persist       : ${fmtInt(N)} list records (${fmtMB(flat.byteLength)} raw) in ${ms.toFixed(1)}ms — no validate/encode/copy`);
 
   const flatStart = performance.now();
   const flatStats = await pool.flatAnalyzeDataset();

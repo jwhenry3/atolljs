@@ -69,3 +69,31 @@ export function defineTask<A, R>(fn: (input: A) => Promise<R>): AsyncTask<A, R> 
   };
   return task;
 }
+
+/** Structural check: run/runOnce triggers plus the observable contract. */
+export function isAsyncTask(x: unknown): x is AsyncTask<any, any> {
+  return (
+    typeof x === 'object' &&
+    x !== null &&
+    typeof (x as AsyncTask<any, any>).run === 'function' &&
+    typeof (x as AsyncTask<any, any>).runOnce === 'function' &&
+    typeof (x as AsyncTask<any, any>).get === 'function' &&
+    typeof (x as AsyncTask<any, any>).subscribe === 'function'
+  );
+}
+
+/**
+ * Accepts an {@link AsyncTask} or a plain async function and always returns
+ * a task — framework bindings (useTask, taskState, …) take either, so a
+ * worker client's method drops straight in:
+ *
+ *   const seed = useTask(initIncidents);            // async fn → defineTask
+ *   const page = useTask(incidents.queryIncidents); // client method → task
+ */
+export function toTask<R>(source: AsyncTask<void, R> | (() => Promise<R>)): AsyncTask<void, R>;
+export function toTask<A, R>(source: AsyncTask<A, R> | ((input: A) => Promise<R>)): AsyncTask<A, R>;
+export function toTask<A, R>(
+  source: AsyncTask<A, R> | ((input: A) => Promise<R>),
+): AsyncTask<A, R> {
+  return isAsyncTask(source) ? source : defineTask(source);
+}

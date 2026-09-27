@@ -1,6 +1,7 @@
 import { Injectable, Module, OnApplicationBootstrap } from '@nestjs/common';
 import { InjectMeshPool, MeshModule } from '@jwhenry123/mesh-nestjs';
-import { type IncidentsPool } from '@jwhenry123/mesh-incidents';
+import { workerClient, type WorkerPool } from '@jwhenry123/mesh/sdk';
+import { type IncidentsWorker } from '@jwhenry123/mesh-incidents';
 import { IncidentsController } from './incidents.controller';
 import { IncidentsMeshModule } from './shared/incidents-mesh.module';
 import { DigestMeshModule } from './digest/digest.module';
@@ -13,9 +14,10 @@ import { DigestController } from './digest/digest.controller';
  */
 @Injectable()
 class SeedOnBootstrap implements OnApplicationBootstrap {
-  constructor(@InjectMeshPool('incidents') private readonly pool: IncidentsPool) {}
+  private readonly incidents = workerClient<IncidentsWorker>(() => this.pool);
+  constructor(@InjectMeshPool('incidents') private readonly pool: WorkerPool) {}
   async onApplicationBootstrap() {
-    await this.pool.seedIncidents();
+    await this.incidents.seedIncidents();
   }
 }
 

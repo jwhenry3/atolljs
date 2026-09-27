@@ -44,7 +44,7 @@ export const AnalyzeDataset: TaskContract<[count: number], Analysis> = {
   resultSchema: analysisSchema,
 };
 
-/** Same aggregation over the fixed-layout struct records — no decode pass. */
+/** Same aggregation over the fixed-layout list records — no decode pass. */
 export const FlatAnalyzeDataset: TaskContract<[], Analysis> = {
   taskId: 'bench-analyze-flat',
   resultSchema: analysisSchema,

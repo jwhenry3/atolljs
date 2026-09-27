@@ -1,32 +1,26 @@
 import { z } from 'zod';
 import { msgpackrCodec } from '../../sdk/contract/msgpackrCodec';
 import { defineSharedMemory, field } from '../../sdk/contract/sharedMemory';
-import { structSchema } from '../../sdk/contract/structSchema';
+import { mz } from '../../sdk/contract/mz';
 
-/* ── Record spec — single source of truth ─────────────────────────────────
-   One instrument quote, 48 bytes, updated in place by the feed. Produces
-   the memory layout, the connector's record type, and the zod schema.
+/* ── Record schema — single source of truth ───────────────────────────────
+   One instrument quote, 48 bytes, updated in place by the feed. The schema
+   produces the memory layout, the connector's record type, and validation.
    The hot tick path touches only the QUOTE_HOT_FIELDS subset — symbol and
    open are written once at seed via field-projection writes.               */
 
-export const quoteSpec = {
-  symbol: { string: 8 },
-  bid: 'f64',
-  ask: 'f64',
-  last: 'f64',
-  open: 'f64',   // session open — reference for change%
-  volume: 'u32', // cumulative shares
-  ticks: 'u32',  // updates this session
-} as const;
+export const quoteSchema = mz.object({
+  symbol: mz.string(8),
+  bid: mz.f64(),
+  ask: mz.f64(),
+  last: mz.f64(),
+  open: mz.f64(),   // session open — reference for change%
+  volume: mz.u32(), // cumulative shares
+  ticks: mz.u32(),  // updates this session
+});
 
 /** Feed-hot fields — tick updates never touch symbol/open. */
 export const QUOTE_HOT_FIELDS: (keyof Quote)[] = ['bid', 'ask', 'last', 'volume', 'ticks'];
-
-/* ── Schemas ──────────────────────────────────────────────────────────────
-   quoteSchema is generated from the spec with storage bounds; the rest are
-   aggregates and screener results the worker hands back.                   */
-
-export const quoteSchema = structSchema(quoteSpec);
 
 export const marketStatsSchema = z.object({
   ticks: z.number(),
@@ -47,7 +41,7 @@ export const screenHitSchema = z.object({
 });
 
 /* ── Inferred types ───────────────────────────────────────────────────────
-   Quote ≡ StructRecord<typeof quoteSpec> — the connector's record type.    */
+   Quote ≡ z.infer<typeof quoteSchema> — the connector's record type.      */
 
 export type Quote = z.infer<typeof quoteSchema>;
 export type MarketStats = z.infer<typeof marketStatsSchema>;
@@ -58,6 +52,6 @@ export type ScreenHit = z.infer<typeof screenHitSchema>;
    for the main thread to observe reactively.                               */
 
 export const marketMemory = defineSharedMemory({
-  quotes: field.struct({ fields: quoteSpec, count: 10_000 }),
+  quotes: field.list({ schema: quoteSchema, count: 10_000 }),
   stats: field.object({ maxBytes: 2048, schema: marketStatsSchema }),
 }, { codec: msgpackrCodec });

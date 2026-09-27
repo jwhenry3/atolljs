@@ -17,7 +17,20 @@ import {
 } from '@jwhenry123/mesh/sdk';
 
 /**
- * One pool's declaration inside provideMesh — two forms:
+ * The lifecycle surface every connectWorker client exposes. Declared
+ * structurally rather than as `WorkerClient<any, any>` — instantiating
+ * WorkerClient's generics with `any` collapses its method map to an index
+ * signature no concrete client satisfies.
+ */
+type AnyWorkerClient = {
+  start(): void;
+  terminate(): void;
+  readonly pool: WorkerPool<any, any> | null;
+  readonly sharedMemory: unknown;
+};
+
+/**
+ * One pool's declaration inside provideMesh — three forms:
  *
  *   // inline: the worker factory keeps the bundler-detectable literal so the
  *   // TS source is the reference
@@ -26,6 +39,10 @@ import {
  *   // existing: a domain package's already-configured pool factory — the
  *   // same instance task helpers resolve, registered for DI + lifecycle
  *   { pool: getIncidentsPool }
+ *
+ *   // typed client: a domain package's connectWorker client — registered
+ *   // for DI + lifecycle (terminate() on destroy; it re-spawns lazily)
+ *   { client: incidents }
  */
 export type MeshPoolDeclaration<
   S extends SharedSpec = SharedSpec,
@@ -50,6 +67,15 @@ export type MeshPoolDeclaration<
       // WorkerPool<S,T> is invariant on S through SharedAccess, so the
       // existing-pool form accepts any specialization.
       pool: () => WorkerPool<any, any>;
+    }
+  | {
+      /**
+       * An already-built connectWorker client — the provider value is the
+       * client itself, so injectMeshPool returns the typed call surface.
+       * Terminated on injector destroy; the lazy client re-spawns on the
+       * next call.
+       */
+      client: AnyWorkerClient;
     }
 );
 
@@ -77,7 +103,7 @@ export function getMeshPoolToken(name = 'default'): InjectionToken<WorkerPool> {
  * domain pool type to keep its task methods typed; override the provider in
  * TestBed to stub the pool.
  */
-export function injectMeshPool<T extends WorkerPool<any, any> = WorkerPool>(name = 'default'): T {
+export function injectMeshPool<T = WorkerPool>(name = 'default'): T {
   return inject(getMeshPoolToken(name)) as unknown as T;
 }
 
@@ -87,18 +113,12 @@ export function injectMeshPool<T extends WorkerPool<any, any> = WorkerPool>(name
  *
  *   bootstrapApplication(AppComponent, {
  *     providers: [
- *       provideMesh({ pools: [{
- *         name: 'incidents',
- *         worker: () => new Worker(new URL('./incidents.worker.ts', import.meta.url)),
- *         sharedMemory: incidentsMemory,
- *         tasks: incidentsService.tasks,
- *         poolSize: 'auto',
- *       }] }),
+ *       provideMesh({ pools: [{ name: 'incidents', client: incidents }] }),
  *     ],
  *   });
  *
  *   // anywhere DI runs:
- *   private readonly pool = injectMeshPool<IncidentsPool>('incidents');
+ *   private readonly incidents = injectMeshPool<IncidentsClient>('incidents');
  *
  * Pools spawn eagerly and terminate when the environment injector is
  * destroyed (app teardown / HMR). Also usable at route level via
@@ -118,6 +138,7 @@ export function provideMesh(
       (cfg): Provider => ({
         provide: getMeshPoolToken(cfg.name),
         useFactory: () => {
+          if ('client' in cfg) return cfg.client as unknown as WorkerPool;
           if ('pool' in cfg) return cfg.pool() as unknown as WorkerPool;
           const { name: _name, worker, sharedMemory, ...rest } = cfg;
           return new WorkerPool({

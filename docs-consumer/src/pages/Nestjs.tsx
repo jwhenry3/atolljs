@@ -5,8 +5,10 @@ const apiBase = `${window.location.protocol}//${window.location.hostname}:${port
 
 const APIS = [
   { name: 'MeshModule.forRoot', signature: 'forRoot({ pools? }) / forRootAsync(...)', desc: 'Global mesh infrastructure — validator, discovery, lifecycle. Optional pools for simple apps; feature modules prefer registerPool.' },
-  { name: 'MeshModule.registerPool', signature: 'registerPool(config) / registerPoolAsync(...)', desc: 'Bull-style module-level pool registration inside the feature module that owns the worker: name, worker, sharedMemory, poolSize, tasks. Injectable provider, terminated on module destroy.' },
-  { name: '@MeshTask', signature: '@MeshTask(taskId | contract | { pool })', desc: 'RPC-style offload — calls on the API thread dispatch to the pool; the method body executes inside the worker’s own Nest context.' },
+  { name: 'MeshModule.registerPool', signature: 'registerPool(config) / registerPoolAsync(...)', desc: 'Bull-style module-level pool registration inside the feature module that owns the worker: name, worker, sharedMemory, poolSize. Injectable provider, terminated on module destroy.' },
+  { name: '@MeshTask', signature: '@MeshTask(taskId | contract | { pool })', desc: 'Per-method RPC offload — calls on the API thread dispatch to the pool; the body executes inside the worker’s own Nest context.' },
+  { name: '@MeshService', signature: '@MeshService({ pool }) / @MeshService(service, opts?)', desc: 'Class-level offload — marks every method for dispatch to the pool under ClassName.method ids (the contract form binds only methods declared in a ServiceContract).' },
+  { name: 'workerClient', signature: 'workerClient<WorkerDef>(runner | () => runner)', desc: 'Typed Proxy over an injected pool — wrap once and call the worker’s own method names: client.seedIncidents().' },
   { name: '@InjectMeshPool', signature: '@InjectMeshPool(name)', desc: 'Inject a configured pool directly (first-class task methods / runTask).' },
   { name: 'runMeshWorker', signature: 'runMeshWorker(module)', desc: 'Worker entry point — self-contained (shim + bootstrap inside), boots a Nest application context inside the worker and registers every @MeshTask method on its DI-resolved provider.' },
   { name: 'registerMeshHandlers', signature: 'registerMeshHandlers(...instances)', desc: 'Explicit task registration for instances created outside a worker Nest context.' },
@@ -42,16 +44,19 @@ export class DigestMeshModule {}
 //   imports: [MeshModule.forRoot(), DigestMeshModule, IncidentsMeshModule]`;
 
 const USAGE_SERVICE = `import { Inject, Injectable } from '@nestjs/common';
-import { MeshTask } from '@jwhenry123/mesh-nestjs/decorators';
+import { MeshService } from '@jwhenry123/mesh-nestjs/decorators';
 import { defineSharedMemory, field } from '@jwhenry123/mesh/sdk';
 
 export const digestMemory = defineSharedMemory({ jobsDone: field.number() });
 
+// Class-level: EVERY method dispatches to the 'digest' pool under
+// DigestService.<method> ids. @MeshTask({ pool }) remains for
+// per-method control.
 @Injectable()
+@MeshService({ pool: 'digest' })
 export class DigestService {
   constructor(@Inject(ScanTelemetry) private telemetry: ScanTelemetry) {}
 
-  @MeshTask({ pool: 'digest' })   // API thread: call → EXECUTE_TASK → worker
   async hash(input: string, rounds = 50_000) {
     this.telemetry.note('hash');  // injected dep resolves inside the worker
     let digest = input;
@@ -60,6 +65,26 @@ export class DigestService {
     }
     digestMemory.jobsDone.write(digestMemory.jobsDone.read() + 1);
     return { hash: digest, rounds };
+  }
+}`;
+
+const USAGE_CONTROLLER = `import { Controller, Get } from '@nestjs/common';
+import { InjectMeshPool } from '@jwhenry123/mesh-nestjs';
+import { workerClient, type WorkerPool } from '@jwhenry123/mesh/sdk';
+import type { IncidentsWorker } from '@jwhenry123/mesh-incidents';
+
+@Controller('api/incidents')
+export class IncidentsController {
+  // Wrap the injected pool once — calls read like the worker's methods.
+  // Factory form resolves this.pool lazily (field inits run before the
+  // constructor's parameter-property assignment).
+  private readonly incidents = workerClient<IncidentsWorker>(() => this.pool);
+
+  constructor(@InjectMeshPool('incidents') private readonly pool: WorkerPool) {}
+
+  @Get('stats')
+  stats() {
+    return this.incidents.computeMetrics();
   }
 }`;
 
@@ -99,9 +124,9 @@ export function Nestjs() {
       <p className="lead">
         <code>@jwhenry123/mesh-nestjs</code> — the worker mesh on the server.
         Named pools of <code>node:worker_threads</code> workers share memory
-        with the API thread, and <code>@MeshTask</code> moves a service
-        method's body into a worker — with real dependency injection on both
-        sides.
+        with the API thread, and <code>@MeshService</code>/<code>@MeshTask</code>{' '}
+        move a service method's body into a worker — with real dependency
+        injection on both sides.
       </p>
 
       <h2>Install</h2>
@@ -112,6 +137,9 @@ export function Nestjs() {
 
       <h2>Service — the decorator picks the thread</h2>
       <CodeBlock code={USAGE_SERVICE} file="digest.service.ts" />
+
+      <h2>Controller — the pool wrapped as a typed client</h2>
+      <CodeBlock code={USAGE_CONTROLLER} file="incidents.controller.ts" />
 
       <h2>Worker entry</h2>
       <CodeBlock code={USAGE_WORKER} file="digest.worker.ts" />

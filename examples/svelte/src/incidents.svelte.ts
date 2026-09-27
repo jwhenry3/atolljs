@@ -1,14 +1,10 @@
 import { sharedValue, taskState } from '@jwhenry123/mesh-svelte';
 import {
-  getIncidentsPool,
-  initIncidentsTask,
+  incidents,
   incidentsMemory,
-  queryIncidentsTask,
+  initIncidents,
   type QueryArgs,
 } from '@jwhenry123/mesh-incidents';
-
-// Bind the contract and spawn the worker pool as soon as this module loads.
-if (typeof window !== 'undefined') getIncidentsPool();
 
 /**
  * Incident data layer: run init once, stream seedProgress/metrics out of
@@ -17,12 +13,12 @@ if (typeof window !== 'undefined') getIncidentsPool();
  * Runes-based — call once during component init.
  */
 export function createIncidents(getQuery: () => QueryArgs) {
-  const seed = taskState(initIncidentsTask);
-  const pageTask = taskState(queryIncidentsTask);
-  const seedProgress = sharedValue(incidentsMemory, 'seedProgress');
-  const metrics = sharedValue(incidentsMemory, 'metrics');
+  const seed = taskState(initIncidents);
+  const pageTask = taskState(incidents.queryIncidents);
+  const seedProgress = sharedValue(incidentsMemory, 'signals.seedProgress');
+  const metrics = sharedValue(incidentsMemory, 'state.metrics');
 
-  initIncidentsTask.runOnce();
+  seed.runOnce();
   $effect(() => {
     const q = getQuery();
     if (seed.settled) pageTask.run(q);

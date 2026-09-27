@@ -50,7 +50,7 @@ export const FRAMEWORKS: FrameworkDoc[] = [
     apis: [
       { name: 'useObservable', signature: 'useObservable(source: ObservableValue<T>): T', desc: 'Subscribe to any observable snapshot (task or field).' },
       VALUE_API('useSharedValue', 'useSharedValue(memory, key): T | undefined', 'returns the field value as React state'),
-      { name: 'useTask', signature: 'useTask(task): { data, pending, settled, elapsedMs, error, run, runOnce }', desc: 'Bind an AsyncTask to state and get its triggers.' },
+      { name: 'useTask', signature: 'useTask(task | asyncFn): { data, pending, settled, elapsedMs, error, run, runOnce }', desc: 'Bind an AsyncTask — or any async fn (e.g. a client method) — to state and get its triggers.' },
     ],
     bindingSource: reactBinding,
     bindingFile: 'packages/react/src/index.ts',
@@ -74,7 +74,7 @@ export const FRAMEWORKS: FrameworkDoc[] = [
     apis: [
       { name: 'useObservable', signature: 'useObservable(source: ObservableValue<T>): Ref<T>', desc: 'Subscribe to any observable snapshot (task or field).' },
       VALUE_API('useSharedValue', 'useSharedValue(memory, key): Ref<T | undefined>', 'returns the field value as a Ref'),
-      { name: 'useTask', signature: 'useTask(task): { state: Ref<TaskSnapshot>, run, runOnce }', desc: 'Bind an AsyncTask to a Ref and get its triggers.' },
+      { name: 'useTask', signature: 'useTask(task | asyncFn): { state: Ref<TaskSnapshot>, run, runOnce }', desc: 'Bind an AsyncTask — or any async fn — to a Ref and get its triggers.' },
     ],
     bindingSource: vueBinding,
     bindingFile: 'packages/vue/src/index.ts',
@@ -97,7 +97,7 @@ export const FRAMEWORKS: FrameworkDoc[] = [
     apis: [
       { name: 'createObservable', signature: 'createObservable(source: ObservableValue<T>): Accessor<T>', desc: 'Subscribe to any observable snapshot (task or field).' },
       VALUE_API('createSharedValue', 'createSharedValue(memory, key): Accessor<T | undefined>', 'returns the field value as an Accessor'),
-      { name: 'createTask', signature: 'createTask(task): { state: Accessor<TaskSnapshot>, run, runOnce }', desc: 'Bind an AsyncTask to a signal and get its triggers.' },
+      { name: 'createTask', signature: 'createTask(task | asyncFn): { state: Accessor<TaskSnapshot>, run, runOnce }', desc: 'Bind an AsyncTask — or any async fn — to a signal and get its triggers.' },
     ],
     bindingSource: solidBinding,
     bindingFile: 'packages/solidjs/src/index.ts',
@@ -121,7 +121,7 @@ export const FRAMEWORKS: FrameworkDoc[] = [
     apis: [
       { name: 'observableValue', signature: 'observableValue(source): { value: T }', desc: 'Subscribe to any observable snapshot as rune-backed state.' },
       VALUE_API('sharedValue', 'sharedValue(memory, key): { value: T | undefined }', 'returns the field value as rune state'),
-      { name: 'taskState', signature: 'taskState(task): { data, pending, settled, elapsedMs, error, run, runOnce }', desc: 'Bind an AsyncTask, exposing snapshot getters plus triggers.' },
+      { name: 'taskState', signature: 'taskState(task | asyncFn): { data, pending, settled, elapsedMs, error, run, runOnce }', desc: 'Bind an AsyncTask — or any async fn — exposing snapshot getters plus triggers.' },
     ],
     bindingSource: svelteBinding,
     bindingFile: 'packages/svelte/src/reactivity.svelte.ts',
@@ -142,11 +142,11 @@ export const FRAMEWORKS: FrameworkDoc[] = [
     summary:
       'Signal adapter for zoneless Angular. Call in an injection context (field initializer or constructor) so subscriptions release on destroy.',
     apis: [
-      { name: 'provideMesh', signature: 'provideMesh({ pools: MeshPoolDeclaration[] })', desc: 'Register worker pools as environment providers — spawned eagerly, terminated on injector destroy.' },
+      { name: 'provideMesh', signature: 'provideMesh({ pools: MeshPoolDeclaration[] })', desc: 'Register worker pools or connectWorker clients ({ name, client }) as environment providers — terminated on injector destroy.' },
       { name: 'injectMeshPool', signature: 'injectMeshPool<T>(name): T', desc: 'Inject a pool registered by provideMesh inside an injection context.' },
       { name: 'observableSignal', signature: 'observableSignal(source: ObservableValue<T>): Signal<T>', desc: 'Subscribe to any observable snapshot (task or field).' },
       VALUE_API('sharedValue', 'sharedValue(memory, key): Signal<T | undefined>', 'returns the field value as a Signal'),
-      { name: 'taskState', signature: 'taskState(task): { state: Signal<TaskSnapshot>, run, runOnce }', desc: 'Bind an AsyncTask to a Signal and get its triggers.' },
+      { name: 'taskState', signature: 'taskState(task | asyncFn): { state: Signal<TaskSnapshot>, run, runOnce }', desc: 'Bind an AsyncTask — or any async fn — to a Signal and get its triggers.' },
     ],
     bindingSource: angularBinding,
     bindingFile: 'packages/angular/src/index.ts',

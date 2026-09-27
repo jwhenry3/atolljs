@@ -2,7 +2,8 @@ import { describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 import { msgpackCodec } from './msgpackCodec';
 import { Codec, Connector, SharedMemory, SharedSpec, defineSharedMemory, field, registerConnectorFactory } from './sharedMemory';
-import { structSchema } from './structSchema';
+import { listSchema } from './listSchema';
+import { mz } from './mz';
 
 function bound<S extends SharedSpec>(spec: S) {
   const mem = defineSharedMemory(spec);
@@ -234,25 +235,25 @@ describe('defineSharedMemory', () => {
   });
 });
 
-describe('struct fields (fixed-layout records)', () => {
-  const recordSpec = {
-    id: 'u32',
-    price: 'f64',
-    quantity: 'u16',
-    active: 'u8',
-    tag: { string: 12 },
-  } as const;
+describe('list fields (fixed-layout records)', () => {
+  const recordSchema = mz.object({
+    id: mz.u32(),
+    price: mz.f64(),
+    quantity: mz.u16(),
+    active: mz.u8(),
+    tag: mz.string(12),
+  });
 
   it('computes a deterministic, naturally-aligned record layout', () => {
-    const d = field.struct({ fields: recordSpec, count: 10 });
+    const d = field.list({ schema: recordSchema, count: 10 });
     // id@0(4) → pad→ price@8(8) → quantity@16(2) → active@18(1) → tag@19(12) → 31, align8 → 32
-    expect(d.struct.offsets).toEqual({ id: 0, price: 8, quantity: 16, active: 18, tag: 19 });
-    expect(d.struct.recordSize).toBe(32);
+    expect(d.offsets).toEqual({ id: 0, price: 8, quantity: 16, active: 18, tag: 19 });
+    expect(d.recordSize).toBe(32);
     expect(d.byteLength).toBe(320);
   });
 
   it('reads and writes individual records with zero serialization', () => {
-    const mem = bound({ recs: field.struct({ fields: recordSpec, count: 4 }) });
+    const mem = bound({ recs: field.list({ schema: recordSchema, count: 4 }) });
     mem.recs.writeAt(1, { id: 42, price: 9.5, quantity: 3, active: 1, tag: 'sku-0001' });
     mem.recs.writeAt(3, { id: 7, price: -2.25, quantity: 65535, active: 0, tag: 'x' });
 
@@ -263,13 +264,13 @@ describe('struct fields (fixed-layout records)', () => {
   });
 
   it('supports bigint via i64/u64 fields', () => {
-    const mem = bound({ recs: field.struct({ fields: { ts: 'u64', delta: 'i64' }, count: 2 }) });
+    const mem = bound({ recs: field.list({ schema: mz.object({ ts: mz.u64(), delta: mz.i64() }), count: 2 }) });
     mem.recs.writeAt(0, { ts: 1764000000000000000n, delta: -5n });
     expect(mem.recs.readAt(0)).toEqual({ ts: 1764000000000000000n, delta: -5n });
   });
 
   it('readAt can reuse an output object for allocation-free scans', () => {
-    const mem = bound({ recs: field.struct({ fields: { v: 'i32' }, count: 3 }) });
+    const mem = bound({ recs: field.list({ schema: mz.object({ v: mz.i32() }), count: 3 }) });
     mem.recs.writeAt(0, { v: 10 });
     mem.recs.writeAt(2, { v: 30 });
     const out = { v: 0 };
@@ -279,7 +280,7 @@ describe('struct fields (fixed-layout records)', () => {
   });
 
   it('enforces index bounds and inline string capacity', () => {
-    const mem = bound({ recs: field.struct({ fields: recordSpec, count: 2 }) });
+    const mem = bound({ recs: field.list({ schema: recordSchema, count: 2 }) });
     expect(() => mem.recs.writeAt(2, { id: 1, price: 0, quantity: 0, active: 0, tag: '' })).toThrow(RangeError);
     expect(() =>
       mem.recs.writeAt(0, { id: 1, price: 0, quantity: 0, active: 0, tag: 'this-tag-is-far-too-long' })
@@ -287,14 +288,14 @@ describe('struct fields (fixed-layout records)', () => {
   });
 
   it('write() persists a whole array and rejects overflow', () => {
-    const mem = bound({ recs: field.struct({ fields: { v: 'i32' }, count: 2 }) });
+    const mem = bound({ recs: field.list({ schema: mz.object({ v: mz.i32() }), count: 2 }) });
     mem.recs.write([{ v: 1 }, { v: 2 }]);
     expect(mem.recs.read()).toEqual([{ v: 1 }, { v: 2 }]);
     expect(() => mem.recs.write([{ v: 1 }, { v: 2 }, { v: 3 }])).toThrow(/capacity/);
   });
 
   it('is visible across separately bound instances on the same buffer', () => {
-    const spec = { recs: field.struct({ fields: { v: 'i32', flag: 'u8' }, count: 4 }) };
+    const spec = { recs: field.list({ schema: mz.object({ v: mz.i32(), flag: mz.u8() }), count: 4 }) };
     const buf = new SharedArrayBuffer(new SharedMemory(spec).totalBytes);
     const a = new SharedMemory(spec);
     const b = new SharedMemory(spec);
@@ -305,7 +306,7 @@ describe('struct fields (fixed-layout records)', () => {
   });
 
   it('writeAt is pure memory access; commit() bumps the version counter', () => {
-    const mem = bound({ recs: field.struct({ fields: { v: 'i32' }, count: 2 }) });
+    const mem = bound({ recs: field.list({ schema: mz.object({ v: mz.i32() }), count: 2 }) });
     const { view, index } = mem.recs._version!;
     const before = view[index];
     mem.recs.writeAt(0, { v: 1 });
@@ -315,21 +316,91 @@ describe('struct fields (fixed-layout records)', () => {
   });
 
   it('readAt supports field projection', () => {
-    const mem = bound({ recs: field.struct({ fields: recordSpec, count: 2 }) });
+    const mem = bound({ recs: field.list({ schema: recordSchema, count: 2 }) });
     mem.recs.writeAt(0, { id: 5, price: 1.5, quantity: 2, active: 1, tag: 'abc' });
     const partial = mem.recs.readAt(0, {}, ['id', 'price']);
     expect(partial).toEqual({ id: 5, price: 1.5 });
   });
 
   it('writeAt with a field list updates only those fields', () => {
-    const mem = bound({ recs: field.struct({ fields: recordSpec, count: 2 }) });
+    const mem = bound({ recs: field.list({ schema: recordSchema, count: 2 }) });
     mem.recs.writeAt(0, { id: 5, price: 1.5, quantity: 2, active: 1, tag: 'abc' });
     mem.recs.writeAt(0, { price: 9.9, quantity: 7 }, ['price', 'quantity']);
     expect(mem.recs.readAt(0)).toEqual({ id: 5, price: 9.9, quantity: 7, active: 1, tag: 'abc' });
   });
 
-  it('structSchema derives a storage-bounded zod schema from the spec', () => {
-    const schema = structSchema(recordSpec);
+  it('compiles zod list members to the same layout as tokens', () => {
+    const d = field.list({
+      schema: mz.object({
+        id: z.uint32(),                          // format → 'u32'
+        delta: z.int64(),                        // bigint format → 'i64'
+        ratio: z.float32(),                      // 'f32'
+        level: z.number().int().min(0).max(3),   // bounds → narrowest int
+        code: z.string().meta({ bytes: 8 }),     // meta → inline string
+        legacy: mz.u16(),
+      }),
+      count: 2,
+    });
+    expect(d.layout).toEqual({
+      id: 'u32', delta: 'i64', ratio: 'f32', level: 'u8', code: { string: 8 }, legacy: 'u16',
+    });
+    // the declared schema keeps the zod members; layout holds the compiled tokens
+    expect(d.schema.shape.id).toBeInstanceOf(z.ZodType);
+    expect(d.recordSize).toBe(32); // 4 + 8 + 4 + 1 + 8 + 2 → align8
+  });
+
+  it('zod members read/write through the connector identically to tokens', () => {
+    const mem = bound({
+      recs: field.list({
+        schema: mz.object({ id: z.uint32(), tag: z.string().meta({ bytes: 6 }), n: mz.u8() }),
+        count: 2,
+      }),
+    });
+    mem.recs.writeAt(0, { id: 42, tag: 'abc', n: 7 });
+    expect(mem.recs.readAt(0)).toEqual({ id: 42, tag: 'abc', n: 7 });
+  });
+
+  it('mz helpers compile every scalar width with one spelling', () => {
+    const d = field.list({
+      schema: mz.object({
+        a: mz.i8(), b: mz.u8(), c: mz.i16(), d: mz.u16(),
+        e: mz.i32(), f: mz.u32(), g: mz.f32(), h: mz.f64(),
+        i: mz.i64(), j: mz.u64(),
+        bounded: mz.int(0, 3),
+        tag: mz.string(6),
+      }),
+      count: 1,
+    });
+    expect(d.layout).toEqual({
+      a: 'i8', b: 'u8', c: 'i16', d: 'u16',
+      e: 'i32', f: 'u32', g: 'f32', h: 'f64',
+      i: 'i64', j: 'u64',
+      bounded: 'u8', tag: { string: 6 },
+    });
+    // mz members are real zod schemas — validation comes with the declaration
+    expect(() => d.schema.shape.b.parse(300)).toThrow();
+    expect(d.schema.shape.b.parse(200)).toBe(200);
+  });
+
+  it('schemas keep declared domain bounds — stricter than the storage width', () => {
+    const mem = bound({
+      recs: field.list({ schema: mz.object({ level: z.number().int().min(0).max(3) }), count: 1 }),
+    });
+    expect(mem.schemas.recs.parse({ level: 2 })).toEqual({ level: 2 });
+    expect(() => mem.schemas.recs.parse({ level: 9 })).toThrow(); // 9 fits u8, not 0..3
+  });
+
+  it('rejects zod members that cannot express a fixed-width layout', () => {
+    expect(() => field.list({
+      schema: mz.object({ when: z.date() }), count: 1,
+    })).toThrow(/can't lay out/);
+    expect(() => field.list({
+      schema: mz.object({ s: z.string() }), count: 1, // no .meta({ bytes }) — capacity unknown
+    })).toThrow(/meta\(\{ bytes: n \}\)/);
+  });
+
+  it('listSchema derives a storage-bounded zod schema from the spec', () => {
+    const schema = listSchema(recordSchema.shape);
     const rec = { id: 5, price: 1.5, quantity: 2, active: 1, tag: 'abc' };
     expect(schema.parse(rec)).toEqual(rec);
     // u8/u16/u32 bounds are enforced — out-of-range fails before touching memory
@@ -339,9 +410,91 @@ describe('struct fields (fixed-layout records)', () => {
     expect(() => schema.parse({ ...rec, tag: 'this-tag-is-too-long' })).toThrow();
     // inferred type is identical to the connector's record type — parsed
     // output is directly assignable to writeAt
-    const mem = bound({ recs: field.struct({ fields: recordSpec, count: 1 }) });
+    const mem = bound({ recs: field.list({ schema: recordSchema, count: 1 }) });
     mem.recs.writeAt(0, schema.parse(rec));
     expect(mem.recs.readAt(0)).toEqual(rec);
+  });
+});
+
+describe('schema-derived fixed layouts', () => {
+  it('field.object derives byteLength from the schema — no maxBytes', () => {
+    const d = field.object({
+      schema: mz.object({ total: mz.f64(), open: mz.u32(), flag: mz.boolean(), tag: mz.string(8) }),
+    });
+    expect(d.kind).toBe('object');
+    expect(d.layout).toEqual({ total: 'f64', open: 'u32', flag: { bool: true }, tag: { string: 8 } });
+    expect(d.recordSize).toBe(24); // 8 + 4 + 1 + 8 → align8
+    expect(d.byteLength).toBe(32); // 8-byte header + record
+  });
+
+  it('fixed objects round-trip inline — no codec, undefined until written', () => {
+    const mem = bound({
+      snapshot: field.object({ schema: mz.object({ total: mz.f64(), open: mz.u32(), flag: mz.boolean(), tag: mz.string(8) }) }),
+    });
+    expect(mem.snapshot.read()).toBeUndefined();
+    mem.snapshot.write({ total: 1.5, open: 7, flag: true, tag: 'hi' });
+    expect(mem.snapshot.read()).toEqual({ total: 1.5, open: 7, flag: true, tag: 'hi' });
+    // identical memory on a second binding sees the same value
+    const spec = { snapshot: field.object({ schema: mz.object({ total: mz.f64(), open: mz.u32() }) }) };
+    const buf = new SharedArrayBuffer(new SharedMemory(spec).totalBytes);
+    const a = new SharedMemory(spec);
+    const b = new SharedMemory(spec);
+    a.bind(buf);
+    b.bind(buf);
+    a.connector('snapshot').write({ total: 9, open: 3 });
+    expect(b.connector('snapshot').read()).toEqual({ total: 9, open: 3 });
+  });
+
+  it('fixed object writes validate against the declared schema', () => {
+    const mem = bound({ s: field.object({ schema: mz.object({ n: mz.u8() }) }) });
+    expect(() => mem.s.write({ n: 300 })).toThrow(); // u8 domain bound
+    mem.s.write({ n: 3 });
+    expect(mem.s.read()).toEqual({ n: 3 });
+  });
+
+  it('field.array derives capacity from .max(n) / .length(n)', () => {
+    const bounded = field.array({ schema: mz.array(mz.u32()).max(4) });
+    expect(bounded.element).toBe('u32');
+    expect(bounded.capacity).toBe(4);
+    expect(bounded.byteLength).toBe(8 + 4 * 4);
+    const exact = field.array({ schema: mz.array(mz.string(6)).length(3) });
+    expect(exact.capacity).toBe(3);
+
+    const mem = bound({ tags: field.array({ schema: mz.array(mz.u8()).max(4) }) });
+    expect(mem.tags.read()).toBeUndefined();
+    mem.tags.write([1, 2]);
+    expect(mem.tags.read()).toEqual([1, 2]);
+    mem.tags.write([]); // empty is a written value
+    expect(mem.tags.read()).toEqual([]);
+    expect(() => mem.tags.write([1, 2, 3, 4, 5])).toThrow(/<=4 items|capacity of 4/);
+  });
+
+  it('field.string derives its budget from mz.string(n)', () => {
+    const d = field.string({ schema: mz.string(10) });
+    expect(d.byteLength).toBe(14); // 4-byte length header + 10
+    const mem = bound({ label: field.string({ schema: mz.string(10) }) });
+    mem.label.write('within');
+    expect(mem.label.read()).toBe('within');
+    expect(() => mem.label.write('exceeds ten bytes')).toThrow();
+  });
+
+  it('rejects schemas with no derivable width when maxBytes is absent', () => {
+    expect(() => field.object({ schema: z.string() as never })).toThrow(/maxBytes/);
+    expect(() => field.object({ schema: mz.object({ note: z.string() }) })).toThrow(/bytes/);
+    expect(() => field.array({ schema: z.array(z.number()) })).toThrow(/\.max\(n\) or \.length\(n\)/);
+    expect(() => field.array({ schema: z.array(z.date()).max(2) })).toThrow(/fixed-width|field\.list/);
+    expect(() => field.string({ schema: z.string() })).toThrow(/bytes|maxBytes/);
+  });
+
+  it('codec-encoded object/array fields keep working with explicit maxBytes', () => {
+    const mem = bound({
+      obj: field.object({ maxBytes: 256, schema: z.object({ note: z.string() }) }),
+      arr: field.array({ maxBytes: 256, schema: z.array(z.string()) }),
+    });
+    mem.obj.write({ note: 'dynamic' });
+    mem.arr.write(['a', 'b', 'c']);
+    expect(mem.obj.read()).toEqual({ note: 'dynamic' });
+    expect(mem.arr.read()).toEqual(['a', 'b', 'c']);
   });
 });
 
@@ -400,20 +553,20 @@ describe('edge coverage', () => {
     expect(() => c.write({ pad: 'x'.repeat(64) })).toThrow(/exceeds field capacity/);
   });
 
-  it('struct connector reads and writes i8, i16, and f32 scalars', () => {
-    const mem = bound({ r: field.struct({ fields: { a: 'i8', b: 'i16', c: 'f32' }, count: 2 }) });
+  it('list connector reads and writes i8, i16, and f32 scalars', () => {
+    const mem = bound({ r: field.list({ schema: mz.object({ a: mz.i8(), b: mz.i16(), c: mz.f32() }), count: 2 }) });
     mem.r.writeAt(0, { a: -8, b: -300, c: 1.5 });
     expect(mem.r.readAt(0)).toEqual({ a: -8, b: -300, c: 1.5 });
   });
 
-  it('struct readString uses max length when the field is exactly full', () => {
-    const mem = bound({ r: field.struct({ fields: { tag: { string: 8 } }, count: 1 }) });
+  it('list readString uses max length when the field is exactly full', () => {
+    const mem = bound({ r: field.list({ schema: mz.object({ tag: mz.string(8) }), count: 1 }) });
     mem.r.writeAt(0, { tag: '12345678' }); // fills the field — no zero byte inside max
     expect(mem.r.readAt(0)).toEqual({ tag: '12345678' });
   });
 
   it('readAt rejects negative indexes', () => {
-    const mem = bound({ r: field.struct({ fields: { v: 'i32' }, count: 2 }) });
+    const mem = bound({ r: field.list({ schema: mz.object({ v: mz.i32() }), count: 2 }) });
     expect(() => mem.r.readAt(-1)).toThrow(RangeError);
   });
 

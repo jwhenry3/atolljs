@@ -15,7 +15,7 @@ export type Logger = (...args: unknown[]) => void;
 /**
  * Flattens a computed object type into its concrete shape so IDE hovers show
  * `{ id: number; site: string }` instead of the mapped-type machinery that
- * produced it. Applied to synthetic types (e.g. struct records); user-named
+ * produced it. Applied to synthetic types (e.g. list records); user-named
  * types keep their names since the name is the better display.
  */
 export type Prettify<T> = { [K in keyof T]: T[K] } & {};

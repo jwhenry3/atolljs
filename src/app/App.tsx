@@ -51,7 +51,7 @@ const DEMOS: Demo[] = [
   {
     title: 'Market Gateway',
     description:
-      'A live quote cache: the worker feeds 500k random-access ticks into 10k struct records, the main thread screens the market and reacts to published breadth stats.',
+      'A live quote cache: the worker feeds 500k random-access ticks into 10k list records, the main thread screens the market and reacts to published breadth stats.',
     run: runMarketDemo,
   },
   {

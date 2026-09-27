@@ -1,5 +1,6 @@
 import { Controller, Get, Inject, NotFoundException, Param, ParseIntPipe, Post, Query } from '@nestjs/common';
 import { InjectMeshPool } from '@jwhenry123/mesh-nestjs';
+import { workerClient, type WorkerPool } from '@jwhenry123/mesh/sdk';
 import {
   incidentsMemory,
   REGIONS,
@@ -7,7 +8,7 @@ import {
   SEVERITIES,
   STATUSES,
   type Incident,
-  type IncidentsPool,
+  type IncidentsWorker,
   type QueryArgs,
 } from '@jwhenry123/mesh-incidents';
 import { IncidentsAnalytics } from './shared/incidents-analytics.service';
@@ -17,10 +18,15 @@ const toIndex = (list: readonly string[], value?: string) =>
 
 @Controller('api/incidents')
 export class IncidentsController {
+  // The injected pool wrapped once as a typed client — calls read like the
+  // worker's own method names. Factory form: resolves `this.pool` lazily
+  // (field initializers run before the ctor's parameter-property assignment).
+  private readonly incidents = workerClient<IncidentsWorker>(() => this.pool);
+
   // Explicit @Inject tokens — webpack/ts-loader does emit design:paramtypes,
   // so these are belt-and-suspenders rather than required.
   constructor(
-    @InjectMeshPool('incidents') private readonly pool: IncidentsPool,
+    @InjectMeshPool('incidents') private readonly pool: WorkerPool,
     @Inject(IncidentsAnalytics) private readonly analytics: IncidentsAnalytics,
   ) {}
 
@@ -31,18 +37,18 @@ export class IncidentsController {
    */
   @Post('seed')
   seed() {
-    return this.pool.seedIncidents().then((ms) => ({ seeded: true, ms }));
+    return this.incidents.seedIncidents().then((ms) => ({ seeded: true, ms }));
   }
 
   @Get('seed-progress')
   seedProgress() {
-    return { progress: incidentsMemory.seedProgress.read() };
+    return { progress: incidentsMemory.signals.seedProgress.read() };
   }
 
   /** Aggregated metrics — computed on a worker over shared memory. */
   @Get('stats')
   stats() {
-    return this.pool.computeMetrics();
+    return this.incidents.computeMetrics();
   }
 
   /**
@@ -62,7 +68,7 @@ export class IncidentsController {
       service: toIndex(SERVICES, q.service),
       search: q.search ?? '',
     };
-    return this.pool.queryIncidents(args);
+    return this.incidents.queryIncidents(args);
   }
 
   /**
@@ -92,7 +98,7 @@ export class IncidentsController {
    */
   @Get(':id')
   byId(@Param('id', ParseIntPipe) id: number) {
-    const conn = incidentsMemory.incidents;
+    const conn = incidentsMemory.lists.incidents;
     if (id < 0 || id >= conn.recordCount) {
       throw new NotFoundException(`incident ${id} out of range`);
     }

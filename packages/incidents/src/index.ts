@@ -9,14 +9,13 @@ export {
   incidentSpec,
   incidentsMemory,
   metricsSchema,
-  queryArgsSchema,
-  queryResultSchema,
 } from './contract/memory.contracts';
-export type { Incident, IncidentRow, Metrics, QueryArgs, QueryResult } from './contract/memory.contracts';
-export { incidentsService } from './contract/incidents.service';
+export type { Incident, IncidentRow, Metrics } from './contract/memory.contracts';
+export { queryArgsSchema, queryResultSchema } from './service/queryIncidents';
+export type { QueryArgs, QueryResult } from './service/queryIncidents';
 export { fmtDate, fmtDur, fmtInt } from './format';
-export { getIncidentsPool, incidentsTasks } from './pool';
-export type { IncidentsPool } from './pool';
-export { initIncidentsTask, queryIncidentsTask } from './tasks';
+export { incidents, initIncidents } from './incidents';
+export type { IncidentsClient } from './incidents';
+export type { IncidentsWorker } from './worker/incidents.worker';
 export { incidentColumns, SEVERITY_CLASSES, STATUS_CLASSES } from './table';
 export type { IncidentColumn } from './table';

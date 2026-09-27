@@ -5,6 +5,7 @@ import {
   defineService,
   implementService,
   rpc,
+  serviceMethod,
   type TaskRunner,
 } from './service';
 import { TaskRegistry } from './worker/registry';
@@ -98,6 +99,73 @@ describe('implementService', () => {
       add: () => 'oops' as unknown as number,
     });
     await expect(TaskRegistry.execute('echo.add', 1, 1)).rejects.toThrow();
+  });
+});
+
+describe('ServiceMethod units', () => {
+  // The one-file-per-task pattern: serviceMethod() builds the unit — the
+  // def's schemas supply the signature, defineService unwraps `.def`,
+  // implementService `.run`.
+  const greet = serviceMethod({
+    def: {
+      argsSchema: z.tuple([z.string()]),
+      resultSchema: z.string(),
+    },
+    // Units may carry extra fields for `run`'s `this` — annotate `this` to
+    // see them (the factory can't reflect extras back into the signature).
+    run(this: { prefix: string }, name) {
+      return `hi ${name} (${this.prefix})`;
+    },
+    prefix: 'unit',
+  });
+
+  const svc = defineService('greeter', { greet });
+
+  it('defineService accepts units and unwraps their def', async () => {
+    expect(svc.tasks.greet.taskId).toBe('greeter.greet');
+    expect(() => svc.tasks.greet.argsSchema!.parse(['ada'])).not.toThrow();
+    implementService(svc, { greet });
+    await expect(TaskRegistry.execute('greeter.greet', 'ada')).resolves.toBe('hi ada (unit)');
+  });
+
+  it('implementService binds a unit’s run to the unit itself', async () => {
+    // `this.prefix` above resolved — the unit (not the handlers map) is `this`.
+    await expect(TaskRegistry.execute('greeter.greet', 'ada')).resolves.toContain('unit');
+  });
+
+  it('unit defs infer handler signatures — wrong types fail compile', () => {
+    implementService(svc, {
+      // @ts-expect-error — greet's args pin [string]
+      greet: { run: (n: number) => 'x' },
+    });
+  });
+
+  it('serviceMethod derives run’s signature from the def’s schemas', async () => {
+    const doubling = serviceMethod({
+      def: {
+        argsSchema: z.tuple([z.number()]),
+        resultSchema: z.number(),
+      },
+      run(n) {
+        // n is contextually `number` from the argsSchema — nothing annotated.
+        const scaled: number = n * 2;
+        return scaled;
+      },
+    });
+    const svc2 = defineService('math', { doubling });
+    implementService(svc2, { doubling });
+    await expect(TaskRegistry.execute('math.doubling', 21)).resolves.toBe(42);
+  });
+
+  it('serviceMethod accepts rpc<A,R>() defs for schema-less signatures', async () => {
+    const pair = serviceMethod({
+      def: rpc<[string, number], string>(),
+      run(word, times) {
+        return word.repeat(times);
+      },
+    });
+    implementService(defineService('rep', { pair }), { pair });
+    await expect(TaskRegistry.execute('rep.pair', 'ab', 3)).resolves.toBe('ababab');
   });
 });
 

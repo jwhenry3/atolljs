@@ -91,6 +91,28 @@ describe('worker-side @MeshService delegation', () => {
   });
 });
 
+describe('contract-less @MeshService({ pool })', () => {
+  @Injectable()
+  @MeshService({ pool: 'p' })
+  class Analytics {
+    constructor(private readonly dep: Dep) {}
+
+    hotspots(limit = 10) {
+      return this.dep.n + limit;
+    }
+
+    rollup() {
+      return 'all';
+    }
+  }
+
+  it('registers every method as `ClassName.method` bound to the DI instance', async () => {
+    bindMeshWorkerInstance(Analytics, new Analytics(new Dep()));
+    await expect(TaskRegistry.execute('Analytics.hotspots', 5)).resolves.toBe(105);
+    await expect(TaskRegistry.execute('Analytics.rollup')).resolves.toBe('all');
+  });
+});
+
 describe('pool providers inside a worker context', () => {
   it('resolve to null instead of spawning a nested pool', async () => {
     // worker() would throw if invoked — proves the provider short-circuits

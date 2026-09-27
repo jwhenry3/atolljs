@@ -52,4 +52,13 @@ describe('useTask', () => {
     expect(t.state.value.settled).toBe(true);
     scope.stop();
   });
+
+  it('accepts a plain async fn and reaches settled', async () => {
+    const scope = effectScope();
+    const t = scope.run(() => useTask(async (n: number) => n * 2))!;
+    t.run(6);
+    await vi.waitFor(() => expect(t.state.value.settled).toBe(true));
+    expect(t.state.value.data).toBe(12);
+    scope.stop();
+  });
 });

@@ -24,27 +24,26 @@ export const FRAMEWORKS: FrameworkDoc[] = [
     apis: [
       { name: 'useObservable', signature: 'useObservable(source: ObservableValue<T>): T', desc: 'Subscribe to any observable snapshot (task or field).' },
       { name: 'useSharedValue', signature: 'useSharedValue(memory, key, select?, options?): T | undefined', desc: 'Bind one shared-memory field to React state; optional selector + equality to slice updates.' },
-      { name: 'useTask', signature: 'useTask(task): { data, pending, settled, elapsedMs, error, run, runOnce }', desc: 'Bind an AsyncTask to state and get its triggers.' },
+      { name: 'useTask', signature: 'useTask(task | asyncFn): { data, pending, settled, elapsedMs, error, run, runOnce }', desc: 'Bind an AsyncTask — or any async fn (e.g. a client method, wrapped via toTask) — to state and get its triggers.' },
     ],
     usageFile: 'App.tsx',
     usageLanguage: 'tsx',
     usage: `import { useSharedValue, useTask } from '@jwhenry123/mesh-react';
-import { counterMemory, incrementTask, initTask } from './counter.contract';
+import { counterMemory } from './counter.memory';
+import { counter } from './counter';
 
 export function App() {
   const count = useSharedValue(counterMemory, 'count');
-  const init = useTask(initTask);
-  const increment = useTask(incrementTask);
+  const increment = useTask(counter.increment);  // client method → latest-wins task
 
-  useEffect(() => init.runOnce(), []);
   return (
-    <button disabled={!init.settled} onClick={() => increment.run(1)}>
+    <button onClick={() => increment.run(1)}>
       count: {count ?? '…'}
     </button>
   );
 }`,
     notes: [
-      'runOnce() makes the init task StrictMode-safe — double mounts skip a second run.',
+      'counter.increment is typed from the worker\'s defineWorker methods — no task contract to declare.',
       'Pass a selector to useSharedValue to re-render only when a slice changes: useSharedValue(memory, \'metrics\', m => m.total, { equals: shallowEqual }).',
     ],
   },
@@ -59,27 +58,25 @@ export function App() {
     apis: [
       { name: 'useObservable', signature: 'useObservable(source: ObservableValue<T>): Ref<T>', desc: 'Subscribe to any observable snapshot.' },
       { name: 'useSharedValue', signature: 'useSharedValue(memory, key, select?, options?): Ref<T | undefined>', desc: 'Bind one shared-memory field to a Ref; optional selector + equality.' },
-      { name: 'useTask', signature: 'useTask(task): { state: Ref<TaskSnapshot>, run, runOnce }', desc: 'Bind an AsyncTask to a Ref and get its triggers.' },
+      { name: 'useTask', signature: 'useTask(task | asyncFn): { state: Ref<TaskSnapshot>, run, runOnce }', desc: 'Bind an AsyncTask — or any async fn — to a Ref and get its triggers.' },
     ],
     usageFile: 'App.vue',
     usageLanguage: 'vue',
     usage: `<script setup lang="ts">
-import { onMounted } from 'vue';
 import { useSharedValue, useTask } from '@jwhenry123/mesh-vue';
-import { counterMemory, incrementTask, initTask } from './counter.contract';
+import { counterMemory } from './counter.memory';
+import { counter } from './counter';
 
 const count = useSharedValue(counterMemory, 'count');
-const init = useTask(initTask);
-const increment = useTask(incrementTask);
-onMounted(() => init.runOnce());
+const increment = useTask(counter.increment);
 </script>
 
 <template>
-  <button :disabled="!init.state.value.settled" @click="increment.run(1)">
+  <button @click="increment.run(1)">
     count: {{ count ?? '…' }}
   </button>
 </template>`,
-    notes: ['watch() the task\'s settled Ref to trigger follow-up work after init.'],
+    notes: ['watch() the task\'s settled Ref to trigger follow-up work after a run.'],
   },
   {
     id: 'solid',
@@ -92,21 +89,20 @@ onMounted(() => init.runOnce());
     apis: [
       { name: 'createObservable', signature: 'createObservable(source: ObservableValue<T>): Accessor<T>', desc: 'Subscribe to any observable snapshot.' },
       { name: 'createSharedValue', signature: 'createSharedValue(memory, key, select?, options?): Accessor<T | undefined>', desc: 'Bind one shared-memory field to an Accessor; optional selector + equality.' },
-      { name: 'createTask', signature: 'createTask(task): { state: Accessor<TaskSnapshot>, run, runOnce }', desc: 'Bind an AsyncTask to a signal and get its triggers.' },
+      { name: 'createTask', signature: 'createTask(task | asyncFn): { state: Accessor<TaskSnapshot>, run, runOnce }', desc: 'Bind an AsyncTask — or any async fn — to a signal and get its triggers.' },
     ],
     usageFile: 'App.tsx',
     usageLanguage: 'tsx',
     usage: `import { createSharedValue, createTask } from '@jwhenry123/mesh-solidjs';
-import { counterMemory, incrementTask, initTask } from './counter.contract';
+import { counterMemory } from './counter.memory';
+import { counter } from './counter';
 
 export function App() {
   const count = createSharedValue(counterMemory, 'count');
-  const init = createTask(initTask);
-  const increment = createTask(incrementTask);
-  init.runOnce();
+  const increment = createTask(counter.increment);
 
   return (
-    <button disabled={!init.state().settled} onClick={() => increment.run(1)}>
+    <button onClick={() => increment.run(1)}>
       count: {count() ?? '…'}
     </button>
   );
@@ -124,21 +120,20 @@ export function App() {
     apis: [
       { name: 'observableValue', signature: 'observableValue(source): { value: T }', desc: 'Subscribe to any observable snapshot as rune-backed state.' },
       { name: 'sharedValue', signature: 'sharedValue(memory, key, select?, options?): { value: T | undefined }', desc: 'Bind one shared-memory field as rune state; optional selector + equality.' },
-      { name: 'taskState', signature: 'taskState(task): { data, pending, settled, elapsedMs, error, run, runOnce }', desc: 'Bind an AsyncTask — snapshot getters plus triggers.' },
+      { name: 'taskState', signature: 'taskState(task | asyncFn): { data, pending, settled, elapsedMs, error, run, runOnce }', desc: 'Bind an AsyncTask — or any async fn — snapshot getters plus triggers.' },
     ],
     usageFile: 'App.svelte',
     usageLanguage: 'svelte',
     usage: `<script lang="ts">
   import { sharedValue, taskState } from '@jwhenry123/mesh-svelte';
-  import { counterMemory, incrementTask, initTask } from './counter.contract';
+  import { counterMemory } from './counter.memory';
+  import { counter } from './counter';
 
   const count = sharedValue(counterMemory, 'count');
-  const init = taskState(initTask);
-  const increment = taskState(incrementTask);
-  init.runOnce();
+  const increment = taskState(counter.increment);
 </script>
 
-<button disabled={!init.settled} onclick={() => increment.run(1)}>
+<button onclick={() => increment.run(1)}>
   count: {count.value ?? '…'}
 </button>`,
     notes: ['Factories must run in a .svelte.ts module or during component init so runes compile correctly.'],
@@ -152,44 +147,40 @@ export function App() {
     summary:
       'Signal adapter for zoneless Angular. Call in an injection context (field initializer or constructor) so subscriptions release on destroy.',
     apis: [
-      { name: 'provideMesh', signature: 'provideMesh({ pools: MeshPoolDeclaration[] }, ...features)', desc: 'Register worker pools as environment providers — spawned eagerly, terminated on injector destroy; also usable at route level.' },
+      { name: 'provideMesh', signature: 'provideMesh({ pools: MeshPoolDeclaration[] }, ...features)', desc: 'Register worker pools or connectWorker clients ({ name, client }) as environment providers — terminated on injector destroy; also usable at route level.' },
       { name: 'injectMeshPool', signature: 'injectMeshPool<T>(name): T', desc: 'Inject a pool registered by provideMesh inside an injection context; mockable via TestBed.' },
       { name: 'observableSignal', signature: 'observableSignal(source: ObservableValue<T>): Signal<T>', desc: 'Subscribe to any observable snapshot.' },
       { name: 'sharedValue', signature: 'sharedValue(memory, key, select?, options?): Signal<T | undefined>', desc: 'Bind one shared-memory field to a Signal; optional selector + equality.' },
-      { name: 'taskState', signature: 'taskState(task): { state: Signal<TaskSnapshot>, run, runOnce }', desc: 'Bind an AsyncTask to a Signal and get its triggers.' },
+      { name: 'taskState', signature: 'taskState(task | asyncFn): { state: Signal<TaskSnapshot>, run, runOnce }', desc: 'Bind an AsyncTask — or any async fn — to a Signal and get its triggers.' },
     ],
     usageFile: 'main.ts + app.component.ts',
     usageLanguage: 'typescript',
-    usage: `// main.ts — pools register as DI providers, terminating on app teardown
+    usage: `// main.ts — the connectWorker client registers as a DI provider,
+// terminated on app teardown (it re-spawns lazily on the next call)
 bootstrapApplication(AppComponent, {
   providers: [
     provideZonelessChangeDetection(),
-    provideMesh({ pools: [{
-      name: 'counter',
-      worker: () => new Worker(new URL('./counter.worker.ts', import.meta.url)),
-      sharedMemory: counterMemory,
-    }] }),
+    provideMesh({ pools: [{ name: 'counter', client: counter }] }),
   ],
 });
 
 // app.component.ts
 import { Component, effect } from '@angular/core';
 import { injectMeshPool, sharedValue, taskState } from '@jwhenry123/mesh-angular';
-import { counterMemory, incrementTask, initTask } from './counter.contract';
+import { counterMemory } from './counter.memory';
+import { counter } from './counter';
 
 @Component({
   selector: 'app-root',
-  template: \`<button [disabled]="!init().settled" (click)="increment.run(1)">
+  template: \`<button (click)="increment.run(1)">
     count: {{ count() ?? '…' }}</button>\`,
 })
 export class AppComponent {
-  private readonly pool = injectMeshPool('counter');
+  private readonly counter = injectMeshPool<typeof counter>('counter');
   count = sharedValue(counterMemory, 'count');
-  init = taskState(initTask).state;
-  increment = taskState(incrementTask);
+  increment = taskState(this.counter.increment);
 
   constructor() {
-    initTask.runOnce();
     effect(() => console.log('count →', this.count()));
   }
 }`,

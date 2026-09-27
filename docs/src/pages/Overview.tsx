@@ -12,20 +12,32 @@ const ARCH = `\
 │  read/write the SAME memory — results stream back via postMessage │
 └───────────────────────────────────────────────────────────────────┘`;
 
-const QUICKSTART = `import { defineSharedMemory, field, WorkerPool } from '@jwhenry123/mesh/sdk';
+const QUICKSTART = `import { defineSharedMemory, field, defineWorker, connectWorker } from '@jwhenry123/mesh/sdk';
 
-// 1. One contract, imported by both threads.
-export const memory = defineSharedMemory({
-  counter: field.number(),
-  stats: field.object({ maxBytes: 2048 }), // 2KB encoded budget
+// counter.memory.ts — one contract, imported by both threads
+export const counterMemory = defineSharedMemory({ count: field.number() });
+
+// counter.worker.ts — the worker owns the runtime + the method list
+export const counterWorker = defineWorker({
+  sharedMemory: counterMemory,
+  methods: {
+    increment(delta: number) {
+      const next = counterMemory.count.read() + delta;
+      counterMemory.count.write(next);   // write in place — no postMessage
+      return next;
+    },
+  },
 });
+export type CounterWorker = typeof counterWorker;
 
-// 2. A task contract + a pool that binds the contract.
-const pool = new WorkerPool({
-  createWorker: () => new Worker(new URL('./worker.ts', import.meta.url), { type: 'module' }),
-  sharedMemory: memory,
-  tasks: { addDelta: AddDelta }, // → pool.addDelta(n)
-});`;
+// counter.ts — main thread imports the TYPE only; the client is a Proxy
+import type { CounterWorker } from './counter.worker';
+export const counter = connectWorker<CounterWorker>({
+  sharedMemory: counterMemory,
+  worker: () => new Worker(new URL('./counter.worker.ts', import.meta.url), { type: 'module' }),
+});
+// counter.increment(1) → Promise<number>; pool spawns on first call
+// (SSR-safe import). counter.terminate() tears it down.`;
 
 const REQUIREMENTS = `\
 # SharedArrayBuffer only exists in cross-origin-isolated contexts.
@@ -43,7 +55,7 @@ export function Overview() {
         through one shared-memory fabric. Threads share a fixed-layout{' '}
         <code>SharedArrayBuffer</code> contract; workers scan, sort, and write in
         place; work is offloaded two ways — task <em>commands</em> and{' '}
-        <em>state reactivity</em> — while only task inputs and explicit results
+        <em>state reactivity</em> — while only method inputs and explicit results
         cross <code>postMessage</code>.
       </p>
 
@@ -52,8 +64,9 @@ export function Overview() {
       <p>
         Three layers: <strong>contracts</strong> (<code>defineSharedMemory</code> +{' '}
         <code>field.*</code>) declare the memory layout once for both threads; the{' '}
-        <strong>pool</strong> (<code>WorkerPool</code> + <code>TaskRegistry</code> +
-        worker bootstrap) dispatches typed tasks; <strong>reactivity</strong> (
+        <strong>worker pair</strong> (<code>defineWorker</code> on the worker side,{' '}
+        <code>connectWorker</code> on the main thread) dispatches typed method
+        calls over a lazily-spawned pool; <strong>reactivity</strong> (
         <code>observe</code>, <code>watch</code>, <code>defineTask</code>) turns shared
         fields and task runs into subscribable snapshots that framework bindings adapt.
       </p>
@@ -72,7 +85,7 @@ export function Overview() {
       </table>
 
       <h2>Quickstart</h2>
-      <CodeBlock code={QUICKSTART} file="contract + pool" />
+      <CodeBlock code={QUICKSTART} file="memory + worker + client" />
 
       <h2>Browser requirements</h2>
       <CodeBlock code={REQUIREMENTS} language="bash" />

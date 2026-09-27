@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
-import { structSchema } from './structSchema';
+import { listSchema } from './listSchema';
 
 const fullSpec = {
   i8v: 'i8', u8v: 'u8', i16v: 'i16', u16v: 'u16', i32v: 'i32', u32v: 'u32',
@@ -14,8 +14,8 @@ const valid = {
   tag: 'abcd',
 };
 
-describe('structSchema', () => {
-  const schema = structSchema(fullSpec);
+describe('listSchema', () => {
+  const schema = listSchema(fullSpec);
 
   it('accepts values at every storage bound', () => {
     expect(schema.parse(valid)).toEqual(valid);

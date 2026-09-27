@@ -1,34 +1,40 @@
 import { CodeBlock } from '../components/CodeBlock';
-import taskDefs from '../../../packages/incidents/src/tasks.ts?raw';
 
 const OBSERVE = `import { observe } from '@jwhenry123/mesh/sdk';
 
 // ObservableValue<T> — get() + subscribe(). Binds lazily: undefined until the
 // contract is bound, activates its watch when bind() lands.
-const progress = observe(incidentsMemory, 'seedProgress');
+const progress = observe(incidentsMemory, 'signals.seedProgress');
 const stop = progress.subscribe((v) => console.log(v));`;
 
 const WATCH = `import { reactive, watch } from '@jwhenry123/mesh/sdk';
 
 // Low-level: observe writes through the shared version counter.
-const unwatch = watch(incidentsMemory.metrics, (m) => render(m));
+const unwatch = watch(incidentsMemory.state.metrics, (m) => render(m));
 
 // Selector form — callback only fires when the slice changes.
-watch(incidentsMemory.metrics, (m) => m.critical, (n) => alert(n));
+watch(incidentsMemory.state.metrics, (m) => m.critical, (n) => alert(n));
 
 // reactive() gives a signal-tracked connector (solid-js under the hood):
 // get() is tracked, set() writes through, observeRemote() polls the counter.
-const conn = reactive(incidentsMemory.seedProgress);`;
+const conn = reactive(incidentsMemory.signals.seedProgress);`;
 
-const TASK = `import { defineTask } from '@jwhenry123/mesh/sdk';
+const TASK = `import { defineTask, toTask } from '@jwhenry123/mesh/sdk';
 
 // Latest-wins async runner: rapid re-runs drop stale results.
 // Snapshot: { data, pending, settled, elapsedMs, error }.
-export const queryTask = defineTask((q: QueryArgs) => pool.queryIncidents(q));
+const queryTask = defineTask((q: QueryArgs) => incidents.queryIncidents(q));
 
 queryTask.run({ offset: 0, /* ... */ });   // fire a run
 queryTask.runOnce();                       // no-op if pending/settled
-queryTask.subscribe((snap) => console.log(snap.pending));`;
+queryTask.subscribe((snap) => console.log(snap.pending));
+
+// Usually you never call defineTask yourself — every binding's task helper
+// accepts a plain async function and wraps it per call site:
+//   useTask(incidents.queryIncidents)   // React
+//   taskState(incidents.queryIncidents) // Angular / Svelte
+// toTask() is the shared normalizer behind them.
+const same = toTask(incidents.queryIncidents);`;
 
 const LOGGING = `import { scoped, setLogLevel, setLogSink } from '@jwhenry123/mesh/sdk';
 
@@ -61,13 +67,16 @@ export function Reactivity() {
       <h2>watch() / reactive() — low-level</h2>
       <CodeBlock code={WATCH} />
 
-      <h2>defineTask() — latest-wins async</h2>
+      <h2>defineTask() / toTask() — latest-wins async</h2>
       <CodeBlock code={TASK} />
       <p>
-        The same runner backs the domain's task definitions — the incidents package
-        defines these once and every framework shares them:
+        Task state is per call site, not per module: two components each calling{' '}
+        <code>useTask(incidents.queryIncidents)</code> get independent
+        pending/data snapshots. Pass a stable function reference — client methods
+        are referentially stable, and composite flows (seed then compute) belong in
+        a module-level <code>async</code> function like the incidents package's{' '}
+        <code>initIncidents</code>.
       </p>
-      <CodeBlock code={taskDefs} file="packages/incidents/src/tasks.ts" />
 
       <h2>Logging</h2>
       <CodeBlock code={LOGGING} />

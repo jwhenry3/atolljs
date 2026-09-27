@@ -105,29 +105,56 @@ export function MeshTask(
 }
 
 /**
- * Binds a whole {@link ServiceContract} to a provider class — the NestJS
- * adapter over the framework-neutral `defineService`/`implementService`
- * pair. Every method whose name matches a service task is wrapped with the
- * same dispatch as @MeshTask: main-thread calls route to the named pool,
- * worker-side calls run the real body on the DI-resolved instance.
+ * Binds a provider class to a worker pool — the NestJS adapter over the
+ * framework-neutral dispatch. Two forms:
  *
+ *   // contract-less: EVERY own prototype method becomes a task —
+ *   // `ClassName.method` ids, like applying @MeshTask({ pool }) to each
  *   @Injectable()
- *   @MeshService(incidentsService, { pool: 'incidents' })
- *   export class IncidentsRpc {
- *     seedIncidents() { …scan shared memory… return ms; }
- *     queryIncidents(q: QueryArgs) { …return page; }
+ *   @MeshService({ pool: 'incidents' })
+ *   export class IncidentsAnalytics {
+ *     hotspots(limit = 10) { …scan shared memory… }
  *   }
  *
- * `pool` defaults to the service name. Methods not declared in the service
- * are untouched; service methods missing on the class are NOT bound (the
- * worker entry should compose `implementService` directly for those, or the
- * call surfaces as "handler not found" on dispatch — same as a missing
- * @MeshTask registration).
+ *   // contract form: only methods declared in a ServiceContract are bound,
+ *   // dispatching under the contract's taskIds (and schemas)
+ *   @Injectable()
+ *   @MeshService(someService, { pool: 'incidents' })
+ *   export class IncidentsRpc {
+ *     seedIncidents() { …scan shared memory… return ms; }
+ *   }
+ *
+ * Main-thread calls route to the named pool; worker-side calls run the real
+ * body on the DI-resolved instance. `pool` defaults to the service name in
+ * the contract form. Contract form: methods not declared in the service are
+ * untouched; service methods missing on the class are NOT bound (the worker
+ * entry should compose `implementService` directly for those, or the call
+ * surfaces as "handler not found" on dispatch — same as a missing @MeshTask
+ * registration).
  */
+export function MeshService(service: ServiceContract, options?: { pool?: string }): ClassDecorator;
+export function MeshService(options: { pool: string }): ClassDecorator;
 export function MeshService(
-  service: ServiceContract,
+  serviceOrOpts: ServiceContract | { pool: string },
   options: { pool?: string } = {},
 ): ClassDecorator {
+  // Contract-less form — every method dispatches to `pool` under
+  // `ClassName.method` ids via the auto-taskId MeshTask overload.
+  if (!('tasks' in serviceOrOpts)) {
+    const { pool } = serviceOrOpts;
+    return (ctor) => {
+      const proto = ctor.prototype as object;
+      for (const key of Object.getOwnPropertyNames(proto)) {
+        if (key === 'constructor') continue;
+        const descriptor = Object.getOwnPropertyDescriptor(proto, key);
+        if (!descriptor || typeof descriptor.value !== 'function') continue;
+        const applied = MeshTask({ pool })(proto, key, descriptor);
+        if (applied) Object.defineProperty(proto, key, applied);
+      }
+    };
+  }
+
+  const service = serviceOrOpts;
   const pool = options.pool ?? service.name;
   return (ctor) => {
     const proto = ctor.prototype as object;

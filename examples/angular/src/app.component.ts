@@ -4,14 +4,13 @@ import {
   fmtDur,
   fmtInt,
   incidentColumns as columns,
-  initIncidentsTask,
   incidentsMemory,
-  queryIncidentsTask,
+  initIncidents,
   REGIONS,
   SERVICES,
   SEVERITIES,
   STATUSES,
-  type IncidentsPool,
+  type IncidentsClient,
   type QueryArgs,
 } from '@jwhenry123/mesh-incidents';
 
@@ -32,13 +31,17 @@ export class AppComponent {
   protected readonly fmtDur = fmtDur;
   protected readonly pageSizes = [25, 50, 100, 200];
 
+  // The DI-registered client — the same instance provideMesh registered in
+  // main.ts; its pool spawns lazily on first call.
+  private readonly incidents = injectMeshPool<IncidentsClient>('incidents');
+
   // Compose the generic Angular bindings with the incident domain: run init
   // once, stream seedProgress/metrics out of shared memory, and re-run the
   // page query whenever the query spec changes.
-  private readonly seedTask = taskState(initIncidentsTask);
-  private readonly pageTask = taskState(queryIncidentsTask);
-  private readonly seedProgressValue = sharedValue(incidentsMemory, 'seedProgress');
-  private readonly metricsValue = sharedValue(incidentsMemory, 'metrics');
+  private readonly seedTask = taskState(initIncidents);
+  private readonly pageTask = taskState(this.incidents.queryIncidents);
+  private readonly seedProgressValue = sharedValue(incidentsMemory, 'signals.seedProgress');
+  private readonly metricsValue = sharedValue(incidentsMemory, 'state.metrics');
 
   protected readonly ready = computed(() => this.seedTask.state().settled);
   protected readonly seedProgress = computed(() => this.seedProgressValue() ?? 0);
@@ -83,13 +86,9 @@ export class AppComponent {
 
   private debounce: ReturnType<typeof setTimeout> | undefined;
 
-  // The DI-registered pool — spawned eagerly by provideMesh in main.ts, the
-  // same instance the domain task helpers dispatch through.
-  private readonly pool = injectMeshPool<IncidentsPool>('incidents');
-
   constructor() {
-    // Kick off seeding — the pool is already up via provideMesh.
-    initIncidentsTask.runOnce();
+    // Kick off seeding — runOnce ignores repeat triggers while pending/settled.
+    this.seedTask.runOnce();
     // Latest-wins page fetch: re-runs on query changes once seeded; stale
     // responses are dropped by the task runner.
     effect(() => {

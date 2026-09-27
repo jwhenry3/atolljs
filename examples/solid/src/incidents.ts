@@ -1,15 +1,11 @@
 import { createEffect, type Accessor } from 'solid-js';
 import { createSharedValue, createTask } from '@jwhenry123/mesh-solidjs';
 import {
-  getIncidentsPool,
-  initIncidentsTask,
+  incidents,
   incidentsMemory,
-  queryIncidentsTask,
+  initIncidents,
   type QueryArgs,
 } from '@jwhenry123/mesh-incidents';
-
-// Bind the contract and spawn the worker pool as soon as this module loads.
-if (typeof window !== 'undefined') getIncidentsPool();
 
 /**
  * Incident data layer: run init once, stream seedProgress/metrics out of
@@ -17,12 +13,12 @@ if (typeof window !== 'undefined') getIncidentsPool();
  * Stale page responses are dropped by the task's latest-wins semantics.
  */
 export function createIncidents(query: Accessor<QueryArgs>) {
-  const seed = createTask(initIncidentsTask);
-  const page = createTask(queryIncidentsTask);
-  const seedProgress = createSharedValue(incidentsMemory, 'seedProgress');
-  const metrics = createSharedValue(incidentsMemory, 'metrics');
+  const seed = createTask(initIncidents);
+  const page = createTask(incidents.queryIncidents);
+  const seedProgress = createSharedValue(incidentsMemory, 'signals.seedProgress');
+  const metrics = createSharedValue(incidentsMemory, 'state.metrics');
 
-  initIncidentsTask.runOnce();
+  seed.runOnce();
   createEffect(() => {
     const q = query();
     if (seed.state().settled) page.run(q);

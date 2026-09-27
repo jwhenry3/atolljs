@@ -58,4 +58,14 @@ describe('createTask', () => {
     t.run(10);
     await vi.waitFor(() => expect(t.state().data).toBe(9));
   });
+
+  it('accepts a plain async fn and reaches settled', async () => {
+    let t!: { state: () => { data: number | null; settled: boolean } };
+    createRoot(() => {
+      t = createTask(async (n: number) => n * 2) as typeof t;
+    });
+    t.run(6);
+    await vi.waitFor(() => expect(t.state().settled).toBe(true));
+    expect(t.state().data).toBe(12);
+  });
 });

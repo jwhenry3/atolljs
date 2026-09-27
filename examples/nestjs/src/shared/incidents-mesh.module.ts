@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { Worker } from 'node:worker_threads';
 import { MeshModule } from '@jwhenry123/mesh-nestjs';
-import { incidentsMemory, incidentsService } from '@jwhenry123/mesh-incidents';
+import { incidentsMemory } from '@jwhenry123/mesh-incidents';
 import { IncidentsAnalytics } from './incidents-analytics.service';
 import { ScanTelemetry } from './scan-telemetry.service';
 
@@ -26,7 +26,6 @@ import { ScanTelemetry } from './scan-telemetry.service';
       worker: () => new Worker(new URL('../incidents.worker.ts', import.meta.url)),
       sharedMemory: incidentsMemory,
       poolSize: 'auto',
-      tasks: incidentsService.tasks,
     }),
   ],
   providers: [ScanTelemetry, IncidentsAnalytics],

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { defineTask } from './task';
+import { defineTask, isAsyncTask, toTask } from './task';
 
 const deferred = <T>() => {
   let resolve!: (v: T) => void, reject!: (e: unknown) => void;
@@ -120,5 +120,32 @@ describe('defineTask', () => {
     d2.resolve(20);
     await tick();
     expect(task.get()).toMatchObject({ data: 20, error: null });
+  });
+});
+
+describe('isAsyncTask / toTask', () => {
+  it('detects tasks structurally', () => {
+    expect(isAsyncTask(defineTask(async () => 1))).toBe(true);
+    expect(isAsyncTask(async () => 1)).toBe(false);
+    expect(isAsyncTask(null)).toBe(false);
+    expect(isAsyncTask({ run: () => {} })).toBe(false);
+  });
+
+  it('returns a task source unchanged', () => {
+    const task = defineTask(async (n: number) => n);
+    expect(toTask(task)).toBe(task);
+  });
+
+  it('wraps a plain async fn into a working task', async () => {
+    const task = toTask(async (n: number) => n * 3);
+    task.run(4);
+    await vi.waitFor(() => expect(task.get().settled).toBe(true));
+    expect(task.get().data).toBe(12);
+  });
+
+  it('wraps a no-arg async fn as AsyncTask<void, R>', async () => {
+    const task = toTask(async () => 'ready');
+    task.runOnce();
+    await vi.waitFor(() => expect(task.get().data).toBe('ready'));
   });
 });

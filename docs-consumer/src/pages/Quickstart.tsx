@@ -5,65 +5,60 @@ export function Quickstart() {
     <article>
       <h1>Quickstart</h1>
       <p className="lead">
-        A minimal counter: one shared field, one task, one worker. Five steps.
+        A minimal counter: one shared field, one worker method, one component.
+        Four files, and the method name is written exactly once.
       </p>
 
       <h2>1 · Install</h2>
       <CodeBlock code="npm install @jwhenry123/mesh @jwhenry123/mesh-react" language="bash" />
 
-      <h2>2 · Declare the contract — shared by both threads</h2>
+      <h2>2 · Declare shared memory — imported by both threads</h2>
       <CodeBlock
-        file="counter.contract.ts"
+        file="counter.memory.ts"
         code={`import { defineSharedMemory, field } from '@jwhenry123/mesh/sdk';
-import type { TaskContract } from '@jwhenry123/mesh/sdk';
-import { z } from 'zod';
 
 export const counterMemory = defineSharedMemory({
   count: field.number(),
-});
-
-// Task contracts are plain objects — argsSchema/resultSchema validate
-// values as they cross the thread boundary via postMessage.
-export const Increment: TaskContract<[delta: number], number> = {
-  taskId: 'increment',
-  argsSchema: z.tuple([z.number()]),
-  resultSchema: z.number(),
-};`}
-      />
-
-      <h2>3 · Implement the handler — runs inside the worker</h2>
-      <CodeBlock
-        file="counter.worker.ts"
-        code={`import '@jwhenry123/mesh/sdk/worker/workerBootstrap';
-import { TaskRegistry } from '@jwhenry123/mesh/sdk';
-import { counterMemory, Increment } from './counter.contract';
-
-TaskRegistry.register(Increment, (delta) => {
-  const next = counterMemory.count.read() + delta;
-  counterMemory.count.write(next);  // write in place — no postMessage
-  return next;
 });`}
       />
 
-      <h2>4 · Spawn the pool on the main thread</h2>
+      <h2>3 · Define the worker — methods live here</h2>
       <CodeBlock
-        file="counter.pool.ts"
-        code={`import { defineTask, WorkerPool } from '@jwhenry123/mesh/sdk';
-import { counterMemory, Increment } from './counter.contract';
+        file="counter.worker.ts"
+        code={`import { defineWorker } from '@jwhenry123/mesh/sdk';
+import { counterMemory } from './counter.memory';
 
-export const pool = new WorkerPool({
+// defineWorker wires the message loop and registers every method.
+// Plain functions type the client from their signature.
+export const counterWorker = defineWorker({
+  sharedMemory: counterMemory,
+  methods: {
+    increment(delta: number) {
+      const next = counterMemory.count.read() + delta;
+      counterMemory.count.write(next);  // write in place — no postMessage
+      return next;
+    },
+  },
+});
+export type CounterWorker = typeof counterWorker;`}
+      />
+
+      <h2>4 · Connect from the main thread — type only</h2>
+      <CodeBlock
+        file="counter.ts"
+        code={`import { connectWorker } from '@jwhenry123/mesh/sdk';
+import { counterMemory } from './counter.memory';
+import type { CounterWorker } from './counter.worker';  // no worker code in this bundle
+
+export const counter = connectWorker<CounterWorker>({
+  sharedMemory: counterMemory,
   // Inline new Worker(new URL(..., import.meta.url)) — every bundler's
   // worker transform can see the entry point this way.
-  createWorker: () => new Worker(new URL('./counter.worker.ts', import.meta.url), { type: 'module' }),
-  sharedMemory: counterMemory,
+  worker: () => new Worker(new URL('./counter.worker.ts', import.meta.url), { type: 'module' }),
   poolSize: 'auto',   // navigator.hardwareConcurrency, or pass a number
-  tasks: { increment: Increment },
 });
-
-// Latest-wins async runners with data/pending/elapsedMs snapshots —
-// the binding's useTask/taskState adapt these.
-export const initTask = defineTask<void, void>(async () => {});
-export const incrementTask = defineTask((delta: number) => pool.increment(delta));`}
+// counter.increment(1) → Promise<number>. The pool spawns on first call
+// (SSR-safe to import); counter.terminate() tears it down.`}
       />
 
       <h2>5 · Bind it in your framework</h2>
@@ -71,21 +66,24 @@ export const incrementTask = defineTask((delta: number) => pool.increment(delta)
         file="App.tsx"
         language="tsx"
         code={`import { useSharedValue, useTask } from '@jwhenry123/mesh-react';
-import { counterMemory } from './counter.contract';
-import { incrementTask } from './counter.pool';
+import { counterMemory } from './counter.memory';
+import { counter } from './counter';
 
 export function App() {
   const count = useSharedValue(counterMemory, 'count');
-  const increment = useTask(incrementTask);
+  const increment = useTask(counter.increment);   // any async fn → latest-wins task state
   return (
     <button onClick={() => increment.run(1)}>count: {count ?? '…'}</button>
   );
 }`}
       />
       <p>
-        That's the whole loop — <code>increment.run(1)</code> posts the task to a
+        That's the whole loop — <code>increment.run(1)</code> posts the call to a
         worker, the worker writes <code>count</code> in place, and the binding
         re-renders on the next field write. No serialization of the value itself.
+        Need validation at the boundary? Swap the plain function for a{' '}
+        <code>serviceMethod({'{ def: { argsSchema, resultSchema }, run }'})</code> unit —
+        see <a href="#/tasks">Worker pool &amp; tasks</a>.
       </p>
 
       <h2>Required: cross-origin isolation</h2>

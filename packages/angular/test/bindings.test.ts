@@ -41,6 +41,13 @@ describe('taskState', () => {
     t.run(1);
     await vi.waitFor(() => expect(t.state().data).toBe(101));
   });
+
+  it('accepts a plain async fn and reaches settled', async () => {
+    const t = inCtx(() => taskState(async (n: number) => n * 5));
+    t.run(4);
+    await vi.waitFor(() => expect(t.state().settled).toBe(true));
+    expect(t.state().data).toBe(20);
+  });
 });
 
 describe('provideMesh / injectMeshPool', () => {

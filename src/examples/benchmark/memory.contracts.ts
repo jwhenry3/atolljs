@@ -1,29 +1,23 @@
 import { z } from 'zod';
 import { msgpackrCodec } from '../../sdk/contract/msgpackrCodec';
 import { defineSharedMemory, field } from '../../sdk/contract/sharedMemory';
-import { structSchema } from '../../sdk/contract/structSchema';
+import { mz } from '../../sdk/contract/mz';
 
 export const CATEGORIES = ['electronics', 'grocery', 'apparel', 'tools', 'home'];
 
-/* ── Flat record spec (fixed-layout path) ─────────────────────────────────
+/* ── Flat record schema (fixed-layout path) ───────────────────────────────
    The same order data as 32-byte records — direct DataView access, no
    serialize/validate pass. category/active are u8 codes, sku is inline.
-   The spec produces the layout, record type, and zod schema in one place.  */
+   The schema produces the layout, record type, and validation in one place. */
 
-export const flatRecordSpec = {
-  id: 'u32',
-  price: 'f64',
-  quantity: 'u16',
-  active: 'u8',   // 0/1
-  category: 'u8', // index into CATEGORIES
-  sku: { string: 12 },
-} as const;
-
-/* ── Schemas ──────────────────────────────────────────────────────────────
-   flatRecordSchema is generated from the spec with storage bounds; the
-   structured schemas describe the serialized path and result shapes.       */
-
-export const flatRecordSchema = structSchema(flatRecordSpec);
+export const flatRecordSchema = mz.object({
+  id: mz.u32(),
+  price: mz.f64(),
+  quantity: mz.u16(),
+  active: mz.u8(),   // 0/1
+  category: mz.u8(), // index into CATEGORIES
+  sku: mz.string(12),
+});
 
 /** Fake order records for the serialized path — codec+validate pipeline. */
 export const orderSchema = z.object({
@@ -50,7 +44,7 @@ export const analysisSchema = z.object({
 });
 
 /* ── Inferred types ───────────────────────────────────────────────────────
-   FlatRecord ≡ StructRecord<typeof flatRecordSpec> — the connector's
+   FlatRecord ≡ ListRecord<typeof flatRecordSpec> — the connector's
    record type — so parsed rows flow straight into readAt/writeAt.          */
 
 export type FlatRecord = z.infer<typeof flatRecordSchema>;
@@ -71,6 +65,6 @@ export const benchMemory = defineSharedMemory({
   }) }),
   checksum: field.number(),
   records: field.array({ maxBytes: 200_000_000, schema: orderArraySchema }), // ~200MB of structured records
-  recordsFlat: field.struct({ fields: flatRecordSpec, count: 2_000_000 }), // 2M × 32B = 64MB, zero-serialization layout
+  recordsFlat: field.list({ schema: flatRecordSchema, count: 2_000_000 }), // 2M × 32B = 64MB, zero-serialization layout
   analysis: field.object({ maxBytes: 512, schema: analysisSchema }),
 }, { codec: msgpackrCodec });

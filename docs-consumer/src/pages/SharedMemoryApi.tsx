@@ -12,15 +12,26 @@ export function SharedMemoryApi() {
 
       <CodeBlock
         file="memory.contract.ts"
-        code={`import { defineSharedMemory, field } from '@jwhenry123/mesh/sdk';
+        code={`import { defineSharedMemory, field, mz } from '@jwhenry123/mesh/sdk';
 
+// Fields may group by intent — lists / state / signals nest one level and
+// every surface mirrors it: memory.signals.count, spec.signals.count, …
 export const memory = defineSharedMemory({
-  count:    field.number(),                    // f64 scalar
-  running:  field.boolean(),                   // flag byte
-  label:    field.string({ maxBytes: 128 }),                 // UTF-8, ≤128 bytes payload
-  metrics:  field.object({ maxBytes: 2048, schema: metricsSchema }), // codec-encoded + optional zod schema
-  samples:  field.float64Array({ length: 1024 }),          // typed view, zero-copy
-  records:  field.struct({ id: 'u32', score: 'f64' }, 1_000_000),
+  signals: {
+    count:   field.number(),                   // f64 scalar
+    running: field.boolean(),                  // flag byte
+  },
+  state: {
+    label:   field.string({ schema: mz.string(128) }),        // budget derives from the schema
+    metrics: field.object({ schema: metricsSchema }),         // mz.object → inline record, no maxBytes
+    payload: field.object({ maxBytes: 2048 }),                // codec blob — the escape hatch for dynamic data
+    samples: field.float64Array({ length: 1024 }),            // typed view, zero-copy
+  },
+  lists: {
+    // mz members are zod schemas that ARE the layout: mz.u32() → 'u32',
+    // mz.int(0, 3) → 'u8', mz.string(10) → 10 inline bytes
+    records: field.list({ schema: mz.object({ id: mz.u32(), score: mz.f64(), tag: mz.string(8) }), count: 1_000_000 }),
+  },
 });`}
       />
 
@@ -32,17 +43,23 @@ export const memory = defineSharedMemory({
         <tbody>
           <tr><td><code>field.number()</code></td><td>8 bytes (f64)</td><td><code>read() / write(v)</code></td></tr>
           <tr><td><code>field.boolean()</code></td><td>8 bytes</td><td><code>read() / write(v)</code></td></tr>
-          <tr><td><code>field.string({ maxBytes: maxBytes })</code></td><td>4-byte length + payload</td><td><code>read() / write(v)</code></td></tr>
-          <tr><td><code>field.object(maxBytes, schema?)</code></td><td>codec-encoded blob</td><td><code>read() / write(v)</code></td></tr>
-          <tr><td><code>field.array(maxBytes, schema?)</code></td><td>codec-encoded blob</td><td><code>read() / write(v)</code></td></tr>
-          <tr><td><code>field.int32Array({ length: n })</code> · <code>float64Array(n)</code> · <code>bigInt64Array(n)</code> · <code>uint8Array(n)</code></td><td>n × element size</td><td>typed-array views — direct indexed access, zero copy</td></tr>
-          <tr><td><code>field.struct(fields, count)</code></td><td>fixed-size records</td><td><code>readAt(i)</code>, <code>writeAt(i, rec)</code>, <code>commit()</code></td></tr>
+          <tr><td><code>field.string({'{ maxBytes }'})</code></td><td>4-byte length + payload</td><td><code>read() / write(v)</code></td></tr>
+          <tr><td><code>field.object({'{ maxBytes, schema? }'})</code></td><td>codec-encoded blob</td><td><code>read() / write(v)</code></td></tr>
+          <tr><td><code>field.array({'{ maxBytes, schema? }'})</code></td><td>codec-encoded blob</td><td><code>read() / write(v)</code></td></tr>
+          <tr><td><code>field.int32Array({'{ length }'})</code> · <code>float64Array({'{ length }'})</code> · <code>bigInt64Array({'{ length }'})</code> · <code>uint8Array({'{ length }'})</code></td><td>n × element size</td><td>typed-array views — direct indexed access, zero copy</td></tr>
+          <tr><td><code>field.list({'{ schema, count }'})</code></td><td>fixed-size records</td><td><code>readAt(i)</code>, <code>writeAt(i, rec)</code>, <code>commit()</code></td></tr>
         </tbody>
       </table>
       <p>
-        Struct scalar kinds: <code>i8 u8 i16 u16 i32 u32 f32 f64 i64 u64</code>.
+        List scalar kinds: <code>i8 u8 i16 u16 i32 u32 f32 f64 i64 u64</code> — or
+        declare members as <code>mz</code>/zod schemas (<code>mz.u32()</code>,{' '}
+        <code>mz.int(0, 3)</code> → narrowest covering kind,{' '}
+        <code>mz.string(10)</code>) and the same declaration becomes both layout
+        and validation schema.
         A field is accessed on the contract object —{' '}
-        <code>memory.metrics.read()</code> — identical API on both threads.
+        <code>memory.state.metrics.read()</code> — identical API on both threads,
+        and observers address fields by path:{' '}
+        <code>observe(memory, 'signals.count')</code>.
       </p>
 
       <h2>Codecs</h2>

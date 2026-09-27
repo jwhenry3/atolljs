@@ -1,4 +1,5 @@
 import { afterAll, describe, expect, it, vi } from 'vitest';
+import { toTask } from '@jwhenry123/mesh/sdk';
 import { InProcessWorker } from '../../../test/inProcessWorker';
 
 /**
@@ -12,12 +13,7 @@ InProcessWorker.handlerModules = [
 ];
 
 // Imports must follow the stub — module side effects create the pool lazily.
-const { getIncidentsPool, initIncidentsTask, queryIncidentsTask } = await import('../src/pool').then(
-  async (pool) => ({
-    getIncidentsPool: pool.getIncidentsPool,
-    ...(await import('../src/tasks')),
-  })
-);
+const { incidents, initIncidents } = await import('../src/incidents');
 const { incidentsMemory } = await import('../src/contract/memory.contracts');
 
 const query = {
@@ -26,16 +22,18 @@ const query = {
 };
 
 describe('incidents pipeline (in-process worker)', () => {
-  afterAll(() => getIncidentsPool().terminate());
+  afterAll(() => incidents.terminate());
 
-  it('seeds 1M records on the worker and reports progress via shared memory', async () => {
-    const ms = await getIncidentsPool().seedIncidents();
+  it('spawns the pool lazily — null before the first call', async () => {
+    expect(incidents.pool).toBeNull();
+    const ms = await incidents.seedIncidents();
+    expect(incidents.pool).not.toBeNull();
     expect(ms).toBeGreaterThan(0);
-    expect(incidentsMemory.seedProgress.read()).toBe(100);
+    expect(incidentsMemory.signals.seedProgress.read()).toBe(100);
   });
 
   it('queryIncidents returns a sorted page with real aggregates', async () => {
-    const page = await getIncidentsPool().queryIncidents(query);
+    const page = await incidents.queryIncidents(query);
     expect(page.total).toBe(1_000_000);
     expect(page.filtered).toBe(1_000_000);
     expect(page.rows).toHaveLength(25);
@@ -48,7 +46,7 @@ describe('incidents pipeline (in-process worker)', () => {
 
   it('filters by severity and search', async () => {
     const site = 'NYC';
-    const page = await getIncidentsPool().queryIncidents({
+    const page = await incidents.queryIncidents({
       ...query, sortBy: null, limit: 10, severity: 3, search: site,
     });
     expect(page.rows.length).toBeGreaterThan(0);
@@ -57,19 +55,22 @@ describe('incidents pipeline (in-process worker)', () => {
   });
 
   it('computeMetrics publishes real aggregates into shared memory', async () => {
-    const m = await getIncidentsPool().computeMetrics();
+    const m = await incidents.computeMetrics();
     expect(m.total).toBe(1_000_000);
     expect(m.open + m.acknowledged + m.resolved).toBe(1_000_000);
     // the same object the worker wrote is readable on this thread
-    expect(incidentsMemory.metrics.read()).toMatchObject({ total: 1_000_000 });
+    expect(incidentsMemory.state.metrics.read()).toMatchObject({ total: 1_000_000 });
   });
 
-  it('tasks expose pending/settled state transitions', async () => {
-    initIncidentsTask.runOnce();
-    await vi.waitFor(() => expect(initIncidentsTask.get().settled).toBe(true));
+  it('tasks built from client methods expose pending/settled transitions', async () => {
+    const initTask = toTask(initIncidents);
+    const queryTask = toTask(incidents.queryIncidents);
 
-    queryIncidentsTask.run(query);
-    await vi.waitFor(() => expect(queryIncidentsTask.get().settled).toBe(true));
-    expect(queryIncidentsTask.get().data?.rows).toHaveLength(25);
+    initTask.runOnce();
+    await vi.waitFor(() => expect(initTask.get().settled).toBe(true));
+
+    queryTask.run(query);
+    await vi.waitFor(() => expect(queryTask.get().settled).toBe(true));
+    expect(queryTask.get().data?.rows).toHaveLength(25);
   });
 });

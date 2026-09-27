@@ -1,47 +1,82 @@
 import { describe, expect, it } from 'vitest';
-import {
-  incidentRowSchema,
-  incidentsMemory,
-  queryArgsSchema,
-} from '../src/contract/memory.contracts';
-import { incidentsService } from '../src/contract/incidents.service';
-import { incidentsTasks } from '../src/pool';
+import { z } from 'zod';
+import { incidentRowSchema, incidentsMemory } from '../src/contract/memory.contracts';
+import { queryArgsSchema, queryIncidents } from '../src/service/queryIncidents';
+import { computeMetrics } from '../src/service/computeMetrics';
 
 const validQuery = {
   offset: 0, limit: 50, sortBy: null, sortDesc: false,
   severity: null, status: null, region: null, service: null, search: '',
 };
 
-describe('incidentsService', () => {
-  it('derives stable wire ids from the service name', () => {
-    expect(incidentsService.name).toBe('incidents');
-    expect(incidentsService.tasks.seedIncidents.taskId).toBe('incidents.seedIncidents');
-    expect(incidentsService.tasks.queryIncidents.taskId).toBe('incidents.queryIncidents');
-    expect(incidentsService.tasks.computeMetrics.taskId).toBe('incidents.computeMetrics');
-  });
-
+describe('incidents wire schemas', () => {
   it('queryIncidents validates args against the zod schema', () => {
     expect(() => queryArgsSchema.parse(validQuery)).not.toThrow();
     expect(() => queryArgsSchema.parse({ ...validQuery, limit: 'many' })).toThrow();
-    expect(() => incidentsService.tasks.queryIncidents.argsSchema!.parse([validQuery])).not.toThrow();
-    expect(() => incidentsService.tasks.queryIncidents.argsSchema!.parse([{ bad: true }])).toThrow();
+    const argsSchema = queryIncidents.def.argsSchema!;
+    expect(() => argsSchema.parse([validQuery])).not.toThrow();
+    expect(() => argsSchema.parse([{ bad: true }])).toThrow();
   });
 
   it('rejects metric results missing required aggregates', () => {
     expect(() =>
-      incidentsService.tasks.computeMetrics.resultSchema!.parse({ total: 1 })
+      computeMetrics.def.resultSchema!.parse({ total: 1 })
     ).toThrow();
   });
 });
 
 describe('incidentsMemory', () => {
-  it('declares a 1M-record struct plus metrics and seedProgress', () => {
+  it('declares a 1M-record list plus metrics and seedProgress', () => {
     expect(incidentsMemory.totalBytes).toBeGreaterThan(30_000_000);
   });
-});
 
-describe('incidentsTasks', () => {
-  it('is the service contract in TaskMap shape', () => {
-    expect(incidentsTasks).toBe(incidentsService.tasks);
+  it('groups fields by intent — lists / state / signals', () => {
+    const { spec, schemas } = incidentsMemory;
+    expect(spec.lists.incidents.kind).toBe('list');
+    expect(spec.state.metrics.kind).toBe('object');
+    expect(spec.signals.seedProgress.kind).toBe('number');
+    // metrics declares no maxBytes — its width derives from the mz schema:
+    // 8 f64 members → 64-byte record + 8-byte header
+    expect(spec.state.metrics.recordSize).toBe(64);
+    expect(spec.state.metrics.byteLength).toBe(72);
+    // schemas nest where the spec nests them
+    expect(schemas.lists.incidents).toBeInstanceOf(z.ZodType);
+    expect(schemas.state.metrics).toBeInstanceOf(z.ZodType);
+    expect(schemas.signals.seedProgress).toBeInstanceOf(z.ZodType);
+  });
+
+  it('carries the inline spec back out via .spec', () => {
+    const spec = incidentsMemory.spec.lists.incidents;
+    expect(spec.count).toBe(1_000_000);
+    // `schema` is the declared mz.object record schema; `layout`
+    // holds the compiled binary spec its members map to.
+    expect(spec.schema.shape.site).toBeInstanceOf(z.ZodType);
+    expect(spec.layout.site).toEqual({ string: 10 });
+    expect(spec.layout.id).toBe('u32');      // mz.u32() → u32
+    expect(spec.layout.alarms).toBe('u16');  // mz.u16() → u16
+    expect(spec.layout.severity).toBe('u8'); // mz.int(0,3) → u8
+  });
+
+  it('re-exports field schemas via .schemas', () => {
+    const { schemas } = incidentsMemory;
+    // list fields get a derived record schema
+    const row = schemas.lists.incidents.parse({
+      id: 1, openedAt: 2, durationMin: 3, customers: 4, alarms: 5,
+      severity: 0, status: 1, region: 2, service: 3, site: 'A1',
+    });
+    expect(row.id).toBe(1);
+    // declared domain bounds survive — severity is 0..3, not the raw u8 range
+    expect(() => schemas.lists.incidents.parse({
+      id: 1, openedAt: 2, durationMin: 3, customers: 4, alarms: 5,
+      severity: 9, status: 1, region: 2, service: 3, site: 'A1',
+    })).toThrow();
+    // declared object schema parses metrics
+    expect(schemas.state.metrics.parse({
+      total: 1, open: 1, acknowledged: 0, resolved: 0,
+      critical: 0, customersAffected: 10, avgDurationMin: 5, scanMs: 1,
+    }).total).toBe(1);
+    // scalars get derived schemas
+    expect(schemas.signals.seedProgress.parse(0.5)).toBe(0.5);
+    expect(() => schemas.signals.seedProgress.parse('half')).toThrow();
   });
 });

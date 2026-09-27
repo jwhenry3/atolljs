@@ -46,7 +46,75 @@ export function rpc<Args extends any[] = any[], Result = any>(
   return def;
 }
 
+/**
+ * One method's whole unit — the pattern for one-file-per-task modules. The
+ * file's top-level export satisfies this interface: `def` is the wire
+ * declaration {@link defineService} composes, `run` is the worker-side
+ * implementation {@link implementService} registers. Both entry points
+ * accept the unit directly and unwrap the part they need:
+ *
+ *   // service/seedIncidents.ts — one file, the whole stack
+ *   export const seedIncidents = {
+ *     def: { resultSchema: z.number() },
+ *     run() { …; return ms; },
+ *   } satisfies ServiceMethod<[], number>;
+ */
+export interface ServiceMethod<Args extends any[] = any[], Result = any> {
+  /** The wire declaration fed into {@link defineService}. */
+  def: RpcMethodDef<Args, Result>;
+  /** The worker-side implementation fed into {@link implementService}. */
+  run(...args: Args): Result | Promise<Result>;
+}
+
+/** The args a method def declares — argsSchema's tuple, else an rpc<A,R>() declaration's type args, else []. */
+type DefArgs<D> =
+  D extends { argsSchema: Schema<infer A extends any[]> }
+    ? A
+    : D extends { resultSchema: Schema<any> }
+      ? []
+      : D extends RpcMethodDef<infer A extends any[], any>
+        ? A
+        : [];
+
+/** The result a method def declares — resultSchema's output, else an rpc<A,R>() declaration's type args, else unknown. */
+type DefResult<D> =
+  D extends { resultSchema: Schema<infer R> }
+    ? R
+    : D extends RpcMethodDef<any[], infer R>
+      ? R
+      : unknown;
+
+/**
+ * Builds a {@link ServiceMethod} unit — the factory form of
+ * `{ def, run } satisfies ServiceMethod<…>`. The def's schemas (or an
+ * `rpc<A,R>()` declaration's type args) supply the signature, so `run`
+ * gets contextual parameter types with nothing to annotate:
+ *
+ *   export const queryIncidents = serviceMethod({
+ *     def: { argsSchema: z.tuple([queryArgsSchema]), resultSchema: queryResultSchema },
+ *     run(q) { … },                     // q: QueryArgs — inferred
+ *   });
+ *
+ * The unit's exact type is returned unchanged, so extra fields (config,
+ * counters) ride along for implementService's `this`-binding — `run`'s
+ * `this` is the unit; annotate it to type extra fields:
+ * `run(this: { prefix: string }, name) { … }`.
+ */
+export function serviceMethod<
+  D extends RpcMethodDef,
+  U extends { def: D },
+>(
+  unit: U & {
+    run: (...args: DefArgs<D>) => DefResult<D> | Promise<DefResult<D>>;
+  },
+): U {
+  return unit;
+}
+
+/** A service method entry: a bare RpcMethodDef or a full {@link ServiceMethod} unit. */
+export type RpcMethodInput = RpcMethodDef<any[], any> | ServiceMethod<any[], any>;
 export type RpcMethodMap = Record<string, RpcMethodDef<any[], any>>;
+export type RpcMethodInputMap = Record<string, RpcMethodInput>;
 
 /**
  * Resolves a method declaration to its TaskContract type. Schemas win when
@@ -54,7 +122,9 @@ export type RpcMethodMap = Record<string, RpcMethodDef<any[], any>>;
  * a no-arg method); an rpc<A,R>() declaration's type args carry the rest.
  */
 type MethodContract<D> =
-  D extends { argsSchema: Schema<infer A extends any[]> }
+  D extends { def: infer Def }
+    ? MethodContract<Def>   // ServiceMethod unit — unwrap the def
+    : D extends { argsSchema: Schema<infer A extends any[]> }
     ? D extends { resultSchema: Schema<infer R> }
       ? TaskContract<A, R>
       : TaskContract<A, any>
@@ -64,7 +134,7 @@ type MethodContract<D> =
         ? TaskContract<A, R>
         : TaskContract<any[], any>;
 
-type MethodsToContracts<M extends RpcMethodMap> = {
+type MethodsToContracts<M extends RpcMethodInputMap> = {
   [K in keyof M]: MethodContract<M[K]>;
 };
 
@@ -73,7 +143,7 @@ type MethodsToContracts<M extends RpcMethodMap> = {
  * a fully-typed {@link TaskMap} — hand it to `WorkerPool`/`SharedWorker`
  * config or iterate it for registration.
  */
-export interface ServiceContract<M extends RpcMethodMap = RpcMethodMap> {
+export interface ServiceContract<M extends RpcMethodInputMap = RpcMethodInputMap> {
   readonly name: string;
   readonly tasks: MethodsToContracts<M>;
 }
@@ -91,12 +161,13 @@ export interface ServiceContract<M extends RpcMethodMap = RpcMethodMap> {
  *     },
  *   });
  */
-export function defineService<M extends RpcMethodMap>(
+export function defineService<M extends RpcMethodInputMap>(
   name: string,
   methods: M,
 ): ServiceContract<M> {
   const tasks = {} as Record<string, TaskContract>;
-  for (const [method, def] of Object.entries(methods)) {
+  for (const [method, input] of Object.entries(methods)) {
+    const def = 'def' in input ? input.def : input;
     tasks[method] = {
       taskId: def.taskId ?? `${name}.${method}`,
       ...(def.dataType ? { dataType: def.dataType } : {}),
@@ -107,10 +178,12 @@ export function defineService<M extends RpcMethodMap>(
   return { name, tasks: tasks as MethodsToContracts<M> };
 }
 
+type ServiceHandlerFn<A extends any[], R> = (...args: A) => R | Promise<R>;
+
 /** The handler signatures a service implementation must provide. */
-export type ServiceHandlers<M extends RpcMethodMap> = {
+export type ServiceHandlers<M extends RpcMethodInputMap> = {
   [K in keyof M]: MethodContract<M[K]> extends TaskContract<infer A, infer R>
-    ? (...args: A) => R | Promise<R>
+    ? ServiceHandlerFn<A, R> | { run: ServiceHandlerFn<A, R> }
     : never;
 };
 
@@ -119,7 +192,7 @@ export type ServiceHandlers<M extends RpcMethodMap> = {
  * "service" that owns the RPC methods. Registration happens eagerly inside
  * {@link implementService}; the returned handle is for composition/testing.
  */
-export interface ServiceImpl<M extends RpcMethodMap = RpcMethodMap> {
+export interface ServiceImpl<M extends RpcMethodInputMap = RpcMethodInputMap> {
   readonly service: ServiceContract<M>;
   readonly handlers: ServiceHandlers<M>;
 }
@@ -139,22 +212,26 @@ export interface ServiceImpl<M extends RpcMethodMap = RpcMethodMap> {
  * `this`. When `handlers` is a class instance (e.g. a DI-resolved provider
  * whose methods match the service surface), binding preserves its `this`.
  */
-export function implementService<M extends RpcMethodMap>(
+export function implementService<M extends RpcMethodInputMap>(
   service: ServiceContract<M>,
   handlers: ServiceHandlers<M>,
 ): ServiceImpl<M> {
-  const missing = Object.keys(service.tasks).filter(
-    (k) => typeof handlers[k] !== 'function',
-  );
+  const missing = Object.keys(service.tasks).filter((k) => {
+    const h = handlers[k] as unknown;
+    return typeof h !== 'function' && typeof (h as { run?: unknown })?.run !== 'function';
+  });
   if (missing.length > 0) {
     throw new Error(
       `implementService("${service.name}"): missing handlers for ${missing.join(', ')}`,
     );
   }
   for (const [method, contract] of Object.entries(service.tasks)) {
+    const h = handlers[method] as ServiceHandlerFn<any[], any> | { run: ServiceHandlerFn<any[], any> };
+    // Function form binds to the handlers object (sibling calls, DI
+    // instances); unit form binds `run` to the unit itself.
     TaskRegistry.register(
       contract,
-      (handlers[method] as (...args: any[]) => any).bind(handlers),
+      typeof h === 'function' ? h.bind(handlers) : h.run.bind(h),
     );
   }
   svcLog.info(

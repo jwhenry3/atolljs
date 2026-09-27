@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { CITIES, REGIONS, SERVICES, type Incident } from '../src/contract/memory.contracts';
-import { genIncident, mulberry32 } from '../src/worker/incidents.data';
+import { genIncident, mulberry32 } from '../src/service/seedIncidents';
 
 describe('mulberry32', () => {
   it('is deterministic for a given seed', () => {

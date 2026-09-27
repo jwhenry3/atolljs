@@ -2,9 +2,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createEffect, createRoot } from 'solid-js';
 import { reactive, shallowEqual, watch } from './reactive';
-import { Connector, SharedMemory, SharedSpec, field } from './contract/sharedMemory';
+import { Connector, FlatKey, SharedMemory, SharedSpec, field } from './contract/sharedMemory';
 
-function boundConnector<S extends SharedSpec, K extends keyof S>(spec: S, key: K, buffer?: SharedArrayBuffer) {
+function boundConnector<S extends SharedSpec, K extends FlatKey<S>>(spec: S, key: K, buffer?: SharedArrayBuffer) {
   const mem = new SharedMemory(spec);
   mem.bind(buffer ?? new SharedArrayBuffer(mem.totalBytes));
   return mem.connector(key);

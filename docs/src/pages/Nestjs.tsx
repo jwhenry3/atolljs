@@ -3,6 +3,7 @@ import moduleSrc from '../../../packages/nestjs/src/module.ts?raw';
 import decoratorsSrc from '../../../packages/nestjs/src/decorators.ts?raw';
 import workerSrc from '../../../packages/nestjs/src/worker.ts?raw';
 import serviceSrc from '../../../examples/nestjs/src/shared/incidents-analytics.service.ts?raw';
+import controllerSrc from '../../../examples/nestjs/src/incidents.controller.ts?raw';
 import workerEntrySrc from '../../../examples/nestjs/src/digest.worker.ts?raw';
 import webpackConfigSrc from '../../../examples/nestjs/webpack.config.js?raw';
 import nestCliSrc from '../../../examples/nestjs/nest-cli.json?raw';
@@ -20,8 +21,9 @@ const ENDPOINTS = [
 
 const APIS = [
   { name: 'MeshModule.forRoot', signature: 'forRoot({ pools? }) / forRootAsync(...)', desc: 'Global mesh infrastructure once — validator, discovery, lifecycle. Optional pools for simple apps; feature modules prefer registerPool.' },
-  { name: 'MeshModule.registerPool', signature: 'registerPool(config) / registerPoolAsync(...)', desc: 'Bull-style module-level pool registration inside the feature module that owns the worker: name, worker, sharedMemory, poolSize, tasks. Injectable provider, terminated on module destroy.' },
-  { name: '@MeshTask', signature: '@MeshTask(taskId | contract | { pool })', desc: 'RPC-style offload — main-thread calls dispatch to the named pool; the body executes inside the worker’s Nest context on the DI-resolved instance.' },
+  { name: 'MeshModule.registerPool', signature: 'registerPool(config) / registerPoolAsync(...)', desc: 'Bull-style module-level pool registration inside the feature module that owns the worker: name, worker, sharedMemory, poolSize. Injectable provider, terminated on module destroy.' },
+  { name: '@MeshTask', signature: '@MeshTask(taskId | contract | { pool })', desc: 'Per-method RPC offload — main-thread calls dispatch to the named pool; the body executes inside the worker’s Nest context on the DI-resolved instance.' },
+  { name: '@MeshService', signature: '@MeshService({ pool }) / @MeshService(service, opts?)', desc: 'Class-level offload — marks every method for dispatch to the pool under ClassName.method ids (the contract form binds only methods declared in a ServiceContract).' },
   { name: '@InjectMeshPool', signature: '@InjectMeshPool(name)', desc: 'Parameter decorator injecting a configured pool for first-class task methods / runTask.' },
   { name: 'runMeshWorker', signature: 'runMeshWorker(module): Promise<INestApplicationContext>', desc: 'Worker-side bootstrap — self-contained (shim + bootstrap inside). Creates a Nest application context, discovers @MeshTask providers via DiscoveryService, binds them into TaskRegistry.' },
   { name: 'registerMeshHandlers', signature: 'registerMeshHandlers(...instances)', desc: 'Explicit registration for instances created outside a worker Nest context.' },
@@ -92,12 +94,14 @@ export function Nestjs() {
       </p>
       <CodeBlock code={moduleSrc} file="packages/nestjs/src/module.ts" />
 
-      <h2>@MeshTask — the decorator decides the thread</h2>
+      <h2>@MeshTask / @MeshService — the decorator decides the thread</h2>
       <p>
         Main thread: the call serializes args and dispatches{' '}
         <code>EXECUTE_TASK</code> to the pool. Worker side: the decorator only
         records metadata — <code>runMeshWorker</code> binds the real body to
-        the DI-created instance.
+        the DI-created instance. <code>@MeshService({'{ pool }'})</code>{' '}
+        applies that dispatch to every method on the class;{' '}
+        <code>@MeshTask</code> remains for per-method control.
       </p>
       <CodeBlock code={decoratorsSrc} file="packages/nestjs/src/decorators.ts" />
 
@@ -110,11 +114,15 @@ export function Nestjs() {
 
       <h2>Usage — one service, two runtimes</h2>
       <p>
-        The same class file is the contract: calling a decorated method on the
-        API thread looks like an ordinary async call; the body runs inside a
+        The same class file is the contract: calling a method on the API
+        thread looks like an ordinary async call; the body runs inside a
         worker where <code>ScanTelemetry</code> is a real injected instance.
+        In the controller, the injected pool is wrapped once with{' '}
+        <code>workerClient&lt;IncidentsWorker&gt;</code> — calls read like the
+        worker's own method names.
       </p>
       <CodeBlock code={serviceSrc} file="examples/nestjs/src/shared/incidents-analytics.service.ts" />
+      <CodeBlock code={controllerSrc} file="examples/nestjs/src/incidents.controller.ts" />
 
       <h2>Worker entry</h2>
       <p>
