@@ -8,6 +8,11 @@
 // approves with 2FA — `npm stage list/view/approve` or the Staged Packages
 // tab on npmjs.com. CI runs this from a release tag; repo versions stay
 // 0.0.0 as a "not yet released" marker. Requires npm CLI >= 11.15.0.
+//
+// `--direct` swaps `npm stage publish` for a plain `npm publish` — the
+// one-time bootstrap, since staging requires the package to already exist
+// on the registry. Run it interactively (2FA prompts per package) to create
+// each package; provenance is dropped since it needs Actions OIDC.
 import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
@@ -15,6 +20,7 @@ import { join } from 'node:path';
 const root = new URL('..', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1');
 const [, , tag, ...rest] = process.argv;
 const dryRun = rest.includes('--dry-run');
+const direct = rest.includes('--direct');
 
 const version = tag?.replace(/^v/, '');
 if (!version || !/^\d+\.\d+\.\d+(-[\w.]+)?$/.test(version)) {
@@ -53,7 +59,11 @@ const sorted = [...packages].sort(
 );
 
 for (const { dir, pkg } of sorted) {
-  const cmd = ['stage', 'publish', '--access', 'public', '--provenance'];
+  // --direct: one-time bootstrap publish — staging requires an existing
+  // package; --provenance is CI-only (needs Actions OIDC).
+  const cmd = direct
+    ? ['publish', '--access', 'public']
+    : ['stage', 'publish', '--access', 'public', '--provenance'];
   console.log(`${dryRun ? '[dry-run] ' : ''}npm ${cmd.join(' ')}  ${pkg.name}@${version}`);
   if (!dryRun) execFileSync('npm', cmd, { cwd: dir, stdio: 'inherit', shell: process.platform === 'win32' });
 }

@@ -44,6 +44,18 @@ installable until a maintainer approves them — `npm stage list` /
 Packages tab on npmjs.com. Requires a granular `NPM_TOKEN` repo secret.
 Preview the plan locally: `node scripts/publish.mjs v0.1.0 --dry-run`.
 
+Staging needs each package to already exist on the registry, so the first
+release is a manual bootstrap — from the repo root:
+
+```bash
+npm login                                    # once
+npm ci && npx vite build && npx tsc -p tsconfig.build.json
+node scripts/publish.mjs 0.1.0 --direct      # prompts for 2FA per package
+```
+
+Once all nine packages exist, release-driven `npm stage publish` works for
+every subsequent version.
+
 ## Layout
 
 ```
