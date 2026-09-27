@@ -1,10 +1,13 @@
-// Lockstep publish — `node scripts/publish.mjs <version|v*.*.*> [--dry-run]`.
+// Lockstep staged publish — `node scripts/publish.mjs <version|v*.*.*> [--dry-run]`.
 //
 // Stamps every publishable package.json (repo root = @jwhenry123/mesh, plus
 // packages/* — private packages are skipped) with the release version,
-// rewrites internal @jwhenry123/* dep ranges to match, then `npm publish`es
-// in dependency order: mesh → node/react → the rest. CI runs this from a
-// release tag; repo versions stay 0.0.0 as a "not yet released" marker.
+// rewrites internal @jwhenry123/* dep ranges to match, then `npm stage
+// publish`es in dependency order: mesh → node/react → the rest. Staged
+// versions sit in npm's stage queue (not installable) until a maintainer
+// approves with 2FA — `npm stage list/view/approve` or the Staged Packages
+// tab on npmjs.com. CI runs this from a release tag; repo versions stay
+// 0.0.0 as a "not yet released" marker. Requires npm CLI >= 11.15.0.
 import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
@@ -50,7 +53,7 @@ const sorted = [...packages].sort(
 );
 
 for (const { dir, pkg } of sorted) {
-  const cmd = ['publish', '--access', 'public', '--provenance'];
+  const cmd = ['stage', 'publish', '--access', 'public', '--provenance'];
   console.log(`${dryRun ? '[dry-run] ' : ''}npm ${cmd.join(' ')}  ${pkg.name}@${version}`);
   if (!dryRun) execFileSync('npm', cmd, { cwd: dir, stdio: 'inherit', shell: process.platform === 'win32' });
 }

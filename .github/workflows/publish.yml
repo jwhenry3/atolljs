@@ -1,10 +1,13 @@
-# Publish — creating a GitHub Release publishes every package at the
-# release tag's version (lockstep; repo files keep version "0.0.0" — the
-# release artifact carries the stamped version).
+# Publish — creating a GitHub Release STAGES every package at the release
+# tag's version (lockstep; repo files keep version "0.0.0" — the release
+# artifact carries the stamped version). Staged packages are not
+# installable until a maintainer approves them — `npm stage list/view/
+# approve`, or the Staged Packages tab on npmjs.com (approval needs 2FA).
 #
-# Auth: a granular NPM_TOKEN repo secret (Settings → Secrets → Actions).
-# id-token: write is still granted so `npm publish --provenance` can
-# attach Sigstore provenance to each package.
+# Auth: a granular NPM_TOKEN repo secret (Settings → Secrets → Actions) —
+# staging accepts any token type without a 2FA prompt. id-token: write is
+# still granted so `npm stage publish --provenance` can attach Sigstore
+# provenance to each staged tarball.
 name: Publish
 
 on:
@@ -29,6 +32,9 @@ jobs:
             package-lock.json
             examples/nestjs/package-lock.json
             examples/nextjs/package-lock.json
+
+      - name: Upgrade npm (stage requires CLI >= 11.15.0)
+        run: npm install -g "npm@^11"
 
       - name: Install dependencies
         run: |

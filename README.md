@@ -38,8 +38,11 @@ package-usage site (source: `docs-consumer/`).
 Create a GitHub Release tagged `v<semver>` — `.github/workflows/publish.yml`
 runs the full test suite, builds the core `dist`, stamps every publishable
 package at the tag's version (lockstep; `packages/incidents` stays private),
-and publishes to npm with provenance. Requires a granular `NPM_TOKEN` repo
-secret. Preview the plan locally: `node scripts/publish.mjs v0.1.0 --dry-run`.
+and **stages** each to npm with provenance. Staged versions aren't
+installable until a maintainer approves them — `npm stage list` /
+`npm stage approve <stage-id>` (2FA at approval, not in CI), or the Staged
+Packages tab on npmjs.com. Requires a granular `NPM_TOKEN` repo secret.
+Preview the plan locally: `node scripts/publish.mjs v0.1.0 --dry-run`.
 
 ## Layout
 
