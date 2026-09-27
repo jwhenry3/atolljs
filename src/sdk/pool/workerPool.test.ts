@@ -95,4 +95,20 @@ describe('WorkerPool', () => {
     await expect(pool.runTask(contract('t-plain'))).resolves.toBe('t-plain');
     pool.terminate();
   });
+
+  it('throws when neither workerUrl nor createWorker is provided', () => {
+    expect(() => new WorkerPool({ sharedMemory: mem() })).toThrow(/workerUrl.*createWorker/);
+  });
+
+  it('throws outside a cross-origin isolated context', () => {
+    vi.stubGlobal('crossOriginIsolated', false);
+    expect(() => makePool()).toThrow(/cross-origin isolated/);
+  });
+
+  it('uses navigator.hardwareConcurrency when poolSize is auto', () => {
+    vi.stubGlobal('Worker', EchoWorker);
+    vi.stubGlobal('navigator', { hardwareConcurrency: 3 });
+    makePool({ poolSize: 'auto' });
+    expect(EchoWorker.created).toHaveLength(3);
+  });
 });

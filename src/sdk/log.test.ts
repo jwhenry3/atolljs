@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fmtBytes, getLogLevel, log, scoped, setLogLevel, setLogSink, type LogEntry } from './log';
 
 describe('log', () => {
@@ -80,5 +80,52 @@ describe('fmtBytes', () => {
   it('formats KB and MB with one decimal', () => {
     expect(fmtBytes(2048)).toBe('2.0KB');
     expect(fmtBytes(32 << 20)).toBe('32.0MB');
+  });
+});
+
+describe('thread detection', () => {
+  it('tags entries as worker when imported inside a worker global scope', async () => {
+    class FakeWorkerGlobalScope {}
+    vi.stubGlobal('WorkerGlobalScope', FakeWorkerGlobalScope);
+    vi.stubGlobal('self', new FakeWorkerGlobalScope());
+    vi.resetModules();
+    try {
+      const mod = await import('./log');
+      const entries: LogEntry[] = [];
+      mod.setLogSink((e) => entries.push(e));
+      mod.log('info', 'scope', 'msg');
+      expect(entries[0].thread).toBe('worker');
+      mod.setLogSink(null);
+    } finally {
+      vi.unstubAllGlobals();
+      vi.resetModules();
+    }
+  });
+
+  it('console sink prints bare messages when data is undefined', () => {
+    const spy = vi.spyOn(console, 'info').mockImplementation(() => {});
+    try {
+      log('info', 'bare', 'no data attached');
+      expect(spy).toHaveBeenCalledWith(expect.stringContaining('no data attached'));
+      expect(spy).toHaveBeenCalledTimes(1); // single arg call — no data arg
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('console sink routes warn and debug levels to the right console methods', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const debugSpy = vi.spyOn(console, 'debug').mockImplementation(() => {});
+    try {
+      log('warn', 'w', 'careful');
+      setLogLevel('debug');
+      log('debug', 'd', 'quiet');
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('careful'));
+      expect(debugSpy).toHaveBeenCalledWith(expect.stringContaining('quiet'));
+    } finally {
+      warnSpy.mockRestore();
+      debugSpy.mockRestore();
+      setLogLevel('info');
+    }
   });
 });

@@ -89,4 +89,36 @@ describe('defineTask', () => {
     await tick();
     expect(spy).not.toHaveBeenCalled();
   });
+
+  it('ignores a result from a superseded run', async () => {
+    const d1 = deferred<number>();
+    const d2 = deferred<number>();
+    const calls: number[] = [];
+    const task = defineTask((n: number) => {
+      calls.push(n);
+      return calls.length === 1 ? d1.promise : d2.promise;
+    });
+    task.run(1);
+    task.run(2); // supersedes run 1
+
+    d2.resolve(20);
+    await tick();
+    d1.resolve(10); // late — must not overwrite run 2's data
+    await tick();
+    expect(task.get().data).toBe(20);
+  });
+
+  it('ignores a rejection from a superseded run', async () => {
+    const d1 = deferred<number>();
+    const d2 = deferred<number>();
+    let calls = 0;
+    const task = defineTask(() => (++calls === 1 ? d1.promise : d2.promise));
+    task.run(1);
+    task.run(2);
+
+    d1.reject(new Error('stale failure')); // must not clobber the pending run
+    d2.resolve(20);
+    await tick();
+    expect(task.get()).toMatchObject({ data: 20, error: null });
+  });
 });

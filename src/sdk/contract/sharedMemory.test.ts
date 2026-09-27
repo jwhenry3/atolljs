@@ -373,3 +373,61 @@ describe('connector factory plugins', () => {
     expect(() => mem.bind(new SharedArrayBuffer(mem.totalBytes))).toThrow(/Unknown shared memory field kind/);
   });
 });
+
+describe('edge coverage', () => {
+  it('supports bigInt64Array fields', () => {
+    const c = bound({ v: field.bigInt64Array(2) }).connector('v');
+    expect(c.read()).toBeInstanceOf(BigInt64Array);
+    c.write(new BigInt64Array([7n, -9n]));
+    expect(Array.from(c.read())).toEqual([7n, -9n]);
+  });
+
+  it('boolean connector writes false explicitly', () => {
+    const c = bound({ b: field.boolean() }).connector('b');
+    c.write(true);
+    expect(c.read()).toBe(true);
+    c.write(false);
+    expect(c.read()).toBe(false);
+  });
+
+  it('string connector throws when the encoded value exceeds capacity', () => {
+    const c = bound({ s: field.string(8) }).connector('s');
+    expect(() => c.write('x'.repeat(64))).toThrow(/exceeds field capacity/);
+  });
+
+  it('structured connector throws when the encoded value exceeds capacity', () => {
+    const c = bound({ o: field.object<Record<string, unknown>>(16) }).connector('o');
+    expect(() => c.write({ pad: 'x'.repeat(64) })).toThrow(/exceeds field capacity/);
+  });
+
+  it('struct connector reads and writes i8, i16, and f32 scalars', () => {
+    const mem = bound({ r: field.struct({ a: 'i8', b: 'i16', c: 'f32' }, 2) });
+    mem.r.writeAt(0, { a: -8, b: -300, c: 1.5 });
+    expect(mem.r.readAt(0)).toEqual({ a: -8, b: -300, c: 1.5 });
+  });
+
+  it('struct readString uses max length when the field is exactly full', () => {
+    const mem = bound({ r: field.struct({ tag: { string: 8 } }, 1) });
+    mem.r.writeAt(0, { tag: '12345678' }); // fills the field — no zero byte inside max
+    expect(mem.r.readAt(0)).toEqual({ tag: '12345678' });
+  });
+
+  it('readAt rejects negative indexes', () => {
+    const mem = bound({ r: field.struct({ v: 'i32' }, 2) });
+    expect(() => mem.r.readAt(-1)).toThrow(RangeError);
+  });
+
+  it('onBound fires immediately when already bound and detaches pre-bind listeners', () => {
+    const mem = bound({ n: field.number() });
+    let fired = 0;
+    mem.onBound(() => fired++);
+    expect(fired).toBe(1);
+
+    const unbound = new SharedMemory({ n: field.number() });
+    let called = 0;
+    const off = unbound.onBound(() => called++);
+    off();
+    unbound.bind(new SharedArrayBuffer(unbound.totalBytes));
+    expect(called).toBe(0);
+  });
+});

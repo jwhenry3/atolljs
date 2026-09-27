@@ -211,4 +211,81 @@ describe('sharedWorker', () => {
     mem.n.write(9);
     expect(mem.n.read()).toBe(9);
   });
+
+  it('connects via workerUrl through the SharedWorker constructor', async () => {
+    const { shared, connectSharedWorker, link } = await boot();
+    const port = link();
+    const created: unknown[][] = [];
+    vi.stubGlobal('SharedWorker', class {
+      public port: MessagePort;
+      constructor(url: URL, opts: unknown) {
+        this.port = port;
+        created.push([String(url), opts]);
+      }
+    });
+    const mem = shared.defineSharedMemory({ n: shared.field.number() });
+    const client = await connectSharedWorker({
+      workerUrl: new URL('https://example.test/sw.ts'),
+      sharedMemory: mem,
+    });
+    expect(client.clientIndex).toBe(1);
+    expect(created[0][1]).toEqual({ type: 'module' });
+  });
+
+  it('ignores non-handshake messages while connecting', async () => {
+    const { shared, connectSharedWorker } = await boot();
+    const { attachSharedPort } = await import('./sharedWorkerHost');
+    const channel = new MessageChannel();
+    attachSharedPort(channel.port1);
+    const mem = shared.defineSharedMemory({ n: shared.field.number() });
+    const pending = connectSharedWorker({ port: channel.port2, sharedMemory: mem });
+    channel.port1.postMessage({ type: 'NOISE', payload: 1 });
+    const client = await pending;
+    expect(client.clientIndex).toBe(1);
+  });
+
+  it('ignores task replies addressed to another messageId', async () => {
+    const { shared, TaskRegistry, connectSharedWorker } = await boot();
+    TaskRegistry.register({ taskId: 'slow' }, async (x: number) => {
+      await new Promise((r) => setTimeout(r, 30));
+      return x;
+    });
+    const { attachSharedPort } = await import('./sharedWorkerHost');
+    const channel = new MessageChannel();
+    attachSharedPort(channel.port1);
+    const mem = shared.defineSharedMemory({ n: shared.field.number() });
+    const client = await connectSharedWorker({ port: channel.port2, sharedMemory: mem });
+
+    const pending = client.runTask({ taskId: 'slow' }, 5);
+    channel.port1.postMessage({ messageId: 'someone-else', success: true, result: 999 });
+    expect(await pending).toBe(5); // real reply routed; stray reply ignored
+  });
+
+  it('host executes tasks without an args field and stringifies non-Error throws', async () => {
+    const { shared, TaskRegistry, connectSharedWorker, link } = await boot();
+    TaskRegistry.register({ taskId: 'argc' }, (...args: number[]) => args.length);
+    TaskRegistry.register({ taskId: 'strthrow' }, () => {
+      throw 'stringified failure'; // eslint-disable-line no-throw-literal
+    });
+    const mem = shared.defineSharedMemory({ n: shared.field.number() });
+    const client = await connectSharedWorker({ port: link(), sharedMemory: mem });
+
+    expect(await client.runTask({ taskId: 'argc' })).toBe(0);
+    await expect(client.runTask({ taskId: 'strthrow' })).rejects.toThrow('stringified failure');
+  });
+
+  it('host ignores unrecognized messages and connects without memoryBytes', async () => {
+    const { attachSharedPort } = await import('./sharedWorkerHost');
+    const channel = new MessageChannel();
+    attachSharedPort(channel.port1);
+    const seen: unknown[] = [];
+    channel.port2.addEventListener('message', (e) => seen.push(e.data));
+    channel.port2.start();
+
+    channel.port2.postMessage({ type: 'MYSTERY' });
+    channel.port2.postMessage(null);
+    channel.port2.postMessage({ type: 'SHARED_CONNECT' }); // no memoryBytes → defaults to 0
+    await new Promise((r) => setTimeout(r, 50));
+    expect(seen.some((m) => (m as { type?: string })?.type === 'SHARED_MEMORY')).toBe(true);
+  });
 });

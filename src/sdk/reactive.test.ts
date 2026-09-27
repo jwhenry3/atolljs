@@ -221,4 +221,60 @@ describe('reactive connector', () => {
       vi.unstubAllGlobals();
     }
   });
+
+  it('shallowEqual treats undefined as unequal to any object', () => {
+    expect(shallowEqual({ a: 1 }, undefined)).toBe(false);
+    expect(shallowEqual(undefined, { a: 1 })).toBe(false);
+    expect(shallowEqual(undefined, undefined)).toBe(true);
+  });
+
+  it('handles a synchronous waitAsync result before parking on the async wait', async () => {
+    const spec = { n: field.number() };
+    const local = new SharedMemory(spec);
+    const remote = new SharedMemory(spec);
+    const buffer = new SharedArrayBuffer(local.totalBytes);
+    local.bind(buffer);
+    remote.bind(buffer);
+
+    // First call resolves synchronously (value already differs); subsequent
+    // calls park on a real async wait so the loop yields.
+    const orig = Atomics.waitAsync!.bind(Atomics);
+    let calls = 0;
+    const fake = Object.create(Atomics);
+    fake.waitAsync = (...args: Parameters<typeof Atomics.waitAsync>) =>
+      ++calls === 1
+        ? ({ async: false, value: 'not-equal' } as ReturnType<typeof Atomics.waitAsync>)
+        : orig(...args);
+    vi.stubGlobal('Atomics', fake);
+    try {
+      const rc = reactive(local.connector('n'));
+      const stop = rc.observeRemote();
+      remote.connector('n').write(50);
+      await vi.waitFor(() => expect(rc.get()).toBe(50), { timeout: 2000 });
+      expect(calls).toBeGreaterThanOrEqual(2);
+      stop();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('polling observer ignores ticks without a version bump', async () => {
+    vi.useFakeTimers();
+    const withoutWaitAsync = Object.create(Atomics);
+    withoutWaitAsync.waitAsync = undefined;
+    const loadSpy = vi.fn(Atomics.load.bind(Atomics));
+    withoutWaitAsync.load = loadSpy;
+    vi.stubGlobal('Atomics', withoutWaitAsync);
+    try {
+      const rc = reactive(boundConnector({ n: field.number() }, 'n'));
+      const stop = rc.observeRemote();
+      await vi.advanceTimersByTimeAsync(120); // ~2 poll ticks, no writes
+      expect(loadSpy.mock.calls.length).toBeGreaterThan(1); // ticks ran
+      expect(rc.get()).toBe(0);                             // unchanged → no bump
+      stop();
+    } finally {
+      vi.unstubAllGlobals();
+      vi.useRealTimers();
+    }
+  });
 });

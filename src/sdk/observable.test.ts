@@ -99,4 +99,18 @@ describe('observe', () => {
     await vi.waitFor(() => expect(seen.length).toBeGreaterThan(0));
     expect(obs.get()).toBe(0);
   });
+
+  it('keeps the underlying watch alive while any subscriber remains', async () => {
+    const mem = boundMem({ n: field.number() });
+    const obs = observe(mem, 'n');
+    const a: (number | undefined)[] = [];
+    const b: (number | undefined)[] = [];
+    const offA = obs.subscribe((v) => a.push(v));
+    obs.subscribe((v) => b.push(v));
+    await vi.waitFor(() => expect(a).toEqual([0]));
+
+    offA(); // one subscriber left — watch must stay live
+    mem.connector('n').write(9);
+    await vi.waitFor(() => expect(b).toEqual([9])); // b joined after the initial emit
+  });
 });
