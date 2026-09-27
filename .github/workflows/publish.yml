@@ -4,10 +4,14 @@
 # installable until a maintainer approves them — `npm stage list/view/
 # approve`, or the Staged Packages tab on npmjs.com (approval needs 2FA).
 #
-# Auth: a granular NPM_TOKEN repo secret (Settings → Secrets → Actions) —
-# staging accepts any token type without a 2FA prompt. id-token: write is
-# still granted so `npm stage publish --provenance` can attach Sigstore
-# provenance to each staged tarball.
+# Auth: npm trusted publishing (OIDC) — `id-token: write` lets the npm CLI
+# exchange the job's OIDC token for a short-lived credential; no stored
+# secret. Requires a trust relationship per package:
+#   npm trust github <pkg> --repo jwhenry3/mesh --file publish.yml --allow-stage-publish -y
+# Use --allow-stage-publish WITHOUT --allow-publish so this workflow is
+# stage-only — direct `npm publish` is rejected outright. Until a package
+# has a trust relationship, NODE_AUTH_TOKEN (granular NPM_TOKEN secret)
+# covers it — remove that env var once all packages are configured.
 name: Publish
 
 on:
@@ -50,7 +54,7 @@ jobs:
       - name: Build core package (dist/index.js + index.d.ts)
         run: npx vite build && npx tsc -p tsconfig.build.json
 
-      - name: Stamp versions + publish all packages
+      - name: Stamp versions + stage all packages
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }} # fallback until all packages have OIDC trust
         run: node scripts/publish.mjs "${{ github.event.release.tag_name }}"

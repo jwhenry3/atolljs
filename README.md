@@ -56,6 +56,26 @@ node scripts/publish.mjs 0.1.0 --direct      # prompts for 2FA per package
 Once all nine packages exist, release-driven `npm stage publish` works for
 every subsequent version.
 
+### Trusted publishing (OIDC)
+
+Prefer OIDC over the `NPM_TOKEN` secret — no long-lived credential, and a
+trust relationship can be **stage-only** so the workflow can't direct-publish
+even if compromised. Configure per package (needs the package to exist on
+npm, and npm CLI ≥ 11.10):
+
+```bash
+for p in mesh mesh-node mesh-react mesh-angular mesh-nestjs mesh-nextjs mesh-solidjs mesh-svelte mesh-vue; do
+  npm trust github "@jwhenry123/$p" --repo jwhenry3/mesh --file publish.yml --allow-stage-publish -y
+  sleep 2
+done
+```
+
+Omit `--allow-publish` — stage-only. First call prompts for 2FA; choose
+"skip for 5 minutes" and the loop finishes hands-free. Verify with
+`npm trust list @jwhenry123/mesh`. Once all nine show the relationship,
+delete the `NODE_AUTH_TOKEN` env line in `publish.yml` (npm only uses OIDC
+when no token is present) — the secret can be revoked after.
+
 ## Layout
 
 ```
