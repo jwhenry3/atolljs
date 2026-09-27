@@ -62,6 +62,13 @@ export default mergeConfig(
       // buffers and e2e app builds need headroom beyond the 5s default.
       testTimeout: 30_000,
       hookTimeout: 120_000,
+      coverage: {
+        provider: 'v8',
+        reporter: ['text', 'lcov'],
+        // The publishable surface: core sdk + every mesh-* binding package.
+        include: ['src/sdk/**', 'packages/*/src/**'],
+        exclude: ['**/*.test.*', '**/test/**'],
+      },
     },
   })
 );
