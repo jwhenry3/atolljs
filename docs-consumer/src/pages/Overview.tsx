@@ -29,9 +29,10 @@ export function Overview() {
       <h2>Install</h2>
       <CodeBlock code={`npm install @jwhenry123/mesh`} language="bash" />
       <p>
-        One package; everything is a subpath import — the SDK under{' '}
-        <code>@jwhenry123/mesh/sdk</code>, framework bindings under{' '}
-        <code>@jwhenry123/mesh/&lt;framework&gt;</code>.
+        The core package ships the SDK — imported as{' '}
+        <code>@jwhenry123/mesh/sdk</code>. Framework bindings are separate,
+        independently published packages — <code>@jwhenry123/mesh-&lt;framework&gt;</code> —
+        so you only install the framework you actually use.
       </p>
 
       <h2>How it fits together</h2>
@@ -57,27 +58,27 @@ export function Overview() {
             <td>Shared-memory contracts, worker pool, worker bootstrap, observables, tasks, codecs, logging</td>
           </tr>
           <tr>
-            <td><code>@jwhenry123/mesh/react</code></td>
+            <td><code>@jwhenry123/mesh-react</code></td>
             <td><code>useObservable</code>, <code>useSharedValue</code>, <code>useTask</code> — React hooks</td>
           </tr>
           <tr>
-            <td><code>@jwhenry123/mesh/vue</code></td>
+            <td><code>@jwhenry123/mesh-vue</code></td>
             <td><code>useObservable</code>, <code>useSharedValue</code>, <code>useTask</code> — Ref-producing composables</td>
           </tr>
           <tr>
-            <td><code>@jwhenry123/mesh/solidjs</code></td>
+            <td><code>@jwhenry123/mesh-solidjs</code></td>
             <td><code>createObservable</code>, <code>createSharedValue</code>, <code>createTask</code> — Accessors</td>
           </tr>
           <tr>
-            <td><code>@jwhenry123/mesh/svelte</code></td>
+            <td><code>@jwhenry123/mesh-svelte</code></td>
             <td><code>observableValue</code>, <code>sharedValue</code>, <code>taskState</code> — rune-backed state</td>
           </tr>
           <tr>
-            <td><code>@jwhenry123/mesh/angular</code></td>
+            <td><code>@jwhenry123/mesh-angular</code></td>
             <td><code>observableSignal</code>, <code>sharedValue</code>, <code>taskState</code> — Signals</td>
           </tr>
           <tr>
-            <td><code>@jwhenry123/mesh/nextjs</code></td>
+            <td><code>@jwhenry123/mesh-nextjs</code></td>
             <td>Re-exports the React binding — App Router safe, SSR-ready</td>
           </tr>
         </tbody>

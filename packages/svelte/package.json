@@ -1,13 +1,19 @@
 {
-  "name": "mesh-svelte",
-  "private": true,
+  "name": "@jwhenry123/mesh-svelte",
   "version": "0.0.0",
+  "description": "Svelte 5 bindings \u2014 observableValue, sharedValue, taskState",
   "type": "module",
   "exports": {
     ".": "./src/index.ts"
   },
+  "files": [
+    "src"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "peerDependencies": {
-    "@jwhenry123/mesh": "workspace:*",
+    "@jwhenry123/mesh": "0.0.0",
     "svelte": "^5.57.1"
   }
 }

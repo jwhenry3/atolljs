@@ -65,8 +65,8 @@ export function Overview() {
         </thead>
         <tbody>
           <tr><td><code>src/sdk/</code></td><td><code>@jwhenry123/mesh/sdk</code> — contracts, pool, worker runtime, reactivity, logging</td></tr>
-          <tr><td><code>packages/incidents/</code></td><td><code>@jwhenry123/mesh/incidents</code> — the demo domain: incident contract, worker, pool, tasks</td></tr>
-          <tr><td><code>packages/&lt;framework&gt;/</code></td><td><code>@jwhenry123/mesh/react|vue|solidjs|svelte|angular</code> — generic bindings, no domain code</td></tr>
+          <tr><td><code>packages/incidents/</code></td><td><code>@jwhenry123/mesh-incidents</code> — the demo domain: incident contract, worker, pool, tasks</td></tr>
+          <tr><td><code>packages/&lt;framework&gt;/</code></td><td><code>@jwhenry123/mesh-&lt;framework&gt;</code> — generic bindings, no domain code</td></tr>
           <tr><td><code>examples/&lt;framework&gt;/</code></td><td>Six isolated apps composing incidents + bindings</td></tr>
         </tbody>
       </table>

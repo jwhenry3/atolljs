@@ -13,14 +13,14 @@ export default defineConfig(({ command }) => ({
   base: command === 'build' ? '/solid/' : '/',
   plugins: [solid()],
   resolve: {
-    // The aliased @jwhenry123/mesh/solidjs source resolves `solid-js` from the
+    // The aliased @jwhenry123/mesh-solidjs source resolves `solid-js` from the
     // workspace root otherwise — two reactive runtimes get bundled, and
     // binding signals never register in the app's render effects (UI frozen
     // at initial values). Force a single copy.
     dedupe: ['solid-js'],
     alias: [
-      { find: '@jwhenry123/mesh/solidjs', replacement: `${solidBindingsRoot}index.ts` },
-      { find: '@jwhenry123/mesh/incidents', replacement: `${incidentsRoot}index.ts` },
+      { find: '@jwhenry123/mesh-solidjs', replacement: `${solidBindingsRoot}index.ts` },
+      { find: '@jwhenry123/mesh-incidents', replacement: `${incidentsRoot}index.ts` },
       { find: /^@jwhenry123\/mesh$/, replacement: `${sdkRoot}index.ts` },
       { find: /^@jwhenry123\/mesh\/sdk$/, replacement: `${sdkRoot}index.ts` },
       { find: /^@jwhenry123\/mesh\/sdk\//, replacement: sdkRoot },

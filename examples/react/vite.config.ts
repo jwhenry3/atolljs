@@ -13,13 +13,13 @@ export default defineConfig(({ command }) => ({
   base: command === 'build' ? '/react/' : '/',
   plugins: [react()],
   resolve: {
-    // The aliased @jwhenry123/mesh/react source resolves `react` from the
+    // The aliased @jwhenry123/mesh-react source resolves `react` from the
     // workspace root otherwise — two React copies get bundled and the
     // binding's hooks read a null dispatcher. Force a single copy.
     dedupe: ['react', 'react-dom'],
     alias: [
-      { find: '@jwhenry123/mesh/react', replacement: `${reactBindingsRoot}index.ts` },
-      { find: '@jwhenry123/mesh/incidents', replacement: `${incidentsRoot}index.ts` },
+      { find: '@jwhenry123/mesh-react', replacement: `${reactBindingsRoot}index.ts` },
+      { find: '@jwhenry123/mesh-incidents', replacement: `${incidentsRoot}index.ts` },
       { find: /^@jwhenry123\/mesh$/, replacement: `${sdkRoot}index.ts` },
       { find: /^@jwhenry123\/mesh\/sdk$/, replacement: `${sdkRoot}index.ts` },
       { find: /^@jwhenry123\/mesh\/sdk\//, replacement: sdkRoot },

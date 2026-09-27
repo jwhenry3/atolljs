@@ -3,6 +3,7 @@ import { SiteSwitch } from './components/SiteSwitch';
 import { FRAMEWORKS } from './frameworks';
 import { FrameworkPage } from './pages/FrameworkPage';
 import { Isolation } from './pages/Isolation';
+import { Nestjs } from './pages/Nestjs';
 import { Overview } from './pages/Overview';
 import { Playground } from './pages/Playground';
 import { Reactivity } from './pages/Reactivity';
@@ -33,11 +34,14 @@ const SECTIONS: { label: string; routes: Route[] }[] = [
   },
   {
     label: 'Frameworks',
-    routes: FRAMEWORKS.map((fw) => ({
-      id: `fw-${fw.id}`,
-      label: fw.name,
-      page: () => <FrameworkPage key={fw.id} fw={fw} />,
-    })),
+    routes: [
+      ...FRAMEWORKS.map((fw) => ({
+        id: `fw-${fw.id}`,
+        label: fw.name,
+        page: () => <FrameworkPage key={fw.id} fw={fw} />,
+      })),
+      { id: 'fw-nestjs', label: 'NestJS', page: () => <Nestjs /> },
+    ],
   },
   {
     label: 'Demos',

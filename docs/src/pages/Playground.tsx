@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { useSharedValue, useTask } from '@jwhenry123/mesh/react';
+import { useSharedValue, useTask } from '@jwhenry123/mesh-react';
 import { CodeBlock } from '../components/CodeBlock';
 import { addTask, getDemoPool, pingTask } from '../demo/demo.pool';
 import { demoMemory } from '../demo/demo.contract';
@@ -10,7 +10,7 @@ import pageSource from './Playground.tsx?raw';
 
 /**
  * Live playground — a real worker bound to a real shared-memory contract,
- * driven through the same @jwhenry123/mesh/react bindings the examples use.
+ * driven through the same @jwhenry123/mesh-react bindings the examples use.
  */
 export function Playground() {
   // Bind the contract + spawn the worker on mount.

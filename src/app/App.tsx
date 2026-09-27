@@ -20,15 +20,16 @@ const FRAMEWORKS = [
   { id: 'svelte', name: 'Svelte', port: 5176, detail: 'Svelte 5 runes' },
   { id: 'angular', name: 'Angular', port: 4201, detail: 'Zoneless signals + effects' },
   { id: 'nextjs', name: 'Next.js', port: 3001, detail: 'App Router + client boundary' },
+  { id: 'nestjs', name: 'NestJS', port: 3100, detail: 'REST API — the pool does the heavy lifting' },
 ];
 
 // Built output lives under dist/<id>/ on this origin; dev servers run per-port.
-// Next.js is server-rendered and always runs on its own port.
+// Next.js and NestJS are server-side apps — they always run on their own port.
 // ?v=<build stamp> defeats stale caches for the document URL (index.html
 // keeps a stable name — only its query changes per build).
 function frameworkHref(id: string, port: number) {
   const base =
-    import.meta.env.DEV || id === 'nextjs'
+    import.meta.env.DEV || id === 'nextjs' || id === 'nestjs'
       ? `${window.location.protocol}//${window.location.hostname}:${port}`
       : `/${id}/`;
   return `${base}?v=${__BUILD_ID__}`;

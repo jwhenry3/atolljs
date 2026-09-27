@@ -24,14 +24,20 @@
       }
     ],
     "paths": {
-      "@jwhenry123/mesh/nextjs": [
+      "@jwhenry123/mesh-nextjs": [
         "../../packages/nextjs/src/index.ts"
       ],
-      "@jwhenry123/mesh/react": [
+      "@jwhenry123/mesh-react": [
         "../../packages/react/src/index.ts"
       ],
-      "@jwhenry123/mesh/incidents": [
+      "@jwhenry123/mesh-incidents": [
         "../../packages/incidents/src/index.ts"
+      ],
+      "@jwhenry123/mesh-node": [
+        "../../packages/node/src/index.ts"
+      ],
+      "@jwhenry123/mesh-node/*": [
+        "../../packages/node/src/*"
       ],
       "@jwhenry123/mesh/sdk": [
         "../../src/sdk/index.ts"

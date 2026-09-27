@@ -1,4 +1,4 @@
-# @jwhenry123/mesh/angular
+# @jwhenry123/mesh-angular
 
 Angular bindings for `@jwhenry123/mesh/sdk` — framework adapter only, no domain code.
 Signal-based; call in an injection context (field initializer or constructor)

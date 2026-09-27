@@ -1,4 +1,4 @@
-# @jwhenry123/mesh/incidents
+# @jwhenry123/mesh-incidents
 
 Framework-neutral incident domain library shared by all examples.
 

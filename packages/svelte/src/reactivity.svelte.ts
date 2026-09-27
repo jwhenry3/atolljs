@@ -7,8 +7,13 @@ import type { AsyncTask, ObservableValue, SharedAccess, SharedMemory, SharedSpec
  */
 export function observableValue<T>(source: ObservableValue<T>) {
   let value = $state(source.get());
-  const stop = source.subscribe((v) => (value = v));
-  $effect(() => () => stop());
+  // Subscribe inside the effect: teardown is registered atomically with the
+  // subscription, so a root destroyed before the first flush can't leak it.
+  $effect(() => {
+    const stop = source.subscribe((v) => (value = v));
+    value = source.get();
+    return stop;
+  });
   return {
     get value() {
       return value;

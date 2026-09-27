@@ -372,7 +372,9 @@ function structFactory(d: FieldDescriptor, ctx: ConnectorContext, byteOffset: nu
     commit: () => {
       if (ctx.version) {
         Atomics.add(ctx.version.view, ctx.version.index, 1);
-        Atomics.notify(ctx.version.view, ctx.version.index, 1);
+        // Wake EVERY waitAsync observer — several watchers may share this
+        // field's counter; a bounded notify starves all but one.
+        Atomics.notify(ctx.version.view, ctx.version.index);
       }
     },
     read: () => Array.from({ length: count }, (_, i) => readAt(i)),
@@ -451,8 +453,9 @@ export class SharedMemory<S extends SharedSpec = SharedSpec> {
           raw.write(v);
           // Bump the version counter and explicitly wake waitAsync observers —
           // V8 only resolves waitAsync waiters on notify, not on value changes.
+          // No count bound: every watcher on this field must wake.
           Atomics.add(versionView, index, 1);
-          Atomics.notify(versionView, index, 1);
+          Atomics.notify(versionView, index);
         },
         _version: { view: versionView, index },
       });

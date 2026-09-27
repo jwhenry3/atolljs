@@ -9,7 +9,7 @@ export function Quickstart() {
       </p>
 
       <h2>1 · Install</h2>
-      <CodeBlock code="npm install @jwhenry123/mesh/sdk @jwhenry123/mesh/react" language="bash" />
+      <CodeBlock code="npm install @jwhenry123/mesh @jwhenry123/mesh-react" language="bash" />
 
       <h2>2 · Declare the contract — shared by both threads</h2>
       <CodeBlock
@@ -70,7 +70,7 @@ export const incrementTask = defineTask((delta: number) => pool.increment(delta)
       <CodeBlock
         file="App.tsx"
         language="tsx"
-        code={`import { useSharedValue, useTask } from '@jwhenry123/mesh/react';
+        code={`import { useSharedValue, useTask } from '@jwhenry123/mesh-react';
 import { counterMemory } from './counter.contract';
 import { incrementTask } from './counter.pool';
 

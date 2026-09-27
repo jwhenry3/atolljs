@@ -10,4 +10,5 @@ export const apps = [
   ['svelte', 'examples/svelte', 5176],
   ['angular', 'examples/angular', 4201],
   ['nextjs', 'examples/nextjs', 3001],
+  ['nestjs', 'examples/nestjs', 3100],
 ];

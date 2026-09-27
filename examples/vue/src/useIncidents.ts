@@ -1,12 +1,12 @@
 import { computed, watch, type Ref } from 'vue';
-import { useSharedValue, useTask } from '@jwhenry123/mesh/vue';
+import { useSharedValue, useTask } from '@jwhenry123/mesh-vue';
 import {
   getIncidentsPool,
   initIncidentsTask,
   incidentsMemory,
   queryIncidentsTask,
   type QueryArgs,
-} from '@jwhenry123/mesh/incidents';
+} from '@jwhenry123/mesh-incidents';
 
 // Bind the contract and spawn the worker pool as soon as this module loads.
 if (typeof window !== 'undefined') getIncidentsPool();

@@ -1,4 +1,4 @@
-# @jwhenry123/mesh/react
+# @jwhenry123/mesh-react
 
 React bindings for `@jwhenry123/mesh/sdk` — framework adapter only, no domain code.
 

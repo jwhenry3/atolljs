@@ -30,10 +30,12 @@ try {
   stop(1);
 }
 
-if (!(await checkPorts([['root', 4173], ['nextjs', 3001]]))) {
+if (!(await checkPorts([['root', 4173], ['nextjs', 3001], ['nestjs', 3100]]))) {
   process.exit(1);
 }
 
 launch('root', root, process.execPath, [serveStatic, 'dist', '4173']);
 // Next.js is a server-rendered app — serve it with `next start`.
 launch('nextjs', 'examples/nextjs', npmCmd, npmScript('start'));
+// NestJS is a Node service — run the bundled dist/main.js.
+launch('nestjs', 'examples/nestjs', npmCmd, npmScript('start'));

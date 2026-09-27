@@ -17,8 +17,8 @@ export const FRAMEWORKS: FrameworkDoc[] = [
     id: 'react',
     name: 'React',
     port: 5173,
-    pkg: '@jwhenry123/mesh/react',
-    install: 'npm install @jwhenry123/mesh',
+    pkg: '@jwhenry123/mesh-react',
+    install: 'npm install @jwhenry123/mesh @jwhenry123/mesh-react',
     summary:
       'Hooks over useSyncExternalStore. SSR-safe — field reads return undefined until the contract binds on the client.',
     apis: [
@@ -28,7 +28,7 @@ export const FRAMEWORKS: FrameworkDoc[] = [
     ],
     usageFile: 'App.tsx',
     usageLanguage: 'tsx',
-    usage: `import { useSharedValue, useTask } from '@jwhenry123/mesh/react';
+    usage: `import { useSharedValue, useTask } from '@jwhenry123/mesh-react';
 import { counterMemory, incrementTask, initTask } from './counter.contract';
 
 export function App() {
@@ -52,8 +52,8 @@ export function App() {
     id: 'vue',
     name: 'Vue',
     port: 5174,
-    pkg: '@jwhenry123/mesh/vue',
-    install: 'npm install @jwhenry123/mesh',
+    pkg: '@jwhenry123/mesh-vue',
+    install: 'npm install @jwhenry123/mesh @jwhenry123/mesh-vue',
     summary:
       'Composables producing Refs. Subscriptions release via onScopeDispose when the component unmounts.',
     apis: [
@@ -65,7 +65,7 @@ export function App() {
     usageLanguage: 'vue',
     usage: `<script setup lang="ts">
 import { onMounted } from 'vue';
-import { useSharedValue, useTask } from '@jwhenry123/mesh/vue';
+import { useSharedValue, useTask } from '@jwhenry123/mesh-vue';
 import { counterMemory, incrementTask, initTask } from './counter.contract';
 
 const count = useSharedValue(counterMemory, 'count');
@@ -85,8 +85,8 @@ onMounted(() => init.runOnce());
     id: 'solid',
     name: 'SolidJS',
     port: 5175,
-    pkg: '@jwhenry123/mesh/solidjs',
-    install: 'npm install @jwhenry123/mesh',
+    pkg: '@jwhenry123/mesh-solidjs',
+    install: 'npm install @jwhenry123/mesh @jwhenry123/mesh-solidjs',
     summary:
       'Signal adapter — the sdk uses solid-js internally for its reactive core, so shared values are natively tracked.',
     apis: [
@@ -96,7 +96,7 @@ onMounted(() => init.runOnce());
     ],
     usageFile: 'App.tsx',
     usageLanguage: 'tsx',
-    usage: `import { createSharedValue, createTask } from '@jwhenry123/mesh/solidjs';
+    usage: `import { createSharedValue, createTask } from '@jwhenry123/mesh-solidjs';
 import { counterMemory, incrementTask, initTask } from './counter.contract';
 
 export function App() {
@@ -117,8 +117,8 @@ export function App() {
     id: 'svelte',
     name: 'Svelte',
     port: 5176,
-    pkg: '@jwhenry123/mesh/svelte',
-    install: 'npm install @jwhenry123/mesh',
+    pkg: '@jwhenry123/mesh-svelte',
+    install: 'npm install @jwhenry123/mesh @jwhenry123/mesh-svelte',
     summary:
       'Svelte 5 runes adapter. Call the factories during component init; teardown happens in an $effect cleanup.',
     apis: [
@@ -129,7 +129,7 @@ export function App() {
     usageFile: 'App.svelte',
     usageLanguage: 'svelte',
     usage: `<script lang="ts">
-  import { sharedValue, taskState } from '@jwhenry123/mesh/svelte';
+  import { sharedValue, taskState } from '@jwhenry123/mesh-svelte';
   import { counterMemory, incrementTask, initTask } from './counter.contract';
 
   const count = sharedValue(counterMemory, 'count');
@@ -147,8 +147,8 @@ export function App() {
     id: 'angular',
     name: 'Angular',
     port: 4201,
-    pkg: '@jwhenry123/mesh/angular',
-    install: 'npm install @jwhenry123/mesh',
+    pkg: '@jwhenry123/mesh-angular',
+    install: 'npm install @jwhenry123/mesh @jwhenry123/mesh-angular',
     summary:
       'Signal adapter for zoneless Angular. Call in an injection context (field initializer or constructor) so subscriptions release on destroy.',
     apis: [
@@ -159,7 +159,7 @@ export function App() {
     usageFile: 'app.component.ts',
     usageLanguage: 'typescript',
     usage: `import { Component, effect } from '@angular/core';
-import { sharedValue, taskState } from '@jwhenry123/mesh/angular';
+import { sharedValue, taskState } from '@jwhenry123/mesh-angular';
 import { counterMemory, incrementTask, initTask } from './counter.contract';
 
 @Component({

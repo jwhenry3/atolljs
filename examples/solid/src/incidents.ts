@@ -1,12 +1,12 @@
 import { createEffect, type Accessor } from 'solid-js';
-import { createSharedValue, createTask } from '@jwhenry123/mesh/solidjs';
+import { createSharedValue, createTask } from '@jwhenry123/mesh-solidjs';
 import {
   getIncidentsPool,
   initIncidentsTask,
   incidentsMemory,
   queryIncidentsTask,
   type QueryArgs,
-} from '@jwhenry123/mesh/incidents';
+} from '@jwhenry123/mesh-incidents';
 
 // Bind the contract and spawn the worker pool as soon as this module loads.
 if (typeof window !== 'undefined') getIncidentsPool();

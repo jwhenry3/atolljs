@@ -44,7 +44,7 @@ export const FRAMEWORKS: FrameworkDoc[] = [
     id: 'react',
     name: 'React',
     port: 5173,
-    binding: '@jwhenry123/mesh/react',
+    binding: '@jwhenry123/mesh-react',
     summary:
       'Hook adapter over useSyncExternalStore. SSR-safe — field reads return undefined until the contract binds on the client.',
     apis: [
@@ -68,7 +68,7 @@ export const FRAMEWORKS: FrameworkDoc[] = [
     id: 'vue',
     name: 'Vue',
     port: 5174,
-    binding: '@jwhenry123/mesh/vue',
+    binding: '@jwhenry123/mesh-vue',
     summary:
       'Composable adapter producing Refs. Subscriptions release via onScopeDispose when the component unmounts.',
     apis: [
@@ -91,7 +91,7 @@ export const FRAMEWORKS: FrameworkDoc[] = [
     id: 'solid',
     name: 'SolidJS',
     port: 5175,
-    binding: '@jwhenry123/mesh/solidjs',
+    binding: '@jwhenry123/mesh-solidjs',
     summary:
       'Signal adapter. The sdk itself uses solid-js internally for reactive(), so shared values are native tracked signals.',
     apis: [
@@ -115,7 +115,7 @@ export const FRAMEWORKS: FrameworkDoc[] = [
     id: 'svelte',
     name: 'Svelte',
     port: 5176,
-    binding: '@jwhenry123/mesh/svelte',
+    binding: '@jwhenry123/mesh-svelte',
     summary:
       'Svelte 5 runes adapter. Functions must be called during component init; teardown happens in an $effect cleanup.',
     apis: [
@@ -138,7 +138,7 @@ export const FRAMEWORKS: FrameworkDoc[] = [
     id: 'angular',
     name: 'Angular',
     port: 4201,
-    binding: '@jwhenry123/mesh/angular',
+    binding: '@jwhenry123/mesh-angular',
     summary:
       'Signal adapter for zoneless Angular. Call in an injection context (field initializer or constructor) so subscriptions release on destroy.',
     apis: [

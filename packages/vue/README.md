@@ -1,4 +1,4 @@
-# @jwhenry123/mesh/vue
+# @jwhenry123/mesh-vue
 
 Vue bindings for `@jwhenry123/mesh/sdk` — framework adapter only, no domain code.
 

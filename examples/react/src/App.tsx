@@ -16,7 +16,7 @@ import {
   SEVERITIES,
   STATUSES,
   type QueryArgs,
-} from '@jwhenry123/mesh/incidents';
+} from '@jwhenry123/mesh-incidents';
 
 const NULL_SEL = '';
 

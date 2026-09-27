@@ -23,8 +23,8 @@ binding pages with embedded real source, and a live in-page playground demo.
 The framework-neutral implementation lives in `../packages/incidents`: shared
 memory and task contracts, worker implementation, pool singleton, task runners,
 formatting, and table metadata. Generic sdk bindings live beside it in
-`@jwhenry123/mesh/react`, `@jwhenry123/mesh/vue`, `@jwhenry123/mesh/solidjs`,
-`@jwhenry123/mesh/svelte`, `@jwhenry123/mesh/angular`, and `@jwhenry123/mesh/nextjs` — they
+`@jwhenry123/mesh-react`, `@jwhenry123/mesh-vue`, `@jwhenry123/mesh-solidjs`,
+`@jwhenry123/mesh-svelte`, `@jwhenry123/mesh-angular`, and `@jwhenry123/mesh-nextjs` — they
 adapt `observe()`/`defineTask()` to each framework's reactivity and carry no
 incident knowledge. Each example owns the composition: a small local data layer
 wires the incident tasks and shared fields through the framework bindings.

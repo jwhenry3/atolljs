@@ -40,7 +40,7 @@ export function FrameworkPage({ fw }: { fw: FrameworkDoc }) {
       <h2>Composition — the app connects the dots</h2>
       <p>
         The example owns the incident-specific glue: it imports the domain tasks and
-        contract from <code>@jwhenry123/mesh/incidents</code> and binds them through{' '}
+        contract from <code>@jwhenry123/mesh-incidents</code> and binds them through{' '}
         <code>{fw.binding}</code>.
       </p>
       <CodeBlock code={fw.glueSource} file={fw.glueFile} />

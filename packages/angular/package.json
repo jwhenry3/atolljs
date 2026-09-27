@@ -1,13 +1,19 @@
 {
-  "name": "mesh-angular",
-  "private": true,
+  "name": "@jwhenry123/mesh-angular",
   "version": "0.0.0",
+  "description": "Angular bindings \u2014 observableSignal, sharedValue, taskState",
   "type": "module",
   "exports": {
     ".": "./src/index.ts"
   },
+  "files": [
+    "src"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "peerDependencies": {
-    "@angular/core": "^22.2.0",
-    "@jwhenry123/mesh": "workspace:*"
+    "@jwhenry123/mesh": "0.0.0",
+    "@angular/core": "^22.2.0"
   }
 }

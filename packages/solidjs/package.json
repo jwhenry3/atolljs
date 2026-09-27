@@ -1,13 +1,19 @@
 {
-  "name": "mesh-solidjs",
-  "private": true,
+  "name": "@jwhenry123/mesh-solidjs",
   "version": "0.0.0",
+  "description": "SolidJS bindings \u2014 createObservable, createSharedValue, createTask",
   "type": "module",
   "exports": {
     ".": "./src/index.ts"
   },
+  "files": [
+    "src"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "peerDependencies": {
-    "@jwhenry123/mesh": "workspace:*",
+    "@jwhenry123/mesh": "0.0.0",
     "solid-js": "^1.9.15"
   }
 }

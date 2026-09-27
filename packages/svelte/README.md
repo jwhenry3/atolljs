@@ -1,4 +1,4 @@
-# @jwhenry123/mesh/svelte
+# @jwhenry123/mesh-svelte
 
 Svelte 5 bindings for `@jwhenry123/mesh/sdk` — framework adapter only, no domain code.
 Rune-based; call during component init.

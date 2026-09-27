@@ -1,13 +1,19 @@
 {
-  "name": "mesh-react",
-  "private": true,
+  "name": "@jwhenry123/mesh-react",
   "version": "0.0.0",
+  "description": "React bindings \u2014 useObservable, useSharedValue, useTask",
   "type": "module",
   "exports": {
     ".": "./src/index.ts"
   },
+  "files": [
+    "src"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "peerDependencies": {
-    "@jwhenry123/mesh": "workspace:*",
+    "@jwhenry123/mesh": "0.0.0",
     "react": "^19.3.0"
   }
 }

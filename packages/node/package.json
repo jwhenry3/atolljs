@@ -1,0 +1,19 @@
+{
+  "name": "@jwhenry123/mesh-node",
+  "version": "0.0.0",
+  "description": "Node runtime adapter \u2014 node:worker_threads pools, no framework",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./shim": "./src/shim.ts"
+  },
+  "files": [
+    "src"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "peerDependencies": {
+    "@jwhenry123/mesh": "0.0.0"
+  }
+}

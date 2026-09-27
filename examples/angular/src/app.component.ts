@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, effect, signal, type WritableSignal } from '@angular/core';
-import { sharedValue, taskState } from '@jwhenry123/mesh/angular';
+import { sharedValue, taskState } from '@jwhenry123/mesh-angular';
 import {
   fmtDur,
   fmtInt,
@@ -13,7 +13,7 @@ import {
   SEVERITIES,
   STATUSES,
   type QueryArgs,
-} from '@jwhenry123/mesh/incidents';
+} from '@jwhenry123/mesh-incidents';
 
 const NULL_SEL = '';
 

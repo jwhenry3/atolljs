@@ -1,12 +1,12 @@
 import { useEffect } from 'react';
-import { useSharedValue, useTask } from '@jwhenry123/mesh/react';
+import { useSharedValue, useTask } from '@jwhenry123/mesh-react';
 import {
   getIncidentsPool,
   initIncidentsTask,
   incidentsMemory,
   queryIncidentsTask,
   type QueryArgs,
-} from '@jwhenry123/mesh/incidents';
+} from '@jwhenry123/mesh-incidents';
 
 // Connect the dots: bind the contract and spawn the worker pool as soon as
 // this module loads on the client (guarded so SSR/prerender never touches Worker).

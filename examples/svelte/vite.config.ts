@@ -14,8 +14,8 @@ export default defineConfig(({ command }) => ({
   plugins: [svelte()],
   resolve: {
     alias: [
-      { find: '@jwhenry123/mesh/svelte', replacement: `${svelteBindingsRoot}index.ts` },
-      { find: '@jwhenry123/mesh/incidents', replacement: `${incidentsRoot}index.ts` },
+      { find: '@jwhenry123/mesh-svelte', replacement: `${svelteBindingsRoot}index.ts` },
+      { find: '@jwhenry123/mesh-incidents', replacement: `${incidentsRoot}index.ts` },
       { find: /^@jwhenry123\/mesh$/, replacement: `${sdkRoot}index.ts` },
       { find: /^@jwhenry123\/mesh\/sdk$/, replacement: `${sdkRoot}index.ts` },
       { find: /^@jwhenry123\/mesh\/sdk\//, replacement: sdkRoot },

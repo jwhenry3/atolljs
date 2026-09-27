@@ -45,7 +45,7 @@ export function Reactivity() {
       <p className="lead">
         The sdk's reactivity layer is framework-neutral: everything reduces to{' '}
         <code>ObservableValue</code> — <code>get()</code> + <code>subscribe()</code> —
-        which each <code>@jwhenry123/mesh/*</code> binding adapts to its framework.
+        which each <code>@jwhenry123/mesh-*</code> binding adapts to its framework.
       </p>
 
       <h2>observe() — fields as snapshots</h2>

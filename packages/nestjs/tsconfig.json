@@ -1,0 +1,23 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ESNext", "DOM", "WebWorker"],
+    "types": ["node"],
+    "experimentalDecorators": true,
+    "strict": true,
+    "noEmit": true,
+    "isolatedModules": true,
+    "skipLibCheck": true,
+    "paths": {
+      "@jwhenry123/mesh/sdk": ["../../src/sdk/index.ts"],
+      "@jwhenry123/mesh/sdk/*": ["../../src/sdk/*"],
+      "@jwhenry123/mesh-node": ["../../packages/node/src/index.ts"],
+      "@jwhenry123/mesh-node/*": ["../../packages/node/src/*"],
+      "@nestjs/common": ["../../examples/nestjs/node_modules/@nestjs/common"],
+      "@nestjs/core": ["../../examples/nestjs/node_modules/@nestjs/core"]
+    }
+  },
+  "include": ["src"]
+}

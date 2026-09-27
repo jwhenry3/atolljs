@@ -1,4 +1,4 @@
-# @jwhenry123/mesh/solidjs
+# @jwhenry123/mesh-solidjs
 
 SolidJS bindings for `@jwhenry123/mesh/sdk` — framework adapter only, no domain code.
 

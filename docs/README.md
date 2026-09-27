@@ -8,7 +8,7 @@ React, hash-routed, on port **4180**.
 - Each framework page embeds the real binding + glue sources (via `?raw`
   imports, so docs never drift from the code) and iframes the running example.
 - The playground page runs a real worker + shared-memory contract in-page
-  through the `@jwhenry123/mesh/react` bindings.
+  through the `@jwhenry123/mesh-react` bindings.
 
 ## Run
 

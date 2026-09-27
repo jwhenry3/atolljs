@@ -14,8 +14,8 @@ export default defineConfig(({ command }) => ({
   plugins: [vue()],
   resolve: {
     alias: [
-      { find: '@jwhenry123/mesh/vue', replacement: `${vueBindingsRoot}index.ts` },
-      { find: '@jwhenry123/mesh/incidents', replacement: `${incidentsRoot}index.ts` },
+      { find: '@jwhenry123/mesh-vue', replacement: `${vueBindingsRoot}index.ts` },
+      { find: '@jwhenry123/mesh-incidents', replacement: `${incidentsRoot}index.ts` },
       { find: /^@jwhenry123\/mesh$/, replacement: `${sdkRoot}index.ts` },
       { find: /^@jwhenry123\/mesh\/sdk$/, replacement: `${sdkRoot}index.ts` },
       { find: /^@jwhenry123\/mesh\/sdk\//, replacement: sdkRoot },

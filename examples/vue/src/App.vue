@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
 import { useIncidents } from './useIncidents';
-import { fmtDur, fmtInt, incidentColumns as columns, REGIONS, SERVICES, SEVERITIES, STATUSES, type QueryArgs } from '@jwhenry123/mesh/incidents';
+import { fmtDur, fmtInt, incidentColumns as columns, REGIONS, SERVICES, SEVERITIES, STATUSES, type QueryArgs } from '@jwhenry123/mesh-incidents';
 
 const pageIndex = ref(0);
 const pageSize = ref(50);

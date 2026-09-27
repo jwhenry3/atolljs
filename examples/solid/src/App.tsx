@@ -1,6 +1,6 @@
 import { createMemo, createSignal, For, type JSX, type Setter } from 'solid-js';
 import { createIncidents } from './incidents';
-import { fmtDur, fmtInt, incidentColumns as columns, REGIONS, SERVICES, SEVERITIES, STATUSES, type QueryArgs } from '@jwhenry123/mesh/incidents';
+import { fmtDur, fmtInt, incidentColumns as columns, REGIONS, SERVICES, SEVERITIES, STATUSES, type QueryArgs } from '@jwhenry123/mesh-incidents';
 
 export function App() {
   const [pageIndex, setPageIndex] = createSignal(0);
