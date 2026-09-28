@@ -31,6 +31,7 @@ export default mergeConfig(
         { find: /^@jwhenry123\/mesh-incidents\/(.*)$/, replacement: r('packages/incidents/src') + '/$1' },
         { find: /^@jwhenry123\/mesh-worker-dom$/, replacement: r('packages/worker-dom/src/index.ts') },
         { find: /^@jwhenry123\/mesh-worker-dom\/(.*)$/, replacement: r('packages/worker-dom/src') + '/$1' },
+        { find: /^@jwhenry123\/mesh-react-island$/, replacement: r('packages/react-island/src/index.tsx') },
         // The published exports map lacks ./incidents/*; tests reach worker
         // entries directly so worker-entry modules can be imported in-process.
         { find: /^@jwhenry123\/mesh\/incidents\/(.*)$/, replacement: r('packages/incidents/src') + '/$1' },

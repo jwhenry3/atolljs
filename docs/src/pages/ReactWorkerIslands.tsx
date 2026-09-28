@@ -15,7 +15,7 @@ export function ReactWorkerIslands() {
     <article>
       <h1>React — worker islands</h1>
       <p className="lead">
-        <code>@jwhenry123/mesh-worker-dom/react</code> — a worker-hosted React (or
+        <code>@jwhenry123/mesh-react-island</code> — a worker-hosted React (or
         imperative proxy-DOM) tree mounted as an ordinary element in a React shell.
         The worker's render loop produces serialized DOM ops; the main thread just
         replays them.

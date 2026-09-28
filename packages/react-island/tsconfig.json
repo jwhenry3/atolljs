@@ -4,7 +4,7 @@
     "module": "ESNext",
     "moduleResolution": "bundler",
     "lib": ["ESNext", "DOM", "WebWorker"],
-    "types": ["vite/client", "node"],
+    "types": ["vite/client"],
     "strict": true,
     "noEmit": true,
     "isolatedModules": true,
@@ -14,9 +14,14 @@
       "@jwhenry123/mesh/sdk": ["../../src/sdk/index.ts"],
       "@jwhenry123/mesh/sdk/*": ["../../src/sdk/*"],
       "@jwhenry123/mesh-worker-dom": ["../../packages/worker-dom/src/index.ts"],
-      "@jwhenry123/mesh-worker-dom/worker": ["../../packages/worker-dom/src/worker/index.ts"],
-      "@jwhenry123/mesh-react-island": ["../../packages/react-island/src/index.tsx"]
+      "@jwhenry123/mesh-worker-dom/*": ["../../packages/worker-dom/src/*"]
     }
   },
-  "include": ["src", "test", "vite.config.ts"]
+  "include": [
+    "src",
+    "test",
+    // The test fixture imports the worker entry, which imports
+    // react-reconciler — worker-dom's ambient module declaration.
+    "../../packages/worker-dom/src/react-reconciler.d.ts"
+  ]
 }

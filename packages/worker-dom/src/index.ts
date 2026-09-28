@@ -26,7 +26,7 @@ export { makeDoorbell } from './memory';
 export type { DoorbellSpec } from './memory';
 
 export { islandApp, islandAppNameOf } from './app';
-export type { IslandAppProps } from './app';
+export type { IslandAppLike, IslandAppProps } from './app';
 
 export { isEventRef } from './ops';
 export type {

@@ -5,7 +5,6 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./react": "./src/react.tsx",
     "./worker": "./src/worker/index.ts"
   },
   "files": [

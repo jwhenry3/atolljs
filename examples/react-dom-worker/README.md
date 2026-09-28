@@ -24,7 +24,7 @@ components — reconciled into the realm's own root — or
 `{ imperative: (doc, props) => void }` — apps built on the worker-side
 **proxy DOM** with no React at all (see below). There is **no React on the
 main thread**: `src/island.ts` is a dumb op applier plus an event sink per
-island. (If your shell *is* a React app, `@jwhenry123/mesh-worker-dom/react`
+island. (If your shell *is* a React app, `@jwhenry123/mesh-react-island`
 exports `<Island/>` — the same mount/updateProps/destroy lifecycle as a
 component, and `app` can take the `islandApp`-stamped component itself —
 `<Island app={ChartsApp} props={{ width }}/>` — for inferred props.)
@@ -61,7 +61,7 @@ op protocol doesn't care what the shell is made of. `index.html` +
 `src/main.ts` is framework-free: `mountIsland({ el, app, props })` calls
 plus hand-wired `island.updateProps` mediation — its bundle is ~4 kB.
 `react-shell.html` + `src/shell.tsx` is the same seven islands through
-`<Island/>` (`@jwhenry123/mesh-worker-dom/react`): each `mountIsland` call
+`<Island/>` (`@jwhenry123/mesh-react-island`): each `mountIsland` call
 becomes a component, badges ride `onReady` → state, and the
 controls→table mediation is literally `onEvent → setState →
 <Island props={…}>` — the component's deduped `updateProps` replaces the
@@ -178,10 +178,12 @@ realm).
 
 ## Files
 
-Package code (`packages/worker-dom/`) does the heavy lifting:
-`defineIslandWorker` (realms, reconcilers, op queues), `hostConfig`,
-`proxyDom` + `installDomShim`, `mountIsland`/`connectIslandWorker` + the
-op protocol + doorbell contract. The example keeps:
+Package code (`packages/worker-dom/` + `packages/react-island/`) does the
+heavy lifting: `defineIslandWorker` (realms, reconcilers, op queues),
+`hostConfig`, `proxyDom` + `installDomShim`, `mountIsland`/
+`connectIslandWorker` + the op protocol + doorbell contract, and the
+`<Island/>`/`lazyIsland`/`islandComponent` component layer. The example
+keeps:
 
 - `src/worker/render.worker.ts` — ~20 lines: `defineIslandWorker({ apps })` mapping island app names to components/imperative builders
 - `src/worker/apps.tsx` — the four React island apps: `ControlsApp` (emits filter/sort/counter events), `TableApp` (2000-row memoized table, props-driven, emits rowSelected/rowsChanged), `StatsApp` (row count + busy-loop compute), `ChartsApp` (real recharts 3.x `ComposedChart`, fixed dims, emits `chartClicked` on bar click)

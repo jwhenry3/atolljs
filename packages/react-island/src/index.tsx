@@ -1,10 +1,11 @@
 /**
- * `<Island/>` — the declarative counterpart to `connectIslandWorker` +
- * `mountIsland`: a worker-hosted React (or imperative proxy-DOM) tree
- * mounted as an ordinary element in a main-thread React app.
+ * `@jwhenry123/mesh-react-island` — the React shell surface for
+ * `@jwhenry123/mesh-worker-dom` islands: a worker-hosted React (or
+ * imperative proxy-DOM) tree mounted as an ordinary element in a
+ * main-thread React app.
  *
  * ```tsx
- * import { Island } from '@jwhenry123/mesh-worker-dom/react';
+ * import { Island } from '@jwhenry123/mesh-react-island';
  * import { ChartsApp } from './worker/apps'; // the islandApp-stamped component
  *
  * const renderWorker = () =>
@@ -40,9 +41,22 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import type { HTMLAttributes, ReactElement, ReactNode, Ref } from 'react';
-import { islandAppNameOf, type IslandAppLike, type IslandAppProps } from './app';
-import { connectIslandWorker, mountIsland } from './island';
-import type { IslandClient, IslandHandle, IslandWorkerOptions } from './island';
+import {
+  connectIslandWorker,
+  islandAppNameOf,
+  mountIsland,
+} from '@jwhenry123/mesh-worker-dom';
+import type {
+  IslandAppLike,
+  IslandAppProps,
+  IslandClient,
+  IslandHandle,
+  IslandWorkerOptions,
+} from '@jwhenry123/mesh-worker-dom';
+
+// Re-export the app-contract types the component API is generic over, so
+// consumers can name them without a second package import.
+export type { IslandAppLike, IslandAppProps, IslandHandle };
 
 /** What `app` accepts: the registry name, or a component/def to resolve. */
 export type IslandAppRef<A> = A | string;
@@ -57,8 +71,8 @@ export interface IslandProps<A = string>
   app: IslandAppRef<A>;
   /**
    * How to reach the worker — either a bundler-detectable factory
-   * `() => new Worker(new URL('./x.worker.ts', import.meta.url))` (the
-   * common case) or a pre-connected `IslandClient`. Exactly one is required.
+   * `() => new Worker(new URL('./x.worker.ts', import.meta.url), { type: 'module' })`
+   * (the common case) or a pre-connected `IslandClient`. Exactly one is required.
    */
   worker?: (() => Worker) | URL;
   client?: IslandClient;

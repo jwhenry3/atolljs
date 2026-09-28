@@ -1,7 +1,7 @@
 /**
  * The React shell — the same seven-island page as index.html, but the shell
  * itself is a React app mounting islands through `<Island/>`
- * (@jwhenry123/mesh-worker-dom/react).
+ * (@jwhenry123/mesh-react-island).
  *
  * What changes versus main.ts:
  *   - Every island mounts through a `lazyIsland` proxy — the worker app
@@ -19,7 +19,7 @@
 import { useEffect, useMemo, useRef, useState, Suspense } from 'react';
 import type { ReactElement, ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { lazyIsland } from '@jwhenry123/mesh-worker-dom/react';
+import { lazyIsland } from '@jwhenry123/mesh-react-island';
 import type { IslandHandle, Mode } from '@jwhenry123/mesh-worker-dom';
 // Leaflet's stylesheet is shell-side: the worker fabricates the DOM Leaflet
 // builds but CSS was always the shell's job.

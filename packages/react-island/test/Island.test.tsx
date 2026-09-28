@@ -8,7 +8,7 @@ import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { act, Suspense } from 'react';
 import { createRoot } from 'react-dom/client';
 import { InProcessWorker } from '../../../test/inProcessWorker';
-import { islandApp, islandAppNameOf } from '../src/index';
+import { islandApp, islandAppNameOf } from '@jwhenry123/mesh-worker-dom';
 import type { IslandHandle } from '../src/index';
 import { echoApp } from './fixtures/echo.worker';
 
@@ -17,16 +17,16 @@ InProcessWorker.handlerModules = [() => import('./fixtures/echo.worker')];
 
 (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
 
-let Island: typeof import('../src/react').Island;
-let islandComponent: typeof import('../src/react').islandComponent;
-let lazyIsland: typeof import('../src/react').lazyIsland;
+let Island: typeof import('../src/index').Island;
+let islandComponent: typeof import('../src/index').islandComponent;
+let lazyIsland: typeof import('../src/index').lazyIsland;
 // In-process artifact: once a worker island calls installDomShim, ambient
 // `document` resolves to its PROXY document (shared globalThis) — capture the
 // real one before any mounts. Real browsers never share globals across threads.
 let realDoc: Document;
 beforeAll(async () => {
   realDoc = document;
-  ({ Island, islandComponent, lazyIsland } = await import('../src/react'));
+  ({ Island, islandComponent, lazyIsland } = await import('../src/index'));
 });
 
 const renderWorker = () =>

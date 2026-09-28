@@ -21,8 +21,11 @@ export default defineConfig(({ command }) => ({
       { find: /^@jwhenry123\/mesh\/sdk$/, replacement: `${sdkRoot}index.ts` },
       { find: /^@jwhenry123\/mesh\/sdk\//, replacement: sdkRoot },
       { find: /^@jwhenry123\/mesh-worker-dom$/, replacement: `${workerDomRoot}index.ts` },
-      { find: /^@jwhenry123\/mesh-worker-dom\/react$/, replacement: `${workerDomRoot}react.tsx` },
       { find: /^@jwhenry123\/mesh-worker-dom\/worker$/, replacement: `${workerDomRoot}worker/index.ts` },
+      {
+        find: /^@jwhenry123\/mesh-react-island$/,
+        replacement: `${fileURLToPath(new URL('../../packages/react-island/src/', import.meta.url)).replace(/\\/g, '/')}index.tsx`,
+      },
     ],
   },
   // Two entry pages: index.html is the framework-free shell (src/main.ts),

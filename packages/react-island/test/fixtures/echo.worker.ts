@@ -4,7 +4,12 @@
  * The app def is `islandApp`-stamped so the shell mounts it by reference:
  * `<Island app={echoApp}/>` — the same object the registry holds.
  */
-import { defineIslandWorker, emit, islandApp, type ProxyDocument } from '../../src/worker/index';
+import {
+  defineIslandWorker,
+  emit,
+  islandApp,
+  type ProxyDocument,
+} from '@jwhenry123/mesh-worker-dom/worker';
 
 export const echoApp = islandApp('echo', {
   imperative: (doc: ProxyDocument, props: Record<string, unknown>): void => {
