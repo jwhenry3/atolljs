@@ -20,6 +20,8 @@ export type {
 
 export { islandApp, islandAppNameOf } from '../app';
 
+export { hostConfig } from './hostConfig';
+
 export {
   allocId,
   bumpOpsVersion,
@@ -27,7 +29,6 @@ export {
   getActiveRealm,
   getHandler,
   getRealmSize,
-  hostConfig,
   instances,
   pushOp,
   registerHandler,
@@ -38,8 +39,8 @@ export {
   setRealmSize,
   takeOps,
   unregisterHandler,
-} from './hostConfig';
-export type { ElementInstance, HostInstance, TextInstance } from './hostConfig';
+} from './realm';
+export type { ElementInstance, HostInstance, TextInstance } from './realm';
 
 export {
   createProxyDocument,

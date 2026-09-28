@@ -10,8 +10,8 @@ import {
   pushOp,
   registerHandler,
   unregisterHandler,
-} from '../hostConfig';
-import type { ElementInstance, HostInstance, TextInstance } from '../hostConfig';
+} from '../realm';
+import type { ElementInstance, HostInstance, TextInstance } from '../realm';
 import type { EventPayload, Op } from '../../ops';
 
 import {

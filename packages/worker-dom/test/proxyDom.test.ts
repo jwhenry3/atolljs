@@ -4,7 +4,7 @@
  * point: mutations emit ops onto a realm queue; reads are served locally.
  */
 import { describe, expect, it } from 'vitest';
-import { runInRealm, takeOps, getHandler, getRealmSize, setRealmSize } from '../src/worker/hostConfig';
+import { runInRealm, takeOps, getHandler, getRealmSize, setRealmSize } from '../src/worker/realm';
 import {
   createProxyDocument,
   installDomShim,

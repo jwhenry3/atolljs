@@ -59,9 +59,9 @@ import {
   type InternalDocument,
   type ProxyDocument,
 } from './proxyDom';
+import { hostConfig } from './hostConfig';
 import {
   getHandler,
-  hostConfig,
   instances,
   pushOp,
   ROOT_CONTAINER,
@@ -70,7 +70,7 @@ import {
   setDoorbellContract,
   setRealmSize,
   takeOps,
-} from './hostConfig';
+} from './realm';
 import type { EventPayload, IslandWorkerMethods, Op } from '../ops';
 
 /**
