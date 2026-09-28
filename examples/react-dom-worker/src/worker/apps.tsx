@@ -13,7 +13,7 @@
  */
 
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
-import { emit, Slot, type EventPayload } from '@jwhenry123/mesh-worker-dom/worker';
+import { emit, islandApp, Slot, type EventPayload } from '@jwhenry123/mesh-worker-dom/worker';
 import {
   Bar,
   CartesianGrid,
@@ -305,8 +305,12 @@ export interface ChartsProps {
  * honest: ResponsiveContainer's getBoundingClientRect measurement has no
  * channel (see the geometry caveat), so the shell feeds measured size via
  * props instead.
+ *
+ * Stamped via islandApp('charts', …) so React shells can mount it by
+ * reference — <Island app={ChartsApp} props={{ width }} /> — with props
+ * inferred from ChartsProps and the registry key surviving minification.
  */
-export function ChartsApp({ width = 600, height = 260 }: ChartsProps) {
+export const ChartsApp = islandApp('charts', function ChartsApp({ width = 600, height = 260 }: ChartsProps) {
   const [picked, setPicked] = useState<RegionStat | null>(null);
 
   return (
@@ -346,4 +350,4 @@ export function ChartsApp({ width = 600, height = 260 }: ChartsProps) {
       </ComposedChart>
     </section>
   );
-}
+});

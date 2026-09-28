@@ -18,6 +18,8 @@ export type {
   Realm,
 } from './defineIslandWorker';
 
+export { islandApp, islandAppNameOf } from '../app';
+
 export {
   allocId,
   bumpOpsVersion,

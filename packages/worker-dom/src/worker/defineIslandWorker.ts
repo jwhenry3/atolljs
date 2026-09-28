@@ -143,6 +143,17 @@ export function defineIslandWorker(
   options: DefineIslandWorkerOptions,
 ): WorkerDefinition<DoorbellSpec, IslandWorkerMethods> {
   const { apps } = options;
+  // A stamped app mounted under a DIFFERENT key means <Island app={Comp}>
+  // resolves a name the registry doesn't hold — flag it at definition time.
+  for (const [key, app] of Object.entries(apps)) {
+    const stamped = (app as { islandAppName?: unknown }).islandAppName;
+    if (typeof stamped === 'string' && stamped !== '' && stamped !== key) {
+      console.warn(
+        `[defineIslandWorker] app registered as "${key}" but stamped "${stamped}" — ` +
+          `component-reference mounts resolve "${stamped}" and will fail. Fix the key or the stamp.`,
+      );
+    }
+  }
   const sharedMemory = options.sharedMemory ?? renderMemory;
   // Point bumpOpsVersion at the declared contract (it's the same object as
   // renderMemory unless a custom doorbell instance was passed).

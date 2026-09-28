@@ -5,14 +5,15 @@
  *
  * ```tsx
  * import { Island } from '@jwhenry123/mesh-worker-dom/react';
+ * import { ChartsApp } from './worker/apps'; // the islandApp-stamped component
  *
  * const renderWorker = () =>
  *   new Worker(new URL('./render.worker.ts', import.meta.url), { type: 'module' });
  *
  * <Island
  *   worker={renderWorker}
- *   app="charts"
- *   props={{ width: 520, height: 280 }}
+ *   app={ChartsApp}              // or the registry name string 'charts'
+ *   props={{ width: 520 }}       // inferred from ChartsApp's own props
  *   onEvent={(name, payload) => setStatus(`${name}: ${JSON.stringify(payload)}`)}
  *   slots={{ gmap: (el) => (el ? mountMainThreadMap(el) : teardownMap()) }}
  * />
@@ -30,15 +31,30 @@
  *   swap them via React `key`, not by passing a new value mid-life.
  * - Unmount destroys the island and terminates its worker (one island owns
  *   one client — even a `client` prop is that island's worker).
+ *
+ * The `app` prop accepts the registry name OR the app itself — a React
+ * component, an `islandApp`-stamped value, or an `{ imperative }` def. Pass
+ * the component to get `props` inference; `islandApp('name', Comp)` is the
+ * minification-proof way to bind a component to its registry key (bare
+ * function/displayName resolution is a dev convenience).
  */
-import { forwardRef, useEffect, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import type { HTMLAttributes, ReactElement, Ref } from 'react';
+import { islandAppNameOf, type IslandAppProps } from './app';
 import { connectIslandWorker, mountIsland } from './island';
 import type { IslandClient, IslandHandle, IslandWorkerOptions } from './island';
 
-export interface IslandProps extends Omit<HTMLAttributes<HTMLDivElement>, 'children'> {
-  /** Registry app name — a key of `defineIslandWorker({ apps })`. */
-  app: string;
+/** What `app` accepts: the registry name, or a component/def to resolve. */
+export type IslandAppRef<A> = A | string;
+
+export interface IslandProps<A = string>
+  extends Omit<HTMLAttributes<HTMLDivElement>, 'children'> {
+  /**
+   * Which app to mount — the `apps` registry key ('charts') or the app
+   * itself (`ChartsApp`, an `islandApp(...)`-stamped def, `{ imperative }`).
+   * A reference infers `props` from its own signature.
+   */
+  app: IslandAppRef<A>;
   /**
    * How to reach the worker — either a bundler-detectable factory
    * `() => new Worker(new URL('./x.worker.ts', import.meta.url))` (the
@@ -49,7 +65,7 @@ export interface IslandProps extends Omit<HTMLAttributes<HTMLDivElement>, 'child
   /** Extra pool options — concurrency, taskTimeout, respawn… (poolSize stays 1). */
   workerOptions?: IslandWorkerOptions;
   /** Initial + updated root props — serialized to the worker. */
-  props?: Record<string, unknown>;
+  props?: IslandAppProps<A>;
   /** Island → shell channel: every `emit` op lands here. */
   onEvent?: (name: string, payload: unknown) => void;
   /**
@@ -64,24 +80,24 @@ export interface IslandProps extends Omit<HTMLAttributes<HTMLDivElement>, 'child
   onReady?: (island: IslandHandle) => void;
   /** Mount/update errors surface here instead of an unhandled rejection. */
   onError?: (err: unknown) => void;
+  /** The container div (React 19 ref-as-prop). */
+  ref?: Ref<HTMLDivElement>;
 }
 
-export const Island = forwardRef<HTMLDivElement, IslandProps>(function Island(
-  {
-    app,
-    worker,
-    client: clientProp,
-    workerOptions,
-    props,
-    onEvent,
-    onActivity,
-    slots,
-    onReady,
-    onError,
-    ...rest
-  },
-  forwardedRef: Ref<HTMLDivElement>,
-): ReactElement {
+export function Island<A = string>({
+  app,
+  worker,
+  client: clientProp,
+  workerOptions,
+  props,
+  onEvent,
+  onActivity,
+  slots,
+  onReady,
+  onError,
+  ref,
+  ...rest
+}: IslandProps<A>): ReactElement {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const islandRef = useRef<IslandHandle | null>(null);
 
@@ -102,13 +118,14 @@ export const Island = forwardRef<HTMLDivElement, IslandProps>(function Island(
 
   const setRefs = (el: HTMLDivElement | null): void => {
     containerRef.current = el;
-    if (typeof forwardedRef === 'function') forwardedRef(el);
-    else if (forwardedRef !== null) forwardedRef.current = el;
+    if (typeof ref === 'function') ref(el);
+    else if (ref != null) ref.current = el;
   };
 
-  // mount effect — app/worker/client identity is intentionally NOT tracked:
-  // those are mount-stable (remount via `key`). The effect re-runs only when
-  // the element itself changes, which React never does for a mounted div.
+  // mount effect — worker/client identity is intentionally NOT tracked:
+  // mount-stable (swap via `key`). `app` IS tracked — a different app means
+  // a different island: the cleanup destroys, the re-run mounts fresh.
+  const appName = islandAppNameOf(app);
   useEffect(() => {
     const el = containerRef.current;
     if (el === null) return;
@@ -118,6 +135,15 @@ export const Island = forwardRef<HTMLDivElement, IslandProps>(function Island(
       if (onErrorRef.current !== undefined) onErrorRef.current(err);
       else console.error('[Island] mount failed:', err);
     };
+
+    if (appName === undefined) {
+      report(
+        new Error(
+          '<Island> could not resolve an app name — pass the registry key or stamp the app with islandApp(name, app)',
+        ),
+      );
+      return;
+    }
 
     const client =
       clientProp ??
@@ -142,8 +168,10 @@ export const Island = forwardRef<HTMLDivElement, IslandProps>(function Island(
         const handle = await mountIsland({
           client,
           el,
-          app,
-          props: propsRef.current ?? {},
+          app: appName,
+          // Serialized across the wire either way — cast preserves inference
+          // for props types without an index signature.
+          props: (propsRef.current ?? {}) as Record<string, unknown>,
           onEvent: (name, payload) => onEventRef.current?.(name, payload),
           onActivity: () => onActivityRef.current?.(),
           slots: slotProxy,
@@ -166,7 +194,7 @@ export const Island = forwardRef<HTMLDivElement, IslandProps>(function Island(
       island?.destroy();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [app, clientProp]);
+  }, [app, appName, clientProp]);
 
   // props → updateProps, deduped by wire-serialized identity (the same bytes
   // produce the same render — a repeat send would be a wasted round-trip).
@@ -174,7 +202,7 @@ export const Island = forwardRef<HTMLDivElement, IslandProps>(function Island(
   useEffect(() => {
     const island = islandRef.current;
     if (island === null) return; // mount picks up propsRef.current
-    island.updateProps(props ?? {}).catch((err) => {
+    island.updateProps((props ?? {}) as Record<string, unknown>).catch((err) => {
       if (onErrorRef.current !== undefined) onErrorRef.current(err);
       else console.error('[Island] updateProps failed:', err);
     });
@@ -182,6 +210,6 @@ export const Island = forwardRef<HTMLDivElement, IslandProps>(function Island(
   }, [propsJson]);
 
   return <div ref={setRefs} {...rest} />;
-});
+}
 
 export default Island;

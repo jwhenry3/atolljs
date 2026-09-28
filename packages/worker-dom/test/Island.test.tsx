@@ -8,7 +8,9 @@ import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { InProcessWorker } from '../../../test/inProcessWorker';
+import { islandApp, islandAppNameOf } from '../src/index';
 import type { IslandHandle } from '../src/index';
+import { echoApp } from './fixtures/echo.worker';
 
 vi.stubGlobal('Worker', InProcessWorker);
 InProcessWorker.handlerModules = [() => import('./fixtures/echo.worker')];
@@ -23,8 +25,12 @@ beforeAll(async () => {
 const renderWorker = () =>
   new Worker(new URL('./fixtures/echo.worker.ts', import.meta.url), { type: 'module' });
 
+/** A typed component handle — proves `props` infers from the reference's own
+ *  signature; the registry's 'echo' app is what actually renders. */
+const TypedEcho = islandApp('echo', (_props: { text: string }) => null);
+
 describe('<Island/>', () => {
-  it('mounts, relays events, re-props, and unmounts cleanly', async () => {
+  it('mounts by app reference, relays events, re-props, unmounts cleanly', async () => {
     const host = document.createElement('div');
     document.body.appendChild(host);
     const emitted: Array<{ name: string; payload: unknown }> = [];
@@ -33,7 +39,7 @@ describe('<Island/>', () => {
     const tree = (
       <Island
         worker={renderWorker}
-        app="echo"
+        app={echoApp}
         props={{ text: 'hello island' }}
         onEvent={(name, payload) => emitted.push({ name, payload })}
         onReady={(h) => (handle = h)}
@@ -57,10 +63,9 @@ describe('<Island/>', () => {
       root.render(
         <Island
           worker={renderWorker}
-          app="echo"
+          app={echoApp}
           props={{ text: 'updated' }}
           onEvent={(name, payload) => emitted.push({ name, payload })}
-          onReady={(h) => (handle = h)}
         />,
       );
     });
@@ -79,7 +84,7 @@ describe('<Island/>', () => {
       root.render(
         <Island
           worker={renderWorker}
-          app="echo"
+          app={echoApp}
           props={{ text: 'updated' }}
           onEvent={(name, payload) => emitted.push({ name, payload })}
         />,
@@ -96,5 +101,16 @@ describe('<Island/>', () => {
       root.unmount();
     });
     expect(worker.terminated).toBe(true);
+  });
+
+  it('resolves stamped names from component references — with prop inference', () => {
+    // The compile-time contract this whole feature exists for: props type
+    // comes from the component signature, not Record<string, unknown>.
+    const good = <Island app={TypedEcho} props={{ text: 'x' }} worker={renderWorker} />;
+    expect(good.props.app).toBe(TypedEcho);
+    // @ts-expect-error — `missing` is not a prop of TypedEcho's signature
+    const _bad = <Island app={TypedEcho} props={{ missing: 1 }} worker={renderWorker} />;
+    void _bad;
+    expect(islandAppNameOf(TypedEcho)).toBe('echo');
   });
 });

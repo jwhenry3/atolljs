@@ -47,20 +47,38 @@ wraps the same calls in a component:
 
 ```tsx
 import { Island } from '@jwhenry123/mesh-worker-dom/react';
+import { ChartsApp } from './worker/apps';
 
 const renderWorker = () =>
   new Worker(new URL('./render.worker.ts', import.meta.url), { type: 'module' });
 
 <Island
   worker={renderWorker}          // or client={connectIslandWorker({...})}
-  app="dashboard"
-  props={{ user }}
+  app={ChartsApp}                // or the registry name 'charts'
+  props={{ width: 520 }}         // inferred from ChartsApp's own props
   onEvent={(name, payload) => ...}
   slots={{ preview: (el) => (el ? mountCanvas(el) : teardown()) }}
   onReady={(island) => console.log(island.pid)}
   className="island-box"
 />
 ```
+
+**Mount by reference, not by string.** `app` accepts the registry key or the
+app itself — stamp it once with `islandApp` and both sides share one handle:
+
+```ts
+// worker/apps.tsx — the stamp is a data property, minification-proof
+export const ChartsApp = islandApp('charts', function ChartsApp(props: ChartsProps) { ... });
+export const mapApp = islandApp('map', { imperative: buildMap });
+// worker entry: apps: { charts: ChartsApp, map: mapApp }   (defineIslandWorker
+// warns if a stamp and its registry key drift apart)
+```
+
+`IslandAppProps` infers `props` from the reference's signature — a React
+component's own props or an imperative def's props parameter — so
+`props={{missing: 1}}` fails to compile. Bare (unstamped) components fall
+back to `displayName`/function name for the wire key — dev convenience;
+bundlers mangle `fn.name`, which is what the stamp exists for.
 
 The rendered `div` is the island's container — `className`/`style`/`data-*`
 spread onto it. Mounting is async (worker spawn + first op batch in an

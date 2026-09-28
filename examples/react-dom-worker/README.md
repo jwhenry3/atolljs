@@ -26,7 +26,8 @@ components — reconciled into the realm's own root — or
 main thread**: `src/island.ts` is a dumb op applier plus an event sink per
 island. (If your shell *is* a React app, `@jwhenry123/mesh-worker-dom/react`
 exports `<Island/>` — the same mount/updateProps/destroy lifecycle as a
-component.)
+component, and `app` can take the `islandApp`-stamped component itself —
+`<Island app={ChartsApp} props={{ width }}/>` — for inferred props.)
 
 **A microfrontend is not limited to one instance.** Islands are identified
 by their worker, not their app name — mount `'data-table'` twice and you get
