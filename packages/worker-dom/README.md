@@ -91,11 +91,47 @@ island rules below apply unchanged.
 
 `examples/react-dom-worker/react-shell.html` mounts all seven demo islands
 this way — worth a look for the mediation pattern (`onEvent → setState →
-<Island props>` replaces hand-wired `updateProps`). One caveat on mounting
-by component reference: importing the worker component into the shell
-pulls its dependency graph into the shell bundle (recharts, in that demo).
-Use references where inference pays off; string registry keys stay fully
-supported for everything else.
+<Island props>` replaces hand-wired `updateProps`).
+
+### Worker-loaded component proxies
+
+`islandComponent` and `lazyIsland` go one step further: they return a
+component that takes the **worker app's props inline** — the island looks
+and types like a local component. Every prop that isn't a shell concern
+(`worker`/`client`/`onEvent`/`onReady`/`onError`/`onActivity`/`slots`/
+`fallback`/`containerProps`) forwards as the island's props.
+
+```tsx
+import { islandComponent, lazyIsland } from '@jwhenry123/mesh-worker-dom/react';
+import type { TableProps } from './worker/apps'; // type-only: erased, zero bundle cost
+
+// The pure-contract proxy — the shell NEVER imports the implementation.
+// Registry key + props type IS the contract; the worker owns the code.
+const TableIsland = islandComponent<TableProps>('data-table');
+<TableIsland worker={renderWorker} filter={filter} desc onEvent={…} />
+
+// The React.lazy mirror — suspends while the module loads, then mounts by
+// stamped component reference. The dynamic import is a real split point:
+// the worker component's deps only load when the island mounts.
+const ChartsIsland = lazyIsland(() =>
+  import('./worker/apps').then((m) => ({ default: m.ChartsApp })),
+);
+<Suspense fallback="loading…">
+  <ChartsIsland worker={renderWorker} width={520} />
+</Suspense>
+```
+
+One asymmetry vs `React.lazy`, by construction: the *loader* suspends but
+the *mount* can't — suspended trees never commit, and mounting needs the
+container div in the DOM. The mount window is covered by the `fallback`
+prop instead of Suspense. `lazyIsland` also fixes the bundle caveat from
+below: static `app={ChartsApp}` imports pull the worker component's deps
+(recharts in the demo: +~500 kB) into the shell chunk eagerly; the lazy
+path splits them out, and `islandComponent` never imports them at all.
+
+`islandComponent` overloads: `islandComponent<P>('name')` for the
+type-contract form above, or `islandComponent(StampedApp)` to infer `P`
+from a stamped reference the shell already has.
 
 ## Island rules
 

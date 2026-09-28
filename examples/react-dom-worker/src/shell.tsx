@@ -6,23 +6,24 @@
  * What changes versus main.ts:
  *   - `mountIsland({ el, ... })` becomes `<Island app={…} onEvent={…} />` —
  *     the div it renders IS the island container; badges come from onReady.
+ *     The data-table and charts islands go further: `islandComponent` and
+ *     `lazyIsland` proxies make the worker app render like a LOCAL
+ *     component — `<TableIsland filter={filter} />` — with the same props
+ *     contract, no `props={}` nesting.
  *   - Mediation is real data flow: a controls emit is setState, the table's
  *     props are that state — the component's updateProps call replaces the
  *     hand-wired `table.updateProps(...)` (and dedups repeats).
- *   - app takes the stamped component itself for the charts island —
- *     `<Island app={ChartsApp} props={{ width }} />` — so props typecheck
- *     against ChartsProps, not a string name.
  *   - setMode/badges/stats ride ordinary React state + a handles map.
  *
  * The islands themselves are unchanged — the demo proves the op protocol
  * serves both shell styles: framework-free (index.html) and React.
  */
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, Suspense } from 'react';
 import type { ReactElement, ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { Island } from '@jwhenry123/mesh-worker-dom/react';
+import { Island, islandComponent, lazyIsland } from '@jwhenry123/mesh-worker-dom/react';
 import type { IslandHandle, Mode } from '@jwhenry123/mesh-worker-dom';
-import { ChartsApp } from './worker/apps';
+import type { ChartsProps, TableProps } from './worker/apps';
 // Leaflet's stylesheet is shell-side: the worker fabricates the DOM Leaflet
 // builds but CSS was always the shell's job.
 import 'leaflet/dist/leaflet.css';
@@ -30,6 +31,22 @@ import 'leaflet/dist/leaflet.css';
 /** One fresh worker per island — poolSize is pinned to 1 inside connectIslandWorker. */
 const renderWorker = (): Worker =>
   new Worker(new URL('./worker/render.worker.ts', import.meta.url), { type: 'module' });
+
+/*
+ * The two proxy styles — both render the WORKER app as if it were a local
+ * component (props inline, not nested under `props`):
+ *
+ *   lazyIsland      — React.lazy mirrored: suspends on the dynamic import
+ *                     (also code-splits recharts out of this bundle), then
+ *                     mounts by stamped component reference.
+ *   islandComponent — the pure-contract proxy: the shell NEVER imports the
+ *                     implementation. The registry key + a type-only props
+ *                     import is the whole contract — zero bundle cost.
+ */
+const ChartsIsland = lazyIsland(
+  () => import('./worker/apps').then((m) => ({ default: m.ChartsApp })),
+);
+const TableIsland = islandComponent<TableProps>('data-table');
 
 /* ── Transclusion demo: a live canvas the SHELL owns inside a worker tree ─ */
 
@@ -173,13 +190,12 @@ export function Shell({ worker = renderWorker }: { worker?: () => Worker }): Rea
       </IslandPanel>
 
       <IslandPanel title="app: data-table" badge={pids.table}>
-        <Island
+        <TableIsland
           worker={renderWorker}
-          app="data-table"
           // The mediation IS this line — controls' emits land as props here.
-          props={{ filter, desc }}
-          className="island-root"
-          id="island-table"
+          filter={filter}
+          desc={desc}
+          containerProps={{ className: 'island-root', id: 'island-table' }}
           onReady={ready('table')}
           onActivity={bump}
           onEvent={(name, payload) => {
@@ -195,12 +211,11 @@ export function Shell({ worker = renderWorker }: { worker?: () => Worker }): Rea
         title="app: data-table (second instance — same microfrontend, different worker + props)"
         badge={pids.table2}
       >
-        <Island
+        <TableIsland
           worker={renderWorker}
-          app="data-table"
-          props={{ filter: 'eu-central', desc: true }}
-          className="island-root"
-          id="island-table-2"
+          filter="eu-central"
+          desc
+          containerProps={{ className: 'island-root', id: 'island-table-2' }}
           onReady={ready('table2')}
           onActivity={bump}
           onEvent={(name, payload) => {
@@ -243,23 +258,30 @@ export function Shell({ worker = renderWorker }: { worker?: () => Worker }): Rea
       </IslandPanel>
 
       <IslandPanel
-        title="app: charts (real recharts — mounted by component reference)"
+        title="app: charts (real recharts — lazyIsland: suspends on the import, mounts by reference)"
         badge={pids.charts}
       >
-        <Island
-          worker={renderWorker}
-          // The component-reference mount — props below infer as ChartsProps.
-          app={ChartsApp}
-          props={{ width: 600, height: 260 }}
-          className="island-root"
-          onReady={ready('charts')}
-          onActivity={bump}
-          onEvent={(name, payload) => {
-            const p = payload as { region?: string; incidents?: number };
-            if (name === 'chartClicked')
-              setStatus(`charts island emitted chartClicked → ${p.region} (${p.incidents} incidents)`);
-          }}
-        />
+        <Suspense
+          fallback={<div className="island-root" style={{ color: '#7d8a9c' }}>loading charts…</div>}
+        >
+          <ChartsIsland
+            worker={renderWorker}
+            // Inline props — the same contract as the worker component.
+            width={600}
+            height={260}
+            fallback={<div style={{ color: '#7d8a9c' }}>mounting worker…</div>}
+            containerProps={{ className: 'island-root' }}
+            onReady={ready('charts')}
+            onActivity={bump}
+            onEvent={(name, payload) => {
+              const p = payload as { region?: string; incidents?: number };
+              if (name === 'chartClicked')
+                setStatus(
+                  `charts island emitted chartClicked → ${p.region} (${p.incidents} incidents)`,
+                );
+            }}
+          />
+        </Suspense>
       </IslandPanel>
 
       <IslandPanel

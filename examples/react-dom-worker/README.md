@@ -65,13 +65,19 @@ plus hand-wired `island.updateProps` mediation — its bundle is ~4 kB.
 becomes a component, badges ride `onReady` → state, and the
 controls→table mediation is literally `onEvent → setState →
 <Island props={…}>` — the component's deduped `updateProps` replaces the
-hand-wiring. The charts island mounts by component reference
-(`app={ChartsApp}`) so its props infer as `ChartsProps`. One honest
-trade-off to know: a component reference means *importing the worker
-component into the shell bundle* — `apps.tsx` pulls recharts in, which is
-why the react-shell chunk is ~730 kB while the framework-free shell stays
-~4 kB. Import the app reference only where inference pays off; string
-registry keys still work everywhere.
+hand-wiring. Two islands go further and mount through **worker-loaded
+proxies**, where the worker app types like a local component with props
+inline:
+
+- `TableIsland = islandComponent<TableProps>('data-table')` — the
+  pure-contract proxy: a type-only props import + registry key, the shell
+  never imports the implementation.
+- `ChartsIsland = lazyIsland(() => import('./worker/apps').then(m => ({default: m.ChartsApp})))`
+  — the React.lazy mirror: `<Suspense>` covers the module load (which
+  code-splits recharts out of the shell chunk — react-shell ~230 kB), the
+  `fallback` prop covers the worker-mount window.
+
+String registry keys still work everywhere (`<Island app="vanilla"/>`).
 
 **Worker-side proxy DOM — the "WorkerDOM" pattern.** Transclusion covers
 libraries that must run on the main thread; `src/worker/proxyDom.ts` covers
@@ -184,7 +190,7 @@ op protocol + doorbell contract. The example keeps:
 - `src/worker/map.ts` — the map island app: `installDomShim` + dynamic `import('leaflet')`, then unmodified Leaflet 1.9 (`L.map`, tile layer, divIcon markers, a `L.Control.extend` place picker) on the proxy DOM
 - `src/vendor/miniwidget.js` (+ `.d.ts`) — a plain-JS "third-party" widget: global `document`, `innerHTML` template, delegated `document.addEventListener` — mounted unmodified inside the island
 - `src/main.ts` — the thin framework-free shell: layout, one `connectIslandWorker({ worker })` + `mountIsland()` per island, event mediation, global transport toggle, `import 'leaflet/dist/leaflet.css'`
-- `src/shell.tsx` + `react-shell.html` — the React shell: the same seven islands mounted through `<Island/>`, state-driven mediation, `app={ChartsApp}` component-reference mount
+- `src/shell.tsx` + `react-shell.html` — the React shell: the same seven islands mounted through `<Island/>` plus the `islandComponent`/`lazyIsland` proxies (inline worker-app props, Suspense for the module load, code-split recharts), state-driven mediation
 - `test/islands.test.ts` — in-process E2E (InProcessWorker + happy-dom): distinct pids, emit → updateProps mediation, doorbell flush, remount semantics, same-app multi-instance, vendored-widget delegation
 - `test/map.test.ts` — in-process E2E for the Leaflet island: tiles, markers, controls, delegated marker/place clicks, drag-pan, wheel zoom, `zoomChanged`/`markerClicked`/`placeSelected` emits
 - `test/charts.test.ts` — in-process E2E for the recharts island: main surface + descendants carry the SVG namespace (zIndex portals included), grid/axis/bar markup lands, bar click emits `chartClicked` with the datum

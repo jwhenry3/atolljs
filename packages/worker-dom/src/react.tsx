@@ -38,9 +38,9 @@
  * minification-proof way to bind a component to its registry key (bare
  * function/displayName resolution is a dev convenience).
  */
-import { useEffect, useRef } from 'react';
-import type { HTMLAttributes, ReactElement, Ref } from 'react';
-import { islandAppNameOf, type IslandAppProps } from './app';
+import { useEffect, useRef, useState } from 'react';
+import type { HTMLAttributes, ReactElement, ReactNode, Ref } from 'react';
+import { islandAppNameOf, type IslandAppLike, type IslandAppProps } from './app';
 import { connectIslandWorker, mountIsland } from './island';
 import type { IslandClient, IslandHandle, IslandWorkerOptions } from './island';
 
@@ -210,6 +210,187 @@ export function Island<A = string>({
   }, [propsJson]);
 
   return <div ref={setRefs} {...rest} />;
+}
+
+/* ── Worker-loaded component proxies ──────────────────────────────────────
+ *
+ * `islandComponent`/`lazyIsland` close the last gap between a worker app and
+ * a local component: the returned component takes the WORKER app's props
+ * inline — `<ChartsApp width={520}/>` — and routes everything that isn't a
+ * shell concern through as the island's props. `lazyIsland` additionally
+ * suspends while the component's module loads, exactly like `React.lazy`
+ * (and gives bundlers a code-split boundary). `islandComponent` never loads
+ * the implementation at all — the worker owns it; the shell-side value is a
+ * pure contract (registry name + props type).
+ *
+ * One asymmetry vs React.lazy, by construction: the loader phase suspends,
+ * but the MOUNT phase can't — suspended trees never commit, and mounting
+ * needs the container div in the DOM first. The mount window is covered by
+ * the `fallback` prop instead of `<Suspense>`.
+ */
+
+/**
+ * Props consumed by a proxy component itself — everything else forwards to
+ * the island as its props.
+ */
+export interface IslandShellProps {
+  /** How to reach the worker — see IslandProps.worker/client. */
+  worker?: (() => Worker) | URL;
+  client?: IslandClient;
+  workerOptions?: IslandWorkerOptions;
+  /** Island → shell channel: every `emit` op lands here. */
+  onEvent?: (name: string, payload: unknown) => void;
+  /** Fired after each applied op batch. */
+  onActivity?: () => void;
+  /** The mounted handle (pid, updateProps, flush, setMode…) once ready. */
+  onReady?: (island: IslandHandle) => void;
+  /** Mount/update errors surface here instead of an unhandled rejection. */
+  onError?: (err: unknown) => void;
+  /** Transclusion slots — see IslandProps.slots. */
+  slots?: Record<string, (el: HTMLElement | null) => void>;
+  /** Rendered while the worker mounts — the lazy-side fallback. */
+  fallback?: ReactNode;
+  /**
+   * Attributes for the island's container div (className/id/style/data-*).
+   * `onError` is omitted — it collides with the mount-error callback.
+   */
+  containerProps?: Omit<HTMLAttributes<HTMLDivElement>, 'children' | 'onError'>;
+}
+
+const SHELL_PROP_KEYS: ReadonlySet<string> = new Set([
+  'worker',
+  'client',
+  'workerOptions',
+  'onEvent',
+  'onActivity',
+  'onReady',
+  'onError',
+  'slots',
+  'fallback',
+  'containerProps',
+]);
+
+/** Every non-shell prop is the island's props — the component contract. */
+const splitProxyProps = (
+  raw: Record<string, unknown>,
+): { shell: IslandShellProps; islandProps: Record<string, unknown> } => {
+  const shell: Record<string, unknown> = {};
+  const islandProps: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(raw)) {
+    if (SHELL_PROP_KEYS.has(key)) shell[key] = value;
+    else islandProps[key] = value;
+  }
+  return { shell: shell as IslandShellProps, islandProps };
+};
+
+function IslandProxy({
+  app,
+  ...raw
+}: { app: IslandAppRef<unknown> } & Record<string, unknown>): ReactElement {
+  const { shell, islandProps } = splitProxyProps(raw);
+  const [ready, setReady] = useState(false);
+  return (
+    <>
+      {!ready ? shell.fallback : null}
+      <Island
+        app={app}
+        worker={shell.worker}
+        client={shell.client}
+        workerOptions={shell.workerOptions}
+        props={islandProps}
+        onEvent={shell.onEvent}
+        onActivity={shell.onActivity}
+        slots={shell.slots}
+        onReady={(h) => {
+          shell.onReady?.(h);
+          setReady(true);
+        }}
+        onError={shell.onError}
+        {...shell.containerProps}
+      />
+    </>
+  );
+}
+
+/**
+ * `islandComponent<P>('charts')` — a proxy component for a worker app that
+ * the shell NEVER imports. `P` is the contract (usually a `import type` of
+ * the worker component's props); the string is the registry key.
+ *
+ * ```tsx
+ * import type { TableProps } from './worker/apps';
+ * const TableIsland = islandComponent<TableProps>('data-table');
+ * <TableIsland worker={renderWorker} filter={filter} desc={desc} />
+ * ```
+ */
+export function islandComponent<P extends object = Record<string, unknown>>(
+  app: string,
+): (props: P & IslandShellProps) => ReactElement;
+export function islandComponent<A extends IslandAppLike>(
+  app: A,
+): (props: IslandAppProps<A> & IslandShellProps) => ReactElement;
+export function islandComponent(
+  app: string | IslandAppLike,
+): (props: object) => ReactElement {
+  const Proxy = (props: Record<string, unknown>): ReactElement => (
+    <IslandProxy app={app as IslandAppLike} {...props} />
+  );
+  (Proxy as { displayName?: string }).displayName =
+    `IslandComponent(${islandAppNameOf(app) ?? 'unknown'})`;
+  return Proxy as (props: object) => ReactElement;
+}
+
+type LazyModule<A> = A | { default: A };
+
+/** The app a lazy module resolves to — unwraps `{ default: A }`, passes A through. */
+export type LazyResolvedApp<T extends Promise<unknown>> =
+  Awaited<T> extends { default: infer D } ? D : Awaited<T>;
+
+/**
+ * `lazyIsland(() => import('./worker/apps').then(m => ({ default: m.ChartsApp })))`
+ * — the `React.lazy` mirror for worker apps. The returned component suspends
+ * while the module loads (wrap it in `<Suspense>`), then proxies all props
+ * to the island. The dynamic import gives bundlers a split point, so the
+ * worker component's dependencies only load when the island mounts.
+ *
+ * ```tsx
+ * const ChartsIsland = lazyIsland(() => import('./worker/apps').then(m => ({ default: m.ChartsApp })));
+ * <Suspense fallback="loading…"><ChartsIsland width={520} worker={renderWorker} /></Suspense>
+ * ```
+ */
+export function lazyIsland<T extends Promise<LazyModule<IslandAppLike>>>(
+  loader: () => T,
+): (props: IslandAppProps<LazyResolvedApp<T>> & IslandShellProps) => ReactElement {
+  let state:
+    | { promise: Promise<unknown>; value?: unknown; error?: unknown }
+    | undefined;
+  const load = (): NonNullable<typeof state> => {
+    state ??= {
+      promise: Promise.resolve()
+        .then(loader)
+        .then((mod) => {
+          const value =
+            mod !== null && typeof mod === 'object' && 'default' in mod ? mod.default : mod;
+          state!.value = value;
+          return value;
+        })
+        .catch((err: unknown) => {
+          state!.error = err;
+          throw err;
+        }),
+    };
+    return state;
+  };
+  function LazyProxy(
+    props: IslandAppProps<LazyResolvedApp<T>> & IslandShellProps,
+  ): ReactElement {
+    const s = load();
+    if (s.error !== undefined) throw s.error;
+    if (s.value === undefined) throw s.promise; // Suspense — same as React.lazy
+    return <IslandProxy app={s.value} {...(props as Record<string, unknown>)} />;
+  }
+  (LazyProxy as { displayName?: string }).displayName = 'LazyIsland';
+  return LazyProxy;
 }
 
 export default Island;

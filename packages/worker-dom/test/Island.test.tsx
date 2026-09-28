@@ -5,7 +5,7 @@
  * fake being the thread boundary.
  */
 import { beforeAll, describe, expect, it, vi } from 'vitest';
-import { act } from 'react';
+import { act, Suspense } from 'react';
 import { createRoot } from 'react-dom/client';
 import { InProcessWorker } from '../../../test/inProcessWorker';
 import { islandApp, islandAppNameOf } from '../src/index';
@@ -18,8 +18,15 @@ InProcessWorker.handlerModules = [() => import('./fixtures/echo.worker')];
 (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
 
 let Island: typeof import('../src/react').Island;
+let islandComponent: typeof import('../src/react').islandComponent;
+let lazyIsland: typeof import('../src/react').lazyIsland;
+// In-process artifact: once a worker island calls installDomShim, ambient
+// `document` resolves to its PROXY document (shared globalThis) — capture the
+// real one before any mounts. Real browsers never share globals across threads.
+let realDoc: Document;
 beforeAll(async () => {
-  ({ Island } = await import('../src/react'));
+  realDoc = document;
+  ({ Island, islandComponent, lazyIsland } = await import('../src/react'));
 });
 
 const renderWorker = () =>
@@ -31,8 +38,8 @@ const TypedEcho = islandApp('echo', (_props: { text: string }) => null);
 
 describe('<Island/>', () => {
   it('mounts by app reference, relays events, re-props, unmounts cleanly', async () => {
-    const host = document.createElement('div');
-    document.body.appendChild(host);
+    const host = realDoc.createElement('div');
+    realDoc.body.appendChild(host);
     const emitted: Array<{ name: string; payload: unknown }> = [];
     let handle: IslandHandle | undefined;
 
@@ -112,5 +119,73 @@ describe('<Island/>', () => {
     const _bad = <Island app={TypedEcho} props={{ missing: 1 }} worker={renderWorker} />;
     void _bad;
     expect(islandAppNameOf(TypedEcho)).toBe('echo');
+  });
+});
+
+describe('worker-loaded component proxies', () => {
+  it('islandComponent takes the worker app\'s props inline', async () => {
+    const Echo = islandComponent<{ text: string }>('echo');
+    const host = realDoc.createElement('div');
+    realDoc.body.appendChild(host);
+    const emitted: Array<{ name: string; payload: unknown }> = [];
+
+    const root = createRoot(host);
+    await act(async () => {
+      root.render(
+        <Echo
+          worker={renderWorker}
+          text="contract props"
+          onEvent={(name, payload) => emitted.push({ name, payload })}
+          containerProps={{ className: 'proxy-box', id: 'echo-proxy' }}
+        />,
+      );
+    });
+
+    // Non-shell props flowed through as the island's props — inline, not
+    // nested under `props` — and containerProps styled the div.
+    await vi.waitFor(() =>
+      expect(host.querySelector('.echo')?.textContent).toBe('contract props'),
+    );
+    const container = host.querySelector('#echo-proxy') as HTMLElement;
+    expect(container.className).toBe('proxy-box');
+
+    act(() => {
+      host.querySelector('.ping')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await vi.waitFor(() => expect(emitted.some((e) => e.name === 'pinged')).toBe(true));
+
+    // @ts-expect-error — `missing` is not part of the proxy's contract
+    const _bad = <Echo worker={renderWorker} missing={1} />;
+    void _bad;
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('lazyIsland suspends on the loader, then mounts by stamped reference', async () => {
+    const LazyEcho = lazyIsland(() => Promise.resolve({ default: TypedEcho }));
+    const host = realDoc.createElement('div');
+    realDoc.body.appendChild(host);
+
+    const root = createRoot(host);
+    await act(async () => {
+      root.render(
+        <Suspense fallback={<div className="lazy-fallback">loading…</div>}>
+          <LazyEcho worker={renderWorker} text="lazy mounted" />
+        </Suspense>,
+      );
+    });
+
+    // The lazy phase resolves through Suspense (React.lazy semantics), then
+    // the island mounts into the committed container.
+    await vi.waitFor(() =>
+      expect(host.querySelector('.echo')?.textContent).toBe('lazy mounted'),
+    );
+    expect(host.querySelector('.lazy-fallback')).toBeNull();
+
+    await act(async () => {
+      root.unmount();
+    });
   });
 });

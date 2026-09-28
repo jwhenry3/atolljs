@@ -69,3 +69,13 @@ export type IslandAppProps<A> = A extends {
   : A extends (props: infer P) => unknown
     ? P
     : Record<string, unknown>;
+
+/**
+ * The structural shape of a mountable app — `never` params so ANY component
+ * or imperative def is assignable. Kept worker-free: importing the real
+ * `IslandApp` union from `worker/defineIslandWorker` would drag worker code
+ * into shell bundles.
+ */
+export type IslandAppLike =
+  | ((props: never) => unknown)
+  | { imperative: (doc: never, props: never) => void };
