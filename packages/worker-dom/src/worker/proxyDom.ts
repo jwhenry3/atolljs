@@ -7,10 +7,8 @@ export type { ProxyEventHandler } from './dom/node';
 export {
   ProxyElement,
 } from './dom/element';
-export type {
-  AdjacentPosition,
-  ProxyClassList,
-} from './dom/element';
+export type { AdjacentPosition } from './dom/element';
+export type { ProxyClassList } from './dom/css';
 export {
   createProxyDocument,
   realmDocFor,

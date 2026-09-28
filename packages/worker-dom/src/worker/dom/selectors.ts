@@ -76,10 +76,10 @@ export function parseSelector(selector: string): CompoundSelector[] {
 
 export function matchCompound(el: ProxyElement, c: CompoundSelector): boolean {
   if (c.tag !== undefined && el.tagName.toLowerCase() !== c.tag) return false;
-  if (c.id !== undefined && el._attrValue('id') !== c.id) return false;
+  if (c.id !== undefined && el._attrs.get('id') !== c.id) return false;
   for (const cls of c.classes) if (!el._classes.has(cls)) return false;
   for (const a of c.attrs) {
-    const v = el._attrValue(a.name);
+    const v = el._attrs.get(a.name);
     if (v === undefined) return false;
     if (a.value !== undefined && v !== a.value) return false;
   }

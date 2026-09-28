@@ -20,23 +20,14 @@ import {
   allocPhantomId,
   rejectForeignChild,
   detachFromParent,
-  hyphenate,
-  camelize,
   type ProxyEventHandler,
 } from './node';
 import { parseChildren, serializeNode } from './html';
 import { parseSelector, matchCompound, matchesChain } from './selectors';
+import { classListFor, styleProxyFor, datasetProxyFor, type ProxyClassList } from './css';
 import type { InternalDocument } from './document';
 
 /* ── ProxyElement ──────────────────────────────────────────────────────── */
-
-export interface ProxyClassList {
-  add(...tokens: string[]): void;
-  remove(...tokens: string[]): void;
-  toggle(token: string, force?: boolean): boolean;
-  contains(token: string): boolean;
-  readonly value: string;
-}
 
 /** Positions `insertAdjacentHTML`/`insertAdjacentElement` accept. */
 export type AdjacentPosition = 'beforebegin' | 'afterbegin' | 'beforeend' | 'afterend';
@@ -46,9 +37,6 @@ export class ProxyElement extends ProxyNode {
   readonly _attrs = new Map<string, string>();
   _classes = new Set<string>();
   readonly _styleProps: Record<string, string> = {};
-  private _styleObj: Record<string, unknown> | null = null;
-  private _datasetObj: Record<string, string> | null = null;
-  private _classListObj: ProxyClassList | null = null;
   private readonly _listeners: Array<{ type: string; fn: ProxyEventHandler; hid: number }> = [];
 
   override get nodeType(): number {
@@ -94,40 +82,7 @@ export class ProxyElement extends ProxyNode {
 
   /* classList — a live view over _classes synced to the `class` attr. */
   get classList(): ProxyClassList {
-    if (this._classListObj === null) {
-      const el = this;
-      this._classListObj = {
-        add: (...tokens) => {
-          let changed = false;
-          for (const t of tokens) {
-            if (t !== '' && !el._classes.has(t)) {
-              el._classes.add(t);
-              changed = true;
-            }
-          }
-          if (changed) el._syncClasses();
-        },
-        remove: (...tokens) => {
-          let changed = false;
-          for (const t of tokens) changed = el._classes.delete(t) || changed;
-          if (changed) el._syncClasses();
-        },
-        toggle: (token, force) => {
-          const has = el._classes.has(token);
-          const want = force ?? !has;
-          if (want === has) return has;
-          if (want) el._classes.add(token);
-          else el._classes.delete(token);
-          el._syncClasses();
-          return want;
-        },
-        contains: (token) => el._classes.has(token),
-        get value() {
-          return el._attrs.get('class') ?? '';
-        },
-      };
-    }
-    return this._classListObj;
+    return classListFor(this);
   }
 
   /**
@@ -137,40 +92,7 @@ export class ProxyElement extends ProxyNode {
    * accept kebab-case and camelize it, like the real CSSStyleDeclaration.
    */
   get style(): CSSStyleDeclaration {
-    if (this._styleObj === null) {
-      const el = this;
-      this._styleObj = new Proxy(this._styleProps as Record<string, unknown>, {
-        get: (t, prop) => {
-          if (prop === 'setProperty') {
-            return (k: string, v: string) => el._writeStyle(camelize(k), v);
-          }
-          if (prop === 'removeProperty') return (k: string) => el._writeStyle(camelize(k), '');
-          if (prop === 'getPropertyValue') return (k: string) => t[camelize(k)] ?? '';
-          if (prop === 'cssText') {
-            return Object.entries(t)
-              .map(([k, v]) => `${hyphenate(k)}: ${v};`)
-              .join(' ');
-          }
-          if (typeof prop === 'string') return t[prop] ?? '';
-          return undefined;
-        },
-        set: (_t, prop, v) => {
-          if (typeof prop === 'string') el._writeStyle(prop, String(v));
-          return true;
-        },
-        deleteProperty: (_t, prop) => {
-          if (typeof prop === 'string') el._writeStyle(prop, '');
-          return true;
-        },
-        has: (t, prop) => prop in t,
-        ownKeys: (t) => Reflect.ownKeys(t),
-        getOwnPropertyDescriptor: (t, prop) =>
-          typeof prop === 'string' && prop in t
-            ? { configurable: true, enumerable: true, value: t[prop] }
-            : undefined,
-      });
-    }
-    return this._styleObj as unknown as CSSStyleDeclaration;
+    return styleProxyFor(this);
   }
 
   /**
@@ -179,31 +101,7 @@ export class ProxyElement extends ProxyNode {
    * `delete el.dataset.x` emits the removal form.
    */
   get dataset(): DOMStringMap {
-    if (this._datasetObj === null) {
-      const el = this;
-      this._datasetObj = new Proxy({} as Record<string, string>, {
-        get: (_t, prop) =>
-          typeof prop === 'string' ? el._attrValue(`data-${hyphenate(prop)}`) : undefined,
-        set: (_t, prop, v) => {
-          if (typeof prop === 'string') el._setAttr(`data-${hyphenate(prop)}`, v);
-          return true;
-        },
-        deleteProperty: (_t, prop) => {
-          if (typeof prop === 'string') el.removeAttribute(`data-${hyphenate(prop)}`);
-          return true;
-        },
-        has: (_t, prop) =>
-          typeof prop === 'string' && el._attrs.has(`data-${hyphenate(prop)}`),
-        ownKeys: () =>
-          [...el._attrs.keys()].filter((k) => k.startsWith('data-')).map((k) => camelize(k.slice(5))),
-        getOwnPropertyDescriptor: (_t, prop) => {
-          if (typeof prop !== 'string') return undefined;
-          const v = el._attrValue(`data-${hyphenate(prop)}`);
-          return v === undefined ? undefined : { configurable: true, enumerable: true, value: v };
-        },
-      });
-    }
-    return this._datasetObj as unknown as DOMStringMap;
+    return datasetProxyFor(this);
   }
 
   /**
@@ -655,9 +553,6 @@ export class ProxyElement extends ProxyNode {
     }
     return pick(size);
   }
-  _attrValue(name: string): string | undefined {
-    return this._attrs.get(name);
-  }
   _writeStyle(key: string, value: string): void {
     this.doc._assertAlive();
     if (this._styleProps[key] === value) return;
@@ -678,11 +573,6 @@ export class ProxyElement extends ProxyNode {
     } else if (name === 'id') {
       this.doc._trackId(this);
     }
-  }
-  private _syncClasses(): void {
-    const v = [...this._classes].join(' ');
-    this._attrs.set('class', v);
-    this._op({ t: 'attr', id: this.instance.id, name: 'class', value: v === '' ? null : v });
   }
 }
 

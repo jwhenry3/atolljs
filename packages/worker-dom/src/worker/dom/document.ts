@@ -21,7 +21,8 @@ import {
   allocPhantomId,
   type ProxyEventHandler,
 } from './node';
-import { ProxyElement, ProxyClassList } from './element';
+import { ProxyElement } from './element';
+import type { ProxyClassList } from './css';
 import { parseChildren, serializeNode } from './html';
 import { parseSelector, matchCompound, matchesChain } from './selectors';
 import type { WindowShim, WindowFacadeBundle } from './window';
@@ -208,7 +209,7 @@ export class InternalDocument implements ProxyDocument {
   /** Keep the getElementById map pointing at each element's CURRENT id. */
   _trackId(el: ProxyElement): void {
     for (const [k, v] of this._ids) if (v === el) this._ids.delete(k);
-    const id = el._attrValue('id');
+    const id = el._attrs.get('id');
     if (id !== undefined && id !== '') this._ids.set(id, el);
   }
 
