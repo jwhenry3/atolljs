@@ -1,12 +1,12 @@
 /**
  * The shell — main-thread orchestration for the islands demo.
  *
- * Five islands render on this page, each inside its OWN Web Worker (one
+ * Six islands render on this page, each inside its OWN Web Worker (one
  * connectWorker client per island, pooling disabled — see island.ts for why
- * pooling can't go wider). Four run reconciled React trees; the fifth —
- * 'vanilla' — is a purely IMPERATIVE app: no React in that worker at all,
- * its DOM writes go through the worker-side proxy DOM (worker/proxyDom.ts)
- * and arrive as the same op stream. Two islands run the SAME 'data-table'
+ * pooling can't go wider). Four run reconciled React trees; 'vanilla' is a
+ * purely IMPERATIVE app (no React in that worker at all — its DOM writes go
+ * through the worker-side proxy DOM); and 'map' is a REAL unmodified
+ * Leaflet 1.9 running on the proxy DOM + DOM shim. Two islands run the SAME 'data-table'
  * app — a microfrontend isn't limited to one instance; each island is its
  * own worker, so the same app can mount as many times as you like with
  * different props. The shell:
@@ -29,6 +29,9 @@ import {
   type IslandHandle,
   type Mode,
 } from '@jwhenry123/mesh-worker-dom';
+// Leaflet's stylesheet is shell-side: the worker fabricates the DOM Leaflet
+// builds (panes, tiles, controls) but CSS was always the shell's job.
+import 'leaflet/dist/leaflet.css';
 
 /** One fresh worker per island — poolSize is pinned to 1 inside connectIslandWorker. */
 const islandWorker = (): Worker =>
@@ -205,8 +208,27 @@ async function main(): Promise<void> {
   islands.push(vanilla);
   $('badge-vanilla').textContent = `worker ${vanilla.pid}`;
 
+  // The map island — REAL Leaflet 1.9, unmodified from npm, mounted on the
+  // worker-side proxy DOM after installDomShim(). Tiles, panes, controls,
+  // drag-pan and wheel zoom all work through the op stream; the only thing
+  // shell-side is the stylesheet (imported above) and tile <img> loading.
+  const map = await mountIsland({
+    client: connectIslandWorker({ worker: islandWorker }),
+    el: $('island-map'),
+    app: 'map',
+    onEvent: (name, payload) => {
+      const p = payload as { label?: string; name?: string; zoom?: number };
+      if (name === 'markerClicked') setStatus(`map island emitted markerClicked → ${p.label}`);
+      if (name === 'placeSelected') setStatus(`map island emitted placeSelected → ${p.name}`);
+      if (name === 'zoomChanged') setStatus(`map island emitted zoomChanged → zoom ${p.zoom}`);
+    },
+    onActivity: renderStats,
+  });
+  islands.push(map);
+  $('badge-map').textContent = `worker ${map.pid}`;
+
   setMode('push');
-  setStatus('five islands mounted — two share an app, one runs no React at all');
+  setStatus('six islands mounted — two share an app, one runs no React, one runs real Leaflet');
 }
 
 void main();

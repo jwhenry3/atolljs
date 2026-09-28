@@ -79,7 +79,7 @@ export function buildMap(doc: ProxyDocument, props: Record<string, unknown>): vo
     .then((L) => {
       // Runs outside a task — hold the realm so emit()/instance-less ops
       // route, then ring the doorbell so the queue drains immediately.
-      runInRealm(realm, () => startLeaflet(L, doc, props));
+      runInRealm(realm, () => startLeaflet(L, doc, props, realm));
       bumpOpsVersion();
     })
     .catch((err: unknown) => {
@@ -91,6 +91,7 @@ function startLeaflet(
   L: LeafletModule,
   doc: ProxyDocument,
   props: Record<string, unknown>,
+  realm: string,
 ): void {
   const host = doc.body as unknown as HTMLElement;
 
@@ -156,7 +157,14 @@ function startLeaflet(
     map.invalidateSize();
   });
 
+  // Leaflet fires `zoomend` from ScrollWheelZoom's debounce timer — OUTSIDE
+  // any realm task — so a bare emit() has no active realm to route to and
+  // the op would be dropped. Re-enter the realm and ring the doorbell so
+  // the queued op wakes the driver immediately.
   map.on('zoomend', () => {
-    emit('zoomChanged', { zoom: map.getZoom() });
+    runInRealm(realm, () => {
+      emit('zoomChanged', { zoom: map.getZoom() });
+      bumpOpsVersion();
+    });
   });
 }

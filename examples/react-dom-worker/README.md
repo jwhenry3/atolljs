@@ -18,7 +18,7 @@ its imperative island demos the worker-side proxy DOM plus the global
 mounts several independent islands. Each island is its own
 `connectWorker` client — one pool, **poolSize pinned to 1**, one worker —
 running the **same worker script**. The worker exposes an app registry
-(`controls` / `data-table` / `stats` / `vanilla`); `mount(app, props)`
+(`controls` / `data-table` / `stats` / `vanilla` / `map`); `mount(app, props)`
 picks what the island renders. Registry entries are either React
 components — reconciled into the realm's own root — or
 `{ imperative: (doc, props) => void }` — apps built on the worker-side
@@ -89,6 +89,24 @@ channel lives there. The demo: `src/vendor/miniwidget.js` is a plain-JS
 vendored widget mounted inside the vanilla island alongside the
 hand-written proxy-DOM code — that's all a real library needs.
 
+**The `map` island — real Leaflet 1.9, unmodified, in a worker.** The
+stress test for the whole shim: `src/worker/map.ts` installs the DOM shim,
+dynamically imports Leaflet (required — it reads `document`/`window` at
+module scope), and mounts `L.map(doc.body)`. Tile `<img>`s, divIcon
+markers, zoom/attribution controls, a custom place-picker control,
+drag-pan, and wheel zoom all work through the op stream — Leaflet's
+`Draggable` registers document-level `mousemove`/`mouseup` listeners
+mid-gesture via `listen` ops, `ScrollWheelZoom`'s debounce timer emits
+`zoomChanged` from outside any task (wrapped in `runInRealm` +
+`bumpOpsVersion`), and delegated marker clicks route through Leaflet's
+`_targets` stamp table onto proxy-element expandos. What makes it possible
+is the one geometry channel: the driver's `ResizeObserver` pushes the
+island container's size (`setSize`), which `doc.body` reports to Leaflet's
+container measurements; `doc.onResize` replays it as `invalidateSize()`.
+The stylesheet is shell-side (`import 'leaflet/dist/leaflet.css'`), and
+tiles are real `<img>` elements — see the note on COEP `credentialless` in
+`vite.config.ts` for why cross-origin tiles load under isolation.
+
 Islands never talk to each other directly — the **shell mediates**:
 
 ```
@@ -99,6 +117,7 @@ table island: emit('rowsChanged') ─────→ shell onEvent → stats.upd
 both data-table islands: emit('rowSelected') → shell status line
 controls island: emit('countChanged') ─→ shell status line
 vanilla island: emit('colorPicked') ───→ shell status line
+map island: emit('markerClicked' / 'placeSelected' / 'zoomChanged') → shell status line
 ```
 
 Each island's header shows its `whoami()` pid — a random per-realm id proving
@@ -115,9 +134,11 @@ op protocol + doorbell contract. The example keeps:
 - `src/worker/render.worker.ts` — ~20 lines: `defineIslandWorker({ apps })` mapping island app names to components/imperative builders
 - `src/worker/apps.tsx` — the three React island apps: `ControlsApp` (emits filter/sort/counter events), `TableApp` (2000-row memoized table, props-driven, emits rowSelected/rowsChanged), `StatsApp` (row count + busy-loop compute)
 - `src/worker/vanilla.ts` — the imperative island app: a hand-written swatch picker + log on the proxy DOM, AND the vendored MiniWidget running on `installDomShim`'s globals (no React import)
+- `src/worker/map.ts` — the map island app: `installDomShim` + dynamic `import('leaflet')`, then unmodified Leaflet 1.9 (`L.map`, tile layer, divIcon markers, a `L.Control.extend` place picker) on the proxy DOM
 - `src/vendor/miniwidget.js` (+ `.d.ts`) — a plain-JS "third-party" widget: global `document`, `innerHTML` template, delegated `document.addEventListener` — mounted unmodified inside the island
-- `src/main.ts` — the thin shell: layout, one `connectIslandWorker({ worker })` + `mountIsland()` per island, event mediation, global transport toggle
+- `src/main.ts` — the thin shell: layout, one `connectIslandWorker({ worker })` + `mountIsland()` per island, event mediation, global transport toggle, `import 'leaflet/dist/leaflet.css'`
 - `test/islands.test.ts` — in-process E2E (InProcessWorker + happy-dom): distinct pids, emit → updateProps mediation, doorbell flush, remount semantics, same-app multi-instance, vendored-widget delegation
+- `test/map.test.ts` — in-process E2E for the Leaflet island: tiles, markers, controls, delegated marker/place clicks, drag-pan, wheel zoom, `zoomChanged`/`markerClicked`/`placeSelected` emits
 
 ## Protocol
 
@@ -150,13 +171,17 @@ it, so the shell sees `island.updateProps(props)`):
   container renders — the batch replays onto an emptied root; the pid survives.
 - `updateProps(realm, props)` → re-render the island's root with new
   serializable props — the shell→island channel.
-- `dispatch(handlerId, {type, value, checked, key, clientX, clientY,
-  button, scrollTop, targetId})` → invokes the handler behind an `__evt`
+- `dispatch(handlerId, payload)` → invokes the handler behind an `__evt`
   ref or a `listen` op (proxy `addEventListener` registers in the same
   handler table); returns the re-render's ops — one postMessage round-trip
-  per interaction. The extra fields are best-effort reads off the DOM
-  event: mouse coords/button, the target's scroll offset, and the worker
-  instance id of the event target (shell-owned slot content has none).
+  per interaction. The payload is `EventPayload` — pointer-family events
+  carry normalized numeric coords/deltas/buttons (see the events caveat);
+  `targetId` maps the event target to its worker instance id when it's an
+  op-created node (shell-owned slot content has none).
+- `setSize(realm, w, h)` → pushes the island container's measured box into
+  the realm — the ONLY geometry channel. The driver calls it once at mount
+  and on container resizes (throttled); imperative realms additionally fire
+  their `doc.onResize` handlers and return their ops in the batch.
 - `flush(realm)` → drains that realm's ops committed outside a task call
   (passive effects, timers).
 - `whoami(realm)` → the realm's random pid.
@@ -195,18 +220,23 @@ it, so the shell sees `island.updateProps(props)`):
   `useLayoutEffect` for `rowsChanged`). Payloads are structured-cloned like
   props. Don't emit from a passive effect — outside a task there's no realm
   to route the op to.
-- **The proxy DOM is write-path-only.** Its reads are served by a local
-  shadow tree that only tracks proxy-side mutations — geometry is
-  categorically unavailable: `getBoundingClientRect`, `offsetWidth/Height`,
-  `scrollTop/scrollHeight`, `getComputedStyle` return 0/empty and warn once
-  per document (Partytown-style synchronous reads via `Atomics` blocking
-  calls are possible future work — deliberately not faked). `innerHTML` and
-  exotic selectors throw clear unsupported errors rather than silently
-  diverge. Imperative writes follow the same realm rule as `emit`: they
-  must happen inside `runInRealm(realm, fn)` — mount/dispatch provide it
-  automatically; worker-initiated work (timers, promise continuations)
-  must wrap itself, since instance-bound ops still queue correctly but
-  nothing drains them until a task or flush runs.
+- **The proxy DOM is write-path plus ONE measured box.** Its reads are
+  served by a local shadow tree that only tracks proxy-side mutations, and
+  geometry is limited to the pushed container size: the driver's
+  `ResizeObserver` calls `setSize(realm, w, h)` (once at mount, then
+  throttled on resize), and `doc.body`/`documentElement`/`markContainer`ed
+  elements report it via `clientWidth`/`offsetWidth`/`getBoundingClientRect`.
+  That single box is what lets Leaflet size its pane tree. Everything else —
+  arbitrary-element `getBoundingClientRect`, `scrollTop/scrollHeight`,
+  `getComputedStyle` — returns 0/empty and warns once per document
+  (Partytown-style synchronous reads via `Atomics` blocking calls are
+  possible future work — deliberately not faked). Imperative writes follow
+  the same realm rule as `emit`: they must happen inside
+  `runInRealm(realm, fn)` — mount/dispatch provide it automatically;
+  worker-initiated work (timers, promise continuations, library callbacks
+  like Leaflet's `zoomend`) must wrap itself and ring the doorbell
+  (`bumpOpsVersion()`), since ops still queue correctly but nothing drains
+  them until a task or flush runs — and `emit` outside a realm drops the op.
 - **Imperative realms rebuild, not diff.** `updateProps` on an imperative
   realm emits `clear` and re-runs `build(props)` on a fresh proxy document
   (the old document is disposed — its handler ids unregister and mutating
@@ -231,13 +261,18 @@ it, so the shell sees `island.updateProps(props)`):
   *proxy* DOM instead — same-looking API, op-emitting mutations,
   shadow-tree reads, no layout.
 - **Events are plain payloads**, not SyntheticEvents:
-  `{ type, value, checked, key, clientX, clientY, button, scrollTop,
-  targetId }` — the last five are best-effort (`undefined` when the DOM
-  event doesn't carry them). React-prop handlers are stable across
-  re-renders — each (instance, prop) pair owns one `__evt` slot, so the
-  main thread attaches each listener once. Proxy `addEventListener` uses
-  the same handler table via `listen`/`unlisten` ops keyed by (type,
-  handler id).
+  `{ type, value, checked, key, clientX/Y, screenX/Y, button, which,
+  modifiers, deltaX/Y, deltaMode, pointerType, scrollTop, targetId }`.
+  Pointer-family events (mouse/pointer/wheel/drag/click…) always carry
+  *numeric* coordinates — the driver normalizes absent fields to 0 so
+  worker-side event math (`e.clientX - rect.left`) never sees `undefined`;
+  non-pointer events leave them `undefined`. `preventDefault`/
+  `stopPropagation` on the payload are synthesized no-ops — the real event
+  already dispatched; the worker can't cancel it. React-prop handlers are
+  stable across re-renders — each (instance, prop) pair owns one `__evt`
+  slot, so the main thread attaches each listener once. Proxy
+  `addEventListener` uses the same handler table via `listen`/`unlisten`
+  ops keyed by (type, handler id).
 - **React DevTools can't see the worker trees** — each island's reconciler is
   a separate copy of React in another realm, and fiber internals don't cross
   postMessage.

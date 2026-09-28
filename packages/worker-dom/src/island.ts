@@ -121,6 +121,17 @@ export interface IslandHandle {
 
 /* ── DOM driver (per island) ────────────────────────────────────────────── */
 
+/**
+ * Event types whose real DOM objects always carry numeric pointer fields
+ * (MouseEvent and its subclasses — WheelEvent, DragEvent, PointerEvent) —
+ * used by listenerFor to normalize absent coords to 0, and by the wheel
+ * families for delta fields. `instanceof` checks in listenerFor catch
+ * event objects with exotic type names.
+ */
+const POINTER_FAMILY =
+  /^(mouse|pointer|drag|drop|wheel|mousewheel|DOMMouseScroll|click|dblclick|auxclick|contextmenu|selectstart|gotpointercapture|lostpointercapture)/;
+const WHEEL_FAMILY = /^(wheel|mousewheel|DOMMouseScroll)$/;
+
 /** Per-island realm counter — see the realm key note in mountIsland. */
 let islandSeq = 0;
 
@@ -190,6 +201,26 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
       const mouse = e as MouseEvent;
       const wheel = e as WheelEvent;
       const pointer = e as PointerEvent;
+      // Real DOM guarantees numeric pointer fields on every MouseEvent-
+      // family object — WheelEvent, DragEvent, PointerEvent included. An
+      // environment that under-fills them (happy-dom's WheelEvent extends
+      // UIEvent and has NO clientX at all) would otherwise ship `undefined`
+      // across the wire, and worker-side geometry math — Leaflet's
+      // `e.clientX - offset.left` in getMousePosition — turns undefined
+      // into NaN coordinates and throws. For those event types the wire
+      // always carries numbers: absent fields default to 0, matching what
+      // the real DOM reports for a pointer at the origin.
+      const pointerFam =
+        POINTER_FAMILY.test(e.type) ||
+        (typeof MouseEvent !== 'undefined' && e instanceof MouseEvent);
+      const wheelFam =
+        WHEEL_FAMILY.test(e.type) ||
+        (typeof WheelEvent !== 'undefined' && e instanceof WheelEvent);
+      const num = (v: unknown): number | undefined =>
+        typeof v === 'number' ? v : undefined;
+      const coord = (v: unknown): number | undefined =>
+        num(v) ?? (pointerFam ? 0 : undefined);
+      const button = num(mouse.button) ?? (pointerFam ? 0 : undefined);
       const payload: EventPayload = {
         type: e.type,
         value: target && 'value' in target ? target.value : undefined,
@@ -198,36 +229,35 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
         // Best-effort enrichment: mouse coords/button, wheel deltas,
         // pointerType, the target's scroll offset, and the instance id of
         // the target when it's an op-created node (shell DOM has no id).
-        clientX: typeof mouse.clientX === 'number' ? mouse.clientX : undefined,
-        clientY: typeof mouse.clientY === 'number' ? mouse.clientY : undefined,
-        screenX: typeof mouse.screenX === 'number' ? mouse.screenX : undefined,
-        screenY: typeof mouse.screenY === 'number' ? mouse.screenY : undefined,
-        button: typeof mouse.button === 'number' ? mouse.button : undefined,
+        clientX: coord(mouse.clientX),
+        clientY: coord(mouse.clientY),
+        screenX: coord(mouse.screenX),
+        screenY: coord(mouse.screenY),
+        button,
         // `which` is non-standard but browsers compute it as button+1 on
         // mouse events; environments that don't expose it (and libs like
         // Leaflet that gate drags on `e.which === 1`) get the same value.
         which:
           typeof mouse.which === 'number' && mouse.which !== 0
             ? mouse.which
-            : typeof mouse.button === 'number'
-              ? mouse.button + 1
+            : button !== undefined
+              ? button + 1
               : undefined,
         shiftKey: typeof mouse.shiftKey === 'boolean' ? mouse.shiftKey : undefined,
         ctrlKey: typeof mouse.ctrlKey === 'boolean' ? mouse.ctrlKey : undefined,
         altKey: typeof mouse.altKey === 'boolean' ? mouse.altKey : undefined,
         metaKey: typeof mouse.metaKey === 'boolean' ? mouse.metaKey : undefined,
-        deltaX: typeof wheel.deltaX === 'number' ? wheel.deltaX : undefined,
-        deltaY: typeof wheel.deltaY === 'number' ? wheel.deltaY : undefined,
+        deltaX: num(wheel.deltaX) ?? (wheelFam ? 0 : undefined),
+        deltaY: num(wheel.deltaY) ?? (wheelFam ? 0 : undefined),
         // WheelEvent.deltaMode is always a real number in browsers; when an
         // environment leaves it undefined but deltas exist, normalize to
         // 0 (pixels) so worker-side wheel math (Leaflet's getWheelDelta
         // checks `deltaMode === 0`) behaves like the real DOM.
         deltaMode:
-          typeof wheel.deltaMode === 'number'
-            ? wheel.deltaMode
-            : typeof wheel.deltaX === 'number' || typeof wheel.deltaY === 'number'
-              ? 0
-              : undefined,
+          num(wheel.deltaMode) ??
+          (wheelFam || typeof wheel.deltaX === 'number' || typeof wheel.deltaY === 'number'
+            ? 0
+            : undefined),
         pointerType: typeof pointer.pointerType === 'string' ? pointer.pointerType : undefined,
         scrollTop: target instanceof HTMLElement ? target.scrollTop : undefined,
         targetId: target ? nodeIds.get(target) : undefined,
@@ -424,7 +454,6 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
         }
         const before = op.before !== undefined ? (nodes.get(op.before) ?? null) : null;
         parent.insertBefore(child, before);
-        if (op.parent === 0) console.error(`[island] appended ${op.child} → root childNodes=${el.childNodes.length}, el===parent:${el === parent}`);
         break;
       }
       case 'remove': {
@@ -461,7 +490,6 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
       case 'listen': {
         const node = nodes.get(op.id);
         if (!(node instanceof HTMLElement)) break;
-        console.error(`[dbg] listen id=${op.id} type=${op.type} hid=${op.handler}`);
         // Keyed by type + handler id so proxy listeners can't collide with
         // the React-prop listener for the same event name, and so unlisten
         // detaches exactly the pair addEventListener created. Id 0 is the
@@ -507,7 +535,6 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
 
   function applyOps(ops: Op[]): void {
     opsApplied += ops.length;
-    console.error(`[island ${realm}] applying ${ops.length} ops:`, ops.map((o) => o.t).join(','));
     onActivity?.();
     for (const op of ops) applyOp(op);
   }

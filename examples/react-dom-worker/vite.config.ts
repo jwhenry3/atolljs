@@ -34,7 +34,11 @@ export default defineConfig(({ command }) => ({
     strictPort: true,
     headers: {
       'Cross-Origin-Opener-Policy': 'same-origin',
-      'Cross-Origin-Embedder-Policy': 'require-corp',
+      // credentialless, not require-corp: it still grants
+      // crossOriginIsolated (SharedArrayBuffer doorbell works) but lets
+      // no-cors cross-origin subresources load without CORP headers — the
+      // map island's OSM tile <img>s come from tile.openstreetmap.org.
+      'Cross-Origin-Embedder-Policy': 'credentialless',
     },
   },
 }));
