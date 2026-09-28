@@ -1,7 +1,7 @@
 import { fileURLToPath } from 'node:url';
 import { svelte } from '@sveltejs/vite-plugin-svelte';
-import { defineConfig, mergeConfig } from 'vite';
-import viteConfig from './vite.config.ts';
+import { defineConfig, mergeConfig } from 'vitest/config';
+import viteConfig from './vite.config';
 
 const r = (p: string) => fileURLToPath(new URL(`./${p}`, import.meta.url));
 
