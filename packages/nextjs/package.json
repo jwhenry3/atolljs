@@ -16,5 +16,10 @@
     "@jwhenry123/mesh": "0.1.0",
     "@jwhenry123/mesh-react": "0.1.0",
     "react": "^19.3.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jwhenry3/mesh",
+    "directory": "packages/nextjs"
   }
 }

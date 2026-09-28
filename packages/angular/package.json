@@ -15,5 +15,10 @@
   "peerDependencies": {
     "@jwhenry123/mesh": "0.1.0",
     "@angular/core": "^22.2.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jwhenry3/mesh",
+    "directory": "packages/angular"
   }
 }
