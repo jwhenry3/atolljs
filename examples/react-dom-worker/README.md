@@ -24,7 +24,9 @@ components — reconciled into the realm's own root — or
 `{ imperative: (doc, props) => void }` — apps built on the worker-side
 **proxy DOM** with no React at all (see below). There is **no React on the
 main thread**: `src/island.ts` is a dumb op applier plus an event sink per
-island.
+island. (If your shell *is* a React app, `@jwhenry123/mesh-worker-dom/react`
+exports `<Island/>` — the same mount/updateProps/destroy lifecycle as a
+component.)
 
 **A microfrontend is not limited to one instance.** Islands are identified
 by their worker, not their app name — mount `'data-table'` twice and you get

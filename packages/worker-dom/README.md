@@ -40,6 +40,37 @@ island.updateProps({ ... });
 island.destroy();
 ```
 
+## React shells: `<Island/>`
+
+When the *shell* itself is a React app, `@jwhenry123/mesh-worker-dom/react`
+wraps the same calls in a component:
+
+```tsx
+import { Island } from '@jwhenry123/mesh-worker-dom/react';
+
+const renderWorker = () =>
+  new Worker(new URL('./render.worker.ts', import.meta.url), { type: 'module' });
+
+<Island
+  worker={renderWorker}          // or client={connectIslandWorker({...})}
+  app="dashboard"
+  props={{ user }}
+  onEvent={(name, payload) => ...}
+  slots={{ preview: (el) => (el ? mountCanvas(el) : teardown()) }}
+  onReady={(island) => console.log(island.pid)}
+  className="island-box"
+/>
+```
+
+The rendered `div` is the island's container — `className`/`style`/`data-*`
+spread onto it. Mounting is async (worker spawn + first op batch in an
+effect, cancellation-safe); `props` changes call `updateProps`, deduped by
+serialized identity so equal props don't cost a round-trip. `onEvent`/
+`slots`/`onActivity` are read through refs — fresh closures never remount.
+`app` remounts on change; `worker`/`client` are mount-stable (use `key` to
+swap). Unmount destroys the island and terminates its worker. All the
+island rules below apply unchanged.
+
 ## Island rules
 
 - **poolSize is pinned to 1.** One tree lives in one worker's memory —
