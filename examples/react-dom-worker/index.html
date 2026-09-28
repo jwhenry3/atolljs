@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>React in a Worker — DOM ops over postMessage</title>
+    <!--
+      Minimal styling: the point of this page is that #root is populated
+      entirely by ops applied in src/main.ts — there is no React on the
+      main thread at all.
+    -->
+    <style>
+      body { font-family: system-ui, sans-serif; margin: 0; background: #101418; color: #e6edf3; }
+      #root { max-width: 860px; margin: 0 auto; padding: 24px; }
+      button, input { font: inherit; }
+      input { padding: 6px 10px; background: #1c2330; color: inherit; border: 1px solid #303845; border-radius: 6px; }
+      button { padding: 6px 12px; background: #2d6cdf; color: #fff; border: 0; border-radius: 6px; cursor: pointer; }
+      button:hover { background: #3d7bef; }
+      table { border-collapse: collapse; width: 100%; }
+      td, th { padding: 3px 8px; border-bottom: 1px solid #262d38; text-align: left; }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
