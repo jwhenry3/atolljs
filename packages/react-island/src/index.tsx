@@ -245,19 +245,12 @@ export function Island<A = string>({
 
 /* ── Worker-loaded component proxies ──────────────────────────────────────
  *
- * `islandComponent`/`lazyIsland` close the last gap between a worker app and
- * a local component: the returned component takes the WORKER app's props
- * inline — `<ChartsApp width={520}/>` — and routes everything that isn't a
- * shell concern through as the island's props. `lazyIsland` additionally
- * suspends while the component's module loads, exactly like `React.lazy`
- * (and gives bundlers a code-split boundary). `islandComponent` never loads
- * the implementation at all — the worker owns it; the shell-side value is a
- * pure contract (registry name + props type).
- *
- * One asymmetry vs React.lazy, by construction: the loader phase suspends,
- * but the MOUNT phase can't — suspended trees never commit, and mounting
- * needs the container div in the DOM first. The mount window is covered by
- * the `fallback` prop instead of `<Suspense>`.
+ * `islandComponent`/`lazyIsland` return components that take a worker app's
+ * props inline — `<ChartsIsland width={520}/>` — and route everything that
+ * isn't a shell concern through as the island's props. The implementation is
+ * shared (`ProxyIsland`) so both APIs differ only in how the app reference is
+ * produced: `islandComponent` binds it eagerly, `lazyIsland` suspends while a
+ * dynamic import resolves (and can additionally supply a worker factory).
  */
 
 /**
@@ -314,21 +307,80 @@ const splitProxyProps = (
   return { shell: shell as IslandShellProps, islandProps };
 };
 
-function IslandProxy({
-  app,
+/* ── Shared proxy implementation ─────────────────────────────────────────── */
+
+type LazyModule<A> = A | { default: A } | { app: A; worker?: (() => Worker) | URL };
+
+/** Cached state for a lazy loader. One cache entry per loader function. */
+interface LazyState {
+  promise: Promise<unknown>;
+  value?: IslandAppLike;
+  worker?: (() => Worker) | URL;
+  error?: unknown;
+}
+
+const lazyCache = new WeakMap<() => Promise<LazyModule<IslandAppLike>>, LazyState>();
+
+/** Resolve a lazy module through Suspense; reused across re-renders. */
+function useLazyApp(loader: () => Promise<LazyModule<IslandAppLike>>): {
+  app?: IslandAppLike;
+  worker?: (() => Worker) | URL;
+} {
+  let state = lazyCache.get(loader);
+  if (state === undefined) {
+    state = {
+      promise: Promise.resolve()
+        .then(loader)
+        .then((mod) => {
+          const unwrapped =
+            mod !== null && typeof mod === 'object' && 'default' in mod
+              ? (mod as { default: unknown }).default
+              : mod;
+          const isContract =
+            unwrapped !== null && typeof unwrapped === 'object' && 'app' in unwrapped;
+          const resolvedApp = isContract
+            ? (unwrapped as { app: IslandAppLike }).app
+            : (unwrapped as IslandAppLike);
+          const resolvedWorker = isContract
+            ? (unwrapped as { worker?: (() => Worker) | URL }).worker
+            : undefined;
+          state!.value = resolvedApp;
+          state!.worker = resolvedWorker;
+          return resolvedApp;
+        })
+        .catch((err: unknown) => {
+          state!.error = err;
+          throw err;
+        }),
+    };
+    lazyCache.set(loader, state);
+  }
+  if (state.error !== undefined) throw state.error;
+  if (state.value === undefined) throw state.promise;
+  return { app: state.value, worker: state.worker };
+}
+
+type AppSource =
+  | { kind: 'static'; app?: IslandAppLike }
+  | { kind: 'lazy'; loader: () => Promise<LazyModule<IslandAppLike>> };
+
+function ProxyIsland({
+  source,
   ...raw
-}: { app?: IslandAppRef<unknown> } & Record<string, unknown>): ReactElement {
+}: { source: AppSource } & Record<string, unknown>): ReactElement {
+  const resolved =
+    source.kind === 'static' ? { app: source.app } : useLazyApp(source.loader);
   const { shell, islandProps } = splitProxyProps(raw);
   const [ready, setReady] = useState(false);
   return (
     <>
       {!ready ? shell.fallback : null}
       <Island
-        app={app}
-        worker={shell.worker}
+        app={resolved.app as IslandAppRef<Record<string, unknown>> | undefined}
+        worker={shell.worker ?? resolved.worker}
         client={shell.client}
         workerOptions={shell.workerOptions}
-        props={islandProps}
+        props={islandProps as Record<string, unknown>}
         onEvent={shell.onEvent}
         onActivity={shell.onActivity}
         slots={shell.slots}
@@ -344,8 +396,19 @@ function IslandProxy({
 }
 
 /**
+ * The app a lazy module resolves to — unwraps `{ default: A }` and the
+ * contract-module shape `{ app: A, worker? }`, passes bare A through.
+ */
+export type LazyResolvedApp<T extends Promise<unknown>> =
+  Awaited<T> extends { app: infer A }
+    ? A
+    : Awaited<T> extends { default: infer D }
+      ? D
+      : Awaited<T>;
+
+/**
  * `islandComponent<P>('charts')` — a proxy component for a worker app that
- * the shell NEVER imports. `P` is the contract (usually a `import type` of
+ * the shell NEVER imports. `P` is the contract (usually an `import type` of
  * the worker component's props); the string is the registry key. Against a
  * `defineRealmWorker` (1:1) worker the name can be omitted entirely.
  *
@@ -365,32 +428,19 @@ export function islandComponent(
   app?: string | IslandAppLike,
 ): (props: object) => ReactElement {
   const Proxy = (props: Record<string, unknown>): ReactElement => (
-    <IslandProxy app={app as IslandAppLike} {...props} />
+    <ProxyIsland source={{ kind: 'static', app: app as IslandAppLike }} {...props} />
   );
   (Proxy as { displayName?: string }).displayName =
     `IslandComponent(${islandAppNameOf(app) ?? 'main'})`;
   return Proxy as (props: object) => ReactElement;
 }
 
-type LazyModule<A> = A | { default: A } | { app: A; worker?: (() => Worker) | URL };
-
-/**
- * The app a lazy module resolves to — unwraps `{ default: A }` and the
- * contract-module shape `{ app: A, worker? }`, passes bare A through.
- */
-export type LazyResolvedApp<T extends Promise<unknown>> =
-  Awaited<T> extends { app: infer A }
-    ? A
-    : Awaited<T> extends { default: infer D }
-      ? D
-      : Awaited<T>;
-
 /**
  * `lazyIsland(() => import('./worker/apps').then(m => ({ default: m.ChartsApp })))`
  * — the `React.lazy` mirror for worker apps. The returned component suspends
- * while the module loads (wrap it in `<Suspense>`), then proxies all props
- * to the island. The dynamic import gives bundlers a split point, so the
- * worker component's dependencies only load when the island mounts.
+ * while the module loads (wrap it in `<Suspense>`), then proxies all props to
+ * the island. The dynamic import gives bundlers a split point, so the worker
+ * component's dependencies only load when the island mounts.
  *
  * ```tsx
  * const ChartsIsland = lazyIsland(() => import('./worker/apps').then(m => ({ default: m.ChartsApp })));
@@ -398,8 +448,8 @@ export type LazyResolvedApp<T extends Promise<unknown>> =
  * ```
  *
  * CONTRACT MODULES: for `defineRealmWorker` (1:1) topologies the loader can
- * resolve `{ app, worker }` — the island then carries its own worker
- * factory and call sites need no `worker` prop at all:
+ * resolve `{ app, worker }` — the island then carries its own worker factory
+ * and call sites need no `worker` prop at all:
  *
  * ```ts
  * // worker/map.island.ts — shell-safe contract (never the .worker.ts entry
@@ -415,46 +465,13 @@ export type LazyResolvedApp<T extends Promise<unknown>> =
 export function lazyIsland<T extends Promise<LazyModule<IslandAppLike>>>(
   loader: () => T,
 ): (props: IslandAppProps<LazyResolvedApp<T>> & IslandShellProps) => ReactElement {
-  let state:
-    | { promise: Promise<unknown>; value?: unknown; worker?: unknown; error?: unknown }
-    | undefined;
-  const load = (): NonNullable<typeof state> => {
-    state ??= {
-      promise: Promise.resolve()
-        .then(loader)
-        .then((mod) => {
-          const unwrapped =
-            mod !== null && typeof mod === 'object' && 'default' in mod ? mod.default : mod;
-          const isContract =
-            unwrapped !== null && typeof unwrapped === 'object' && 'app' in unwrapped;
-          state!.value = isContract ? (unwrapped as { app: unknown }).app : unwrapped;
-          if (isContract) state!.worker = (unwrapped as { worker?: unknown }).worker;
-          return state!.value;
-        })
-        .catch((err: unknown) => {
-          state!.error = err;
-          throw err;
-        }),
-    };
-    return state;
-  };
-  function LazyProxy(
+  const Proxy = (props: Record<string, unknown>): ReactElement => (
+    <ProxyIsland source={{ kind: 'lazy', loader: loader as () => Promise<LazyModule<IslandAppLike>> }} {...props} />
+  );
+  (Proxy as { displayName?: string }).displayName = 'LazyIsland';
+  return Proxy as (props: object) => ReactElement as (
     props: IslandAppProps<LazyResolvedApp<T>> & IslandShellProps,
-  ): ReactElement {
-    const s = load();
-    if (s.error !== undefined) throw s.error;
-    if (s.value === undefined) throw s.promise; // Suspense — same as React.lazy
-    return (
-      <IslandProxy
-        app={s.value}
-        // The contract module's worker is the default — an explicit prop wins.
-        worker={(s.worker ?? undefined) as (() => Worker) | URL | undefined}
-        {...(props as Record<string, unknown>)}
-      />
-    );
-  }
-  (LazyProxy as { displayName?: string }).displayName = 'LazyIsland';
-  return LazyProxy;
+  ) => ReactElement;
 }
 
 export default Island;
