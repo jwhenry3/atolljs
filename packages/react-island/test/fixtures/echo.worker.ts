@@ -20,7 +20,9 @@ export const echoApp = islandApp('echo', {
     btn.className = 'ping';
     btn.textContent = 'ping';
     btn.addEventListener('click', () => emit('pinged', { n: 1 }));
-    doc.body.append(p, btn);
+    const slot = doc.createElement('div');
+    slot.dataset.meshSlot = 'slot';
+    doc.body.append(p, btn, slot);
   },
 });
 

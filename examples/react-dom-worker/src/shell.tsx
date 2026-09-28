@@ -17,7 +17,7 @@
  * serves both shell styles: framework-free (index.html) and React.
  */
 import { useEffect, useMemo, useRef, useState, Suspense } from 'react';
-import type { ReactElement, ReactNode } from 'react';
+import type { ReactElement, ReactNode, RefObject } from 'react';
 import { createRoot } from 'react-dom/client';
 import { lazyIsland } from '@jwhenry123/mesh-react-island';
 import { connectIslandWorker } from '@jwhenry123/mesh-worker-dom';
@@ -70,40 +70,48 @@ const loading = (
 
 /* ── Transclusion demo: a live canvas the SHELL owns inside a worker tree ─ */
 
-function mountSparkline(el: HTMLElement | null): void {
-  const holder = mountSparkline as unknown as { raf?: number };
-  if (holder.raf !== undefined) cancelAnimationFrame(holder.raf);
-  holder.raf = undefined;
-  if (el === null) return; // unmounted by the worker tree — stop drawing
-
-  // ownerDocument, not the global — in-process tests share globalThis with the
-  // worker realm dispatcher, so `document` can resolve to a proxy document.
-  const canvas = el.ownerDocument.createElement('canvas');
-  canvas.style.cssText = 'width:100%;height:100%;display:block;border-radius:4px;background:#0d1117';
-  el.appendChild(canvas);
-  // getContext can return null (happy-dom has no canvas impl) — the slot
-  // element still gets its box; the animation just skips that environment.
-  const ctx = canvas.getContext('2d');
-  if (!ctx) return;
-  const trace: number[] = [];
-  const tick = (t: number): void => {
-    const w = (canvas.width = el.clientWidth);
-    const h = (canvas.height = el.clientHeight);
-    trace.push((Math.sin(t / 320) + Math.sin(t / 97) * 0.5) / 1.5);
-    if (trace.length > w) trace.shift();
-    ctx.clearRect(0, 0, w, h);
-    ctx.strokeStyle = '#58a6ff';
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    trace.forEach((v, i) => {
-      const y = h / 2 + v * h * 0.4;
-      if (i === 0) ctx.moveTo(i, y);
-      else ctx.lineTo(i, y);
-    });
-    ctx.stroke();
-    holder.raf = requestAnimationFrame(tick);
-  };
-  holder.raf = requestAnimationFrame(tick);
+function Sparkline(): ReactElement {
+  const ref = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    const canvas = ref.current;
+    if (canvas === null) return;
+    const ctx = canvas.getContext('2d');
+    if (ctx === null) return;
+    let raf: number;
+    const trace: number[] = [];
+    const tick = (t: number): void => {
+      const el = canvas.parentElement;
+      const w = (canvas.width = el?.clientWidth ?? 300);
+      const h = (canvas.height = el?.clientHeight ?? 150);
+      trace.push((Math.sin(t / 320) + Math.sin(t / 97) * 0.5) / 1.5);
+      if (trace.length > w) trace.shift();
+      ctx.clearRect(0, 0, w, h);
+      ctx.strokeStyle = '#58a6ff';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      trace.forEach((v, i) => {
+        const y = h / 2 + v * h * 0.4;
+        if (i === 0) ctx.moveTo(i, y);
+        else ctx.lineTo(i, y);
+      });
+      ctx.stroke();
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, []);
+  return (
+    <canvas
+      ref={ref}
+      style={{
+        width: '100%',
+        height: '100%',
+        display: 'block',
+        borderRadius: 4,
+        background: '#0d1117',
+      }}
+    />
+  );
 }
 
 /* ── Shell ──────────────────────────────────────────────────────────────── */
@@ -158,7 +166,7 @@ export function Shell({ worker = renderWorker }: { worker?: () => Worker }): Rea
     bump();
   }, [mode]);
 
-  const slots = useMemo(() => ({ wave: mountSparkline }), []);
+  const slots = useMemo(() => ({ wave: <Sparkline key="sparkline" /> }), []);
   const flushes = [...handles.current.values()].reduce((a, i) => a + i.flushCalls, 0);
   const ops = [...handles.current.values()].reduce((a, i) => a + i.opsApplied, 0);
   void statsTick; // re-render trigger for the aggregate read

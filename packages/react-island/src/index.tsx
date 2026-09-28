@@ -16,7 +16,7 @@
  *   app={ChartsApp}              // or the registry name string 'charts'
  *   props={{ width: 520 }}       // inferred from ChartsApp's own props
  *   onEvent={(name, payload) => setStatus(`${name}: ${JSON.stringify(payload)}`)}
- *   slots={{ gmap: (el) => (el ? mountMainThreadMap(el) : teardownMap()) }}
+ *   slots={{ wave: <Sparkline /> }} // React portals into worker data-mesh-slot="wave"
  * />
  * ```
  *
@@ -26,8 +26,10 @@
  * - `props` changes call `island.updateProps` — deduped by JSON-serialized
  *   identity, so re-rendering with an equal props object costs no round-trip
  *   (props cross the wire serialized anyway, making that the honest equality).
- * - `onEvent`/`onActivity`/`slots` are read through refs — passing fresh
- *   closures each render never remounts the worker.
+ * - `onEvent`/`onActivity` are read through refs — passing fresh closures
+ *   each render never remounts the worker. `slots` are React portals into
+ *   worker-created anchor elements; the portal content renders wherever the
+ *   worker places the matching `data-mesh-slot`.
  * - `app` changes remount the island; `worker`/`client` are MOUNT-STABLE —
  *   swap them via React `key`, not by passing a new value mid-life.
  * - Unmount destroys the island; the worker terminates unless the client
@@ -40,7 +42,8 @@
  * minification-proof way to bind a component to its registry key (bare
  * function/displayName resolution is a dev convenience).
  */
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import type { HTMLAttributes, ReactElement, ReactNode, Ref } from 'react';
 import {
   connectIslandWorker,
@@ -85,11 +88,11 @@ export interface IslandProps<A = string>
   /** Island → shell channel: every `emit` op lands here. */
   onEvent?: (name: string, payload: unknown) => void;
   /**
-   * Transclusion slots — a worker `<div data-mesh-slot="name">` hands its
-   * real element to `slots[name](el)` (and `null` on removal). Looked up
-   * per call, so keys may be added or replaced between renders.
+   * Transclusion slots — a worker `<div data-mesh-slot="name">` becomes a
+   * React portal mount point. The element's contents are rendered by React
+   * on the main thread; the worker only owns the empty anchor.
    */
-  slots?: Record<string, (el: HTMLElement | null) => void>;
+  slots?: Record<string, ReactNode>;
   /** Fired after each applied op batch — stats hooks. */
   onActivity?: () => void;
   /** The mounted handle (pid, updateProps, flush, setMode…) once ready. */
@@ -116,6 +119,7 @@ export function Island<A = string>({
 }: IslandProps<A>): ReactElement {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const islandRef = useRef<IslandHandle | null>(null);
+  const [slotTargets, setSlotTargets] = useState<Record<string, HTMLElement | null>>({});
 
   // Latest-render values — the mount effect and driver callbacks read
   // through these so fresh identities never force a remount.
@@ -172,15 +176,14 @@ export function Island<A = string>({
       return;
     }
 
-    // Slot lookup delegates to the latest map — a proxy so newly added keys
-    // resolve too; the driver only ever reads `slots[name]`.
-    const slotProxy =
-      slotsRef.current === undefined
-        ? undefined
-        : (new Proxy(
-            {},
-            { get: (_t, name) => (e: HTMLElement | null) => slotsRef.current?.[name as string]?.(e) },
-          ) as Record<string, (el: HTMLElement | null) => void>);
+    // React portal anchors: the worker marks `data-mesh-slot="name"`, the
+    // driver hands us the real element, and we render the matching slot
+    // content into it with createPortal.
+    const slotProxy = new Proxy({} as Record<string, (el: HTMLElement | null) => void>, {
+      get: (_t, name: string) => (e: HTMLElement | null) => {
+        setSlotTargets((prev) => (prev[name] === e ? prev : { ...prev, [name]: e }));
+      },
+    });
 
     void (async () => {
       try {
@@ -228,7 +231,16 @@ export function Island<A = string>({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [propsJson]);
 
-  return <div ref={setRefs} {...rest} />;
+  return (
+    <>
+      <div ref={setRefs} {...rest} />
+      {Object.entries(slotTargets).map(([name, el]) =>
+        el && slotsRef.current?.[name] != null
+          ? createPortal(slotsRef.current[name] as ReactNode, el, `mesh-slot-${name}`)
+          : null,
+      )}
+    </>
+  );
 }
 
 /* ── Worker-loaded component proxies ──────────────────────────────────────
@@ -266,7 +278,7 @@ export interface IslandShellProps {
   /** Mount/update errors surface here instead of an unhandled rejection. */
   onError?: (err: unknown) => void;
   /** Transclusion slots — see IslandProps.slots. */
-  slots?: Record<string, (el: HTMLElement | null) => void>;
+  slots?: Record<string, ReactNode>;
   /** Rendered while the worker mounts — the lazy-side fallback. */
   fallback?: ReactNode;
   /**

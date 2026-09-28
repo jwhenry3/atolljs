@@ -118,6 +118,30 @@ describe('<Island/>', () => {
     expect(worker.terminated).toBe(true);
   });
 
+  it('renders slots as React portals into worker-created anchors', async () => {
+    const host = realDoc.createElement('div');
+    realDoc.body.appendChild(host);
+    const root = createRoot(host);
+    await act(async () => {
+      root.render(
+        <Island
+          worker={renderWorker}
+          app={echoApp}
+          props={{ text: 'portal test' }}
+          slots={{ slot: <span className="portal-content">portal</span> }}
+        />,
+      );
+    });
+    await vi.waitFor(() =>
+      expect(host.querySelector('[data-mesh-slot="slot"] .portal-content')?.textContent).toBe(
+        'portal',
+      ),
+    );
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
   it('resolves stamped names from component references — with prop inference', () => {
     // The compile-time contract this whole feature exists for: props type
     // comes from the component signature, not Record<string, unknown>.
