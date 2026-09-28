@@ -89,6 +89,14 @@ serialized identity so equal props don't cost a round-trip. `onEvent`/
 swap). Unmount destroys the island and terminates its worker. All the
 island rules below apply unchanged.
 
+`examples/react-dom-worker/react-shell.html` mounts all seven demo islands
+this way — worth a look for the mediation pattern (`onEvent → setState →
+<Island props>` replaces hand-wired `updateProps`). One caveat on mounting
+by component reference: importing the worker component into the shell
+pulls its dependency graph into the shell bundle (recharts, in that demo).
+Use references where inference pays off; string registry keys stay fully
+supported for everything else.
+
 ## Island rules
 
 - **poolSize is pinned to 1.** One tree lives in one worker's memory —

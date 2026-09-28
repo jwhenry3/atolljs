@@ -21,8 +21,20 @@ export default defineConfig(({ command }) => ({
       { find: /^@jwhenry123\/mesh\/sdk$/, replacement: `${sdkRoot}index.ts` },
       { find: /^@jwhenry123\/mesh\/sdk\//, replacement: sdkRoot },
       { find: /^@jwhenry123\/mesh-worker-dom$/, replacement: `${workerDomRoot}index.ts` },
+      { find: /^@jwhenry123\/mesh-worker-dom\/react$/, replacement: `${workerDomRoot}react.tsx` },
       { find: /^@jwhenry123\/mesh-worker-dom\/worker$/, replacement: `${workerDomRoot}worker/index.ts` },
     ],
+  },
+  // Two entry pages: index.html is the framework-free shell (src/main.ts),
+  // react-shell.html is the same islands mounted by a React shell through
+  // <Island/> (src/shell.tsx).
+  build: {
+    rollupOptions: {
+      input: {
+        main: fileURLToPath(new URL('./index.html', import.meta.url)),
+        'react-shell': fileURLToPath(new URL('./react-shell.html', import.meta.url)),
+      },
+    },
   },
   // The ops themselves still ride postMessage — but the push transport uses
   // a SharedArrayBuffer doorbell (see packages/worker-dom memory.ts), which

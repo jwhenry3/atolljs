@@ -56,6 +56,23 @@ callback fires with `null` for teardown. This is the escape hatch for every
 library in the "structurally can't run in a worker" bucket — it doesn't
 port into the worker, it gets *transcluded* around it.
 
+**Two shells, same islands.** The demo ships two entry pages to prove the
+op protocol doesn't care what the shell is made of. `index.html` +
+`src/main.ts` is framework-free: `mountIsland({ el, app, props })` calls
+plus hand-wired `island.updateProps` mediation — its bundle is ~4 kB.
+`react-shell.html` + `src/shell.tsx` is the same seven islands through
+`<Island/>` (`@jwhenry123/mesh-worker-dom/react`): each `mountIsland` call
+becomes a component, badges ride `onReady` → state, and the
+controls→table mediation is literally `onEvent → setState →
+<Island props={…}>` — the component's deduped `updateProps` replaces the
+hand-wiring. The charts island mounts by component reference
+(`app={ChartsApp}`) so its props infer as `ChartsProps`. One honest
+trade-off to know: a component reference means *importing the worker
+component into the shell bundle* — `apps.tsx` pulls recharts in, which is
+why the react-shell chunk is ~730 kB while the framework-free shell stays
+~4 kB. Import the app reference only where inference pays off; string
+registry keys still work everywhere.
+
 **Worker-side proxy DOM — the "WorkerDOM" pattern.** Transclusion covers
 libraries that must run on the main thread; `src/worker/proxyDom.ts` covers
 the opposite: imperative/DOM-dependent code that should run *inside* the
@@ -166,10 +183,12 @@ op protocol + doorbell contract. The example keeps:
 - `src/worker/vanilla.ts` — the imperative island app: a hand-written swatch picker + log on the proxy DOM, AND the vendored MiniWidget running on `installDomShim`'s globals (no React import)
 - `src/worker/map.ts` — the map island app: `installDomShim` + dynamic `import('leaflet')`, then unmodified Leaflet 1.9 (`L.map`, tile layer, divIcon markers, a `L.Control.extend` place picker) on the proxy DOM
 - `src/vendor/miniwidget.js` (+ `.d.ts`) — a plain-JS "third-party" widget: global `document`, `innerHTML` template, delegated `document.addEventListener` — mounted unmodified inside the island
-- `src/main.ts` — the thin shell: layout, one `connectIslandWorker({ worker })` + `mountIsland()` per island, event mediation, global transport toggle, `import 'leaflet/dist/leaflet.css'`
+- `src/main.ts` — the thin framework-free shell: layout, one `connectIslandWorker({ worker })` + `mountIsland()` per island, event mediation, global transport toggle, `import 'leaflet/dist/leaflet.css'`
+- `src/shell.tsx` + `react-shell.html` — the React shell: the same seven islands mounted through `<Island/>`, state-driven mediation, `app={ChartsApp}` component-reference mount
 - `test/islands.test.ts` — in-process E2E (InProcessWorker + happy-dom): distinct pids, emit → updateProps mediation, doorbell flush, remount semantics, same-app multi-instance, vendored-widget delegation
 - `test/map.test.ts` — in-process E2E for the Leaflet island: tiles, markers, controls, delegated marker/place clicks, drag-pan, wheel zoom, `zoomChanged`/`markerClicked`/`placeSelected` emits
 - `test/charts.test.ts` — in-process E2E for the recharts island: main surface + descendants carry the SVG namespace (zIndex portals included), grid/axis/bar markup lands, bar click emits `chartClicked` with the datum
+- `test/shell.test.tsx` — in-process E2E for the React shell: `<Shell/>` mounts all seven islands via `<Island/>`, badges/stats aggregate in React-rendered DOM, controls→table mediation flows through state → `props`
 
 ## Protocol
 
@@ -321,6 +340,7 @@ it, so the shell sees `island.updateProps(props)`):
 
 ```sh
 npm install
-npm run dev   # http://localhost:5177
+npm run dev   # http://localhost:5177 (framework-free shell)
+              # http://localhost:5177/react-shell.html (React + <Island/>)
 npm run build # tsc --noEmit && vite build → emits a worker chunk
 ```

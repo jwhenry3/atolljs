@@ -12,6 +12,7 @@
     "@jwhenry123/mesh-worker-dom": "file:../../packages/worker-dom",
     "leaflet": "^1.9.4",
     "react": "file:../../node_modules/react",
+    "react-dom": "file:../../node_modules/react-dom",
     "react-reconciler": "^0.34.0",
     "recharts": "^3.10.1"
   },
