@@ -131,6 +131,11 @@ describe('leaflet map island', () => {
         expect(emitted.some((e) => e.name === 'zoomChanged')).toBe(true);
       }, { timeout: 8000 });
 
+      // Let Leaflet's debounced wheel-zoom and drag-inertia timers fire
+      // before teardown — in-process workers share the test thread, so a
+      // delayed callback that fires after destroy hits a disposed proxy DOM.
+      await tick(300);
+
       island.destroy();
     } finally {
       (globalThis as any).document = prevDoc;
