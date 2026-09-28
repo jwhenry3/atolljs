@@ -25,10 +25,32 @@ export type Op =
   | { t: 'remove'; child: number }
   /** Re-serialized full prop set for `id` (main diffs against its last seen set). */
   | { t: 'update'; id: number; props: WireProps }
-  /** New text content for a text instance. */
+  /** New text content for a text instance. Also how the proxy DOM writes
+   *  `element.textContent` — the driver assigns `node.textContent`, which
+   *  replaces the element's children with a single text node. */
   | { t: 'utext'; id: number; text: string }
-  /** Clear the root container (React's clearContainer). */
+  /** Clear the root container (React's clearContainer, or an imperative
+   *  realm's rebuild). */
   | { t: 'clear' }
+  /**
+   * Set/remove a single attribute — emitted by the worker-side proxy DOM
+   * (`setAttribute`, `id`/`className` setters, `classList`, `dataset`).
+   * `value: null` removes the attribute.
+   */
+  | { t: 'attr'; id: number; name: string; value: string | null }
+  /**
+   * Merge inline-style changes — the proxy DOM's `style` proxy re-sends only
+   * the changed keys; `''` clears a key (deleteProperty).
+   */
+  | { t: 'style'; id: number; props: Record<string, string> }
+  /**
+   * Attach a DOM listener for a proxy-DOM `addEventListener` — `handler` is
+   * a worker handler-table id (same currency as `__evt` refs); the driver
+   * wires it to `client.dispatch(handler, payload)`.
+   */
+  | { t: 'listen'; id: number; type: string; handler: number }
+  /** Detach the listener a `listen` op attached (type + handler identify it). */
+  | { t: 'unlisten'; id: number; type: string; handler: number }
   /**
    * Island → shell event — worker code calls `emit(name, payload)` inside a
    * handler (or a commit-phase effect); the driver invokes the island's
@@ -61,11 +83,21 @@ export const isEventRef = (v: unknown): v is EventRef =>
 
 /**
  * What the main thread sends back when a DOM event fires. Deliberately NOT a
- * SyntheticEvent — just the handful of fields the demo needs.
+ * SyntheticEvent — just a best-effort handful of fields read off the DOM
+ * event and its target. Mouse fields are `undefined` for non-mouse events;
+ * `targetId` is only set when the event target is an op-created node (shell-
+ * owned slot content has no instance id).
  */
 export interface EventPayload {
   type: string;
   value?: string;
   checked?: boolean;
   key?: string;
+  clientX?: number;
+  clientY?: number;
+  button?: number;
+  /** `target.scrollTop` when the target is an element. */
+  scrollTop?: number;
+  /** The worker instance id of `event.target`, when it maps to one. */
+  targetId?: number;
 }

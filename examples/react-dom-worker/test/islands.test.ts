@@ -222,4 +222,150 @@ describe('react-dom-worker islands', () => {
     expect(el.contains(slotEl)).toBe(false);
     island.destroy();
   });
+
+  it('vanilla island: an imperative proxy-DOM app builds real DOM and round-trips events', async () => {
+    const el = document.createElement('div');
+    document.body.appendChild(el);
+    const emitted: Array<{ name: string; payload: unknown }> = [];
+
+    const island = await mountIsland({
+      client: connectIslandWorker(),
+      el,
+      app: 'vanilla',
+      props: { title: 'test vanilla widget' },
+      onEvent: (name, payload) => emitted.push({ name, payload }),
+    });
+    expect(island.pid).toMatch(/^w-/);
+
+    // Imperative-built DOM landed via the ordinary op stream — attr ops for
+    // id/class/dataset, style ops for inline styles, text ops for content.
+    expect(el.querySelector('#vanilla-root')).not.toBeNull();
+    expect(el.querySelector('.vanilla-heading')!.textContent).toBe('test vanilla widget');
+    const swatches = el.querySelectorAll('.swatch');
+    expect(swatches.length).toBe(5);
+    expect((swatches[0] as HTMLElement).style.background).not.toBe('');
+    expect(swatches[0].getAttribute('data-color')).toBe('#2d6cdf');
+    // The boot log line was appended by imperative code reading its own
+    // shadow tree (row.children.length / querySelectorAll).
+    const readout = el.querySelector('[data-role="readout"]')!;
+    expect(readout.textContent).toContain('pick a swatch');
+    expect(el.querySelectorAll('.vanilla-log-line').length).toBe(1);
+    expect(el.querySelector('.vanilla-log-line')!.textContent).toContain('5 swatches');
+
+    // Click swatch #2 — the listen op wired a real DOM listener; dispatch
+    // routes the EventPayload into the worker handler, whose proxy-DOM
+    // mutations stream back as ops.
+    fire(swatches[1], new MouseEvent('click', { bubbles: true, clientX: 40, clientY: 17 }));
+    await vi.waitFor(() => expect(readout.textContent).toContain('#1f9d55'));
+    expect(readout.textContent).toContain('(40, 17)'); // coordinates round-tripped
+    expect((readout as HTMLElement).style.color).not.toBe('');
+    // classList.toggle('active') on every sibling → attr ops for 'class'
+    expect(swatches[1].classList.contains('active')).toBe(true);
+    expect(swatches[0].classList.contains('active')).toBe(false);
+    // The handler's appendLog ran too — getElementById lookup succeeded.
+    const lines = el.querySelectorAll('.vanilla-log-line');
+    expect(lines.length).toBe(2);
+    expect(lines[1].textContent).toContain('clicked #1f9d55');
+    expect(lines[1].textContent).toContain('getElementById');
+
+    // The emit carries the enriched payload fields back to the shell.
+    await vi.waitFor(() => expect(emitted.some((e) => e.name === 'colorPicked')).toBe(true));
+    const picked = emitted.find((e) => e.name === 'colorPicked')!.payload as {
+      color: string;
+      x: number;
+      y: number;
+      targetId?: number;
+    };
+    expect(picked.color).toBe('#1f9d55');
+    expect(picked.x).toBe(40);
+    expect(picked.y).toBe(17);
+    // targetId resolves through the driver's node→id map — the swatch is an
+    // op-created node, so its worker instance id crosses back.
+    expect(picked.targetId).toBeGreaterThan(0);
+
+    // updateProps on an imperative realm = clear + rebuild on a fresh doc.
+    await island.updateProps({ title: 'rebuilt widget' });
+    expect(el.querySelector('.vanilla-heading')!.textContent).toBe('rebuilt widget');
+    expect(el.querySelectorAll('.swatch').length).toBe(5);
+
+    island.destroy();
+  });
+
+  it('proxyDom shadow tree: local reads and op emission inside a realm', async () => {
+    const { createProxyDocument } = await import('../src/worker/proxyDom');
+    const { runInRealm, takeOps } = await import('../src/worker/hostConfig');
+
+    const ops = runInRealm('proxy-shadow', () => {
+      const doc = createProxyDocument('proxy-shadow');
+      const host = doc.createElement('div');
+      host.id = 'host';
+      host.classList.add('shell-box');
+      const kid = doc.createElement('span');
+      kid.className = 'kid';
+      kid.dataset.role = 'marker';
+      kid.textContent = 'hello';
+      const tail = doc.createElement('span');
+      tail.textContent = 'world';
+      host.appendChild(kid);
+      host.appendChild(tail);
+      doc.body.appendChild(host);
+
+      // Navigation reads are served locally — no main-thread round-trip.
+      expect(doc.getElementById('host')).toBe(host);
+      expect(doc.querySelector('.kid')).toBe(kid);
+      expect(doc.querySelector('#host .kid')).toBe(kid);
+      expect(doc.querySelector('[data-role="marker"]')).toBe(kid);
+      expect(doc.querySelector('span.kid')).toBe(kid);
+      expect(host.childNodes.length).toBe(2);
+      expect(host.children.length).toBe(2);
+      expect(host.firstChild).toBe(kid);
+      expect(host.lastChild).toBe(tail);
+      expect(kid.nextSibling).toBe(tail);
+      expect(tail.previousSibling).toBe(kid);
+      expect(kid.parentNode).toBe(host);
+      expect(kid.parentElement).toBe(host);
+      expect(host.textContent).toBe('helloworld');
+      expect(kid.isConnected).toBe(true);
+      expect(doc.querySelector('.missing')).toBeNull();
+      // Unsupported selector shapes fail loudly.
+      expect(() => doc.querySelector('div > .kid')).toThrow(/unsupported selector/);
+
+      // textContent rewrite → utext + a phantom text child for reads.
+      host.textContent = 'replaced';
+      expect(host.textContent).toBe('replaced');
+      expect(host.childNodes.length).toBe(1);
+      expect(kid.isConnected).toBe(false);
+      // The id map still resolves the connected host.
+      expect(doc.getElementById('host')).toBe(host);
+
+      // listen/unlisten ops pair up around one handler registration.
+      const noopHandler = () => {};
+      kid.addEventListener('click', noopHandler);
+      kid.removeEventListener('click', noopHandler);
+
+      return takeOps('proxy-shadow');
+    });
+
+    // Every mutation emitted a replayable op.
+    expect(ops.some((o) => o.t === 'create' && o.type === 'div')).toBe(true);
+    expect(ops.some((o) => o.t === 'create' && o.type === 'span')).toBe(true);
+    expect(ops.some((o) => o.t === 'text')).toBe(false); // no createTextNode here — phantoms
+    expect(
+      ops.some((o) => o.t === 'attr' && o.name === 'id' && o.value === 'host'),
+    ).toBe(true);
+    expect(
+      ops.some((o) => o.t === 'attr' && o.name === 'class' && o.value === 'shell-box'),
+    ).toBe(true);
+    expect(
+      ops.some((o) => o.t === 'attr' && o.name === 'class' && o.value === 'kid'),
+    ).toBe(true);
+    expect(
+      ops.some((o) => o.t === 'attr' && o.name === 'data-role' && o.value === 'marker'),
+    ).toBe(true);
+    expect(ops.some((o) => o.t === 'utext' && o.text === 'hello')).toBe(true);
+    expect(ops.some((o) => o.t === 'utext' && o.text === 'replaced')).toBe(true);
+    expect(ops.some((o) => o.t === 'append' && o.parent === 0)).toBe(true);
+    expect(ops.some((o) => o.t === 'listen' && o.type === 'click')).toBe(true);
+    expect(ops.some((o) => o.t === 'unlisten' && o.type === 'click')).toBe(true);
+  });
 });

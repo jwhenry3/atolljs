@@ -60,7 +60,13 @@ export const ROOT_CONTAINER = Object.freeze({ id: 0 });
 const opsByRealm = new Map<string, Op[]>();
 /** The realm a task is currently executing under — see setActiveRealm. */
 let activeRealm = '';
-const instances = new Map<number, HostInstance>();
+/**
+ * instance id → host record. Exported so the proxy DOM (worker/proxyDom.ts)
+ * shares the SAME instance space as the reconciler: a proxy-created element
+ * can nest inside a React-rendered parent and vice versa, because ops are
+ * id-addressed and ids come from one counter.
+ */
+export const instances = new Map<number, HostInstance>();
 interface HandlerEntry {
   fn: (payload: unknown) => void;
   realm: string;
@@ -69,6 +75,9 @@ interface HandlerEntry {
 const handlers = new Map<number, HandlerEntry>();
 let nextId = 1;
 let nextHandlerId = 1;
+
+/** Allocate an instance id — the shared counter React and the proxy DOM both draw from. */
+export const allocId = (): number => nextId++;
 
 /**
  * Marks which realm the currently-running task belongs to; returns the
@@ -83,10 +92,44 @@ export const setActiveRealm = (realm: string): string => {
   return prev;
 };
 
-const pushOp = (realm: string, op: Op): void => {
+/** The realm the current task is running under — '' outside a realm task. */
+export const getActiveRealm = (): string => activeRealm;
+
+/**
+ * Run `fn` while `realm` is the active realm — the imperative-code twin of
+ * the reconciler's syncCommit wrapper. Imperative DOM writes (`emit`, the
+ * proxy DOM's `emit` calls, `clear`) only route correctly while a realm
+ * task holds the active realm: mount, updateProps, and dispatch all wrap
+ * their work in this, and imperative apps should do the same for any
+ * worker-initiated work (timers, promise continuations).
+ */
+export const runInRealm = <T>(realm: string, fn: () => T): T => {
+  const prev = setActiveRealm(realm);
+  try {
+    return fn();
+  } finally {
+    setActiveRealm(prev);
+  }
+};
+
+/** Queue an op onto a realm's queue — instance-bound ops pass their
+ *  instance's realm, instance-less ops (`clear`, `emit`) the active one. */
+export const pushOp = (realm: string, op: Op): void => {
   let queue = opsByRealm.get(realm);
   if (!queue) opsByRealm.set(realm, (queue = []));
   queue.push(op);
+};
+
+/**
+ * The doorbell write resetAfterCommit performs, exported so non-React op
+ * producers (the proxy DOM) can ring it too — a commit made outside any
+ * task still needs to wake the island's observe() loop. No-op while the
+ * contract is unbound (before the pool's INIT_MEMORY handshake).
+ */
+export const bumpOpsVersion = (): void => {
+  if (!renderMemory.bound) return;
+  const bell = renderMemory.connector('opsVersion');
+  bell.write((bell.read() ?? 0) + 1);
 };
 
 /** Drain one realm's queued ops — called by the worker's task methods. */
@@ -98,6 +141,23 @@ export const takeOps = (realm: string): Op[] => {
 };
 
 export const getHandler = (id: number): HandlerEntry | undefined => handlers.get(id);
+
+/**
+ * Register a function in the handler table outside prop serialization —
+ * the proxy DOM's addEventListener uses this. The realm is stamped on the
+ * entry so a dispatched event routes its re-render ops to the right queue.
+ * `listen`/`unlisten` ops carry the returned id so the main thread can wire
+ * and later detach the matching DOM listener.
+ */
+export const registerHandler = (fn: (payload: unknown) => void, realm: string): number => {
+  const id = nextHandlerId++;
+  handlers.set(id, { fn, realm });
+  return id;
+};
+
+export const unregisterHandler = (id: number): void => {
+  handlers.delete(id);
+};
 
 /**
  * The island→shell channel. Apps call `emit(name, payload)` inside event
@@ -152,7 +212,7 @@ function serializeProps(instance: ElementInstance, props: Record<string, unknown
 function newElement(type: string, props: Record<string, unknown>): ElementInstance {
   const instance: ElementInstance = {
     kind: 'element',
-    id: nextId++,
+    id: allocId(),
     type,
     realm: activeRealm,
     props: {},
@@ -164,7 +224,7 @@ function newElement(type: string, props: Record<string, unknown>): ElementInstan
 }
 
 function newText(text: string): TextInstance {
-  const instance: TextInstance = { kind: 'text', id: nextId++, text, realm: activeRealm };
+  const instance: TextInstance = { kind: 'text', id: allocId(), text, realm: activeRealm };
   instances.set(instance.id, instance);
   return instance;
 }
@@ -220,10 +280,7 @@ export const hostConfig = {
   // made outside task calls (effects, timers, async setState) arrive as a
   // push instead of waiting on a poll. Task-returned ops bump too; the
   // follow-up flush just finds an empty queue.
-  resetAfterCommit: () => {
-    const bell = renderMemory.connector('opsVersion');
-    bell.write((bell.read() ?? 0) + 1);
-  },
+  resetAfterCommit: bumpOpsVersion,
 
   // Creation — emit ops
   createInstance: (

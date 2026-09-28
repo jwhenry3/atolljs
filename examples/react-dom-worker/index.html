@@ -37,6 +37,14 @@
       .island-root { padding: 8px 12px; }
       .island-root table { max-height: 360px; }
       #island-table { max-height: 380px; overflow-y: auto; display: block; }
+      /* the vanilla island's content is entirely worker-created via the
+         proxy DOM — these rules are shell-side styling of op-applied DOM */
+      .vanilla-heading, .vanilla-readout { margin: 4px 0 8px; font-size: 13px; color: #9aa4b2; }
+      .vanilla-readout { color: #e6edf3; }
+      .swatch { border: 1px solid #303845; border-radius: 4px; padding: 0; background: none; }
+      .swatch.active { outline: 2px solid #e6edf3; outline-offset: 1px; }
+      .vanilla-log { margin-top: 8px; font: 11px/1.7 monospace; color: #7d8a9c; }
+      .vanilla-log-line { border-left: 2px solid #2a3340; padding-left: 8px; }
     </style>
   </head>
   <body>
@@ -68,6 +76,11 @@
       <section class="island">
         <div class="island-head"><span>app: stats</span><span class="badge" id="badge-stats">worker …</span></div>
         <div class="island-root" id="island-stats"></div>
+      </section>
+
+      <section class="island">
+        <div class="island-head"><span>app: vanilla (imperative proxy DOM — no React in this worker)</span><span class="badge" id="badge-vanilla">worker …</span></div>
+        <div class="island-root" id="island-vanilla"></div>
       </section>
     </div>
     <script type="module" src="/src/main.ts"></script>

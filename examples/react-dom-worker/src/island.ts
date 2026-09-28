@@ -113,6 +113,8 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
 
   /** instance id → live DOM node. Id 0 is the root container sentinel. */
   const nodes = new Map<number, Node>([[0, el]]);
+  /** live DOM node → instance id — fills EventPayload.targetId. */
+  const nodeIds = new WeakMap<Node, number>([[el, 0]]);
   /** instance id → last applied prop set (for diffing on `update`). */
   const prevProps = new Map<number, WireProps>();
   /** instance id → event name → attached listener (kept for removal). */
@@ -160,11 +162,20 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
   function listenerFor(handlerId: number): EventListener {
     return (e: Event) => {
       const target = e.target as HTMLInputElement | null;
+      const mouse = e as MouseEvent;
       const payload: EventPayload = {
         type: e.type,
         value: target && 'value' in target ? target.value : undefined,
         checked: target && 'checked' in target ? target.checked : undefined,
         key: (e as KeyboardEvent).key,
+        // Best-effort enrichment: mouse coords/button for pointer events,
+        // the target's scroll offset, and the instance id of the target
+        // when it's an op-created node (shell DOM has no id).
+        clientX: typeof mouse.clientX === 'number' ? mouse.clientX : undefined,
+        clientY: typeof mouse.clientY === 'number' ? mouse.clientY : undefined,
+        button: typeof mouse.button === 'number' ? mouse.button : undefined,
+        scrollTop: target instanceof HTMLElement ? target.scrollTop : undefined,
+        targetId: target ? nodeIds.get(target) : undefined,
       };
       // The whole point: an event = one postMessage round-trip. The worker
       // re-renders, we apply whatever ops come back.
@@ -263,17 +274,81 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
     }
   }
 
+  /**
+   * The `attr` op — the proxy DOM's setAttribute/removeAttribute channel.
+   * Values are always strings (or null to remove): the worker-side facade
+   * only knows attributes. Reuses setProp's heuristics where they apply —
+   * `data-mesh-slot` routes to the slot machinery, `class`/`className` land
+   * on the property, other names prefer a DOM property when one exists
+   * (`id`, `value`) and fall back to the attribute.
+   */
+  function setAttr(node: HTMLElement, id: number, name: string, value: string | null): void {
+    if (name === 'data-mesh-slot') {
+      if (value === null) {
+        unmountSlot(id);
+        node.removeAttribute('data-mesh-slot');
+      } else {
+        mountSlot(node, id, value);
+      }
+      return;
+    }
+    if (value === null) {
+      if (name === 'className') node.className = '';
+      else if (name === 'style') node.removeAttribute('style');
+      else node.removeAttribute(name);
+      return;
+    }
+    if (name === 'class' || name === 'className') {
+      node.className = value;
+      return;
+    }
+    if (name === 'style') {
+      node.setAttribute('style', value);
+      return;
+    }
+    if (name in node) {
+      try {
+        (node as unknown as Record<string, unknown>)[name] = value;
+        return;
+      } catch {
+        /* read-only property — use the attribute */
+      }
+    }
+    node.setAttribute(name, value);
+  }
+
+  /**
+   * The `style` op — incremental inline-style changes from the proxy DOM's
+   * style Proxy. Only changed keys arrive; '' clears a key. The merged set
+   * is written back into prevProps so a later React `update` style-diff
+   * sees these keys as "prev" and still diffs correctly.
+   */
+  function mergeStyle(node: HTMLElement, id: number, changes: Record<string, string>): void {
+    const elStyle = node.style as unknown as Record<string, string>;
+    const prev = prevProps.get(id) ?? {};
+    const merged = { ...((prev.style ?? {}) as Record<string, string>) };
+    for (const [k, v] of Object.entries(changes)) {
+      elStyle[k] = v;
+      merged[k] = v;
+    }
+    prev.style = merged;
+    prevProps.set(id, prev);
+  }
+
   function applyOp(op: Op): void {
     switch (op.t) {
       case 'create': {
         const node = document.createElement(op.type);
         nodes.set(op.id, node);
+        nodeIds.set(node, op.id);
         prevProps.set(op.id, op.props);
         for (const [name, value] of Object.entries(op.props)) setProp(node, op.id, name, value);
         break;
       }
       case 'text': {
-        nodes.set(op.id, document.createTextNode(op.text));
+        const node = document.createTextNode(op.text);
+        nodes.set(op.id, node);
+        nodeIds.set(node, op.id);
         break;
       }
       case 'append': {
@@ -301,6 +376,45 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
       case 'utext': {
         const node = nodes.get(op.id);
         if (node) node.textContent = op.text;
+        break;
+      }
+      case 'attr': {
+        const node = nodes.get(op.id);
+        if (!(node instanceof HTMLElement)) break;
+        setAttr(node, op.id, op.name, op.value);
+        break;
+      }
+      case 'style': {
+        const node = nodes.get(op.id);
+        if (!(node instanceof HTMLElement)) break;
+        mergeStyle(node, op.id, op.props);
+        break;
+      }
+      case 'listen': {
+        const node = nodes.get(op.id);
+        if (!(node instanceof HTMLElement)) break;
+        // Keyed by type + handler id so proxy listeners can't collide with
+        // the React-prop listener for the same event name, and so unlisten
+        // detaches exactly the pair addEventListener created.
+        const key = `${op.type}#${op.handler}`;
+        let table = nodeListeners.get(op.id);
+        if (!table) nodeListeners.set(op.id, (table = new Map()));
+        if (!table.has(key)) {
+          const listener = listenerFor(op.handler);
+          table.set(key, listener);
+          node.addEventListener(op.type, listener);
+        }
+        break;
+      }
+      case 'unlisten': {
+        const node = nodes.get(op.id);
+        if (!(node instanceof HTMLElement)) break;
+        const key = `${op.type}#${op.handler}`;
+        const listener = nodeListeners.get(op.id)?.get(key);
+        if (listener) {
+          node.removeEventListener(op.type, listener);
+          nodeListeners.get(op.id)?.delete(key);
+        }
         break;
       }
       case 'clear': {

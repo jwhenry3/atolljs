@@ -16,6 +16,12 @@
  * the main-thread mountIsland helper binds it, so shell code just calls
  * `island.updateProps(props)`.
  *
+ * IMPERATIVE REALMS: a registry entry can be `{ imperative: (doc, props) }`
+ * instead of a component — 'vanilla' is one. Those realms hold no
+ * reconciler at all: mount hands the app a realm-scoped proxy DOM and its
+ * mutations emit ops directly (updateProps = clear + rebuild, dispatch =
+ * runInRealm + drain, flush = drain only). See worker/proxyDom.ts.
+ *
  * Ops still ride back through the pool's ordinary postMessage channel — the
  * sharedMemory contract here is only the doorbell (see memory.ts): a commit
  * counter the main thread observe()s to trigger flush() as a push. Drop it
@@ -28,17 +34,43 @@ import Reconciler from 'react-reconciler';
 import { defineWorker } from '@jwhenry123/mesh/sdk';
 import { renderMemory } from '../memory';
 import { ControlsApp, StatsApp, TableApp } from './apps';
-import { getHandler, hostConfig, ROOT_CONTAINER, setActiveRealm, takeOps } from './hostConfig';
+import { buildVanilla } from './vanilla';
+import { createProxyDocument, type ProxyDocument } from './proxyDom';
+import {
+  getHandler,
+  hostConfig,
+  pushOp,
+  ROOT_CONTAINER,
+  runInRealm,
+  setActiveRealm,
+  takeOps,
+} from './hostConfig';
 import type { EventPayload, Op } from '../ops';
 
+/**
+ * Registry value shapes:
+ *  - a React component function — reconciled into the realm's own root
+ *  - `{ imperative: (doc, props) => void }` — NO React at all. mount() hands
+ *    it a proxy DOM scoped to the realm; its mutations emit ops directly.
+ */
+type ReactApp = (props: Record<string, unknown>) => ReactElement;
+interface ImperativeApp {
+  imperative: (doc: ProxyDocument, props: Record<string, unknown>) => void;
+}
+type RegistryApp = ReactApp | ImperativeApp;
+
 /** The apps an island can mount — keyed by the name the shell passes to mount(). */
-const REGISTRY: Record<string, (props: Record<string, unknown>) => ReactElement> = {
-  controls: ControlsApp as (props: Record<string, unknown>) => ReactElement,
-  'data-table': TableApp as (props: Record<string, unknown>) => ReactElement,
-  stats: StatsApp as (props: Record<string, unknown>) => ReactElement,
+const REGISTRY: Record<string, RegistryApp> = {
+  controls: ControlsApp as ReactApp,
+  'data-table': TableApp as ReactApp,
+  stats: StatsApp as ReactApp,
+  vanilla: { imperative: buildVanilla },
 };
 
-interface Realm {
+const isImperative = (app: RegistryApp | undefined): app is ImperativeApp =>
+  typeof app === 'object' && app !== null && 'imperative' in app;
+
+interface RealmBase {
   /** The wire key — 'app' or 'app@instance'; op queues route by this. */
   key: string;
   /** The registry name — which component this realm renders. */
@@ -47,9 +79,26 @@ interface Realm {
    *  distinct render realm (in production: a distinct worker). Stable across
    *  remounts of the same realm key. */
   pid: string;
+}
+
+interface ReactRealm extends RealmBase {
+  imperative?: undefined;
   reconciler: ReturnType<typeof Reconciler>;
   container: unknown;
 }
+
+interface ImperativeRealm extends RealmBase {
+  imperative: {
+    build: ImperativeApp['imperative'];
+    /** The realm's proxy document — replaced on each rebuild. */
+    doc: ProxyDocument;
+    props: Record<string, unknown>;
+  };
+}
+
+type Realm = ReactRealm | ImperativeRealm;
+
+const isImperativeRealm = (r: Realm): r is ImperativeRealm => r.imperative !== undefined;
 
 /** realm key → mounted realm. Production workers hold exactly one entry. */
 const realms = new Map<string, Realm>();
@@ -64,8 +113,18 @@ const appNameOf = (realm: string): string => {
 
 // Legacy root (tag 0) — no concurrent features. Container creation is
 // per-realm, not module-level, so a second mount() can't collide with the
-// first realm's tree.
+// first realm's tree. Imperative realms skip the reconciler entirely —
+// their "host environment" is the proxy DOM, and build() emits ops itself.
 function createRealm(key: string, pid: string): Realm {
+  const app = REGISTRY[appNameOf(key)];
+  if (isImperative(app)) {
+    return {
+      key,
+      app: appNameOf(key),
+      pid,
+      imperative: { build: app.imperative, doc: createProxyDocument(key), props: {} },
+    };
+  }
   const reconciler = Reconciler(hostConfig);
   const container = reconciler.createContainer(
     ROOT_CONTAINER,
@@ -93,7 +152,7 @@ function createRealm(key: string, pid: string): Realm {
  * pending sync work in its `finally`, so by the time it returns the
  * mutation hooks have run and the realm's op queue is full.
  */
-function syncCommit(realm: Realm, fn: () => void): Op[] {
+function syncCommit(realm: ReactRealm, fn: () => void): Op[] {
   const prev = setActiveRealm(realm.key);
   try {
     realm.reconciler.flushSyncFromReconciler(fn);
@@ -102,6 +161,26 @@ function syncCommit(realm: Realm, fn: () => void): Op[] {
   } finally {
     setActiveRealm(prev);
   }
+}
+
+/**
+ * Rebuild an imperative realm — the simplest honest updateProps/remount
+ * semantics for code with no reconciler: dispose the old document (its
+ * handler ids die with it), emit `clear` so the driver empties the island
+ * root, then re-run build() on a FRESH proxy document whose shadow tree
+ * starts empty like the real one. All inside the realm's active scope so
+ * emit() and instance-less ops route correctly.
+ */
+function rebuildImperative(realm: ImperativeRealm, props: Record<string, unknown>): Op[] {
+  return runInRealm(realm.key, () => {
+    const imp = realm.imperative;
+    imp.doc.dispose();
+    pushOp(realm.key, { t: 'clear' });
+    imp.doc = createProxyDocument(realm.key);
+    imp.props = props;
+    imp.build(imp.doc, props);
+    return takeOps(realm.key);
+  });
 }
 
 export const renderWorker = defineWorker({
@@ -125,8 +204,14 @@ export const renderWorker = defineWorker({
         );
       }
 
-      let ops: Op[] = [];
       let mounted = realms.get(realm);
+      // Imperative remount — same clear+rebuild semantics as updateProps;
+      // the realm (and pid) survives.
+      if (mounted !== undefined && isImperativeRealm(mounted)) {
+        return rebuildImperative(mounted, props);
+      }
+
+      let ops: Op[] = [];
       if (mounted !== undefined) {
         // Remount — unmount the existing tree so React detaches its
         // instances, then rebuild on a fresh container.
@@ -140,9 +225,28 @@ export const renderWorker = defineWorker({
       }
       realms.set(realm, mounted);
 
+      if (isImperativeRealm(mounted)) {
+        // First mount of an imperative realm — run build() in the realm's
+        // scope and drain the ops its proxy-DOM mutations emitted.
+        const imp = mounted.imperative;
+        imp.props = props;
+        return ops.concat(
+          runInRealm(realm, () => {
+            imp.build(imp.doc, props);
+            return takeOps(realm);
+          }),
+        );
+      }
+
+      const reactRealm = mounted as ReactRealm;
       return ops.concat(
-        syncCommit(mounted, () => {
-          mounted.reconciler.updateContainer(createElement(App, props), mounted.container, null, null);
+        syncCommit(reactRealm, () => {
+          reactRealm.reconciler.updateContainer(
+            createElement(App as ReactApp, props),
+            reactRealm.container,
+            null,
+            null,
+          );
         }),
       );
     },
@@ -157,7 +261,11 @@ export const renderWorker = defineWorker({
       if (mounted === undefined) {
         throw new Error(`updateProps: "${realm}" is not mounted in this worker — mount() first`);
       }
-      const App = REGISTRY[mounted.app];
+      // Imperative realms have no diffing — updateProps REBUILDS: clear the
+      // root and re-run build(props) on a fresh proxy document. Documented
+      // as the honest semantics; fine for widgets, not for huge trees.
+      if (isImperativeRealm(mounted)) return rebuildImperative(mounted, props);
+      const App = REGISTRY[mounted.app] as ReactApp;
       return syncCommit(mounted, () => {
         mounted.reconciler.updateContainer(createElement(App, props), mounted.container, null, null);
       });
@@ -174,6 +282,15 @@ export const renderWorker = defineWorker({
       if (entry === undefined) return [];
       const realm = realms.get(entry.realm);
       if (realm === undefined) return []; // stale handler — its tree was remounted
+      if (isImperativeRealm(realm)) {
+        // No reconciler to flush — the handler's proxy-DOM mutations emit
+        // ops directly; runInRealm gives emit() and instance-less ops a
+        // queue to route to.
+        return runInRealm(realm.key, () => {
+          entry.fn(payload);
+          return takeOps(realm.key);
+        });
+      }
       return syncCommit(realm, () => {
         entry.fn(payload);
       });
@@ -187,6 +304,9 @@ export const renderWorker = defineWorker({
     flush(realm: string): Op[] {
       const mounted = realms.get(realm);
       if (mounted === undefined) return [];
+      // Imperative realms have no passive effects — ops committed outside a
+      // task (timers, continuations mutating the proxy DOM) just drain.
+      if (isImperativeRealm(mounted)) return takeOps(realm);
       const prev = setActiveRealm(realm);
       try {
         mounted.reconciler.flushPassiveEffects();

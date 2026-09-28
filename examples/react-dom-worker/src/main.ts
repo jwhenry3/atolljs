@@ -1,12 +1,15 @@
 /**
  * The shell — main-thread orchestration for the islands demo.
  *
- * Four independent React trees render on this page, each reconciled inside
- * its OWN Web Worker (one connectWorker client per island, pooling disabled
- * — see island.ts for why pooling can't go wider). Two of them run the SAME
- * 'data-table' app — a microfrontend isn't limited to one instance; each
- * island is its own worker, so the same app can mount as many times as you
- * like with different props. The shell:
+ * Five islands render on this page, each inside its OWN Web Worker (one
+ * connectWorker client per island, pooling disabled — see island.ts for why
+ * pooling can't go wider). Four run reconciled React trees; the fifth —
+ * 'vanilla' — is a purely IMPERATIVE app: no React in that worker at all,
+ * its DOM writes go through the worker-side proxy DOM (worker/proxyDom.ts)
+ * and arrive as the same op stream. Two islands run the SAME 'data-table'
+ * app — a microfrontend isn't limited to one instance; each island is its
+ * own worker, so the same app can mount as many times as you like with
+ * different props. The shell:
  *
  *   - creates the layout + per-island containers and badges,
  *   - mounts one registry app per island via mountIsland(),
@@ -172,8 +175,27 @@ async function main(): Promise<void> {
   islands.push(table2);
   $('badge-table-2').textContent = `worker ${table2.pid}`;
 
+  // The imperative island — the 'vanilla' registry entry isn't a component,
+  // it's build(doc) over the worker-side proxy DOM. Mount, events, and emit
+  // all ride the same protocol; the worker just holds no React.
+  const vanilla = await mountIsland({
+    client: connectIslandWorker(),
+    el: $('island-vanilla'),
+    app: 'vanilla',
+    props: { title: 'vanilla island — imperative proxy DOM, zero React in this worker' },
+    onEvent: (name, payload) => {
+      const p = payload as { color?: string; x?: number; y?: number };
+      if (name === 'colorPicked') {
+        setStatus(`vanilla island emitted colorPicked → ${p.color} @ (${p.x}, ${p.y})`);
+      }
+    },
+    onActivity: renderStats,
+  });
+  islands.push(vanilla);
+  $('badge-vanilla').textContent = `worker ${vanilla.pid}`;
+
   setMode('push');
-  setStatus('four islands mounted — two run the same app in different workers');
+  setStatus('five islands mounted — two share an app, one runs no React at all');
 }
 
 void main();
