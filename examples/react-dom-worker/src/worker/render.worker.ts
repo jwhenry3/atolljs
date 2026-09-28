@@ -1,16 +1,19 @@
 /**
  * Worker entry — owns the reconcilers and exposes the island task methods.
  *
- * APP REGISTRY: every island's worker runs THIS same script. `mount(app,
+ * APP REGISTRY: every island's worker runs THIS same script. `mount(realm,
  * props)` picks a component out of REGISTRY and reconciles it into that
- * app's own root ("realm"): its own reconciler, container, op queue, and
- * pid. In production each worker mounts exactly one app — one client,
+ * realm's own root: its own reconciler, container, op queue, and pid.
+ * In production each worker mounts exactly one realm — one client,
  * poolSize 1, one tree. Multiple realms in one module only happen in the
  * in-process test, where every island shares the module graph.
  *
- * Wire signatures carry the app name (`updateProps(app, props)`,
- * `flush(app)`, `whoami(app)`) so a call can be routed to its realm — the
- * main-thread mountIsland helper binds it, so shell code just calls
+ * REALM KEYS are `app` or `app@instance` — the part before the last '@'
+ * names the registry app, the rest distinguishes instances so the same
+ * microfrontend can mount more than once (mountIsland mints a fresh key
+ * per island). Wire signatures carry the realm key (`updateProps(realm,
+ * props)`, `flush(realm)`, `whoami(realm)`) so a call routes to its realm —
+ * the main-thread mountIsland helper binds it, so shell code just calls
  * `island.updateProps(props)`.
  *
  * Ops still ride back through the pool's ordinary postMessage channel — the
@@ -36,24 +39,33 @@ const REGISTRY: Record<string, (props: Record<string, unknown>) => ReactElement>
 };
 
 interface Realm {
+  /** The wire key — 'app' or 'app@instance'; op queues route by this. */
+  key: string;
+  /** The registry name — which component this realm renders. */
   app: string;
-  /** Per-mount random id — shown in the island's badge as proof it's a
+  /** Per-realm random id — shown in the island's badge as proof it's a
    *  distinct render realm (in production: a distinct worker). Stable across
-   *  remounts of the same app. */
+   *  remounts of the same realm key. */
   pid: string;
   reconciler: ReturnType<typeof Reconciler>;
   container: unknown;
 }
 
-/** app name → mounted realm. Production workers hold exactly one entry. */
+/** realm key → mounted realm. Production workers hold exactly one entry. */
 const realms = new Map<string, Realm>();
 
 const newPid = (): string => `w-${Math.random().toString(36).slice(2, 8)}`;
 
+/** 'controls' or 'data-table@7' → 'data-table' — registry name part of a realm key. */
+const appNameOf = (realm: string): string => {
+  const at = realm.lastIndexOf('@');
+  return at === -1 ? realm : realm.slice(0, at);
+};
+
 // Legacy root (tag 0) — no concurrent features. Container creation is
 // per-realm, not module-level, so a second mount() can't collide with the
 // first realm's tree.
-function createRealm(app: string, pid: string): Realm {
+function createRealm(key: string, pid: string): Realm {
   const reconciler = Reconciler(hostConfig);
   const container = reconciler.createContainer(
     ROOT_CONTAINER,
@@ -67,7 +79,7 @@ function createRealm(app: string, pid: string): Realm {
     console.error, // onRecoverableError
     null, // onDefaultTransitionIndicator
   );
-  return { app, pid, reconciler, container };
+  return { key, app: appNameOf(key), pid, reconciler, container };
 }
 
 /**
@@ -82,11 +94,11 @@ function createRealm(app: string, pid: string): Realm {
  * mutation hooks have run and the realm's op queue is full.
  */
 function syncCommit(realm: Realm, fn: () => void): Op[] {
-  const prev = setActiveRealm(realm.app);
+  const prev = setActiveRealm(realm.key);
   try {
     realm.reconciler.flushSyncFromReconciler(fn);
     realm.reconciler.flushSyncWork();
-    return takeOps(realm.app);
+    return takeOps(realm.key);
   } finally {
     setActiveRealm(prev);
   }
@@ -96,37 +108,38 @@ export const renderWorker = defineWorker({
   sharedMemory: renderMemory,
   methods: {
     /**
-     * Mount REGISTRY[app] into its own root; returns the initial op batch.
+     * Mount REGISTRY[appNameOf(realm)] into its own root; returns the
+     * initial op batch. The realm key may carry an instance suffix
+     * ('data-table@3') so the same app can mount multiple times.
      *
-     * Mounting an app that is already mounted is a REMOUNT: the old tree is
-     * unmounted first (a `clear` op + GC of its instance records), then a
-     * fresh container renders the new tree — the returned batch replays
-     * cleanly onto an emptied root. The pid is kept across remounts.
+     * Mounting a realm key that is already mounted is a REMOUNT: the old
+     * tree is unmounted first (a `clear` op + GC of its instance records),
+     * then a fresh container renders the new tree — the returned batch
+     * replays cleanly onto an emptied root. The pid is kept across remounts.
      */
-    mount(app: string, props: Record<string, unknown> = {}): Op[] {
-      const App = REGISTRY[app];
+    mount(realm: string, props: Record<string, unknown> = {}): Op[] {
+      const App = REGISTRY[appNameOf(realm)];
       if (App === undefined) {
         throw new Error(
-          `mount: unknown app "${app}" — registry has: ${Object.keys(REGISTRY).join(', ')}`,
+          `mount: unknown app "${realm}" — registry has: ${Object.keys(REGISTRY).join(', ')}`,
         );
       }
 
       let ops: Op[] = [];
-      let realm = realms.get(app);
-      if (realm !== undefined) {
+      let mounted = realms.get(realm);
+      if (mounted !== undefined) {
         // Remount — unmount the existing tree so React detaches its
         // instances, then rebuild on a fresh container.
-        const old = realm;
+        const old = mounted;
         ops = syncCommit(old, () => {
           old.reconciler.updateContainer(null, old.container, null, null);
         });
-        realm = createRealm(app, old.pid);
+        mounted = createRealm(realm, old.pid);
       } else {
-        realm = createRealm(app, newPid());
+        mounted = createRealm(realm, newPid());
       }
-      realms.set(app, realm);
+      realms.set(realm, mounted);
 
-      const mounted = realm;
       return ops.concat(
         syncCommit(mounted, () => {
           mounted.reconciler.updateContainer(createElement(App, props), mounted.container, null, null);
@@ -135,18 +148,18 @@ export const renderWorker = defineWorker({
     },
 
     /**
-     * Re-render the app's root with new props — the shell→island channel.
+     * Re-render the realm's root with new props — the shell→island channel.
      * `updateProps` is how the shell mediates between islands (controls
      * emits filterChanged → shell → table.updateProps({filter})).
      */
-    updateProps(app: string, props: Record<string, unknown>): Op[] {
-      const realm = realms.get(app);
-      if (realm === undefined) {
-        throw new Error(`updateProps: "${app}" is not mounted in this worker — mount() first`);
+    updateProps(realm: string, props: Record<string, unknown>): Op[] {
+      const mounted = realms.get(realm);
+      if (mounted === undefined) {
+        throw new Error(`updateProps: "${realm}" is not mounted in this worker — mount() first`);
       }
-      const App = REGISTRY[realm.app];
-      return syncCommit(realm, () => {
-        realm.reconciler.updateContainer(createElement(App, props), realm.container, null, null);
+      const App = REGISTRY[mounted.app];
+      return syncCommit(mounted, () => {
+        mounted.reconciler.updateContainer(createElement(App, props), mounted.container, null, null);
       });
     },
 
@@ -171,22 +184,22 @@ export const renderWorker = defineWorker({
      * (useEffect), timers, async setState. The pool protocol has no push
      * channel, so the main thread polls this (or the doorbell pushes it).
      */
-    flush(app: string): Op[] {
-      const realm = realms.get(app);
-      if (realm === undefined) return [];
-      const prev = setActiveRealm(app);
+    flush(realm: string): Op[] {
+      const mounted = realms.get(realm);
+      if (mounted === undefined) return [];
+      const prev = setActiveRealm(realm);
       try {
-        realm.reconciler.flushPassiveEffects();
-        realm.reconciler.flushSyncWork();
-        return takeOps(app);
+        mounted.reconciler.flushPassiveEffects();
+        mounted.reconciler.flushSyncWork();
+        return takeOps(realm);
       } finally {
         setActiveRealm(prev);
       }
     },
 
     /** The mounted realm's random id — the island's "worker pid" badge. */
-    whoami(app: string): string {
-      return realms.get(app)?.pid ?? 'unmounted';
+    whoami(realm: string): string {
+      return realms.get(realm)?.pid ?? 'unmounted';
     },
   },
 });

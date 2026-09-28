@@ -1,16 +1,19 @@
 /**
  * The shell — main-thread orchestration for the islands demo.
  *
- * Three independent React trees render on this page, each reconciled inside
- * its OWN Web Worker (one connectWorker client per island, poolSize 1 — see
- * island.ts for why pooling can't go wider). The shell:
+ * Four independent React trees render on this page, each reconciled inside
+ * its OWN Web Worker (one connectWorker client per island, pooling disabled
+ * — see island.ts for why pooling can't go wider). Two of them run the SAME
+ * 'data-table' app — a microfrontend isn't limited to one instance; each
+ * island is its own worker, so the same app can mount as many times as you
+ * like with different props. The shell:
  *
  *   - creates the layout + per-island containers and badges,
  *   - mounts one registry app per island via mountIsland(),
  *   - mediates island → island traffic through `onEvent` + `updateProps`:
  *       controls emits filterChanged/sortChanged → table.updateProps(...)
  *       table emits rowsChanged → stats.updateProps({visible, total})
- *       table emits rowSelected / controls emits countChanged → status line
+ *       both tables emit rowSelected / controls emits countChanged → status line
  *
  * There is still NO React on this thread — every visible element below the
  * toolbar arrives via op replay.
@@ -114,8 +117,28 @@ async function main(): Promise<void> {
   islands.push(controls);
   $('badge-controls').textContent = `worker ${controls.pid}`;
 
+  // Multi-instance: the SAME microfrontend mounts again in a fourth worker —
+  // islands aren't keyed by app name (each island is its own pool/worker), so
+  // a microfrontend can appear any number of times with different content.
+  // This copy starts filtered to eu-central and isn't wired into stats —
+  // its emits still work, they just only reach this island's onEvent sink.
+  const table2 = await mountIsland({
+    client: connectIslandWorker(),
+    el: $('island-table-2'),
+    app: 'data-table',
+    props: { filter: 'eu-central', desc: true },
+    onEvent: (name, payload) => {
+      const p = payload as { id?: number };
+      if (name === 'rowSelected')
+        setStatus(`second data-table instance emitted rowSelected (row #${p.id})`);
+    },
+    onActivity: renderStats,
+  });
+  islands.push(table2);
+  $('badge-table-2').textContent = `worker ${table2.pid}`;
+
   setMode('push');
-  setStatus('three islands mounted — each badge is a different worker realm');
+  setStatus('four islands mounted — two run the same app in different workers');
 }
 
 void main();

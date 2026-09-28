@@ -16,15 +16,30 @@
  * a tree it doesn't hold (sticky routing is future work — see README).
  */
 import { connectWorker, observe } from '@jwhenry123/mesh/sdk';
+import type { ConnectWorkerConfig, SharedSpec } from '@jwhenry123/mesh/sdk';
 import { makeDoorbell } from './memory';
 import { isEventRef, type EventPayload, type Op, type WireProps } from './ops';
 import type { RenderWorker } from './worker/render.worker';
 
 export type Mode = 'push' | 'poll';
 
+/**
+ * Islands are microfrontend containers: each owns ONE worker holding ONE
+ * reconciled tree, so pooling is disabled by construction — the type omits
+ * `poolSize`/`worker`/`sharedMemory` (all island-internal) and the literal
+ * below pins `poolSize: 1` after the spread, so a wider pool can't sneak
+ * through a cast either. What remains configurable (concurrency, taskTimeout,
+ * respawn, lazy…) still passes through.
+ */
+export type IslandWorkerOptions = Omit<
+  ConnectWorkerConfig<SharedSpec>,
+  'sharedMemory' | 'worker' | 'poolSize'
+>;
+
 /** One island client: one pool, one worker, one doorbell buffer. */
-export const connectIslandWorker = () =>
+export const connectIslandWorker = (options: IslandWorkerOptions = {}) =>
   connectWorker<RenderWorker>({
+    ...options,
     sharedMemory: makeDoorbell(),
     worker: () =>
       new Worker(new URL('./worker/render.worker.ts', import.meta.url), { type: 'module' }),
@@ -71,9 +86,20 @@ export interface IslandHandle {
 
 /* ── DOM driver (per island) ────────────────────────────────────────────── */
 
+/** Per-island realm counter — see the realm key note in mountIsland. */
+let islandSeq = 0;
+
 export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandle> {
   const { client, el, app, onEvent, onActivity } = opts;
   const props = opts.props ?? {};
+
+  // Realm key = 'app@N' — the instance suffix keeps each island's realm
+  // distinct even when several islands mount the SAME microfrontend. In
+  // production each worker holds one realm anyway so the suffix is
+  // inert, but under the in-process test one module plays every worker —
+  // without it, mounting 'data-table' twice would remount one shared realm
+  // instead of giving each island its own (and they would share a pid).
+  const realm = `${app}@${++islandSeq}`;
 
   /** instance id → live DOM node. Id 0 is the root container sentinel. */
   const nodes = new Map<number, Node>([[0, el]]);
@@ -251,7 +277,7 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
   const doFlush = (): void => {
     if (destroyed) return;
     flushCalls++;
-    void client.flush(app).then(applyOps);
+    void client.flush(realm).then(applyOps);
   };
 
   /* ── Transport: push (shared-memory doorbell) vs poll ─────────────────── */
@@ -277,8 +303,8 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
 
   /* ── Mount ────────────────────────────────────────────────────────────── */
 
-  applyOps(await client.mount(app, props));
-  const pid = await client.whoami(app);
+  applyOps(await client.mount(realm, props));
+  const pid = await client.whoami(realm);
 
   const handle: IslandHandle = {
     app,
@@ -294,10 +320,10 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
     },
     setMode,
     updateProps: async (next: Record<string, unknown>) => {
-      applyOps(await client.updateProps(app, next));
+      applyOps(await client.updateProps(realm, next));
     },
     flush: async () => {
-      applyOps(await client.flush(app));
+      applyOps(await client.flush(realm));
     },
     destroy: () => {
       destroyed = true;

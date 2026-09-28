@@ -141,4 +141,46 @@ describe('react-dom-worker islands', () => {
     await expect(client.mount('nope', {})).rejects.toThrow(/unknown app "nope"/);
     client.terminate();
   });
+
+  it('the same microfrontend mounts in multiple islands with independent content', async () => {
+    // The islands model is per-worker, not per-app-name — nothing stops the
+    // same registry app running in two islands at once, each with its own
+    // worker, props, and rendered output.
+    const elA = document.createElement('div');
+    const elB = document.createElement('div');
+    document.body.append(elA, elB);
+
+    const a = await mountIsland({
+      client: connectIslandWorker(),
+      el: elA,
+      app: 'data-table',
+      props: { filter: 'us-east', desc: false },
+    });
+    const b = await mountIsland({
+      client: connectIslandWorker(),
+      el: elB,
+      app: 'data-table',
+      props: { filter: '', desc: true },
+    });
+
+    // Same app name, different workers.
+    expect(a.pid).not.toBe(b.pid);
+    expect(a.pid).toMatch(/^w-/);
+
+    // Independent content: A rendered the filter passed at mount, B is
+    // unfiltered and descending.
+    expect(elA.querySelectorAll('tbody tr').length).toBe(400);
+    expect(elB.querySelectorAll('tbody tr').length).toBe(2000);
+    const aFirstCell = elA.querySelector('tbody tr td')!.textContent;
+    const bFirstCell = elB.querySelector('tbody tr td')!.textContent;
+    expect(aFirstCell).not.toBe(bFirstCell);
+
+    // And each still reacts independently — updating A's props doesn't
+    // touch B.
+    await a.updateProps({ filter: '', desc: false });
+    expect(elA.querySelectorAll('tbody tr').length).toBe(2000);
+    expect(elB.querySelectorAll('tbody tr').length).toBe(2000);
+    a.destroy();
+    b.destroy();
+  });
 });
