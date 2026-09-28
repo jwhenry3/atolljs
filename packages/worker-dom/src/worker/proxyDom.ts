@@ -80,6 +80,32 @@ const camelize = (k: string): string => k.replace(/-([a-z])/g, (_m, c: string) =
  */
 let nextPhantomId = -1;
 
+/**
+ * A node that isn't a ProxyNode can only arrive via a foreign `document`
+ * (the dispatcher's real-DOM fallback or a poisoned override) — typically a
+ * library's deferred callback running after its realm was torn down, or
+ * globals restored while worker-side timers still fire. Adopting it would
+ * crash later on `child.instance`; reject it here with the actual cause.
+ */
+const rejectForeignChild = (child: unknown): never => {
+  throw new Error(
+    'proxyDom.insertBefore: child is not a proxy node — the ambient `document`/' +
+      '`createElement` resolved a foreign DOM (a stale override or the real one), ' +
+      'so this node was created outside the realm that owns the parent',
+  );
+};
+
+/**
+ * Detach `child` from its recorded parent, tolerating a stale/foreign
+ * `_parent` link (undefined, or a non-proxy object) instead of crashing on
+ * `_detach` — a corrupted link is cleared, a valid one is honored.
+ */
+const detachFromParent = (child: ProxyNode): void => {
+  const p = child._parent;
+  if (p instanceof ProxyNode) p._detach(child);
+  else child._parent = null;
+};
+
 /* ── ProxyNode ─────────────────────────────────────────────────────────── */
 
 export class ProxyNode {
@@ -183,6 +209,7 @@ export class ProxyNode {
 
   insertBefore<T extends ProxyNode>(child: T, ref: ProxyNode | null): T {
     this.doc._assertAlive();
+    if (!(child instanceof ProxyNode)) rejectForeignChild(child);
     // A fragment is a phantom PARENT — the real DOM splices its children
     // in at the insertion point and empties it; do the same (per-child ops).
     if (child instanceof ProxyFragment) {
@@ -191,7 +218,7 @@ export class ProxyNode {
     }
     let beforeId: number | undefined;
     if (ref === null) {
-      if (child._parent !== null) child._parent._detach(child);
+      detachFromParent(child);
       child._parent = this;
       this._children.push(child);
     } else {
@@ -199,7 +226,7 @@ export class ProxyNode {
       if (index === -1) {
         throw new Error('proxyDom.insertBefore: reference node is not a child of this node');
       }
-      if (child._parent !== null) child._parent._detach(child);
+      detachFromParent(child);
       child._parent = this;
       this._children.splice(index, 0, child);
       if (ref.instance.id > 0) beforeId = ref.instance.id;
@@ -1587,11 +1614,19 @@ export interface WindowShim {
   innerHeight: number;
   devicePixelRatio: number;
   requestAnimationFrame(cb: (time: number) => void): number;
-  cancelAnimationFrame(id: number): void;
-  setTimeout: typeof setTimeout;
-  clearTimeout: typeof clearTimeout;
-  setInterval: typeof setInterval;
-  clearInterval: typeof clearInterval;
+  cancelAnimationFrame(id?: number): void;
+  setTimeout(
+    callback: (...args: unknown[]) => void,
+    delay?: number,
+    ...args: unknown[]
+  ): number;
+  clearTimeout(id?: number): void;
+  setInterval(
+    callback: (...args: unknown[]) => void,
+    delay?: number,
+    ...args: unknown[]
+  ): number;
+  clearInterval(id?: number): void;
   getComputedStyle(el: unknown): Record<string, never>;
   /** Media queries can't be answered worker-side — always `matches: false`. */
   matchMedia(query: string): MediaQueryList;
@@ -1665,6 +1700,18 @@ const buildWindowFacade = (internal: InternalDocument): WindowFacadeBundle => {
 
   const raf = g.requestAnimationFrame as ((cb: (time: number) => void) => number) | undefined;
   const caf = g.cancelAnimationFrame as ((id: number) => void) | undefined;
+  const globalSetTimeout = g.setTimeout as typeof setTimeout;
+  const globalSetInterval = g.setInterval as typeof setInterval;
+  const globalClearTimeout = g.clearTimeout as typeof clearTimeout;
+  const globalClearInterval = g.clearInterval as typeof clearInterval;
+
+  // A realm owns the timers/rAFs it schedules through this facade; teardown
+  // cancels them so deferred library work (Leaflet drag inertia, scroll-zoom
+  // debounces, etc.) doesn't outlive the document and mutate a dead or
+  // foreign ambient DOM. We wrap callbacks so completed ones drop their id.
+  const timeouts = new Set<number>();
+  const intervals = new Set<number>();
+  const rafs = new Set<number>();
 
   const facade: WindowShim = {
     document: internal,
@@ -1684,20 +1731,62 @@ const buildWindowFacade = (internal: InternalDocument): WindowFacadeBundle => {
     },
     devicePixelRatio: 1,
     // Workers normally have no rAF — pass through when one exists (in-process
-    // test), degrade to a 16ms timer otherwise.
+    // test), degrade to a 16ms timer otherwise. Schedule through the host
+    // timers but keep track of the handles so teardown can cancel pending
+    // callbacks (Leaflet's drag/zoom animations, etc.).
     requestAnimationFrame(cb: (time: number) => void): number {
-      return typeof raf === 'function'
-        ? raf.call(globalThis, cb)
-        : (setTimeout(() => cb(Date.now()), 16) as unknown as number);
+      let id: number;
+      const wrapped = (time: number): void => {
+        rafs.delete(id);
+        cb(time);
+      };
+      id = typeof raf === 'function'
+        ? raf.call(globalThis, wrapped)
+        : (globalSetTimeout((stamp: number) => wrapped(stamp), 16, Date.now()) as unknown as number);
+      rafs.add(id);
+      return id;
     },
-    cancelAnimationFrame(id: number): void {
+    cancelAnimationFrame(id?: number): void {
+      if (id === undefined) return;
+      rafs.delete(id);
       if (typeof caf === 'function') caf.call(globalThis, id);
-      else clearTimeout(id);
+      else globalClearTimeout(id);
     },
-    setTimeout: setTimeout.bind(globalThis),
-    clearTimeout: clearTimeout.bind(globalThis),
-    setInterval: setInterval.bind(globalThis),
-    clearInterval: clearInterval.bind(globalThis),
+    setTimeout(...args: Parameters<typeof setTimeout>): number {
+      const [cb, delay, ...rest] = args as [
+        cb: (...a: unknown[]) => void,
+        delay?: number,
+        ...rest: unknown[],
+      ];
+      let id: number;
+      const wrapped = (...a: unknown[]): void => {
+        timeouts.delete(id);
+        cb(...a);
+      };
+      id = globalSetTimeout(wrapped, delay, ...rest) as unknown as number;
+      timeouts.add(id);
+      return id;
+    },
+    clearTimeout(id?: number): void {
+      if (id === undefined) return;
+      timeouts.delete(id);
+      globalClearTimeout(id);
+    },
+    setInterval(...args: Parameters<typeof setInterval>): number {
+      const [cb, delay, ...rest] = args as [
+        cb: (...a: unknown[]) => void,
+        delay?: number,
+        ...rest: unknown[],
+      ];
+      const id = globalSetInterval(cb, delay, ...rest) as unknown as number;
+      intervals.add(id);
+      return id;
+    },
+    clearInterval(id?: number): void {
+      if (id === undefined) return;
+      intervals.delete(id);
+      globalClearInterval(id);
+    },
     // No measurement channel — an empty declaration, same honesty rule as
     // doc.getComputedStyle (which warns once); the facade stays silent.
     getComputedStyle: () => ({}),
@@ -1725,6 +1814,15 @@ const buildWindowFacade = (internal: InternalDocument): WindowFacadeBundle => {
   };
 
   const teardown = (): void => {
+    for (const id of rafs) {
+      if (typeof caf === 'function') caf.call(globalThis, id);
+      else globalClearTimeout(id);
+    }
+    rafs.clear();
+    for (const id of timeouts) globalClearTimeout(id);
+    timeouts.clear();
+    for (const id of intervals) globalClearInterval(id);
+    intervals.clear();
     for (const [type, table] of windowListeners) {
       for (const hid of table.values()) {
         unregisterHandler(hid);

@@ -476,6 +476,105 @@ describe('enriched event payloads', () => {
   });
 });
 
+describe('proxyDom parent/child invariants', () => {
+  it('reparents a node from one parent to another with a remove+append op pair', () => {
+    const ops = inRealm('reparent', () => {
+      const doc = createProxyDocument('reparent');
+      const a = doc.createElement('div');
+      const b = doc.createElement('div');
+      const child = doc.createElement('span');
+      a.appendChild(child);
+      b.appendChild(child);
+      expect(child.parentNode).toBe(b);
+      expect(a.childNodes).toEqual([]);
+      expect(b.childNodes).toEqual([child]);
+      doc.body.append(a, b);
+    });
+    expect(ops.filter((o) => o.t === 'append').length).toBe(4);
+    // `_detach` intentionally emits no remove op: the real DOM move is carried
+    // by the subsequent append of the same node to its new parent.
+    expect(ops.some((o) => o.t === 'remove')).toBe(false);
+  });
+
+  it('splices a DocumentFragment into its new parent and empties it', () => {
+    const ops = inRealm('fragment', () => {
+      const doc = createProxyDocument('fragment');
+      const list = doc.createElement('ul');
+      const frag = doc.createDocumentFragment();
+      const a = doc.createElement('li');
+      a.textContent = 'a';
+      const b = doc.createElement('li');
+      b.textContent = 'b';
+      frag.appendChild(a);
+      frag.appendChild(b);
+      list.appendChild(frag);
+      expect(frag.childNodes).toEqual([]);
+      expect(list.childNodes.length).toBe(2);
+      doc.body.appendChild(list);
+    });
+    expect(ops.some((o) => o.t === 'append' && o.parent !== undefined && o.parent !== 0)).toBe(true);
+  });
+
+  it('rejects a foreign (non-proxy) child with a descriptive error', () => {
+    inRealm('foreign', () => {
+      const doc = createProxyDocument('foreign');
+      const host = doc.createElement('div');
+      doc.body.appendChild(host);
+      const foreign = { _parent: null, instance: { id: 1 } } as unknown as Parameters<
+        typeof host.appendChild
+      >[0];
+      expect(() => host.appendChild(foreign)).toThrow(/not a proxy node/);
+    });
+  });
+
+  it('guards a stale non-proxy _parent instead of crashing on _detach', () => {
+    inRealm('stale-parent', () => {
+      const doc = createProxyDocument('stale-parent');
+      const parent = doc.createElement('div');
+      const child = doc.createElement('span');
+      // Simulate a corrupted parent link (foreign DOM reparenting, etc.).
+      (child as unknown as { _parent: unknown })._parent = {};
+      parent.appendChild(child);
+      expect(child.parentNode).toBe(parent);
+    });
+  });
+});
+
+describe('window facade teardown', () => {
+  it('cancels pending rAF/setTimeout/setInterval handles scheduled through the facade', async () => {
+    const doc = createProxyDocument('timers') as InternalDocument;
+    const uninstall = installDomShim(doc);
+    const win = globalThis.window as unknown as Window & typeof globalThis;
+
+    let timeoutRan = false;
+    let intervalRan = false;
+    let rafRan = false;
+    win.setTimeout(() => {
+      timeoutRan = true;
+    }, 50);
+    const intervalId = win.setInterval(() => {
+      intervalRan = true;
+    }, 50);
+    win.requestAnimationFrame(() => {
+      rafRan = true;
+    });
+
+    // Let the host schedule the handles before we tear down.
+    await new Promise<void>((r) => globalThis.setTimeout(r, 10));
+
+    uninstall();
+
+    // Wait to see if any slipped through.
+    await new Promise<void>((r) => globalThis.setTimeout(r, 80));
+    globalThis.clearInterval(intervalId);
+
+    expect(timeoutRan).toBe(false);
+    expect(intervalRan).toBe(false);
+    expect(rafRan).toBe(false);
+    doc.dispose();
+  });
+});
+
 describe('reflected property accessors', () => {
   it('library-style `el.src = url`/tabIndex/alt emit attr ops instead of silent expandos', () => {
     const ops = inRealm('reflected', () => {

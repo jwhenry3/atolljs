@@ -6,6 +6,8 @@
  */
 import { defineRealmWorker, emit, type ProxyDocument } from '@jwhenry123/mesh-worker-dom/worker';
 
+export let disposed = false;
+
 export const soloWorker = defineRealmWorker({
   imperative: (doc: ProxyDocument, props: Record<string, unknown>): void => {
     const p = doc.createElement('p');
@@ -16,5 +18,8 @@ export const soloWorker = defineRealmWorker({
     btn.textContent = 'ping';
     btn.addEventListener('click', () => emit('pinged', { realm: 'solo' }));
     doc.body.append(p, btn);
+  },
+  dispose() {
+    disposed = true;
   },
 });

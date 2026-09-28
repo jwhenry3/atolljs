@@ -11,6 +11,7 @@ import { InProcessWorker } from '../../../test/inProcessWorker';
 import { islandApp, islandAppNameOf } from '@jwhenry123/mesh-worker-dom';
 import type { IslandHandle } from '../src/index';
 import { echoApp } from './fixtures/echo.worker';
+import { disposed as soloDisposed } from './fixtures/solo.worker';
 
 vi.stubGlobal('Worker', InProcessWorker);
 // In-process workers share one module graph — both worker entries register
@@ -188,6 +189,7 @@ describe('worker-loaded component proxies', () => {
     await act(async () => {
       root.unmount();
     });
+    await vi.waitFor(() => expect(soloDisposed).toBe(true));
   });
 
   it('a shared client mounts two realms into one worker — teardown is ref-counted', async () => {

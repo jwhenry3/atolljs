@@ -84,6 +84,14 @@ import type { EventPayload, IslandWorkerMethods, Op } from '../ops';
 export type ReactIslandApp = (props: any) => ReactElement;
 export interface ImperativeIslandApp {
   imperative: (doc: ProxyDocument, props: Record<string, unknown>) => void;
+  /**
+   * Optional teardown — runs inside the realm's scope BEFORE its proxy
+   * document is disposed (unmount, remount, updateProps rebuild). Cancel
+   * library timers/animation loops/listeners here (e.g. `map.remove()`) so
+   * deferred work can't mutate a dead realm or a foreign ambient document
+   * after teardown.
+   */
+  dispose?: (doc: ProxyDocument) => void;
 }
 /** The apps an island can mount — keyed by the name the shell passes to mount(). */
 export type IslandApp = ReactIslandApp | ImperativeIslandApp;
@@ -123,6 +131,8 @@ interface ReactRealm extends RealmBase {
 interface ImperativeRealm extends RealmBase {
   imperative: {
     build: ImperativeIslandApp['imperative'];
+    /** Optional app teardown — run before the realm's doc is disposed. */
+    dispose: ImperativeIslandApp['dispose'];
     /** The realm's proxy document — replaced on each rebuild. */
     doc: ProxyDocument;
     props: Record<string, unknown>;
@@ -193,7 +203,12 @@ function createIslandRuntime(
         key,
         app: appNameOf(key),
         pid,
-        imperative: { build: app.imperative, doc: createProxyDocument(key), props: {} },
+        imperative: {
+          build: app.imperative,
+          dispose: app.dispose,
+          doc: createProxyDocument(key),
+          props: {},
+        },
       };
     }
     const reconciler = Reconciler(hostConfig);
@@ -248,6 +263,7 @@ function createIslandRuntime(
   function rebuildImperative(realm: ImperativeRealm, props: Record<string, unknown>): Op[] {
     return runInRealm(realm.key, () => {
       const imp = realm.imperative;
+      imp.dispose?.(imp.doc);
       imp.doc.dispose();
       pushOp(realm.key, { t: 'clear' });
       imp.doc = createProxyDocument(realm.key);
@@ -424,8 +440,14 @@ function createIslandRuntime(
         if (mounted === undefined) return [];
         realms.delete(realm);
         if (isImperativeRealm(mounted)) {
-          // Disposing the doc unwinds its DOM shim and drops its handlers.
-          runInRealm(realm, () => mounted.imperative.doc.dispose());
+          // The app's dispose hook cancels deferred work (library timers,
+          // animation loops) BEFORE the doc dies — disposing the doc then
+          // unwinds its DOM shim and drops its handlers.
+          runInRealm(realm, () => {
+            const imp = mounted.imperative;
+            imp.dispose?.(imp.doc);
+            imp.doc.dispose();
+          });
           return [{ t: 'clear' }];
         }
         return syncCommit(mounted, () => {

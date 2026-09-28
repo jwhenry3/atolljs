@@ -688,7 +688,16 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
         // handlers release regardless.
         void client.unmount(realm).catch(() => {});
       } else {
-        client.terminate();
+        // Last island — still run the realm's teardown first so the app's
+        // dispose hook cancels deferred work (library timers, animation
+        // loops) and the proxy doc unwinds. In a real worker terminate may
+        // kill the thread before unmount lands — equally fine, process
+        // death is teardown — but in-process workers need this or the
+        // realm zombies on and its pending callbacks mutate foreign docs.
+        void client
+          .unmount(realm)
+          .catch(() => {})
+          .finally(() => client.terminate());
       }
     },
   };

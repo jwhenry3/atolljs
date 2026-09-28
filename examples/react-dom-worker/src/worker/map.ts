@@ -61,6 +61,10 @@ const PLACES: MapPlace[] = [
 
 type LeafletModule = typeof import('leaflet');
 
+// One map instance per realm document — keyed by doc so multiple map realms
+// in the same in-process module graph don't collide.
+const liveMaps = new WeakMap<ProxyDocument, { remove(): void }>();
+
 export function buildMap(doc: ProxyDocument, props: Record<string, unknown>): void {
   const realm = getActiveRealm();
 
@@ -168,7 +172,16 @@ function startLeaflet(
       bumpOpsVersion();
     });
   });
+
+  liveMaps.set(doc, map);
 }
 
 /** Stamped registry def — mountable by reference (`lazyIsland(() => import('./map'))`). */
-export const mapApp = islandApp('map', { imperative: buildMap });
+export const mapApp = islandApp('map', {
+  imperative: buildMap,
+  /** Cancel Leaflet timers/listeners and tile loads before the proxy doc dies. */
+  dispose(doc: ProxyDocument) {
+    liveMaps.get(doc)?.remove();
+    liveMaps.delete(doc);
+  },
+});
