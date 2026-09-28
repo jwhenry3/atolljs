@@ -4,9 +4,15 @@
  * The worker runs a real React reconciler whose "host environment" is a set
  * of records in a Map — every render-phase and mutation-phase host-config
  * call appends one of these ops to a queue. Task methods (`mount`,
- * `dispatch`, `flush`) return the flushed batch, and the main thread's only
- * job is to replay them against the DOM. Ops ride postMessage — no shared
- * memory is involved.
+ * `updateProps`, `dispatch`, `flush`) return the flushed batch, and the main
+ * thread's only job is to replay them against the DOM. Ops ride postMessage —
+ * no shared memory is involved.
+ *
+ * ISLANDS: every island owns an independent op stream — instance ids are only
+ * unique within one worker, so each island's driver keeps its own node map
+ * (see src/island.ts). `emit` is the one op that is NOT a DOM mutation: it is
+ * the island→shell event channel — the driver hands `{name, payload}` to the
+ * shell-registered `onEvent` callback instead of touching the DOM.
  */
 export type Op =
   /** createElement-equivalent — `props` is already wire-serialized. */
@@ -22,7 +28,14 @@ export type Op =
   /** New text content for a text instance. */
   | { t: 'utext'; id: number; text: string }
   /** Clear the root container (React's clearContainer). */
-  | { t: 'clear' };
+  | { t: 'clear' }
+  /**
+   * Island → shell event — worker code calls `emit(name, payload)` inside a
+   * handler (or a commit-phase effect); the driver invokes the island's
+   * `onEvent(name, payload)` instead of mutating the DOM. Payloads must be
+   * structured-cloneable — same rule as props.
+   */
+  | { t: 'emit'; name: string; payload?: unknown };
 
 /**
  * Wire-serialized props. Functions named `on*` (onClick, onInput, …) cross as

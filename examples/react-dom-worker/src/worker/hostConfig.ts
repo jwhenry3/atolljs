@@ -14,6 +14,14 @@
  * persistence, resources, singletons, view transitions, test selectors,
  * scope/hydratable APIs) — they exist so nothing throws when the reconciler
  * destructures them; they are never invoked behind the `supports*` flags.
+ *
+ * REALMS: one worker script hosts an app registry — in production each
+ * island's worker mounts exactly one app, but the in-process test runs every
+ * island against a single module instance, so state that must not bleed
+ * between islands is keyed by app name ("realm"): each instance records the
+ * realm it was created under, and structural ops route to that instance's
+ * realm queue. Task methods wrap their work in {@link setActiveRealm} so
+ * instance-less ops (`clear`, `emit`) land on the right queue too.
  */
 
 import { createContext } from 'react';
@@ -26,6 +34,8 @@ export interface ElementInstance {
   kind: 'element';
   id: number;
   type: string;
+  /** Which mounted app this node belongs to — routes its ops. */
+  realm: string;
   /** Last serialized prop set — needed so hide/unhide can resend it. */
   props: WireProps;
   /** propName → stable handler id (keeps DOM listeners stable across updates). */
@@ -36,6 +46,7 @@ export interface TextInstance {
   kind: 'text';
   id: number;
   text: string;
+  realm: string;
 }
 
 export type HostInstance = ElementInstance | TextInstance;
@@ -43,20 +54,62 @@ export type HostInstance = ElementInstance | TextInstance;
 /** The root container is a sentinel — op `parent: 0` means "the root". */
 export const ROOT_CONTAINER = Object.freeze({ id: 0 });
 
-/* ── Op queue + instance/handler tables ─────────────────────────────────── */
+/* ── Per-realm op queues + instance/handler tables ──────────────────────── */
 
-const ops: Op[] = [];
+/** realm (app name) → queued ops. Each island flushes only its own queue. */
+const opsByRealm = new Map<string, Op[]>();
+/** The realm a task is currently executing under — see setActiveRealm. */
+let activeRealm = '';
 const instances = new Map<number, HostInstance>();
-/** handler id → the actual prop function. Lives worker-side; never serialized. */
-const handlers = new Map<number, (payload: unknown) => void>();
+interface HandlerEntry {
+  fn: (payload: unknown) => void;
+  realm: string;
+}
+/** handler id → prop function + owning realm. Lives worker-side; never serialized. */
+const handlers = new Map<number, HandlerEntry>();
 let nextId = 1;
 let nextHandlerId = 1;
 
-/** Drain the queued ops — called by the worker's task methods. */
-export const takeOps = (): Op[] => ops.splice(0, ops.length);
+/**
+ * Marks which realm the currently-running task belongs to; returns the
+ * previous value for restore. Structural ops don't need it — they route by
+ * their instance's realm — but instance-less ops (`clear`, `emit`) and
+ * handler dispatch do. Worker tasks run synchronously, so a single pointer
+ * is safe even when several realms coexist in one module.
+ */
+export const setActiveRealm = (realm: string): string => {
+  const prev = activeRealm;
+  activeRealm = realm;
+  return prev;
+};
 
-export const getHandler = (id: number): ((payload: unknown) => void) | undefined =>
-  handlers.get(id);
+const pushOp = (realm: string, op: Op): void => {
+  let queue = opsByRealm.get(realm);
+  if (!queue) opsByRealm.set(realm, (queue = []));
+  queue.push(op);
+};
+
+/** Drain one realm's queued ops — called by the worker's task methods. */
+export const takeOps = (realm: string): Op[] => {
+  const queue = opsByRealm.get(realm);
+  if (!queue || queue.length === 0) return [];
+  opsByRealm.set(realm, []);
+  return queue;
+};
+
+export const getHandler = (id: number): HandlerEntry | undefined => handlers.get(id);
+
+/**
+ * The island→shell channel. Apps call `emit(name, payload)` inside event
+ * handlers or commit-phase effects — it just queues an `emit` op, which the
+ * main-thread driver routes to the island's `onEvent` callback instead of
+ * the DOM. Call it while a task holds the realm (handlers, layout effects);
+ * a bare emit from a passive effect has no realm to route to in the
+ * many-realms-per-module case and would be dropped.
+ */
+export const emit = (name: string, payload?: unknown): void => {
+  pushOp(activeRealm, { t: 'emit', name, payload });
+};
 
 /* ── Prop serialization ─────────────────────────────────────────────────── */
 
@@ -83,7 +136,7 @@ function serializeProps(instance: ElementInstance, props: Record<string, unknown
           slot = nextHandlerId++;
           instance.listenerSlots[name] = slot;
         }
-        handlers.set(slot, value as (payload: unknown) => void);
+        handlers.set(slot, { fn: value as (payload: unknown) => void, realm: instance.realm });
         out[name] = { __evt: slot };
       }
       // Non-event functions (render props, callbacks) can't cross the wire — dropped.
@@ -97,14 +150,21 @@ function serializeProps(instance: ElementInstance, props: Record<string, unknown
 /* ── Small factories ────────────────────────────────────────────────────── */
 
 function newElement(type: string, props: Record<string, unknown>): ElementInstance {
-  const instance: ElementInstance = { kind: 'element', id: nextId++, type, props: {}, listenerSlots: {} };
+  const instance: ElementInstance = {
+    kind: 'element',
+    id: nextId++,
+    type,
+    realm: activeRealm,
+    props: {},
+    listenerSlots: {},
+  };
   instance.props = serializeProps(instance, props);
   instances.set(instance.id, instance);
   return instance;
 }
 
 function newText(text: string): TextInstance {
-  const instance: TextInstance = { kind: 'text', id: nextId++, text };
+  const instance: TextInstance = { kind: 'text', id: nextId++, text, realm: activeRealm };
   instances.set(instance.id, instance);
   return instance;
 }
@@ -174,7 +234,7 @@ export const hostConfig = {
     _internalHandle: unknown,
   ): ElementInstance => {
     const instance = newElement(type, props);
-    ops.push({ t: 'create', id: instance.id, type, props: instance.props });
+    pushOp(instance.realm, { t: 'create', id: instance.id, type, props: instance.props });
     return instance;
   },
   createTextInstance: (
@@ -184,7 +244,7 @@ export const hostConfig = {
     _internalHandle: unknown,
   ): TextInstance => {
     const instance = newText(text);
-    ops.push({ t: 'text', id: instance.id, text });
+    pushOp(instance.realm, { t: 'text', id: instance.id, text });
     return instance;
   },
   finalizeInitialChildren: FALSE,
@@ -196,28 +256,30 @@ export const hostConfig = {
 
   // Tree wiring — emit ops
   appendInitialChild: (parent: HostInstance, child: HostInstance): void => {
-    ops.push({ t: 'append', parent: parent.id, child: child.id });
+    pushOp(parent.realm, { t: 'append', parent: parent.id, child: child.id });
   },
   appendChild: (parent: HostInstance, child: HostInstance): void => {
-    ops.push({ t: 'append', parent: parent.id, child: child.id });
+    pushOp(parent.realm, { t: 'append', parent: parent.id, child: child.id });
   },
   appendChildToContainer: (_container: unknown, child: HostInstance): void => {
-    ops.push({ t: 'append', parent: 0, child: child.id });
+    pushOp(child.realm, { t: 'append', parent: 0, child: child.id });
   },
   insertBefore: (parent: HostInstance, child: HostInstance, before: HostInstance): void => {
-    ops.push({ t: 'append', parent: parent.id, child: child.id, before: before.id });
+    pushOp(parent.realm, { t: 'append', parent: parent.id, child: child.id, before: before.id });
   },
   insertInContainerBefore: (_container: unknown, child: HostInstance, before: HostInstance): void => {
-    ops.push({ t: 'append', parent: 0, child: child.id, before: before.id });
+    pushOp(child.realm, { t: 'append', parent: 0, child: child.id, before: before.id });
   },
   removeChild: (_parent: HostInstance, child: HostInstance): void => {
-    ops.push({ t: 'remove', child: child.id });
+    pushOp(child.realm, { t: 'remove', child: child.id });
   },
   removeChildFromContainer: (_container: unknown, child: HostInstance): void => {
-    ops.push({ t: 'remove', child: child.id });
+    pushOp(child.realm, { t: 'remove', child: child.id });
   },
+  // No instance argument — routed by the task's active realm (only reached
+  // inside mount/remount's syncCommit).
   clearContainer: (): void => {
-    ops.push({ t: 'clear' });
+    pushOp(activeRealm, { t: 'clear' });
   },
 
   // Updates — emit ops
@@ -229,33 +291,33 @@ export const hostConfig = {
     _internalHandle: unknown,
   ): void => {
     instance.props = serializeProps(instance, newProps);
-    ops.push({ t: 'update', id: instance.id, props: instance.props });
+    pushOp(instance.realm, { t: 'update', id: instance.id, props: instance.props });
   },
   commitTextUpdate: (instance: TextInstance, _oldText: string, newText: string): void => {
     instance.text = newText;
-    ops.push({ t: 'utext', id: instance.id, text: newText });
+    pushOp(instance.realm, { t: 'utext', id: instance.id, text: newText });
   },
   commitMount: noop,
   // Unreachable while shouldSetTextContent is always false; still emit the
   // spec'd op for completeness.
   resetTextContent: (instance: ElementInstance): void => {
     instance.props = {};
-    ops.push({ t: 'update', id: instance.id, props: {} });
+    pushOp(instance.realm, { t: 'update', id: instance.id, props: {} });
   },
 
   // Suspense visibility — `hidden` is a global HTML attribute the main
   // thread applies like any other prop.
   hideInstance: (instance: ElementInstance): void => {
-    ops.push({ t: 'update', id: instance.id, props: { ...instance.props, hidden: true } });
+    pushOp(instance.realm, { t: 'update', id: instance.id, props: { ...instance.props, hidden: true } });
   },
   unhideInstance: (instance: ElementInstance): void => {
-    ops.push({ t: 'update', id: instance.id, props: { ...instance.props } });
+    pushOp(instance.realm, { t: 'update', id: instance.id, props: { ...instance.props } });
   },
   hideTextInstance: (instance: TextInstance): void => {
-    ops.push({ t: 'utext', id: instance.id, text: '' });
+    pushOp(instance.realm, { t: 'utext', id: instance.id, text: '' });
   },
   unhideTextInstance: (instance: TextInstance, text: string): void => {
-    ops.push({ t: 'utext', id: instance.id, text });
+    pushOp(instance.realm, { t: 'utext', id: instance.id, text });
   },
 
   // GC hook — drop the record and its handler slots.

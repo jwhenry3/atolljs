@@ -1,28 +1,45 @@
-# React in a Worker — DOM ops over postMessage
+# React Worker Islands — one worker script, N React trees
 
-A standalone proof that **React's render logic needs no DOM**. The real
-`react-reconciler@0.34` (the same package react-dom is built on) runs inside a
-Web Worker with a custom `supportsMutation` host config whose "host instances"
-are plain records in a `Map`. Every render-phase and mutation-phase hook
-appends a serialized op to a queue; task methods return the flushed batch, and
-the main thread's only job is to replay the ops as real DOM mutations.
+A standalone proof that **React's render logic needs no DOM** — scaled out to
+islands. The real `react-reconciler@0.34` (the same package react-dom is built
+on) runs inside Web Workers with a custom `supportsMutation` host config whose
+"host instances" are plain records in a `Map`. Every render-phase and
+mutation-phase hook appends a serialized op to a queue; task methods return the
+flushed batch, and the main thread's only job is to replay the ops as real DOM
+mutations.
 
-There is **no React on the main thread** — `src/main.ts` is a dumb op applier.
-The ops themselves always ride postMessage; the toolbar at the top of the page
-switches how async commits get *noticed*: **push** uses a SharedArrayBuffer
-doorbell (`opsVersion` bumped per commit, `observe()` wakes via
-`Atomics.waitAsync`), **poll** uses a 50 ms `setInterval`. Push mode is why
-the dev server sends COOP/COEP — the poll path needs none of it, which is the
-message-only/shared-memory tradeoff made visible.
+**The shell + islands model:** the page mounts several independent React apps.
+Each island is its own `connectWorker` client — one pool, `poolSize: 1`, one
+worker — running the **same worker script**. The worker exposes an app
+registry (`controls` / `data-table` / `stats`); `mount(app, props)` picks the
+component the island renders. There is **no React on the main thread**:
+`src/island.ts` is a dumb op applier plus an event sink per island.
+
+Islands never talk to each other directly — the **shell mediates**:
+
+```
+controls island: emit('filterChanged') ─┐
+                                        ├─ shell onEvent → table.updateProps({filter, desc})
+controls island: emit('sortChanged') ───┘
+table island: emit('rowsChanged') ─────→ shell onEvent → stats.updateProps({visible, total})
+table island: emit('rowSelected') ─────→ shell status line
+controls island: emit('countChanged') ─→ shell status line
+```
+
+Each island's header shows its `whoami()` pid — a random per-realm id proving
+every island is a distinct worker (in the in-process test, a distinct render
+realm).
 
 ## Files
 
-- `src/worker/render.worker.ts` — `defineWorker` entry; owns the reconciler, exposes `mount`/`dispatch`/`flush`
-- `src/worker/hostConfig.ts` — the ~150-field host config: instances as `{ id, type, props }` records, ops emitted per hook
-- `src/worker/App.tsx` — demo app: memoized 2000-row list, filter input, sort toggle, counter, busy-loop compute
-- `src/main.ts` — main thread: `connectWorker` client + `applyOps` DOM driver + transport toggle
-- `src/memory.ts` — the doorbell contract: one `opsVersion` counter
+- `src/worker/render.worker.ts` — `defineWorker` entry; app registry + per-realm reconciler/container/queue/pid; exposes `mount` / `updateProps` / `dispatch` / `flush` / `whoami`
+- `src/worker/hostConfig.ts` — the ~150-field host config: realm-tagged instances, per-realm op queues, the `emit()` helper
+- `src/worker/apps.tsx` — the three island apps: `ControlsApp` (emits filter/sort/counter events), `TableApp` (2000-row memoized table, props-driven, emits rowSelected/rowsChanged), `StatsApp` (row count + busy-loop compute)
+- `src/island.ts` — `mountIsland({ client, el, app, props, onEvent })`: per-island DOM driver, doorbell subscription, `{ updateProps, setMode, destroy }`
+- `src/main.ts` — the thin shell: layout, one `connectIslandWorker()` + `mountIsland()` per island, event mediation, global transport toggle
+- `src/memory.ts` — the doorbell contract: `renderMemory` (worker side) + `makeDoorbell()` (per-island main-side instance)
 - `src/ops.ts` — the wire protocol
+- `test/islands.test.ts` — in-process E2E (InProcessWorker + happy-dom): distinct pids, emit → updateProps mediation, doorbell flush, remount semantics
 
 ## Protocol
 
@@ -32,53 +49,70 @@ Worker → main, batches of:
 | --- | --- | --- |
 | `create` | `{id, type, props}` | `document.createElement(type)` + props (`{__evt:id}` → listener) |
 | `text` | `{id, text}` | `document.createTextNode(text)` |
-| `append` | `{parent, child, before?}` | `parent.insertBefore(child, before ?? null)`; parent `0` = root |
+| `append` | `{parent, child, before?}` | `parent.insertBefore(child, before ?? null)`; parent `0` = island root |
 | `remove` | `{child}` | detach the node |
 | `update` | `{id, props}` | full re-serialized prop set; main diffs vs. its last set |
 | `utext` | `{id, text}` | `node.textContent = text` |
-| `clear` | `{}` | clear the root container |
+| `clear` | `{}` | clear the island's root container |
+| `emit` | `{name, payload}` | **not** a DOM op — invokes the island's `onEvent(name, payload)` |
 
-Main → worker:
+Main → worker (the app name rides the wire for realm routing — `mountIsland`
+binds it, so the shell sees `island.updateProps(props)`):
 
-- `mount()` → first op batch after a synchronous `updateContainer(<App/>)` commit
-- `dispatch(handlerId, {type, value, checked, key})` → invokes the prop function
-  behind an `__evt` ref; returns the re-render's ops — one postMessage
-  round-trip per interaction
-- `flush()` → drains ops committed outside a task call (passive effects, timers)
+- `mount(app, props)` → first op batch after a synchronous `updateContainer`
+  commit. Mounting an already-mounted app is a **remount**: the old tree
+  unmounts (`clear` + detached instances), a fresh container renders — the
+  batch replays onto an emptied root; the pid survives.
+- `updateProps(app, props)` → re-render the island's root with new
+  serializable props — the shell→island channel.
+- `dispatch(handlerId, {type, value, checked, key})` → invokes the prop
+  function behind an `__evt` ref; returns the re-render's ops — one
+  postMessage round-trip per interaction.
+- `flush(app)` → drains that realm's ops committed outside a task call
+  (passive effects, timers).
+- `whoami(app)` → the realm's random pid.
 
 ## Notes & caveats
 
-- **poolSize must be 1.** One reconciled tree lives in one worker's memory. A
-  second worker would emit ops for a different tree with colliding instance
-  ids; the main thread's node map would corrupt. This is inherent to the
-  single-tree design, not a pool limitation to lean on.
+- **poolSize: 1 is inherent per island.** One reconciled tree lives in one
+  worker's memory; every island gets its own pool instead of sharing a bigger
+  one. A real pool can't serve islands today anyway — task routing is
+  least-busy round-robin, so a second worker would receive `dispatch` calls
+  for a tree it doesn't hold (its handler ids are a different worker's).
+  Sticky routing / per-worker task affinity is documented future work.
+- **Ops are isolated per island.** Instance ids are only unique within one
+  worker, so each island keeps its own nodes/props/listeners maps — sharing
+  them would corrupt. On the worker side the same rule applies to ops: each
+  instance records the realm it was created under, and ops route to that
+  realm's queue (multi-realm module state exists for the in-process test,
+  where one module instance plays every worker).
+- **`emit` is the island→shell channel.** Island code calls `emit(name,
+  payload)` inside event handlers or commit-phase effects (the demo uses
+  `useLayoutEffect` for `rowsChanged`). Payloads are structured-cloned like
+  props. Don't emit from a passive effect — outside a task there's no realm
+  to route the op to.
+- **One doorbell contract instance per island.** A `SharedMemory` contract
+  binds to exactly one buffer; each island's pool creates its own buffer, so
+  the shell passes a fresh `makeDoorbell()` per client. The worker script has
+  one module-level `renderMemory` — each worker instance binds its own copy.
+- **Async updates need `flush()`.** `useEffect` state updates, timers, and
+  promise continuations commit on the worker's own scheduler task; their ops
+  sit in the realm queue until asked for. `resetAfterCommit` bumps
+  `opsVersion`, the island's `observe()` wakes on `Atomics.waitAsync`, and
+  `flush(app)` drains — the toolbar's **push/poll** toggle applies to every
+  island and is called after all mounts (see `setMode` in island.ts).
 - **Every interaction is a round-trip.** A keystroke = postMessage → worker
-  re-render → ops back → DOM writes. Fine for this demo; latency-sensitive UI
-  would want the ops batched or the update moved closer to the input.
+  re-render → ops back → DOM writes. Cross-island effects add one more hop:
+  emit op → shell → `updateProps` task → second worker re-render → ops back.
 - **No DOM in worker components.** No `document`/`window`/refs/`useLayoutEffect`
-  reads — render output is the only interface to the page.
+  reads (using it only for `emit` timing is fine — it runs during commit, not
+  render).
 - **Events are plain payloads**, not SyntheticEvents: `{ type, value, checked,
   key }`. Handlers are stable across re-renders — each (instance, prop) pair
   owns one `__evt` slot, so the main thread attaches each listener once.
-- **Text children are text instances.** `shouldSetTextContent` always returns
-  `false`, so `"hello {x}"` becomes `text`/`append`/`utext` ops rather than a
-  `textContent` prop — structure stays uniform in the protocol.
-- **React DevTools can't see the worker tree** — the reconciler is a separate
-  copy of React in another realm, and `HostTransitionContext`/`act`/fiber
-  internals don't cross postMessage.
-- **Async updates need `flush()`.** `useEffect` state updates, timers, and
-  promise continuations commit on the worker's own scheduler task; their ops
-  sit in the queue until asked for. The pool protocol has no push channel, so
-  the doorbell pattern supplies it: `hostConfig.resetAfterCommit` bumps
-  `opsVersion` in shared memory, the main thread's `observe()` wakes on
-  `Atomics.waitAsync` and calls `flush()`. Toggle to **poll** in the toolbar
-  and the same flush runs on a 50 ms `setInterval` — watch the flush-call
-  counter to see what the doorbell saves (each poll tick is a round trip that
-  usually returns `[]`).
-- **Commits are synchronous only inside tasks.** `mount`/`dispatch` wrap work
-  in `flushSyncFromReconciler`, which pins the update lane to sync and flushes
-  in its `finally` — `updateContainer` alone in 0.34 only *schedules*.
-- No COOP/COEP headers — none needed without SharedArrayBuffer.
+- **React DevTools can't see the worker trees** — each island's reconciler is
+  a separate copy of React in another realm, and fiber internals don't cross
+  postMessage.
 
 ## Run
 
