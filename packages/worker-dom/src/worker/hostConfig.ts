@@ -27,6 +27,7 @@
 import { createContext } from 'react';
 import { renderMemory } from '../memory';
 import type { Op, WireProps } from '../ops';
+import { realmDocFor, type ProxyNode } from './proxyDom';
 
 /* ── Host instances ─────────────────────────────────────────────────────── */
 
@@ -36,6 +37,9 @@ export interface ElementInstance {
   type: string;
   /** Which mounted app this node belongs to — routes its ops. */
   realm: string;
+  /** Namespace URI for non-HTML elements (svg/mathml) — rides the `create`
+   *  op so the driver uses `createElementNS`. Tracked via host context. */
+  ns?: string;
   /** Last serialized prop set — needed so hide/unhide can resend it. */
   props: WireProps;
   /** propName → stable handler id (keeps DOM listeners stable across updates). */
@@ -51,8 +55,17 @@ export interface TextInstance {
 
 export type HostInstance = ElementInstance | TextInstance;
 
-/** The root container is a sentinel — op `parent: 0` means "the root". */
-export const ROOT_CONTAINER = Object.freeze({ id: 0 });
+/** The root container is a sentinel — op `parent: 0` means "the root".
+ *  defineIslandWorker stamps `realm` on the container it hands
+ *  createContainer, so createInstance can bind every element to the realm
+ *  that rendered it — deterministic even when a commit runs outside a realm
+ *  task (passive-effect renders, scheduler flushes), where activeRealm is
+ *  ''. Instance-bound ops then always reach their island's queue. */
+export interface RootContainer {
+  id: 0;
+  realm?: string;
+}
+export const ROOT_CONTAINER = Object.freeze({ id: 0 }) as RootContainer;
 
 /* ── Per-realm op queues + instance/handler tables ──────────────────────── */
 
@@ -70,6 +83,8 @@ export const instances = new Map<number, HostInstance>();
 interface HandlerEntry {
   fn: (payload: unknown) => void;
   realm: string;
+  /** The element this handler was attached to — the event's currentTarget. */
+  instanceId?: number;
 }
 /** handler id → prop function + owning realm. Lives worker-side; never serialized. */
 const handlers = new Map<number, HandlerEntry>();
@@ -86,14 +101,32 @@ export const allocId = (): number => nextId++;
  * handler dispatch do. Worker tasks run synchronously, so a single pointer
  * is safe even when several realms coexist in one module.
  */
+let lastRealm = '';
 export const setActiveRealm = (realm: string): string => {
   const prev = activeRealm;
   activeRealm = realm;
+  if (realm !== '') lastRealm = realm;
   return prev;
 };
 
 /** The realm the current task is running under — '' outside a realm task. */
 export const getActiveRealm = (): string => activeRealm;
+
+/**
+ * The most recent realm a task ran under — used by the realm dispatcher to
+ * route deferred library work (timers, promise continuations) to the right
+ * document when several realms share one module (in-process tests).
+ */
+export const getLastActiveRealm = (): string => lastRealm;
+
+/**
+ * Marks `realm` as the ambient realm for out-of-task readers (timers,
+ * continuations, shim consumers outside realm work). Called by
+ * installDomShim so its document becomes the ambient document.
+ */
+export const markRealmActive = (realm: string): void => {
+  if (realm) lastRealm = realm;
+};
 
 /**
  * Run `fn` while `realm` is the active realm — the imperative-code twin of
@@ -191,9 +224,13 @@ export const setRealmSize = (realm: string, w: number, h: number): void => {
  * `listen`/`unlisten` ops carry the returned id so the main thread can wire
  * and later detach the matching DOM listener.
  */
-export const registerHandler = (fn: (payload: unknown) => void, realm: string): number => {
+export const registerHandler = (
+  fn: (payload: unknown) => void,
+  realm: string,
+  instanceId?: number,
+): number => {
   const id = nextHandlerId++;
-  handlers.set(id, { fn, realm });
+  handlers.set(id, { fn, realm, instanceId });
   return id;
 };
 
@@ -238,7 +275,11 @@ function serializeProps(instance: ElementInstance, props: Record<string, unknown
           slot = nextHandlerId++;
           instance.listenerSlots[name] = slot;
         }
-        handlers.set(slot, { fn: value as (payload: unknown) => void, realm: instance.realm });
+        handlers.set(slot, {
+          fn: value as (payload: unknown) => void,
+          realm: instance.realm,
+          instanceId: instance.id,
+        });
         out[name] = { __evt: slot };
       }
       // Non-event functions (render props, callbacks) can't cross the wire — dropped.
@@ -251,12 +292,18 @@ function serializeProps(instance: ElementInstance, props: Record<string, unknown
 
 /* ── Small factories ────────────────────────────────────────────────────── */
 
-function newElement(type: string, props: Record<string, unknown>): ElementInstance {
+function newElement(
+  type: string,
+  props: Record<string, unknown>,
+  ns: string | undefined,
+  realm: string,
+): ElementInstance {
   const instance: ElementInstance = {
     kind: 'element',
     id: allocId(),
     type,
-    realm: activeRealm,
+    ns,
+    realm,
     props: {},
     listenerSlots: {},
   };
@@ -265,8 +312,8 @@ function newElement(type: string, props: Record<string, unknown>): ElementInstan
   return instance;
 }
 
-function newText(text: string): TextInstance {
-  const instance: TextInstance = { kind: 'text', id: allocId(), text, realm: activeRealm };
+function newText(text: string, realm: string): TextInstance {
+  const instance: TextInstance = { kind: 'text', id: allocId(), text, realm };
   instances.set(instance.id, instance);
   return instance;
 }
@@ -291,7 +338,71 @@ const noop = (): void => {};
 const NULL = (): null => null;
 const FALSE = (): boolean => false;
 const TRUE = (): boolean => true;
-const DEFAULT_HOST_CONTEXT = Object.freeze({});
+
+/* ── Refs & portals ───────────────────────────────────────────────────────
+ *
+ * React refs must receive an object the COMPONENT treats as "the element" —
+ * for React DOM that's the real DOM node, for us the closest truthful thing
+ * is the proxy DOM's facade (it navigates the shadow tree, mutates via ops,
+ * and reports `nodeType === 1`). getPublicInstance therefore adopts the
+ * host instance into a per-realm proxy document, created lazily so React
+ * realms only pay for it when something actually holds a ref.
+ *
+ * This is what makes react-dom's `createPortal(children, ref.current)` work
+ * here: isValidContainer() only checks nodeType, the portal fiber then feeds
+ * the facade back as `containerInfo`, and the container-level methods below
+ * unwrap `.instance` so portal children land inside the real target node —
+ * that is the entire recharts <Tooltip>/<Legend> path.
+ */
+const publicInstanceFor = (instance: HostInstance): ProxyNode | HostInstance =>
+  realmDocFor(instance.realm).adopt(instance);
+
+/**
+ * Portal `containerInfo` is the public instance (a ProxyElement) the caller
+ * passed to createPortal; the ROOT_CONTAINER sentinel and raw instances keep
+ * their own `id`. Anything unrecognizable falls back to the island root.
+ */
+const containerParentId = (container: unknown): number => {
+  const inst = (container as { instance?: { id?: unknown } } | null)?.instance;
+  if (inst && typeof inst.id === 'number') return inst.id;
+  const id = (container as { id?: unknown } | null)?.id;
+  return typeof id === 'number' ? id : 0;
+};
+
+/**
+ * The realm a create should bind to — read off the root container for
+ * ordinary renders, off the portal container's wrapped instance for portal
+ * subtrees (a ProxyElement, whose `.realm` field doesn't exist but whose
+ * `.instance.realm` does), finally falling back to ambient realm state.
+ */
+const containerRealm = (container: unknown): string => {
+  const c = container as (RootContainer & { instance?: { realm?: string } }) | null;
+  return c?.realm ?? c?.instance?.realm ?? (activeRealm !== '' ? activeRealm : lastRealm);
+};
+
+/* Host context = DOM namespace tracking, same role it plays in React DOM:
+ * `getChildHostContext` flips the namespace when the element type requires
+ * it, and `createInstance` stamps the result on the instance so the `create`
+ * op can tell the driver to createElementNS. Recharts-style SVG trees need
+ * this — without it every <svg>/<path> would arrive as an HTMLUnknownElement. */
+interface HostContext {
+  ns?: string;
+}
+const SVG_NS = 'http://www.w3.org/2000/svg';
+const MATH_NS = 'http://www.w3.org/1998/Math/MathML';
+const HTML_CTX: HostContext = Object.freeze({});
+const SVG_CTX: HostContext = Object.freeze({ ns: SVG_NS });
+const MATH_CTX: HostContext = Object.freeze({ ns: MATH_NS });
+
+/** The namespace context a host element gives its children — and the
+ *  namespace the element itself belongs to (getChildNamespace semantics:
+ *  <svg> in HTML is SVG, foreignObject/desc/title flip back to HTML). */
+const childHostContextFor = (parent: HostContext, type: string): HostContext => {
+  if (type === 'svg') return SVG_CTX;
+  if (type === 'math') return MATH_CTX;
+  if (type === 'foreignObject' || type === 'desc' || type === 'title') return HTML_CTX;
+  return parent;
+};
 
 /* ── The host config ────────────────────────────────────────────────────── */
 
@@ -310,12 +421,25 @@ export const hostConfig = {
   supportsMicrotasks: false,
   supportsTestSelectors: false,
 
-  getPublicInstance: (instance: HostInstance): HostInstance => instance,
+  getPublicInstance: (instance: HostInstance): unknown => publicInstanceFor(instance),
   // Host contexts must be non-null objects (the reconciler pushes them on a
   // context stack and warns "Expected host context to exist" on null). This
   // renderer carries no per-subtree context — echo a single frozen sentinel.
-  getRootHostContext: () => DEFAULT_HOST_CONTEXT,
-  getChildHostContext: (parent: unknown) => parent,
+  // Host contexts must be non-null objects (the reconciler warns on null).
+  // Ours carries only the element namespace: <svg>/<math> enter their
+  // namespaces; foreignObject/desc/title are HTML-integration points that
+  // flip children back to HTML; everything else inherits the parent's.
+  // For portals, this becomes the context the portal subtree renders under —
+  // derived from the container's own namespace so children of an SVG portal
+  // target (recharts zIndex <g> layers) stay in the SVG namespace.
+  getRootHostContext: (container: unknown): HostContext => {
+    const ns = (container as { instance?: { ns?: string } } | null)?.instance?.ns;
+    if (ns === SVG_NS) return SVG_CTX;
+    if (ns === MATH_NS) return MATH_CTX;
+    return HTML_CTX;
+  },
+  getChildHostContext: (parent: HostContext, type: string): HostContext =>
+    childHostContextFor(parent, type),
   prepareForCommit: NULL,
   // The doorbell: every commit bumps opsVersion once — the main thread's
   // observe() wakes (Atomics.waitAsync) and flushes the op queue, so commits
@@ -328,21 +452,32 @@ export const hostConfig = {
   createInstance: (
     type: string,
     props: Record<string, unknown>,
-    _rootContainer: unknown,
-    _hostContext: unknown,
+    rootContainer: unknown,
+    hostContext: unknown,
     _internalHandle: unknown,
   ): ElementInstance => {
-    const instance = newElement(type, props);
-    pushOp(instance.realm, { t: 'create', id: instance.id, type, props: instance.props });
+    // The element's own namespace = the child context its TYPE produces
+    // under the parent's context — the same computation React DOM runs
+    // (getChildNamespace): <svg> in HTML is itself SVG, <foreignObject> in
+    // SVG is itself HTML. Realm comes from the container (see RootContainer).
+    const ctx = childHostContextFor(hostContext as HostContext, type);
+    const instance = newElement(type, props, ctx.ns, containerRealm(rootContainer));
+    pushOp(instance.realm, {
+      t: 'create',
+      id: instance.id,
+      type,
+      props: instance.props,
+      ns: instance.ns,
+    });
     return instance;
   },
   createTextInstance: (
     text: string,
-    _rootContainer: unknown,
+    rootContainer: unknown,
     _hostContext: unknown,
     _internalHandle: unknown,
   ): TextInstance => {
-    const instance = newText(text);
+    const instance = newText(text, containerRealm(rootContainer));
     pushOp(instance.realm, { t: 'text', id: instance.id, text });
     return instance;
   },
@@ -360,14 +495,19 @@ export const hostConfig = {
   appendChild: (parent: HostInstance, child: HostInstance): void => {
     pushOp(parent.realm, { t: 'append', parent: parent.id, child: child.id });
   },
-  appendChildToContainer: (_container: unknown, child: HostInstance): void => {
-    pushOp(child.realm, { t: 'append', parent: 0, child: child.id });
+  appendChildToContainer: (container: unknown, child: HostInstance): void => {
+    pushOp(child.realm, { t: 'append', parent: containerParentId(container), child: child.id });
   },
   insertBefore: (parent: HostInstance, child: HostInstance, before: HostInstance): void => {
     pushOp(parent.realm, { t: 'append', parent: parent.id, child: child.id, before: before.id });
   },
-  insertInContainerBefore: (_container: unknown, child: HostInstance, before: HostInstance): void => {
-    pushOp(child.realm, { t: 'append', parent: 0, child: child.id, before: before.id });
+  insertInContainerBefore: (container: unknown, child: HostInstance, before: HostInstance): void => {
+    pushOp(child.realm, {
+      t: 'append',
+      parent: containerParentId(container),
+      child: child.id,
+      before: before.id,
+    });
   },
   removeChild: (_parent: HostInstance, child: HostInstance): void => {
     pushOp(child.realm, { t: 'remove', child: child.id });

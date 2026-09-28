@@ -66,7 +66,10 @@ island.destroy();
   button, `which` (button+1), modifiers, wheel deltaX/Y/deltaMode, pointerType,
   scrollTop, and `targetId` (resolved to a proxy node as `payload.target`) all
   cross. Pointer-family events always carry *numeric* coords — absent fields
-  normalize to 0 rather than leaking `undefined` into library math.
+  normalize to 0 rather than leaking `undefined` into library math. At dispatch
+  time `target`/`currentTarget` materialize as proxy nodes (`currentTarget` =
+  the node the handler was attached to, the realm root for id-0 listeners) so
+  library middleware can read them — geometry still returns honest zeros.
 - **`installDomShim(doc)`** puts the proxy doc on `globalThis.document` plus a
   `window` facade — `innerHTML` parses via htmlparser2, `document`/`window`
   listeners land on the island container (id 0) so delegation works,
@@ -75,21 +78,49 @@ island.destroy();
   `globalThis.addEventListener` and `self` are never touched — the pool's
   message channel lives there. `uninstall()` (or `doc.dispose()`) restores the
   globals.
+- **Realm-aware globals.** `defineIslandWorker` installs a dispatcher so
+  `document`/`window`/`Element` are *accessors*, not fixed globals: inside a
+  realm task they resolve that realm's document (its facade, `ProxyElement`),
+  outside tasks they resolve the sole or last-active realm's, and explicit
+  assignments (`installDomShim`, test harnesses) take precedence over implicit
+  resolution. React realms get a working `document`/`window` for free —
+  libraries that read them during render or in deferred callbacks just work.
+  On the main-thread driver, element checks are structural (`nodeType`), never
+  `instanceof Element` — the same global may be a proxy in in-process setups.
+- **SVG + portals + library refs.** Ops carry a namespace (`create` gets `ns`)
+  and host context tracks `<svg>`/`<foreignObject>` boundaries — the driver
+  uses `createElementNS`, so `<svg>` trees land correctly, including through
+  portals (the container's namespace propagates). `getPublicInstance` exposes
+  `ProxyElement` facades, which are valid react-dom `createPortal` containers —
+  this is what makes recharts' tooltip/legend portals work unmodified.
 
 ## Real libraries — what works
 
-The `map` island in `examples/react-dom-worker` runs **Leaflet 1.9, unmodified
-from npm**, entirely worker-side: `installDomShim(doc)` then
-`await import('leaflet')` (dynamic import is required — Leaflet reads
+**Imperative libraries.** The `map` island in `examples/react-dom-worker` runs
+**Leaflet 1.9, unmodified from npm**, entirely worker-side: `installDomShim(doc)`
+then `await import('leaflet')` (dynamic import is required — Leaflet reads
 `document`/`window` at module scope for Browser detection). Verified working:
 tile `<img>` ops, divIcon markers, controls, attribution, drag-pan
 (document-level listeners registered mid-gesture), wheel zoom, delegated
 marker clicks, and `doc.onResize` → `invalidateSize()`.
 
+**React libraries.** The `charts` island runs **recharts 3.x, unmodified**, as
+an ordinary React tree in the worker: `ComposedChart` with grid/axes/tooltip/
+legend/bar/line, `onClick` handlers, and `emit` — verified end-to-end with a
+bar-click round-trip. It exercises the general machinery above: namespaced
+SVG ops, `ProxyElement` refs as portal targets (tooltip/legend render via
+react-dom `createPortal`), realm-resolved `document`/`window` for its
+selector/`getComputedStyle` calls, and `currentTarget` synthesis for its
+mouse middleware. Use fixed chart dimensions — `ResponsiveContainer` has no
+layout to observe — and prefer `isAnimationActive={false}` to skip
+measurement-feedback render passes that converge but cost op volume.
+
 Known limits for DOM-heavy libraries:
 
 - **Geometry is one box.** Only the island container is measured (pushed);
-  libraries that measure arbitrary elements still get 0.
+  libraries that measure arbitrary elements still get 0 — SVG-specific reads
+  (`getBBox`, `getTotalLength`, `getComputedTextLength`) too, which is why
+  recharts text truncation/animation sizing degrades to stub values.
 - **`preventDefault`/`stopPropagation` are no-ops** — the real event already
   dispatched on the main thread; the worker can't cancel it.
 - **Async-library callbacks that mutate DOM or emit outside a task** must

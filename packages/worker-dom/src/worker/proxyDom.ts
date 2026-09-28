@@ -53,8 +53,10 @@ import {
   allocId,
   bumpOpsVersion,
   getActiveRealm,
+  getLastActiveRealm,
   getRealmSize,
   instances,
+  markRealmActive,
   pushOp,
   registerHandler,
   unregisterHandler,
@@ -514,7 +516,11 @@ export class ProxyElement extends ProxyNode {
     this.doc._assertAlive();
     // The real DOM dedupes identical (type, listener) pairs — so do we.
     if (this._listeners.some((l) => l.type === type && l.fn === fn)) return;
-    const hid = registerHandler((p) => fn(this.doc._enrichEvent(p as EventPayload)), this.instance.realm);
+    const hid = registerHandler(
+      (p) => fn(this.doc._enrichEvent(p as EventPayload)),
+      this.instance.realm,
+      this.instance.id,
+    );
     this._listeners.push({ type, fn, hid });
     this.doc._handlerIds.add(hid);
     this._op({ t: 'listen', id: this.instance.id, type, handler: hid });
@@ -527,6 +533,75 @@ export class ProxyElement extends ProxyNode {
     unregisterHandler(entry.hid);
     this.doc._handlerIds.delete(entry.hid);
     this._op({ t: 'unlisten', id: this.instance.id, type, handler: entry.hid });
+  }
+
+  /** Live-descendant search over the shadow tree. Nodes mounted by the
+   *  reconciler aren't reachable (the op stream doesn't mirror React's
+   *  structure into _children) — adopted subtrees match only their own
+   *  proxy-built descendants. Class matching reads _classes AND the
+   *  instance's serialized className prop, so adopted React elements with
+   *  className set still match. */
+  getElementsByClassName(name: string): ProxyElement[] {
+    this.doc._assertAlive();
+    const out: ProxyElement[] = [];
+    const visit = (el: ProxyElement): void => {
+      for (const child of el._children) {
+        if (!(child instanceof ProxyElement)) continue;
+        const viaProps = ((child.instance.props?.className as string | undefined) ?? '')
+          .split(/\s+/)
+          .includes(name);
+        if (child._classes.has(name) || viaProps) out.push(child);
+        visit(child);
+      }
+    };
+    visit(this);
+    return out;
+  }
+
+  getElementsByTagName(tag: string): ProxyElement[] {
+    this.doc._assertAlive();
+    const want = tag.toLowerCase();
+    const out: ProxyElement[] = [];
+    const visit = (el: ProxyElement): void => {
+      for (const child of el._children) {
+        if (!(child instanceof ProxyElement)) continue;
+        if (want === '*' || child.instance.type.toLowerCase() === want) out.push(child);
+        visit(child);
+      }
+    };
+    visit(this);
+    return out;
+  }
+
+  /* SVG measurement APIs — no layout/text engine exists worker-side, so
+   *  these report honest zeros (warned once), exactly like the rest of the
+   *  geometry surface. Libraries doing animation sizing (recharts'
+   *  getTotalLength paths) degrade to instant/no animation. */
+  getBBox(): {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    top: number;
+    right: number;
+    bottom: number;
+    left: number;
+  } {
+    this.doc._assertAlive();
+    this.doc._warn('getBBox');
+    return { x: 0, y: 0, width: 0, height: 0, top: 0, right: 0, bottom: 0, left: 0 };
+  }
+
+  getTotalLength(): number {
+    this.doc._assertAlive();
+    this.doc._warn('getTotalLength');
+    return 0;
+  }
+
+  getComputedTextLength(): number {
+    this.doc._assertAlive();
+    this.doc._warn('getComputedTextLength');
+    return 0;
   }
 
   /* Selector matching — compound selectors only (see parseSelector). */
@@ -1095,6 +1170,12 @@ export interface ProxyDocument {
   readonly body: ProxyElement;
   readonly documentElement: ProxyElement;
   createElement(tag: string): ProxyElement;
+  /**
+   * Namespaced creation for SVG/MathML trees — the `create` op carries the
+   * namespace so the driver uses `createElementNS`. Needed by libraries that
+   * build SVG imperatively (d3-style code).
+   */
+  createElementNS(ns: string, tag: string): ProxyElement;
   createTextNode(text: string): ProxyText;
   /**
    * A phantom container for batching — appending the fragment splices its
@@ -1166,8 +1247,13 @@ export class InternalDocument implements ProxyDocument {
   readonly _containerIds = new Set<number>([0]);
   /** Handlers fired when a setSize task pushes a new container size. */
   private readonly _resizeHandlers = new Set<(w: number, h: number) => void>();
-  /** The shim's window facade — set by installDomShim, cleared on uninstall. */
-  defaultView?: WindowShim;
+  /** The window facade bundle — built lazily by windowFacadeFor, shared by
+   *  installDomShim and the realm dispatcher. */
+  _windowBundle?: WindowFacadeBundle;
+  /** what `document.defaultView` reads as (`window.getComputedStyle` etc). */
+  get defaultView(): WindowShim | undefined {
+    return this._windowBundle?.facade;
+  }
   /** Document-level listeners — separate table from the root element's, so
    *  doc.addEventListener and body.addEventListener don't wrongly dedupe
    *  against each other. Both emit `listen` on id 0. */
@@ -1197,6 +1283,13 @@ export class InternalDocument implements ProxyDocument {
   }
   get documentElement(): ProxyElement {
     return this._root;
+  }
+
+  /** No hit-testing exists worker-side — honest null (a11y-layer probing). */
+  elementFromPoint(_x: number, _y: number): null {
+    this._assertAlive();
+    this._warn('elementFromPoint');
+    return null;
   }
 
   _assertAlive(): void {
@@ -1292,17 +1385,26 @@ export class InternalDocument implements ProxyDocument {
   }
 
   createElement(tag: string): ProxyElement {
+    return this._newElement(tag.toLowerCase(), undefined);
+  }
+
+  createElementNS(ns: string, tag: string): ProxyElement {
+    return this._newElement(tag, ns);
+  }
+
+  private _newElement(type: string, ns: string | undefined): ProxyElement {
     this._assertAlive();
     const instance: ElementInstance = {
       kind: 'element',
       id: allocId(),
-      type: tag.toLowerCase(),
+      type,
+      ns,
       realm: this.realm,
       props: {},
       listenerSlots: {},
     };
     instances.set(instance.id, instance);
-    pushOp(this.realm, { t: 'create', id: instance.id, type: instance.type, props: {} });
+    pushOp(this.realm, { t: 'create', id: instance.id, type: instance.type, props: {}, ns: instance.ns });
     if (getActiveRealm() !== this.realm) bumpOpsVersion();
     return this._wrap(instance) as ProxyElement;
   }
@@ -1361,7 +1463,11 @@ export class InternalDocument implements ProxyDocument {
   addEventListener(type: string, fn: ProxyEventHandler): void {
     this._assertAlive();
     if (this._docListeners.some((l) => l.type === type && l.fn === fn)) return;
-    const hid = registerHandler((p) => fn(this._enrichEvent(p as EventPayload)), this.realm);
+    const hid = registerHandler(
+      (p) => fn(this._enrichEvent(p as EventPayload)),
+      this.realm,
+      0, // document-level listener → currentTarget is the island root
+    );
     this._docListeners.push({ type, fn, hid });
     this._handlerIds.add(hid);
     pushOp(this.realm, { t: 'listen', id: 0, type, handler: hid });
@@ -1410,11 +1516,12 @@ export class InternalDocument implements ProxyDocument {
   }
 
   dispose(): void {
-    // Restore globals FIRST if this doc was installed as the shim — the
-    // rebuild path (updateProps) swaps in a fresh doc and re-installs.
+    // Tear down the shim FIRST if this doc was installed — the rebuild path
+    // (updateProps) swaps in a fresh doc and re-installs.
     this._uninstallShim?.();
     this._uninstallShim = null;
     this._disposed = true;
+    if (realmDocs.get(this.realm) === this) realmDocs.delete(this.realm);
     this._resizeHandlers.clear();
     for (const hid of this._handlerIds) unregisterHandler(hid);
     this._handlerIds.clear();
@@ -1426,8 +1533,47 @@ export class InternalDocument implements ProxyDocument {
  * mount and per rebuild (updateProps). Mutations emit ops onto the realm's
  * queue immediately; reads are served from the shadow tree.
  */
-export const createProxyDocument = (realm: string): ProxyDocument =>
-  new InternalDocument(realm);
+/**
+ * realm key → the proxy document for that realm. `createProxyDocument` is
+ * the only creator — imperative apps get one at mount, React realms lazily
+ * via `getPublicInstance` — so global `document`/`window`/`Element` can
+ * dispatch to the right realm's document (see installRealmDispatcher).
+ */
+const realmDocs = new Map<string, InternalDocument>();
+
+export const createProxyDocument = (realm: string): ProxyDocument => {
+  const doc = new InternalDocument(realm);
+  realmDocs.set(realm, doc);
+  return doc;
+};
+
+/**
+ * The realm's proxy document, creating it lazily — the getPublicInstance
+ * path (React realms only need a document when a library holds a ref or a
+ * portal target).
+ */
+export const realmDocFor = (realm: string): InternalDocument =>
+  realmDocs.get(realm) ?? (createProxyDocument(realm) as InternalDocument);
+
+/**
+ * The document `globalThis.document` should mean right now: the active
+ * realm's when a task holds one; the single registered document when only
+ * one realm exists (every real island worker — timers and promise
+ * continuations run outside realm tasks but unambiguously belong to it);
+ * the most recently active realm's otherwise (multi-realm in-process tests
+ * still route deferred library callbacks sensibly).
+ */
+const activeRealmDoc = (): InternalDocument | undefined => realmDocs.get(getActiveRealm());
+
+/** The ambient document: the sole registered doc, or the most recently
+ *  active realm's — for out-of-task readers (timers, continuations). */
+const ambientDoc = (): InternalDocument | undefined =>
+  realmDocs.size === 1
+    ? realmDocs.values().next().value
+    : realmDocs.get(getLastActiveRealm());
+
+const docForCurrentContext = (): InternalDocument | undefined =>
+  activeRealmDoc() ?? ambientDoc();
 
 /* ── The global shim ───────────────────────────────────────────────────── */
 
@@ -1447,6 +1593,8 @@ export interface WindowShim {
   setInterval: typeof setInterval;
   clearInterval: typeof clearInterval;
   getComputedStyle(el: unknown): Record<string, never>;
+  /** Media queries can't be answered worker-side — always `matches: false`. */
+  matchMedia(query: string): MediaQueryList;
   addEventListener(type: string, fn: ProxyEventHandler): void;
   removeEventListener(type: string, fn: ProxyEventHandler): void;
   /** Scrolling is main-thread business — no-ops so window.scrollTo(x,y)
@@ -1458,66 +1606,26 @@ export interface WindowShim {
 
 /**
  * The uninstall currently returned by the latest installDomShim — chained
- * so installing a fresh document's shim first unwinds the previous one
- * (otherwise uninstalling would restore a STALE proxy document).
+ * so installing a fresh document's shim first unwinds the previous one.
  */
 let activeShimUninstall: (() => void) | null = null;
 
+interface WindowFacadeBundle {
+  facade: WindowShim;
+  /** Detach every surviving window listener — ops and handler-table entries. */
+  teardown(): void;
+}
+
 /**
- * Install a proxy document as `globalThis.document` plus a `window` facade
- * — the entry point for running real DOM-dependent libraries unmodified
- * inside an island realm:
- *
- *   const doc = createProxyDocument(realm);
- *   installDomShim(doc);
- *   SomeVendorLib.mount(doc.body);  // uses document./window./innerHTML…
- *
- * What gets faked:
- *  - `globalThis.document` = the proxy document (all proxy behavior above)
- *  - `globalThis.window` = a facade OBJECT: navigator, location stubs,
- *    timers + rAF passthrough (setTimeout fallback where workers lack rAF),
- *    innerWidth/innerHeight fed by the pushed container size,
- *    devicePixelRatio constant, empty getComputedStyle, and addEventListener.
- *  - `globalThis.Element` = `ProxyElement` — workers have NO `Element`
- *    global, and library type-checks like `x instanceof Element` would
- *    throw a ReferenceError without it. `document.defaultView` points at
- *    the facade too (`document.defaultView.getComputedStyle` paths).
- *  - `window.addEventListener` keeps a SEPARATE listener table and emits
- *    `listen`/`unlisten` ops on id 0 — same as `document.addEventListener`:
- *    the driver attaches real listeners to the island's container, so DOM
- *    events that bubble inside the island dispatch to window listeners too
- *    (matching real document→window bubbling for content events; there are
- *    no true window-level events — resize & co. never fire).
- *  - Events dispatched to shim listeners get `payload.target` synthesized
- *    to the proxy node for `targetId` — delegated handlers using
- *    `e.target.closest(…)`/`.dataset` work unmodified.
- *
- * What does NOT get touched — deliberately:
- *  - `globalThis.addEventListener`/`removeEventListener` and `self` — the
- *    pool's `self.onmessage` channel lives there; `window` is a facade
- *    object, not the global.
- *  - Any other global (history, fetch, localStorage…) — libraries touching
- *    them fail loudly, which is the honest answer.
- *
- * Returns `uninstall()` restoring the prior globals exactly. Also runs
- * automatically on `doc.dispose()` (the updateProps rebuild path) and is
- * superseded by a later installDomShim call — the last install wins.
+ * Build the `window` facade for one realm's document — shared by
+ * installDomShim (imperative apps) and the realm dispatcher (React realms
+ * get a window the first time library code reads one). The bundle caches
+ * on the document so both paths hand out the SAME facade — a listener
+ * registered through `window` must land in the same table whichever global
+ * routed the call.
  */
-export function installDomShim(doc: ProxyDocument): () => void {
-  const internal = doc as InternalDocument;
+const buildWindowFacade = (internal: InternalDocument): WindowFacadeBundle => {
   const g = globalThis as Record<string, unknown>;
-
-  // Unwind any previous install first — its captured "prior globals" are the
-  // real originals (or globals from before the first shim).
-  activeShimUninstall?.();
-  activeShimUninstall = null;
-
-  const hadDocument = 'document' in g;
-  const prevDocument = g.document;
-  const hadWindow = 'window' in g;
-  const prevWindow = g.window;
-  const hadElement = 'Element' in g;
-  const prevElement = g.Element;
 
   /** type → fn → handler id. Window listeners get their own table (a lib
    *  removing a document listener must not detach its window twin), but
@@ -1537,6 +1645,7 @@ export function installDomShim(doc: ProxyDocument): () => void {
     const hid = registerHandler(
       (p) => fn(internal._enrichEvent(p as EventPayload)),
       internal.realm,
+      0, // window-level listener → currentTarget is the island root
     );
     table.set(fn, hid);
     internal._handlerIds.add(hid);
@@ -1554,11 +1663,11 @@ export function installDomShim(doc: ProxyDocument): () => void {
     pushDocOp({ t: 'unlisten', id: 0, type, handler: hid });
   };
 
-  const raf = (g.requestAnimationFrame as ((cb: (time: number) => void) => number) | undefined);
-  const caf = (g.cancelAnimationFrame as ((id: number) => void) | undefined);
+  const raf = g.requestAnimationFrame as ((cb: (time: number) => void) => number) | undefined;
+  const caf = g.cancelAnimationFrame as ((id: number) => void) | undefined;
 
-  const windowFacade: WindowShim = {
-    document: doc,
+  const facade: WindowShim = {
+    document: internal,
     navigator: { userAgent: 'mesh-worker-dom' },
     location: {
       href: 'about:blank',
@@ -1592,6 +1701,19 @@ export function installDomShim(doc: ProxyDocument): () => void {
     // No measurement channel — an empty declaration, same honesty rule as
     // doc.getComputedStyle (which warns once); the facade stays silent.
     getComputedStyle: () => ({}),
+    // No preference/quiz surface exists worker-side — media queries never
+    // match. The shape is complete enough for feature-detection code.
+    matchMedia: (query: string) =>
+      ({
+        matches: false,
+        media: query,
+        onchange: null,
+        addListener: () => {},
+        removeListener: () => {},
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        dispatchEvent: () => false,
+      }) as unknown as MediaQueryList,
     addEventListener: windowAddEventListener,
     removeEventListener: windowRemoveEventListener,
     // No scroll surface exists worker-side — libraries call these during
@@ -1602,18 +1724,7 @@ export function installDomShim(doc: ProxyDocument): () => void {
     scroll: () => {},
   };
 
-  g.document = doc;
-  g.window = windowFacade;
-  // Workers lack the Element constructor entirely — `x instanceof Element`
-  // inside a library would ReferenceError. Point it at ProxyElement so type
-  // checks behave; real HTMLElement checks on driver-created nodes never
-  // run worker-side.
-  g.Element = ProxyElement;
-  internal.defaultView = windowFacade;
-
-  const uninstall = (): void => {
-    // Tear down surviving window listeners first — both wire ops and the
-    // worker-side handler table entries.
+  const teardown = (): void => {
     for (const [type, table] of windowListeners) {
       for (const hid of table.values()) {
         unregisterHandler(hid);
@@ -1622,13 +1733,147 @@ export function installDomShim(doc: ProxyDocument): () => void {
       }
       table.clear();
     }
-    if (hadDocument) g.document = prevDocument;
-    else delete g.document;
-    if (hadWindow) g.window = prevWindow;
-    else delete g.window;
-    if (hadElement) g.Element = prevElement;
-    else delete g.Element;
-    internal.defaultView = undefined;
+  };
+
+  return { facade, teardown };
+};
+
+/** The document's window facade, built once and shared by every path. */
+const windowFacadeFor = (internal: InternalDocument): WindowFacadeBundle => {
+  if (internal._windowBundle === undefined) {
+    internal._windowBundle = buildWindowFacade(internal);
+  }
+  return internal._windowBundle;
+};
+
+let realmDispatcherInstalled = false;
+
+/**
+ * Define `document`/`window`/`Element` as GLOBAL GETTERS that resolve to
+ * the current realm's proxy document — the mechanism that lets React-island
+ * libraries (recharts reading `window.getComputedStyle`, `document.body`)
+ * work without their app ever touching a doc, and that routes imperative
+ * library calls correctly when several realms share one module (the
+ * in-process test layout).
+ *
+ * Resolution (docForCurrentContext): the active realm's doc inside tasks;
+ * the single registered doc when only one realm exists — every real island
+ * worker, so timer/promise callbacks from libraries still hit their own
+ * document; the most recent realm's doc as a final multi-realm fallback;
+ * the pre-install global otherwise (a real document in happy-dom tests —
+ * transparent to shell-side code, which never runs inside a realm task).
+ */
+export function installRealmDispatcher(): void {
+  if (realmDispatcherInstalled) return;
+  realmDispatcherInstalled = true;
+  const g = globalThis as Record<string, unknown>;
+  const prevDocument = g.document;
+  const prevWindow = g.window;
+  const prevElement = g.Element;
+  // Explicit assignments override the fallback (never the in-realm doc) —
+  // keeps pre-dispatcher semantics for out-of-realm code, and lets test
+  // harnesses/suites restore globals by plain assignment.
+  let docOverride: unknown;
+  let winOverride: unknown;
+  let elOverride: unknown;
+
+  Object.defineProperty(g, 'document', {
+    configurable: true,
+    enumerable: true,
+    get: () => activeRealmDoc() ?? docOverride ?? ambientDoc() ?? prevDocument,
+    set: (v) => {
+      docOverride = v;
+    },
+  });
+  Object.defineProperty(g, 'window', {
+    configurable: true,
+    enumerable: true,
+    get: () => {
+      const doc = activeRealmDoc();
+      if (doc !== undefined) return windowFacadeFor(doc).facade;
+      if (winOverride !== undefined) return winOverride;
+      const ambient = ambientDoc();
+      return ambient !== undefined ? windowFacadeFor(ambient).facade : prevWindow;
+    },
+    set: (v) => {
+      winOverride = v;
+    },
+  });
+  // Workers lack the Element constructor — `x instanceof Element` inside a
+  // library would ReferenceError. Point it at ProxyElement while a realm
+  // doc is resolvable; real HTMLElement checks never run worker-side.
+  Object.defineProperty(g, 'Element', {
+    configurable: true,
+    enumerable: true,
+    get: () => {
+      if (activeRealmDoc() !== undefined) return ProxyElement;
+      if (elOverride !== undefined) return elOverride;
+      return ambientDoc() !== undefined ? ProxyElement : prevElement;
+    },
+    set: (v) => {
+      elOverride = v;
+    },
+  });
+}
+
+/**
+ * Install this document as the realm's DOM surface — the entry point for
+ * running real DOM-dependent libraries unmodified inside an island realm:
+ *
+ *   const doc = createProxyDocument(realm);
+ *   installDomShim(doc);
+ *   SomeVendorLib.mount(doc.body);  // uses document./window./innerHTML…
+ *
+ * Under the realm dispatcher (installed here automatically, and by
+ * defineIslandWorker for every island worker) `globalThis.document` and
+ * `globalThis.window` already resolve to this document while its realm is
+ * active — so this call's real work is building the window facade
+ * (navigator/location stubs, timers + rAF passthrough, innerWidth/Height
+ * from the pushed container size, empty getComputedStyle, never-matching
+ * matchMedia, addEventListener wired to `listen` ops on id 0) and exposing
+ * it as `document.defaultView`.
+ *
+ * What does NOT get touched — deliberately:
+ *  - `globalThis.addEventListener`/`removeEventListener` and `self` — the
+ *    pool's `self.onmessage` channel lives there; `window` is a facade
+ *    object, not the global.
+ *  - Any other global (history, fetch, localStorage…) — libraries touching
+ *    them fail loudly, which is the honest answer.
+ *
+ * Returns `uninstall()` tearing down the facade's listeners. Also runs
+ * automatically on `doc.dispose()` (the updateProps rebuild path) and is
+ * superseded by a later installDomShim call — the last install wins.
+ */
+export function installDomShim(doc: ProxyDocument): () => void {
+  const internal = doc as InternalDocument;
+  installRealmDispatcher();
+  const g = globalThis as Record<string, unknown>;
+  activeShimUninstall?.();
+  activeShimUninstall = null;
+
+  // Capture the ambient state BEFORE this doc claims it — uninstall puts
+  // it all back, so chained installs restore true originals.
+  const prevRealm = getLastActiveRealm();
+  const prevDocument = g.document;
+  const prevWindow = g.window;
+  const prevElement = g.Element;
+
+  // The installed document becomes the ambient one for out-of-realm
+  // readers: the explicit assignment wins the dispatcher's resolution,
+  // and the realm is marked for implicit resolution paths.
+  markRealmActive(internal.realm);
+  const bundle = windowFacadeFor(internal);
+  g.document = doc;
+  g.window = bundle.facade;
+  g.Element = ProxyElement;
+
+  const uninstall = (): void => {
+    bundle.teardown();
+    internal._windowBundle = undefined;
+    g.document = prevDocument;
+    g.window = prevWindow;
+    g.Element = prevElement;
+    markRealmActive(prevRealm);
     if (activeShimUninstall === uninstall) activeShimUninstall = null;
   };
 

@@ -9,7 +9,7 @@
  * driven entirely through the worker-side proxy DOM.
  */
 import { defineIslandWorker } from '@jwhenry123/mesh-worker-dom/worker';
-import { ControlsApp, StatsApp, TableApp } from './apps';
+import { ChartsApp, ControlsApp, StatsApp, TableApp } from './apps';
 import { buildMap } from './map';
 import { buildVanilla } from './vanilla';
 
@@ -18,6 +18,7 @@ export const renderWorker = defineIslandWorker({
     controls: ControlsApp,
     'data-table': TableApp,
     stats: StatsApp,
+    charts: ChartsApp,
     vanilla: { imperative: buildVanilla },
     map: { imperative: buildMap },
   },

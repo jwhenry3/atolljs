@@ -36,7 +36,7 @@
       }
       .island-root { padding: 8px 12px; }
       .island-root table { max-height: 360px; }
-      #island-table { max-height: 380px; overflow-y: auto; display: block; }
+      #island-table, #island-table-2 { max-height: 380px; overflow-y: auto; display: block; }
       /* the vanilla island's content is entirely worker-created via the
          proxy DOM — these rules are shell-side styling of op-applied DOM */
       .vanilla-heading, .vanilla-readout { margin: 4px 0 8px; font-size: 13px; color: #9aa4b2; }
@@ -110,6 +110,11 @@
       <section class="island">
         <div class="island-head"><span>app: vanilla (imperative proxy DOM — no React in this worker)</span><span class="badge" id="badge-vanilla">worker …</span></div>
         <div class="island-root" id="island-vanilla"></div>
+      </section>
+
+      <section class="island">
+        <div class="island-head"><span>app: charts (real recharts — unmodified — namespaced SVG ops)</span><span class="badge" id="badge-charts">worker …</span></div>
+        <div class="island-root" id="island-charts"></div>
       </section>
 
       <section class="island">

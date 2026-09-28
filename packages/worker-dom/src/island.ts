@@ -181,8 +181,15 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
    *  subtrees with ONE `remove` op — a slot deep inside gets no op of its
    *  own). Elements created by ops are the only things in the tree, so a
    *  DOM query for the marker attribute is exact. */
+  // Element-ness is checked structurally (nodeType 1), never via the global
+  // `Element` constructor — in in-process embeddings the worker-side realm
+  // dispatcher may have pointed that global at ProxyElement, which would
+  // make every `instanceof Element` check silently reject real DOM nodes.
+  const isElementNode = (node: Node | undefined): node is Element =>
+    node !== undefined && node.nodeType === 1;
+
   const unmountSlotSubtree = (node: Node): void => {
-    if (!(node instanceof HTMLElement)) return;
+    if (!isElementNode(node)) return;
     for (const [id, slotEl] of Array.from(slotNodes.entries()).map(([id]) => [id, nodes.get(id)] as const)) {
       if (slotEl === node || node.contains(slotEl as Node)) unmountSlot(id);
     }
@@ -271,9 +278,12 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
     };
   }
 
-  function setProp(el: HTMLElement, id: number, name: string, value: unknown): void {
+  // Element-typed, not HTMLElement-typed: createElementNS produces
+  // SVGElement/MathMLElement, which share Element's API surface but are NOT
+  // HTMLElements — guards and signatures must accept both.
+  function setProp(el: Element, id: number, name: string, value: unknown): void {
     if (name === 'data-mesh-slot') {
-      mountSlot(el, id, String(value));
+      mountSlot(el as HTMLElement, id, String(value));
       return;
     }
     if (isEventRef(value)) {
@@ -297,7 +307,10 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
       return;
     }
     if (name === 'className') {
-      el.className = String(value);
+      // SVGElement.className is a read-only SVGAnimatedString — assignment
+      // throws in strict mode; the class attribute is the portable write.
+      if (el instanceof SVGElement) el.setAttribute('class', String(value));
+      else el.className = String(value);
       return;
     }
     if (value === true) {
@@ -323,7 +336,7 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
     el.setAttribute(name, String(value));
   }
 
-  function removeProp(el: HTMLElement, id: number, name: string, oldValue: unknown): void {
+  function removeProp(el: Element, id: number, name: string, oldValue: unknown): void {
     if (name === 'data-mesh-slot') {
       unmountSlot(id);
       el.removeAttribute('data-mesh-slot');
@@ -339,7 +352,8 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
       return;
     }
     if (name === 'className') {
-      el.className = '';
+      if (el instanceof SVGElement) el.removeAttribute('class');
+      else el.className = '';
       return;
     }
     if (name === 'style') {
@@ -352,7 +366,7 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
     el.removeAttribute(name);
   }
 
-  function applyProps(el: HTMLElement, id: number, prev: WireProps, next: WireProps): void {
+  function applyProps(el: Element, id: number, prev: WireProps, next: WireProps): void {
     for (const name of Object.keys(prev)) {
       if (!(name in next)) removeProp(el, id, name, prev[name]);
     }
@@ -370,13 +384,13 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
    * on the property, other names prefer a DOM property when one exists
    * (`id`, `value`) and fall back to the attribute.
    */
-  function setAttr(node: HTMLElement, id: number, name: string, value: string | null): void {
+  function setAttr(node: Element, id: number, name: string, value: string | null): void {
     if (name === 'data-mesh-slot') {
       if (value === null) {
         unmountSlot(id);
         node.removeAttribute('data-mesh-slot');
       } else {
-        mountSlot(node, id, value);
+        mountSlot(node as HTMLElement, id, value);
       }
       return;
     }
@@ -387,7 +401,8 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
       return;
     }
     if (name === 'class' || name === 'className') {
-      node.className = value;
+      if (node instanceof SVGElement) node.setAttribute('class', value);
+      else node.className = value;
       return;
     }
     if (name === 'style') {
@@ -411,8 +426,8 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
    * is written back into prevProps so a later React `update` style-diff
    * sees these keys as "prev" and still diffs correctly.
    */
-  function mergeStyle(node: HTMLElement, id: number, changes: Record<string, string>): void {
-    const elStyle = node.style as unknown as Record<string, string>;
+  function mergeStyle(node: Element, id: number, changes: Record<string, string>): void {
+    const elStyle = (node as HTMLElement).style as unknown as Record<string, string>;
     const prev = prevProps.get(id) ?? {};
     const merged = { ...((prev.style ?? {}) as Record<string, string>) };
     for (const [k, v] of Object.entries(changes)) {
@@ -432,7 +447,11 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
   function applyOp(op: Op): void {
     switch (op.t) {
       case 'create': {
-        const node = realDocument.createElement(op.type);
+        // ns-carrying ops (svg/math) need createElementNS — plain
+        // createElement would produce HTMLUnknownElements for <svg> trees.
+        const node = op.ns !== undefined
+          ? realDocument.createElementNS(op.ns, op.type)
+          : realDocument.createElement(op.type);
         nodes.set(op.id, node);
         nodeIds.set(node, op.id);
         prevProps.set(op.id, op.props);
@@ -464,7 +483,7 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
       }
       case 'update': {
         const node = nodes.get(op.id);
-        if (!(node instanceof HTMLElement)) break;
+        if (!isElementNode(node)) break;
         const prev = prevProps.get(op.id) ?? {};
         applyProps(node, op.id, prev, op.props);
         prevProps.set(op.id, op.props);
@@ -477,19 +496,19 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
       }
       case 'attr': {
         const node = nodes.get(op.id);
-        if (!(node instanceof HTMLElement)) break;
+        if (!isElementNode(node)) break;
         setAttr(node, op.id, op.name, op.value);
         break;
       }
       case 'style': {
         const node = nodes.get(op.id);
-        if (!(node instanceof HTMLElement)) break;
+        if (!isElementNode(node)) break;
         mergeStyle(node, op.id, op.props);
         break;
       }
       case 'listen': {
         const node = nodes.get(op.id);
-        if (!(node instanceof HTMLElement)) break;
+        if (!isElementNode(node)) break;
         // Keyed by type + handler id so proxy listeners can't collide with
         // the React-prop listener for the same event name, and so unlisten
         // detaches exactly the pair addEventListener created. Id 0 is the
@@ -507,7 +526,7 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
       }
       case 'unlisten': {
         const node = nodes.get(op.id);
-        if (!(node instanceof HTMLElement)) break;
+        if (!isElementNode(node)) break;
         const key = `${op.type}#${op.handler}`;
         const listener = nodeListeners.get(op.id)?.get(key);
         if (listener) {

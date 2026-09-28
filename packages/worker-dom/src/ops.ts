@@ -15,8 +15,15 @@
  * shell-registered `onEvent` callback instead of touching the DOM.
  */
 export type Op =
-  /** createElement-equivalent — `props` is already wire-serialized. */
-  | { t: 'create'; id: number; type: string; props: WireProps }
+  /**
+   * createElement-equivalent — `props` is already wire-serialized. `ns` is
+   * the element's namespace URI when it isn't HTML ('http://www.w3.org/2000/svg',
+   * 'http://www.w3.org/1998/Math/MathML') — the driver calls
+   * `createElementNS(ns, type)`. The reconciler's host context tracks it
+   * (svg/math enter, foreignObject/desc/title return to HTML), so SVG trees
+   * like recharts' arrive correctly namespaced.
+   */
+  | { t: 'create'; id: number; type: string; props: WireProps; ns?: string }
   /** createTextNode-equivalent. */
   | { t: 'text'; id: number; text: string }
   /** `parent.insertBefore(child, before ?? null)` — parent 0 is the root container. */

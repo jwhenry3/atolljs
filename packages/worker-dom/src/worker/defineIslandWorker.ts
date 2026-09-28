@@ -41,10 +41,17 @@ import Reconciler from 'react-reconciler';
 import { defineWorker } from '@jwhenry123/mesh/sdk';
 import type { SharedMemory, WorkerDefinition } from '@jwhenry123/mesh/sdk';
 import { renderMemory, type DoorbellSpec } from '../memory';
-import { createProxyDocument, type InternalDocument, type ProxyDocument } from './proxyDom';
+import {
+  createProxyDocument,
+  installRealmDispatcher,
+  realmDocFor,
+  type InternalDocument,
+  type ProxyDocument,
+} from './proxyDom';
 import {
   getHandler,
   hostConfig,
+  instances,
   pushOp,
   ROOT_CONTAINER,
   runInRealm,
@@ -140,6 +147,12 @@ export function defineIslandWorker(
   // Point bumpOpsVersion at the declared contract (it's the same object as
   // renderMemory unless a custom doorbell instance was passed).
   setDoorbellContract(sharedMemory);
+  // Give every realm DOM globals — `document`/`window`/`Element` resolve to
+  // the active realm's proxy document. Libraries a React app pulls in
+  // (recharts, d3-ish helpers) can then read them without the app ever
+  // installing a shim; imperative apps get the same globals via
+  // installDomShim, which builds on this.
+  installRealmDispatcher();
 
   // Legacy root (tag 0) — no concurrent features. Container creation is
   // per-realm, not module-level, so a second mount() can't collide with the
@@ -157,7 +170,9 @@ export function defineIslandWorker(
     }
     const reconciler = Reconciler(hostConfig);
     const container = reconciler.createContainer(
-      ROOT_CONTAINER,
+      // Realm-stamped root container — createInstance reads `.realm` off it,
+      // binding every element to this realm even in out-of-task commits.
+      { id: 0, realm: key } as typeof ROOT_CONTAINER,
       0,
       null,
       false,
@@ -313,6 +328,28 @@ export function defineIslandWorker(
         if (entry === undefined) return [];
         const realm = realms.get(entry.realm);
         if (realm === undefined) return []; // stale handler — its tree was remounted
+        // Give handlers real event-object semantics: `target` is the proxy
+        // node for the wire's targetId (when it maps to an op-created node),
+        // `currentTarget` the element this handler was attached to. Libraries
+        // that read geometry off them (recharts' getRelativeCoordinate) get
+        // the proxy's honest zeros instead of crashing on undefined.
+        const p = payload as EventPayload & { target?: unknown; currentTarget?: unknown };
+        if (p.target === undefined || p.currentTarget === undefined) {
+          const doc = realmDocFor(realm.key);
+          if (p.target === undefined && typeof p.targetId === 'number') {
+            const t = instances.get(p.targetId);
+            if (t !== undefined) p.target = doc.adopt(t);
+          }
+          if (p.currentTarget === undefined && entry.instanceId !== undefined) {
+            // id 0 = the island container — its facade is the doc's root.
+            p.currentTarget =
+              entry.instanceId === 0
+                ? doc._root
+                : (instances.get(entry.instanceId) !== undefined
+                    ? doc.adopt(instances.get(entry.instanceId)!)
+                    : undefined);
+          }
+        }
         if (isImperativeRealm(realm)) {
           // No reconciler to flush — the handler's proxy-DOM mutations emit
           // ops directly; runInRealm gives emit() and instance-less ops a

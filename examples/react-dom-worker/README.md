@@ -18,8 +18,8 @@ its imperative island demos the worker-side proxy DOM plus the global
 mounts several independent islands. Each island is its own
 `connectWorker` client — one pool, **poolSize pinned to 1**, one worker —
 running the **same worker script**. The worker exposes an app registry
-(`controls` / `data-table` / `stats` / `vanilla` / `map`); `mount(app, props)`
-picks what the island renders. Registry entries are either React
+(`controls` / `data-table` / `stats` / `vanilla` / `map` / `charts`);
+`mount(app, props)` picks what the island renders. Registry entries are either React
 components — reconciled into the realm's own root — or
 `{ imperative: (doc, props) => void }` — apps built on the worker-side
 **proxy DOM** with no React at all (see below). There is **no React on the
@@ -107,6 +107,32 @@ The stylesheet is shell-side (`import 'leaflet/dist/leaflet.css'`), and
 tiles are real `<img>` elements — see the note on COEP `credentialless` in
 `vite.config.ts` for why cross-origin tiles load under isolation.
 
+**The `charts` island — real recharts 3.x, unmodified, inside a React
+island.** Where Leaflet stresses the imperative shim, recharts stresses the
+*React* machinery: `src/worker/apps.tsx`'s `ChartsApp` renders an ordinary
+`ComposedChart` (grid, axes, tooltip, legend, bar + line — `isAnimationActive`
+off to skip measurement churn). It works because of four general renderer
+capabilities, not recharts-specific hacks: **namespaced SVG** — host context
+tracks `<svg>`/`<foreignObject>` boundaries and ops carry a namespace so the
+driver calls `createElementNS` (portal children inherit their target's
+namespace too); **refs return proxy facades** — `getPublicInstance` hands
+libraries a `ProxyElement`, so recharts' tooltip/legend `createPortal` target
+(the wrapper's ref) is a valid container the host methods unwrap back to its
+instance; **realm-aware globals** — `document`/`window`/`Element` resolve per
+realm (inside tasks the active realm's doc, otherwise the sole/last-active
+realm's — and plain assignments still override for out-of-realm code), so
+recharts' `getComputedStyle`, selector calls (`getElementsByClassName`/
+`getElementsByTagName`), and portal bookkeeping run unmodified; and
+**event-object semantics** — dispatched payloads get `target`/`currentTarget`
+synthesized to the owning proxy node, which is what the chart's mouse
+middleware reads geometry from (honest zeros). A bar click updates local
+state and emits `chartClicked` — one dispatch round-trip, like every other
+interaction. The limits are the ones you'd predict: chart dimensions are
+**fixed props** (`ResponsiveContainer` can't observe real layout without a
+measurement channel), and geometry-reading features (tooltip positioning)
+settle on stub values — SVG `getBBox`/`getTotalLength`/`offsetWidth` warn
+once and return 0.
+
 Islands never talk to each other directly — the **shell mediates**:
 
 ```
@@ -118,6 +144,7 @@ both data-table islands: emit('rowSelected') → shell status line
 controls island: emit('countChanged') ─→ shell status line
 vanilla island: emit('colorPicked') ───→ shell status line
 map island: emit('markerClicked' / 'placeSelected' / 'zoomChanged') → shell status line
+charts island: emit('chartClicked') ─────────────────────────────────────────→ shell status line
 ```
 
 Each island's header shows its `whoami()` pid — a random per-realm id proving
@@ -132,13 +159,14 @@ Package code (`packages/worker-dom/`) does the heavy lifting:
 op protocol + doorbell contract. The example keeps:
 
 - `src/worker/render.worker.ts` — ~20 lines: `defineIslandWorker({ apps })` mapping island app names to components/imperative builders
-- `src/worker/apps.tsx` — the three React island apps: `ControlsApp` (emits filter/sort/counter events), `TableApp` (2000-row memoized table, props-driven, emits rowSelected/rowsChanged), `StatsApp` (row count + busy-loop compute)
+- `src/worker/apps.tsx` — the four React island apps: `ControlsApp` (emits filter/sort/counter events), `TableApp` (2000-row memoized table, props-driven, emits rowSelected/rowsChanged), `StatsApp` (row count + busy-loop compute), `ChartsApp` (real recharts 3.x `ComposedChart`, fixed dims, emits `chartClicked` on bar click)
 - `src/worker/vanilla.ts` — the imperative island app: a hand-written swatch picker + log on the proxy DOM, AND the vendored MiniWidget running on `installDomShim`'s globals (no React import)
 - `src/worker/map.ts` — the map island app: `installDomShim` + dynamic `import('leaflet')`, then unmodified Leaflet 1.9 (`L.map`, tile layer, divIcon markers, a `L.Control.extend` place picker) on the proxy DOM
 - `src/vendor/miniwidget.js` (+ `.d.ts`) — a plain-JS "third-party" widget: global `document`, `innerHTML` template, delegated `document.addEventListener` — mounted unmodified inside the island
 - `src/main.ts` — the thin shell: layout, one `connectIslandWorker({ worker })` + `mountIsland()` per island, event mediation, global transport toggle, `import 'leaflet/dist/leaflet.css'`
 - `test/islands.test.ts` — in-process E2E (InProcessWorker + happy-dom): distinct pids, emit → updateProps mediation, doorbell flush, remount semantics, same-app multi-instance, vendored-widget delegation
 - `test/map.test.ts` — in-process E2E for the Leaflet island: tiles, markers, controls, delegated marker/place clicks, drag-pan, wheel zoom, `zoomChanged`/`markerClicked`/`placeSelected` emits
+- `test/charts.test.ts` — in-process E2E for the recharts island: main surface + descendants carry the SVG namespace (zIndex portals included), grid/axis/bar markup lands, bar click emits `chartClicked` with the datum
 
 ## Protocol
 
@@ -255,11 +283,16 @@ it, so the shell sees `island.updateProps(props)`):
 - **Every interaction is a round-trip.** A keystroke = postMessage → worker
   re-render → ops back → DOM writes. Cross-island effects add one more hop:
   emit op → shell → `updateProps` task → second worker re-render → ops back.
-- **No real DOM in worker code.** React components get no `document`/
-  `window`/refs/`useLayoutEffect` reads (using it only for `emit` timing is
-  fine — it runs during commit, not render). Imperative code gets the
-  *proxy* DOM instead — same-looking API, op-emitting mutations,
-  shadow-tree reads, no layout.
+- **No real DOM in worker code — but library DOM glue works.** React
+  components get no real `document`/`window`/`useLayoutEffect` reads (using
+  it only for `emit` timing is fine — it runs during commit, not render).
+  Imperative code gets the *proxy* DOM instead — same-looking API,
+  op-emitting mutations, shadow-tree reads, no layout. And the globals ARE
+  defined now: `defineIslandWorker` installs a realm-aware dispatcher so
+  `document`/`window`/`Element` resolve to the executing realm's proxy doc
+  (plain assignments still win out-of-realm — `installDomShim` composes on
+  top). Refs point at `ProxyElement` facades (valid `createPortal`
+  containers — recharts uses them), geometry reads still honest-zero.
 - **Events are plain payloads**, not SyntheticEvents:
   `{ type, value, checked, key, clientX/Y, screenX/Y, button, which,
   modifiers, deltaX/Y, deltaMode, pointerType, scrollTop, targetId }`.
@@ -268,7 +301,11 @@ it, so the shell sees `island.updateProps(props)`):
   worker-side event math (`e.clientX - rect.left`) never sees `undefined`;
   non-pointer events leave them `undefined`. `preventDefault`/
   `stopPropagation` on the payload are synthesized no-ops — the real event
-  already dispatched; the worker can't cancel it. React-prop handlers are
+  already dispatched; the worker can't cancel it. During dispatch the
+  handler also gets `target`/`currentTarget` materialized as proxy nodes
+  (`currentTarget` = the element the listener was registered on, the realm
+  root for document-level listeners) — library code reading geometry off
+  them gets honest zeros instead of `undefined` crashes. React-prop handlers are
   stable across re-renders — each (instance, prop) pair owns one `__evt`
   slot, so the main thread attaches each listener once. Proxy
   `addEventListener` uses the same handler table via `listen`/`unlisten`

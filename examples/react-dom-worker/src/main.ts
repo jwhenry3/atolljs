@@ -1,12 +1,13 @@
 /**
  * The shell — main-thread orchestration for the islands demo.
  *
- * Six islands render on this page, each inside its OWN Web Worker (one
+ * Seven islands render on this page, each inside its OWN Web Worker (one
  * connectWorker client per island, pooling disabled — see island.ts for why
- * pooling can't go wider). Four run reconciled React trees; 'vanilla' is a
- * purely IMPERATIVE app (no React in that worker at all — its DOM writes go
- * through the worker-side proxy DOM); and 'map' is a REAL unmodified
- * Leaflet 1.9 running on the proxy DOM + DOM shim. Two islands run the SAME 'data-table'
+ * pooling can't go wider). Four run reconciled React trees ('charts' is real
+ * recharts rendering namespaced SVG); 'vanilla' is a purely IMPERATIVE app
+ * (no React in that worker at all — its DOM writes go through the worker-side
+ * proxy DOM); and 'map' is a REAL unmodified Leaflet 1.9 running on the proxy
+ * DOM + DOM shim. Two islands run the SAME 'data-table'
  * app — a microfrontend isn't limited to one instance; each island is its
  * own worker, so the same app can mount as many times as you like with
  * different props. The shell:
@@ -227,8 +228,27 @@ async function main(): Promise<void> {
   islands.push(map);
   $('badge-map').textContent = `worker ${map.pid}`;
 
+  // The charts island — real recharts 3.x (unmodified) rendering an SVG
+  // tree inside the worker. Fixed dimensions are passed as props because
+  // ResponsiveContainer's container measurement has no channel in the
+  // worker (the geometry caveat) — the shell just reads its own layout.
+  const charts = await mountIsland({
+    client: connectIslandWorker({ worker: islandWorker }),
+    el: $('island-charts'),
+    app: 'charts',
+    props: { width: 600, height: 260 },
+    onEvent: (name, payload) => {
+      const p = payload as { region?: string; incidents?: number };
+      if (name === 'chartClicked')
+        setStatus(`charts island emitted chartClicked → ${p.region} (${p.incidents} incidents)`);
+    },
+    onActivity: renderStats,
+  });
+  islands.push(charts);
+  $('badge-charts').textContent = `worker ${charts.pid}`;
+
   setMode('push');
-  setStatus('six islands mounted — two share an app, one runs no React, one runs real Leaflet');
+  setStatus('seven islands mounted — two share an app, one runs no React, one runs real Leaflet + recharts');
 }
 
 void main();

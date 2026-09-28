@@ -14,6 +14,16 @@
 
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import { emit, Slot, type EventPayload } from '@jwhenry123/mesh-worker-dom/worker';
+import {
+  Bar,
+  CartesianGrid,
+  ComposedChart,
+  Legend,
+  Line,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
 
 /**
  * Worker-side event handlers receive the plain wire payload — { type, value,
@@ -259,6 +269,81 @@ export function StatsApp({ visible = 0, total = 0, spark }: StatsProps) {
           <Slot name={spark} style={{ height: '56px' }} />
         </div>
       ) : null}
+    </section>
+  );
+}
+
+/* ── charts (recharts) ──────────────────────────────────────────────────── */
+
+interface RegionStat {
+  region: string;
+  incidents: number;
+  resolved: number;
+}
+
+const CHART_DATA: RegionStat[] = [
+  { region: 'us-east', incidents: 418, resolved: 372 },
+  { region: 'us-west', incidents: 295, resolved: 261 },
+  { region: 'eu-central', incidents: 356, resolved: 340 },
+  { region: 'ap-south', incidents: 487, resolved: 398 },
+  { region: 'sa-east', incidents: 171, resolved: 150 },
+];
+
+export interface ChartsProps {
+  /** Real dimensions — ResponsiveContainer can't measure in the worker
+   *  (no layout engine), so the shell passes measured pixels as props. */
+  width?: number;
+  height?: number;
+}
+
+/**
+ * Real recharts 3.x (unmodified) rendering an SVG tree inside the worker —
+ * the namespace plumbing demo: <svg>/<path>/<text> all arrive as
+ * createElementNS ops via the host-context namespace tracking. A Bar's
+ * onClick is invoked by recharts' own internals with the datum — inside a
+ * dispatch's realm scope, so emit() routes normally. Fixed dims are
+ * honest: ResponsiveContainer's getBoundingClientRect measurement has no
+ * channel (see the geometry caveat), so the shell feeds measured size via
+ * props instead.
+ */
+export function ChartsApp({ width = 600, height = 260 }: ChartsProps) {
+  const [picked, setPicked] = useState<RegionStat | null>(null);
+
+  return (
+    <section>
+      <p style={{ margin: '4px 0 8px', color: '#9aa4b2', fontSize: '13px' }}>
+        recharts {`<ComposedChart>`} rendered as namespaced SVG ops — click a
+        bar to emit; {picked ? `last pick: ${picked.region} (${picked.incidents})` : 'no pick yet'}
+      </p>
+      <ComposedChart width={width} height={height} data={CHART_DATA}>
+        <CartesianGrid stroke="#2a3340" strokeDasharray="3 3" />
+        <XAxis dataKey="region" stroke="#9aa4b2" fontSize={12} />
+        <YAxis stroke="#9aa4b2" fontSize={12} />
+        <Tooltip
+          contentStyle={{ background: '#161c26', border: '1px solid #2a3340', fontSize: 12 }}
+          labelStyle={{ color: '#e6edf3' }}
+        />
+        <Legend wrapperStyle={{ fontSize: 12 }} />
+        <Bar
+          dataKey="incidents"
+          fill="#2d6cdf"
+          barSize={28}
+          isAnimationActive={false}
+          onClick={(data: unknown) => {
+            const d = data as RegionStat;
+            setPicked(d);
+            emit('chartClicked', { region: d.region, incidents: d.incidents, resolved: d.resolved });
+          }}
+        />
+        <Line
+          type="monotone"
+          dataKey="resolved"
+          stroke="#3fb950"
+          strokeWidth={2}
+          dot={{ r: 3 }}
+          isAnimationActive={false}
+        />
+      </ComposedChart>
     </section>
   );
 }

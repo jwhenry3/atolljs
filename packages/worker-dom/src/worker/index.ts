@@ -42,11 +42,13 @@ export type { ElementInstance, HostInstance, TextInstance } from './hostConfig';
 export {
   createProxyDocument,
   installDomShim,
+  installRealmDispatcher,
   InternalDocument,
   ProxyElement,
   ProxyFragment,
   ProxyNode,
   ProxyText,
+  realmDocFor,
 } from './proxyDom';
 export type {
   AdjacentPosition,

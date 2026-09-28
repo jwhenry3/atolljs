@@ -303,10 +303,16 @@ describe('installDomShim', () => {
       uninstall();
     }
 
+    // The realm dispatcher keeps `document`/`window` as permanent accessors —
+    // after uninstall, out-of-realm reads resolve ambiently, so the invariant
+    // is that this document is no longer what they return.
     if (hadDoc) expect(globalThis.document).toBe(prevDoc);
-    else expect('document' in globalThis).toBe(false);
+    else expect(globalThis.document).not.toBe(doc);
     if (hadWin) expect(globalThis.window).toBe(prevWin);
-    else expect('window' in globalThis).toBe(false);
+    else {
+      const win = globalThis.window as { document?: unknown } | undefined;
+      expect(win?.document).not.toBe(doc);
+    }
   });
 
   it('a later install unwinds the previous one — uninstall restores true originals', () => {
@@ -332,8 +338,10 @@ describe('installDomShim', () => {
     installDomShim(doc);
     expect(globalThis.document).toBe(doc);
     doc.dispose();
-    expect('document' in globalThis).toBe(false);
-    expect('window' in globalThis).toBe(false);
+    // Disposed and out of the realm registry — ambient reads can't reach it.
+    expect(globalThis.document).not.toBe(doc);
+    const win = globalThis.window as { document?: unknown } | undefined;
+    expect(win?.document).not.toBe(doc);
   });
 
   it('installs Element=ProxyElement and document.defaultView for library instanceof/getComputedStyle paths', () => {
