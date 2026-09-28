@@ -97,7 +97,33 @@ export interface EventPayload {
   key?: string;
   clientX?: number;
   clientY?: number;
+  screenX?: number;
+  screenY?: number;
   button?: number;
+  /**
+   * UIEvent.which — non-standard but set by every browser (1 = left button,
+   * 2 = middle, 3 = right). Libraries like Leaflet's Draggable gate on it:
+   * `e.which !== 1 && e.button !== 1` must not both hold for a left press.
+   */
+  which?: number;
+  /** Modifier states for the event (KeyboardEvent/MouseEvent share them). */
+  shiftKey?: boolean;
+  ctrlKey?: boolean;
+  altKey?: boolean;
+  metaKey?: boolean;
+  /** WheelEvent deltas — only set for `wheel` events (deltaMode is always
+   *  0/pixels in practice; reported raw). */
+  deltaX?: number;
+  deltaY?: number;
+  /**
+   * WheelEvent.deltaMode (0 = pixels, 1 = lines, 2 = pages). Libraries like
+   * Leaflet gate on `e.deltaMode === 0` inside getWheelDelta, so the driver
+   * always sends a concrete number — defaulting to 0 when the environment
+   * doesn't expose it but deltas exist.
+   */
+  deltaMode?: number;
+  /** PointerEvent.pointerType ('mouse' | 'touch' | 'pen' | ''). */
+  pointerType?: string;
   /** `target.scrollTop` when the target is an element. */
   scrollTop?: number;
   /** The worker instance id of `event.target`, when it maps to one. */
@@ -111,6 +137,18 @@ export interface EventPayload {
    * same proxy document.
    */
   target?: unknown;
+  /**
+   * Synthesized NO-OPS — added worker-side by the proxy DOM when it wraps a
+   * listener's payload (they never cross the wire). They exist so library
+   * code written for real DOM events — `e.preventDefault()`,
+   * `e.stopPropagation()` — doesn't crash. They CANNOT cancel anything: the
+   * real event already dispatched on the main thread before this payload
+   * ever reached the worker. Practical consequence: a `wheel` listener on a
+   * scrolling island can't preventDefault — the page scrolls anyway.
+   */
+  preventDefault?(): void;
+  stopPropagation?(): void;
+  stopImmediatePropagation?(): void;
 }
 
 /**
@@ -126,6 +164,17 @@ export type IslandWorkerMethods = {
   updateProps(realm: string, props: Record<string, unknown>): Op[];
   /** Invoke the worker handler a `__evt` ref or `listen` op points at. */
   dispatch(handlerId: number, payload: EventPayload): Op[];
+  /**
+   * Push the island container's measured box into the realm — the ONLY
+   * geometry channel that exists. The driver observes the island's `el`
+   * with a ResizeObserver and calls this once at mount and on resizes
+   * (throttled ~100ms). The realm stores {w,h}; proxy-DOM geometry reads on
+   * `doc.body`/`documentElement` and on elements marked via
+   * `doc.markContainer(el)` then return it — deeper elements keep the
+   * honest 0. Handlers registered via `doc.onResize` re-run on each push;
+   * their ops ride back in this method's return batch.
+   */
+  setSize(realm: string, width: number, height: number): Op[];
   /** Drain ops committed outside a task (passive effects, timers). */
   flush(realm: string): Op[];
   /** The mounted realm's random id — the island's "worker pid" badge. */

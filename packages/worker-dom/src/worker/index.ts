@@ -24,6 +24,7 @@ export {
   emit,
   getActiveRealm,
   getHandler,
+  getRealmSize,
   hostConfig,
   instances,
   pushOp,
@@ -32,6 +33,7 @@ export {
   runInRealm,
   setActiveRealm,
   setDoorbellContract,
+  setRealmSize,
   takeOps,
   unregisterHandler,
 } from './hostConfig';
@@ -42,6 +44,7 @@ export {
   installDomShim,
   InternalDocument,
   ProxyElement,
+  ProxyFragment,
   ProxyNode,
   ProxyText,
 } from './proxyDom';

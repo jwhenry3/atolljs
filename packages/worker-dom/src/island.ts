@@ -188,23 +188,56 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
     return (e: Event) => {
       const target = e.target as HTMLInputElement | null;
       const mouse = e as MouseEvent;
+      const wheel = e as WheelEvent;
+      const pointer = e as PointerEvent;
       const payload: EventPayload = {
         type: e.type,
         value: target && 'value' in target ? target.value : undefined,
         checked: target && 'checked' in target ? target.checked : undefined,
         key: (e as KeyboardEvent).key,
-        // Best-effort enrichment: mouse coords/button for pointer events,
-        // the target's scroll offset, and the instance id of the target
-        // when it's an op-created node (shell DOM has no id).
+        // Best-effort enrichment: mouse coords/button, wheel deltas,
+        // pointerType, the target's scroll offset, and the instance id of
+        // the target when it's an op-created node (shell DOM has no id).
         clientX: typeof mouse.clientX === 'number' ? mouse.clientX : undefined,
         clientY: typeof mouse.clientY === 'number' ? mouse.clientY : undefined,
+        screenX: typeof mouse.screenX === 'number' ? mouse.screenX : undefined,
+        screenY: typeof mouse.screenY === 'number' ? mouse.screenY : undefined,
         button: typeof mouse.button === 'number' ? mouse.button : undefined,
+        // `which` is non-standard but browsers compute it as button+1 on
+        // mouse events; environments that don't expose it (and libs like
+        // Leaflet that gate drags on `e.which === 1`) get the same value.
+        which:
+          typeof mouse.which === 'number' && mouse.which !== 0
+            ? mouse.which
+            : typeof mouse.button === 'number'
+              ? mouse.button + 1
+              : undefined,
+        shiftKey: typeof mouse.shiftKey === 'boolean' ? mouse.shiftKey : undefined,
+        ctrlKey: typeof mouse.ctrlKey === 'boolean' ? mouse.ctrlKey : undefined,
+        altKey: typeof mouse.altKey === 'boolean' ? mouse.altKey : undefined,
+        metaKey: typeof mouse.metaKey === 'boolean' ? mouse.metaKey : undefined,
+        deltaX: typeof wheel.deltaX === 'number' ? wheel.deltaX : undefined,
+        deltaY: typeof wheel.deltaY === 'number' ? wheel.deltaY : undefined,
+        // WheelEvent.deltaMode is always a real number in browsers; when an
+        // environment leaves it undefined but deltas exist, normalize to
+        // 0 (pixels) so worker-side wheel math (Leaflet's getWheelDelta
+        // checks `deltaMode === 0`) behaves like the real DOM.
+        deltaMode:
+          typeof wheel.deltaMode === 'number'
+            ? wheel.deltaMode
+            : typeof wheel.deltaX === 'number' || typeof wheel.deltaY === 'number'
+              ? 0
+              : undefined,
+        pointerType: typeof pointer.pointerType === 'string' ? pointer.pointerType : undefined,
         scrollTop: target instanceof HTMLElement ? target.scrollTop : undefined,
         targetId: target ? nodeIds.get(target) : undefined,
       };
       // The whole point: an event = one postMessage round-trip. The worker
       // re-renders, we apply whatever ops come back.
-      void client.dispatch(handlerId, payload).then(applyOps);
+      void client
+        .dispatch(handlerId, payload)
+        .then(applyOps)
+        .catch((err) => console.error(`[island ${realm}] dispatch failed`, err));
     };
   }
 
@@ -385,9 +418,13 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
       case 'append': {
         const parent = nodes.get(op.parent);
         const child = nodes.get(op.child);
-        if (!parent || !child) break;
+        if (!parent || !child) {
+          console.error(`[island] append skipped: parent=${op.parent}→${String(parent)} child=${op.child}→${String(child)}`);
+          break;
+        }
         const before = op.before !== undefined ? (nodes.get(op.before) ?? null) : null;
         parent.insertBefore(child, before);
+        if (op.parent === 0) console.error(`[island] appended ${op.child} → root childNodes=${el.childNodes.length}, el===parent:${el === parent}`);
         break;
       }
       case 'remove': {
@@ -424,6 +461,7 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
       case 'listen': {
         const node = nodes.get(op.id);
         if (!(node instanceof HTMLElement)) break;
+        console.error(`[dbg] listen id=${op.id} type=${op.type} hid=${op.handler}`);
         // Keyed by type + handler id so proxy listeners can't collide with
         // the React-prop listener for the same event name, and so unlisten
         // detaches exactly the pair addEventListener created. Id 0 is the
@@ -469,6 +507,7 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
 
   function applyOps(ops: Op[]): void {
     opsApplied += ops.length;
+    console.error(`[island ${realm}] applying ${ops.length} ops:`, ops.map((o) => o.t).join(','));
     onActivity?.();
     for (const op of ops) applyOp(op);
   }
@@ -505,6 +544,49 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
   applyOps(await client.mount(realm, props));
   const pid = await client.whoami(realm);
 
+  /* ── Pushed-size channel ─────────────────────────────────────────────────
+   *
+   * The proxy DOM's only geometry is the box THIS element renders — so the
+   * driver measures it and pushes {w,h} into the realm via setSize: once
+   * immediately (the app's first size-aware work happens then — mount()
+   * itself ran before any size existed), and on every ResizeObserver tick
+   * throttled to ~100ms (trailing, plus a leading call when the window is
+   * quiet). Pushed ops from onResize handlers ride back in the task's
+   * return value like dispatch() results.
+   */
+  let sizeTimer: number | null = null;
+  let sizeLastPush = -Infinity;
+  let lastW = -1;
+  let lastH = -1;
+  const pushSize = (): void => {
+    const w = el.clientWidth;
+    const h = el.clientHeight;
+    if (w === lastW && h === lastH) return;
+    lastW = w;
+    lastH = h;
+    void client.setSize(realm, w, h).then(applyOps);
+  };
+  const resizeObserver =
+    typeof ResizeObserver === 'function'
+      ? new ResizeObserver(() => {
+          const now = Date.now();
+          const elapsed = now - sizeLastPush;
+          if (elapsed >= 100) {
+            sizeLastPush = now;
+            pushSize();
+          } else if (sizeTimer === null) {
+            sizeTimer = window.setTimeout(() => {
+              sizeTimer = null;
+              sizeLastPush = Date.now();
+              pushSize();
+            }, 100 - elapsed);
+          }
+        })
+      : null;
+  resizeObserver?.observe(el);
+  sizeLastPush = Date.now();
+  pushSize();
+
   const handle: IslandHandle = {
     app,
     pid,
@@ -527,7 +609,9 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
     destroy: () => {
       destroyed = true;
       unsubscribe?.();
+      resizeObserver?.disconnect();
       if (pollTimer !== null) clearInterval(pollTimer);
+      if (sizeTimer !== null) clearTimeout(sizeTimer);
       client.terminate();
     },
   };

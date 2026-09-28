@@ -35,11 +35,17 @@
  * instance's realm even outside a task, but nothing drains the queue until
  * a task or flush runs — and `emit` ops would route to no queue at all.
  *
- * HONEST CONSTRAINT — write-path-only: there is no measurement channel.
- * `getBoundingClientRect`, `offsetWidth/Height`, `scrollTop/scrollHeight`,
- * `getComputedStyle` return 0/empty and warn once. Partytown solves this
- * with synchronous XHR/atomics round-trips to the main thread — noted as
- * future work, deliberately not faked here.
+ * HONEST CONSTRAINT — near-write-path-only: there is exactly ONE geometry
+ * channel, and it is PUSHED, not queried. The driver measures the island
+ * container's box and pushes it into the realm via `setSize`; proxy-DOM
+ * geometry reads (`clientWidth/Height`, `offsetWidth/Height`,
+ * `getBoundingClientRect` → {x:0,y:0,…,right:w,bottom:h,width,height})
+ * return that pushed size for `doc.body`/`documentElement` and elements
+ * marked `doc.markContainer(el)` — every other element keeps the honest
+ * 0 + warn-once. `scrollTop/scrollHeight`, `getComputedStyle` stay 0/empty
+ * unconditionally — the driver can't measure inside the tree. Partytown
+ * solves arbitrary reads with synchronous XHR/atomics round-trips to the
+ * main thread — noted as future work, deliberately not faked here.
  */
 
 import { parseDocument, ElementType } from 'htmlparser2';
@@ -47,6 +53,7 @@ import {
   allocId,
   bumpOpsVersion,
   getActiveRealm,
+  getRealmSize,
   instances,
   pushOp,
   registerHandler,
@@ -174,6 +181,12 @@ export class ProxyNode {
 
   insertBefore<T extends ProxyNode>(child: T, ref: ProxyNode | null): T {
     this.doc._assertAlive();
+    // A fragment is a phantom PARENT — the real DOM splices its children
+    // in at the insertion point and empties it; do the same (per-child ops).
+    if (child instanceof ProxyFragment) {
+      for (const c of child._children.slice()) this.insertBefore(c, ref);
+      return child;
+    }
     let beforeId: number | undefined;
     if (ref === null) {
       if (child._parent !== null) child._parent._detach(child);
@@ -189,8 +202,10 @@ export class ProxyNode {
       this._children.splice(index, 0, child);
       if (ref.instance.id > 0) beforeId = ref.instance.id;
     }
-    // Phantom texts have no driver-side node to move — shadow-only.
-    if (child.instance.id > 0) {
+    // Phantom nodes (fragments, shadow-only texts) have NEGATIVE ids and no
+    // driver-side counterpart — skip ops when either endpoint is phantom.
+    // Id 0 is NOT phantom: it's the island's real root container.
+    if (this.instance.id >= 0 && child.instance.id > 0) {
       this._op({ t: 'append', parent: this.instance.id, child: child.instance.id, before: beforeId });
     }
     return child;
@@ -204,7 +219,9 @@ export class ProxyNode {
     }
     this._children.splice(index, 1);
     child._parent = null;
-    if (child.instance.id > 0) this._op({ t: 'remove', child: child.instance.id });
+    if (this.instance.id >= 0 && child.instance.id > 0) {
+      this._op({ t: 'remove', child: child.instance.id });
+    }
     return child;
   }
 
@@ -286,6 +303,20 @@ export class ProxyText extends ProxyNode {
     const text = String(v);
     this.instance.text = text;
     this._op({ t: 'utext', id: this._utextTarget, text });
+  }
+}
+
+/* ── ProxyFragment ─────────────────────────────────────────────────────── */
+
+/**
+ * DocumentFragment — a PHANTOM parent: it never exists driver-side, so its
+ * `instance.id` is negative (no ops ever target it). Appending it to a real
+ * parent splices its children out like the DOM does; libraries use it to
+ * batch insertions (Leaflet's GridLayer builds each zoom level in one).
+ */
+export class ProxyFragment extends ProxyNode {
+  override get nodeType(): number {
+    return 11;
   }
 }
 
@@ -467,6 +498,15 @@ export class ProxyElement extends ProxyNode {
     return this._datasetObj as unknown as DOMStringMap;
   }
 
+  /**
+   * Focus/blur — NO-OPS. Real focus can't be delivered over async postMessage
+   * (the driver's dispatch fires after the event; there is no focus op).
+   * They exist because gesture libraries call `el.focus()` unconditionally
+   * during mousedown paths (Leaflet's Keyboard handler does).
+   */
+  focus(): void {}
+  blur(): void {}
+
   /* Events — registers a worker handler-table entry and emits listen.
    * The driver's listenerFor dispatches EventPayloads back into the worker;
    * the payload is enriched with a synthesized `target` proxy node first. */
@@ -637,23 +677,56 @@ export class ProxyElement extends ProxyNode {
     this.append(...nodes);
   }
 
-  /* ── Write-path-only stubs: NO measurement channel exists. Returning a
-   *  fake non-zero number would be silently wrong; these return the honest
-   *  zero/empty and warn once per document per API. ── */
+  /* ── Pushed-size geometry. The ONLY measured box is the island container:
+   *  `doc.body`/`documentElement` and markContainer()ed elements report the
+   *  last setSize push; everything else keeps the honest 0 and warns once
+   *  per document per API. A marked element reports the CONTAINER's box —
+   *  the driver can only measure the island's root, so "marked" means
+   *  "pretend my box is the container's", which is only honest for elements
+   *  that genuinely fill it. ── */
   getBoundingClientRect(): DOMRect {
-    this.doc._warn('getBoundingClientRect');
+    const size = this.doc._sizeFor(this);
+    if (size === undefined) {
+      this.doc._warn('getBoundingClientRect');
+      return {
+        x: 0, y: 0, top: 0, left: 0, right: 0, bottom: 0, width: 0, height: 0,
+        toJSON: () => ({}),
+      } as DOMRect;
+    }
     return {
-      x: 0, y: 0, top: 0, left: 0, right: 0, bottom: 0, width: 0, height: 0,
+      x: 0, y: 0, top: 0, left: 0, right: size.w, bottom: size.h,
+      width: size.w, height: size.h,
       toJSON: () => ({}),
     } as DOMRect;
   }
+  get clientWidth(): number {
+    return this._geom('clientWidth', (s) => s.w);
+  }
+  get clientHeight(): number {
+    return this._geom('clientHeight', (s) => s.h);
+  }
   get offsetWidth(): number {
-    this.doc._warn('offsetWidth');
-    return 0;
+    return this._geom('offsetWidth', (s) => s.w);
   }
   get offsetHeight(): number {
-    this.doc._warn('offsetHeight');
+    return this._geom('offsetHeight', (s) => s.h);
+  }
+  /** Border edge widths — honestly 0 (the pushed box doesn't measure borders). */
+  get clientLeft(): number {
     return 0;
+  }
+  get clientTop(): number {
+    return 0;
+  }
+  /** Position within offsetParent — not measured; 0 is honest for root-level boxes. */
+  get offsetLeft(): number {
+    return 0;
+  }
+  get offsetTop(): number {
+    return 0;
+  }
+  get offsetParent(): null {
+    return null;
   }
   get scrollTop(): number {
     this.doc._warn('scrollTop');
@@ -678,7 +751,126 @@ export class ProxyElement extends ProxyNode {
     return 0;
   }
 
+  /**
+   * Reflected properties. Library code assigns `img.src = url`,
+   * `el.tabIndex = 0`, `link.href = '#'` — on a bare class instance those
+   * become silent expandos and nothing crosses the wire. The attribute-backed
+   * accessors below (defined for the properties real libraries poke) make
+   * those assignments emit ordinary `attr` ops. Everything else still falls
+   * through to a plain own-property — which is also exactly what library
+   * expandos like `_leaflet_pos` need, so proxy elements are deliberately
+   * NOT frozen/sealed.
+   */
+  get src(): string {
+    return this._attrs.get('src') ?? '';
+  }
+  set src(v: string) {
+    this._setAttr('src', v);
+  }
+  get srcset(): string {
+    return this._attrs.get('srcset') ?? '';
+  }
+  set srcset(v: string) {
+    this._setAttr('srcset', v);
+  }
+  get href(): string {
+    return this._attrs.get('href') ?? '';
+  }
+  set href(v: string) {
+    this._setAttr('href', v);
+  }
+  get alt(): string {
+    return this._attrs.get('alt') ?? '';
+  }
+  set alt(v: string) {
+    this._setAttr('alt', v);
+  }
+  get title(): string {
+    return this._attrs.get('title') ?? '';
+  }
+  set title(v: string) {
+    this._setAttr('title', v);
+  }
+  get tabIndex(): number {
+    return Number(this._attrs.get('tabindex') ?? -1);
+  }
+  set tabIndex(v: number) {
+    this._setAttr('tabindex', String(v));
+  }
+  get draggable(): boolean {
+    return this._attrs.get('draggable') === 'true';
+  }
+  set draggable(v: boolean) {
+    this._setAttr('draggable', String(v));
+  }
+  get crossOrigin(): string | null {
+    return this._attrs.get('crossorigin') ?? null;
+  }
+  set crossOrigin(v: string | null) {
+    if (v === null) this.removeAttribute('crossorigin');
+    else this._setAttr('crossorigin', v);
+  }
+  get width(): number {
+    return Number(this._attrs.get('width') ?? 0);
+  }
+  set width(v: number) {
+    this._setAttr('width', String(v));
+  }
+  get height(): number {
+    return Number(this._attrs.get('height') ?? 0);
+  }
+  set height(v: number) {
+    this._setAttr('height', String(v));
+  }
+  get type(): string {
+    return this._attrs.get('type') ?? '';
+  }
+  set type(v: string) {
+    this._setAttr('type', v);
+  }
+  get loading(): string {
+    return this._attrs.get('loading') ?? '';
+  }
+  set loading(v: string) {
+    this._setAttr('loading', v);
+  }
+  get decoding(): string {
+    return this._attrs.get('decoding') ?? '';
+  }
+  set decoding(v: string) {
+    this._setAttr('decoding', v);
+  }
+  get value(): string {
+    return this._attrs.get('value') ?? '';
+  }
+  set value(v: string) {
+    this._setAttr('value', v);
+  }
+  get checked(): boolean {
+    return this._attrs.has('checked');
+  }
+  set checked(v: boolean) {
+    if (v) this._setAttr('checked', '');
+    else this.removeAttribute('checked');
+  }
+  get disabled(): boolean {
+    return this._attrs.has('disabled');
+  }
+  set disabled(v: boolean) {
+    if (v) this._setAttr('disabled', '');
+    else this.removeAttribute('disabled');
+  }
+
   /* internals */
+  /** Geometry read shared by the pushed-size getters above. */
+  _geom(feature: string, pick: (size: { w: number; h: number }) => number): number {
+    const size = this.doc._sizeFor(this);
+    if (size === undefined) {
+      this.doc._warn(feature);
+      return 0;
+    }
+    return pick(size);
+  }
   _attrValue(name: string): string | undefined {
     return this._attrs.get(name);
   }
@@ -905,6 +1097,12 @@ export interface ProxyDocument {
   createElement(tag: string): ProxyElement;
   createTextNode(text: string): ProxyText;
   /**
+   * A phantom container for batching — appending the fragment splices its
+   * children into the target like the DOM does (each child emits its own
+   * append op). Fragments never exist driver-side.
+   */
+  createDocumentFragment(): ProxyFragment;
+  /**
    * Document-level listeners: emitted as `listen` ops on id 0 — the driver
    * attaches them to the island's real container element, so delegated
    * handlers see every event that bubbles inside the island. This is what
@@ -924,6 +1122,27 @@ export interface ProxyDocument {
    *  or mutate around it — the bridge for nesting proxy trees inside
    *  React-rendered parents and vice versa. */
   adopt(instance: HostInstance): ProxyNode;
+  /**
+   * Mark `el` as reporting the pushed container size — the driver's only
+   * measured box is the island container, so geometry reads
+   * (`clientWidth/Height`, `offsetWidth/Height`, `getBoundingClientRect`)
+   * on marked elements return the last `setSize` push exactly like
+   * `doc.body`/`documentElement`. Only honest for elements that actually
+   * fill the island's box (a map viewport, a canvas host).
+   */
+  markContainer(el: ProxyElement): void;
+  /**
+   * Register a handler fired every time the driver pushes a new container
+   * size — the app's resize signal. Handlers run inside the realm's task
+   * scope, so their proxy-DOM mutations emit ops and `emit` routes.
+   */
+  onResize(cb: (w: number, h: number) => void): void;
+  /**
+   * The window facade `installDomShim` installed this document under —
+   * what `document.defaultView` reads as (`window.getComputedStyle` etc).
+   * undefined until the shim installs.
+   */
+  readonly defaultView?: WindowShim;
   /** No measurement channel — returns an all-empty declaration (warns once). */
   getComputedStyle(el: ProxyElement): CSSStyleDeclaration;
   /** Unregister every handler this document's listeners hold. Called by the
@@ -939,6 +1158,16 @@ export class InternalDocument implements ProxyDocument {
   readonly _ids = new Map<string, ProxyElement>();
   /** handler ids this document registered — disposed on rebuild. */
   readonly _handlerIds = new Set<number>();
+  /**
+   * instance ids geometry reads answer for — id 0 (the root) plus every
+   * markContainer()ed element. The pushed box is the ISLAND CONTAINER's,
+   * so a marked element claims "my box is the container's box".
+   */
+  readonly _containerIds = new Set<number>([0]);
+  /** Handlers fired when a setSize task pushes a new container size. */
+  private readonly _resizeHandlers = new Set<(w: number, h: number) => void>();
+  /** The shim's window facade — set by installDomShim, cleared on uninstall. */
+  defaultView?: WindowShim;
   /** Document-level listeners — separate table from the root element's, so
    *  doc.addEventListener and body.addEventListener don't wrongly dedupe
    *  against each other. Both emit `listen` on id 0. */
@@ -982,8 +1211,37 @@ export class InternalDocument implements ProxyDocument {
     if (this._warned.has(feature)) return;
     this._warned.add(feature);
     console.warn(
-      `[proxyDom] '${feature}' has no measurement channel — the worker DOM is write-path-only; reads return 0/empty.`,
+      `[proxyDom] '${feature}' has no measurement channel — the only geometry the worker sees is the pushed container size (setSize); reads on unmarked elements return 0/empty.`,
     );
+  }
+
+  markContainer(el: ProxyElement): void {
+    this._assertAlive();
+    this._containerIds.add(el.instance.id);
+  }
+
+  /**
+   * The size a geometry read on `el` may report: the pushed container box
+   * when `el` is the root or was markContainer()ed, undefined otherwise
+   * (also undefined when nothing has been pushed yet — reads return 0).
+   */
+  _sizeFor(el: ProxyElement): { w: number; h: number } | undefined {
+    if (!this._containerIds.has(el.instance.id)) return undefined;
+    return getRealmSize(this.realm);
+  }
+
+  onResize(cb: (w: number, h: number) => void): void {
+    this._assertAlive();
+    this._resizeHandlers.add(cb);
+  }
+
+  /**
+   * Fire the doc's resize handlers — the worker's `setSize` task calls this
+   * inside the realm's scope, so handler mutations emit ops on the realm
+   * queue and come back in the task's return batch.
+   */
+  _notifySize(w: number, h: number): void {
+    for (const cb of [...this._resizeHandlers]) cb(w, h);
   }
 
   /** Keep the getElementById map pointing at each element's CURRENT id. */
@@ -1007,17 +1265,30 @@ export class InternalDocument implements ProxyDocument {
   }
 
   /**
-   * Give a dispatched payload its `target` — the proxy node for targetId,
-   * looked up in the shared instance space and wrapped in THIS document's
-   * wrapper map (so `e.target.closest`/`.dataset`/`.contains` behave like
-   * the real DOM for proxy-created nodes).
+   * Enrich a dispatched payload before handing it to a proxy listener:
+   *  - `target` = the proxy node for targetId, looked up in the shared
+   *    instance space and wrapped in THIS document's wrapper map (so
+   *    `e.target.closest`/`.dataset`/`.contains` behave like the real DOM
+   *    for proxy-created nodes).
+   *  - `preventDefault`/`stopPropagation`/`stopImmediatePropagation` =
+   *    synthesized NO-OPS. They cannot cancel anything — the real event
+   *    already dispatched on the main thread before this payload crossed
+   *    postMessage — but library code written against real DOM events calls
+   *    them unconditionally, so the wrapper supplies them.
    */
   _enrichEvent(payload: EventPayload): EventPayload {
+    const out: EventPayload = {
+      ...payload,
+      preventDefault: () => {},
+      stopPropagation: () => {},
+      stopImmediatePropagation: () => {},
+    };
     const id = payload.targetId;
-    if (typeof id !== 'number') return payload;
-    const instance = instances.get(id);
-    if (instance === undefined) return payload;
-    return { ...payload, target: this._wrap(instance) };
+    if (typeof id === 'number') {
+      const instance = instances.get(id);
+      if (instance !== undefined) out.target = this._wrap(instance);
+    }
+    return out;
   }
 
   createElement(tag: string): ProxyElement {
@@ -1053,6 +1324,18 @@ export class InternalDocument implements ProxyDocument {
   adopt(instance: HostInstance): ProxyNode {
     this._assertAlive();
     return this._wrap(instance);
+  }
+
+  createDocumentFragment(): ProxyFragment {
+    this._assertAlive();
+    return new ProxyFragment(this, {
+      kind: 'element',
+      id: nextPhantomId--,
+      type: '#fragment',
+      realm: this.realm,
+      props: {},
+      listenerSlots: {},
+    });
   }
 
   /** Wrap (or return the existing wrapper for) a shared instance record. */
@@ -1132,6 +1415,7 @@ export class InternalDocument implements ProxyDocument {
     this._uninstallShim?.();
     this._uninstallShim = null;
     this._disposed = true;
+    this._resizeHandlers.clear();
     for (const hid of this._handlerIds) unregisterHandler(hid);
     this._handlerIds.clear();
   }
@@ -1165,6 +1449,11 @@ export interface WindowShim {
   getComputedStyle(el: unknown): Record<string, never>;
   addEventListener(type: string, fn: ProxyEventHandler): void;
   removeEventListener(type: string, fn: ProxyEventHandler): void;
+  /** Scrolling is main-thread business — no-ops so window.scrollTo(x,y)
+   *  calls in libraries don't throw. */
+  scrollTo(x?: number | ScrollToOptions, y?: number): void;
+  scrollBy(x?: number | ScrollToOptions, y?: number): void;
+  scroll(x?: number | ScrollToOptions, y?: number): void;
 }
 
 /**
@@ -1187,8 +1476,12 @@ let activeShimUninstall: (() => void) | null = null;
  *  - `globalThis.document` = the proxy document (all proxy behavior above)
  *  - `globalThis.window` = a facade OBJECT: navigator, location stubs,
  *    timers + rAF passthrough (setTimeout fallback where workers lack rAF),
- *    innerWidth/innerHeight/devicePixelRatio constants, empty
- *    getComputedStyle, and addEventListener.
+ *    innerWidth/innerHeight fed by the pushed container size,
+ *    devicePixelRatio constant, empty getComputedStyle, and addEventListener.
+ *  - `globalThis.Element` = `ProxyElement` — workers have NO `Element`
+ *    global, and library type-checks like `x instanceof Element` would
+ *    throw a ReferenceError without it. `document.defaultView` points at
+ *    the facade too (`document.defaultView.getComputedStyle` paths).
  *  - `window.addEventListener` keeps a SEPARATE listener table and emits
  *    `listen`/`unlisten` ops on id 0 — same as `document.addEventListener`:
  *    the driver attaches real listeners to the island's container, so DOM
@@ -1223,6 +1516,8 @@ export function installDomShim(doc: ProxyDocument): () => void {
   const prevDocument = g.document;
   const hadWindow = 'window' in g;
   const prevWindow = g.window;
+  const hadElement = 'Element' in g;
+  const prevElement = g.Element;
 
   /** type → fn → handler id. Window listeners get their own table (a lib
    *  removing a document listener must not detach its window twin), but
@@ -1271,8 +1566,13 @@ export function installDomShim(doc: ProxyDocument): () => void {
       assign(_url: string) {},
       replace(_url: string) {},
     },
-    innerWidth: 0,
-    innerHeight: 0,
+    get innerWidth(): number {
+      // Fed by the pushed container size — the viewport the island lives in.
+      return getRealmSize(internal.realm)?.w ?? 0;
+    },
+    get innerHeight(): number {
+      return getRealmSize(internal.realm)?.h ?? 0;
+    },
     devicePixelRatio: 1,
     // Workers normally have no rAF — pass through when one exists (in-process
     // test), degrade to a 16ms timer otherwise.
@@ -1294,10 +1594,22 @@ export function installDomShim(doc: ProxyDocument): () => void {
     getComputedStyle: () => ({}),
     addEventListener: windowAddEventListener,
     removeEventListener: windowRemoveEventListener,
+    // No scroll surface exists worker-side — libraries call these during
+    // gesture handlers (Leaflet's Keyboard._onMouseDown scrolls the page
+    // back); honest no-ops.
+    scrollTo: () => {},
+    scrollBy: () => {},
+    scroll: () => {},
   };
 
   g.document = doc;
   g.window = windowFacade;
+  // Workers lack the Element constructor entirely — `x instanceof Element`
+  // inside a library would ReferenceError. Point it at ProxyElement so type
+  // checks behave; real HTMLElement checks on driver-created nodes never
+  // run worker-side.
+  g.Element = ProxyElement;
+  internal.defaultView = windowFacade;
 
   const uninstall = (): void => {
     // Tear down surviving window listeners first — both wire ops and the
@@ -1314,6 +1626,9 @@ export function installDomShim(doc: ProxyDocument): () => void {
     else delete g.document;
     if (hadWindow) g.window = prevWindow;
     else delete g.window;
+    if (hadElement) g.Element = prevElement;
+    else delete g.Element;
+    internal.defaultView = undefined;
     if (activeShimUninstall === uninstall) activeShimUninstall = null;
   };
 

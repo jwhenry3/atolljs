@@ -10,10 +10,12 @@
   },
   "dependencies": {
     "@jwhenry123/mesh-worker-dom": "file:../../packages/worker-dom",
+    "leaflet": "^1.9.4",
     "react": "^19.3.0",
     "react-reconciler": "^0.34.0"
   },
   "devDependencies": {
+    "@types/leaflet": "^1.9.22",
     "@types/react": "^19.3.0",
     "typescript": "^7.0.2",
     "vite": "^8.3.1"

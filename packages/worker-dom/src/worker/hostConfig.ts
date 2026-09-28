@@ -162,6 +162,28 @@ export const takeOps = (realm: string): Op[] => {
 
 export const getHandler = (id: number): HandlerEntry | undefined => handlers.get(id);
 
+/* ── Pushed container size (setSize channel) ────────────────────────────── */
+
+/**
+ * realm key → the island container's last measured {w,h}, pushed by the
+ * driver's `setSize` task. This is the ONLY geometry channel: the main
+ * thread can only measure the island's root box, so the proxy DOM serves
+ * this value to `doc.body`/`documentElement` and to elements explicitly
+ * marked `doc.markContainer(el)` — every other element keeps the honest 0.
+ * Module-level (not per-document) so it survives imperative rebuilds that
+ * swap in a fresh proxy document.
+ */
+const realmSizes = new Map<string, { w: number; h: number }>();
+
+/** The realm's last pushed container size, or undefined if none arrived. */
+export const getRealmSize = (realm: string): { w: number; h: number } | undefined =>
+  realmSizes.get(realm);
+
+/** Store the container size a `setSize` task pushed. */
+export const setRealmSize = (realm: string, w: number, h: number): void => {
+  realmSizes.set(realm, { w, h });
+};
+
 /**
  * Register a function in the handler table outside prop serialization —
  * the proxy DOM's addEventListener uses this. The realm is stamped on the

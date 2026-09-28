@@ -10,6 +10,7 @@
  */
 import { defineIslandWorker } from '@jwhenry123/mesh-worker-dom/worker';
 import { ControlsApp, StatsApp, TableApp } from './apps';
+import { buildMap } from './map';
 import { buildVanilla } from './vanilla';
 
 export const renderWorker = defineIslandWorker({
@@ -18,6 +19,7 @@ export const renderWorker = defineIslandWorker({
     'data-table': TableApp,
     stats: StatsApp,
     vanilla: { imperative: buildVanilla },
+    map: { imperative: buildMap },
   },
 });
 

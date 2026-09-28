@@ -4,7 +4,7 @@
  * point: mutations emit ops onto a realm queue; reads are served locally.
  */
 import { describe, expect, it } from 'vitest';
-import { runInRealm, takeOps, getHandler } from '../src/worker/hostConfig';
+import { runInRealm, takeOps, getHandler, getRealmSize, setRealmSize } from '../src/worker/hostConfig';
 import {
   createProxyDocument,
   installDomShim,
@@ -334,5 +334,163 @@ describe('installDomShim', () => {
     doc.dispose();
     expect('document' in globalThis).toBe(false);
     expect('window' in globalThis).toBe(false);
+  });
+
+  it('installs Element=ProxyElement and document.defaultView for library instanceof/getComputedStyle paths', () => {
+    const doc = createProxyDocument('shim-element');
+    const prevElement = (globalThis as Record<string, unknown>).Element;
+    const hadElement = 'Element' in globalThis;
+    const uninstall = installDomShim(doc);
+    try {
+      const el = doc.createElement('div');
+      expect(el instanceof Element).toBe(true); // the library type check
+      expect((doc as InternalDocument).defaultView).toBe(globalThis.window);
+      expect(document.defaultView).toBe(globalThis.window);
+    } finally {
+      uninstall();
+    }
+    if (hadElement) expect((globalThis as Record<string, unknown>).Element).toBe(prevElement);
+    else expect('Element' in globalThis).toBe(false);
+  });
+});
+
+describe('pushed container size (setSize channel)', () => {
+  it('body/documentElement and markContainer()ed elements report the pushed box; others stay honest-0', () => {
+    const realm = 'sized';
+    const doc = createProxyDocument(realm);
+    const map = doc.createElement('div');
+    const plain = doc.createElement('div');
+    doc.body.appendChild(map);
+    doc.body.appendChild(plain);
+    doc.markContainer(map);
+
+    // Before any push every geometry read is the honest 0.
+    expect(getRealmSize(realm)).toBeUndefined();
+    expect(doc.body.clientWidth).toBe(0);
+
+    setRealmSize(realm, 640, 480);
+
+    // The root reports the pushed box — body and documentElement are aliases.
+    expect(doc.body.clientWidth).toBe(640);
+    expect(doc.body.clientHeight).toBe(480);
+    expect(doc.documentElement.offsetWidth).toBe(640);
+    const rect = doc.body.getBoundingClientRect();
+    expect(rect.x).toBe(0);
+    expect(rect.left).toBe(0);
+    expect(rect.top).toBe(0);
+    expect(rect.right).toBe(640);
+    expect(rect.bottom).toBe(480);
+    expect(rect.width).toBe(640);
+    expect(rect.height).toBe(480);
+
+    // A marked element claims the same box — the map-container contract.
+    expect(map.clientWidth).toBe(640);
+    expect(map.offsetHeight).toBe(480);
+    expect(map.getBoundingClientRect().width).toBe(640);
+    expect(map.clientLeft).toBe(0); // border edges honestly 0
+    expect(map.offsetParent).toBeNull();
+
+    // Unmarked elements keep the honest zero (and warned once — see _warn).
+    expect(plain.clientWidth).toBe(0);
+    expect(plain.offsetHeight).toBe(0);
+    expect(plain.getBoundingClientRect().width).toBe(0);
+
+    // A second push updates the same realm store.
+    setRealmSize(realm, 320, 240);
+    expect(doc.body.clientWidth).toBe(320);
+    doc.dispose();
+  });
+
+  it('onResize handlers fire on _notifySize inside the realm — ops route to its queue', () => {
+    const realm = 'resize-notify';
+    const doc = createProxyDocument(realm) as InternalDocument;
+    const el = doc.createElement('div');
+    doc.body.appendChild(el);
+    const seen: Array<[number, number]> = [];
+    doc.onResize((w, h) => {
+      seen.push([w, h]);
+      el.style.width = `${w}px`; // handler ops ride the setSize batch back
+    });
+
+    const ops = runInRealm(realm, () => {
+      setRealmSize(realm, 800, 600);
+      doc._notifySize(800, 600);
+      return takeOps(realm);
+    });
+    expect(seen).toEqual([[800, 600]]);
+    expect(ops.some((o) => o.t === 'style' && o.props.width === '800px')).toBe(true);
+    doc.dispose();
+  });
+
+  it('the shim window facade reports pushed size as innerWidth/innerHeight', () => {
+    const realm = 'sized-shim';
+    const doc = createProxyDocument(realm);
+    setRealmSize(realm, 512, 384);
+    const uninstall = installDomShim(doc);
+    try {
+      const win = globalThis.window as unknown as { innerWidth: number; innerHeight: number };
+      expect(win.innerWidth).toBe(512);
+      expect(win.innerHeight).toBe(384);
+    } finally {
+      uninstall();
+    }
+    doc.dispose();
+  });
+});
+
+describe('enriched event payloads', () => {
+  it('proxy listeners receive preventDefault/stopPropagation noops + a synthesized target', () => {
+    const realm = 'payload-enrich';
+    let received: import('../src/ops').EventPayload | null = null;
+    const doc = createProxyDocument(realm);
+    const btn = doc.createElement('button');
+    btn.className = 'hit';
+    doc.body.appendChild(btn);
+    btn.addEventListener('click', (p) => {
+      received = p;
+    });
+
+    const drained = takeOps(realm);
+    const listenOp = drained.find((o) => o.t === 'listen' && o.type === 'click');
+    expect(listenOp).toBeDefined();
+    getHandler((listenOp as { handler: number }).handler)!.fn({
+      type: 'click',
+      targetId: btn.instance.id,
+    });
+
+    expect(received).not.toBeNull();
+    expect(received!.target instanceof ProxyElement).toBe(true);
+    // Cancellation can't cross postMessage — these exist and do nothing.
+    expect(() => received!.preventDefault!()).not.toThrow();
+    expect(() => received!.stopPropagation!()).not.toThrow();
+    expect(() => received!.stopImmediatePropagation!()).not.toThrow();
+    doc.dispose();
+  });
+});
+
+describe('reflected property accessors', () => {
+  it('library-style `el.src = url`/tabIndex/alt emit attr ops instead of silent expandos', () => {
+    const ops = inRealm('reflected', () => {
+      const doc = createProxyDocument('reflected');
+      const img = doc.createElement('img');
+      img.src = 'https://tile.openstreetmap.org/1/2/3.png';
+      img.alt = '';
+      img.width = 256;
+      img.height = 256;
+      doc.body.appendChild(img);
+      const link = doc.createElement('a');
+      link.href = '#';
+      link.title = 'Zoom in';
+      link.tabIndex = 0;
+      link.draggable = false;
+      doc.body.appendChild(link);
+    });
+    expect(ops.some((o) => o.t === 'attr' && o.name === 'src' && String(o.value).includes('tile.openstreetmap'))).toBe(true);
+    expect(ops.some((o) => o.t === 'attr' && o.name === 'alt' && o.value === '')).toBe(true);
+    expect(ops.some((o) => o.t === 'attr' && o.name === 'width' && o.value === '256')).toBe(true);
+    expect(ops.some((o) => o.t === 'attr' && o.name === 'href' && o.value === '#')).toBe(true);
+    expect(ops.some((o) => o.t === 'attr' && o.name === 'title' && o.value === 'Zoom in')).toBe(true);
+    expect(ops.some((o) => o.t === 'attr' && o.name === 'tabindex' && o.value === '0')).toBe(true);
+    expect(ops.some((o) => o.t === 'attr' && o.name === 'draggable' && o.value === 'false')).toBe(true);
   });
 });

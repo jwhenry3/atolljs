@@ -41,7 +41,7 @@ import Reconciler from 'react-reconciler';
 import { defineWorker } from '@jwhenry123/mesh/sdk';
 import type { SharedMemory, WorkerDefinition } from '@jwhenry123/mesh/sdk';
 import { renderMemory, type DoorbellSpec } from '../memory';
-import { createProxyDocument, type ProxyDocument } from './proxyDom';
+import { createProxyDocument, type InternalDocument, type ProxyDocument } from './proxyDom';
 import {
   getHandler,
   hostConfig,
@@ -50,6 +50,7 @@ import {
   runInRealm,
   setActiveRealm,
   setDoorbellContract,
+  setRealmSize,
   takeOps,
 } from './hostConfig';
 import type { EventPayload, IslandWorkerMethods, Op } from '../ops';
@@ -324,6 +325,26 @@ export function defineIslandWorker(
         return syncCommit(realm, () => {
           entry.fn(payload);
         });
+      },
+
+      /**
+       * The pushed-size channel: the driver measured the island's container
+       * and stores it for the realm (see hostConfig realmSizes). Imperative
+       * realms additionally fire their proxy document's onResize handlers —
+       * inside the realm's scope so their mutations emit ops, which ride
+       * back in this task's return batch. React realms have no proxy doc;
+       * the stored size is still what a shim-installed document would read.
+       */
+      setSize(realm: string, width: number, height: number): Op[] {
+        setRealmSize(realm, width, height);
+        const mounted = realms.get(realm);
+        if (mounted !== undefined && isImperativeRealm(mounted)) {
+          return runInRealm(mounted.key, () => {
+            (mounted.imperative.doc as InternalDocument)._notifySize(width, height);
+            return takeOps(realm);
+          });
+        }
+        return takeOps(realm);
       },
 
       /**
