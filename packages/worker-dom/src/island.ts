@@ -141,6 +141,61 @@ const POINTER_FAMILY =
   /^(mouse|pointer|drag|drop|wheel|mousewheel|DOMMouseScroll|click|dblclick|auxclick|contextmenu|selectstart|gotpointercapture|lostpointercapture)/;
 const WHEEL_FAMILY = /^(wheel|mousewheel|DOMMouseScroll)$/;
 
+/** Build the wire payload for a DOM event, normalizing missing numeric fields
+ *  so worker-side geometry math never receives undefined. */
+function buildEventPayload(
+  e: Event,
+  target: EventTarget | null,
+  targetId: number | undefined,
+): EventPayload {
+  const input = target as HTMLInputElement | null;
+  const mouse = e as MouseEvent;
+  const wheel = e as WheelEvent;
+  const pointer = e as PointerEvent;
+  const pointerFam =
+    POINTER_FAMILY.test(e.type) ||
+    (typeof MouseEvent !== 'undefined' && e instanceof MouseEvent);
+  const wheelFam =
+    WHEEL_FAMILY.test(e.type) ||
+    (typeof WheelEvent !== 'undefined' && e instanceof WheelEvent);
+  const num = (v: unknown): number | undefined =>
+    typeof v === 'number' ? v : undefined;
+  const coord = (v: unknown): number | undefined =>
+    num(v) ?? (pointerFam ? 0 : undefined);
+  const button = num(mouse.button) ?? (pointerFam ? 0 : undefined);
+  return {
+    type: e.type,
+    value: input && 'value' in input ? input.value : undefined,
+    checked: input && 'checked' in input ? input.checked : undefined,
+    key: (e as KeyboardEvent).key,
+    clientX: coord(mouse.clientX),
+    clientY: coord(mouse.clientY),
+    screenX: coord(mouse.screenX),
+    screenY: coord(mouse.screenY),
+    button,
+    which:
+      typeof mouse.which === 'number' && mouse.which !== 0
+        ? mouse.which
+        : button !== undefined
+          ? button + 1
+          : undefined,
+    shiftKey: typeof mouse.shiftKey === 'boolean' ? mouse.shiftKey : undefined,
+    ctrlKey: typeof mouse.ctrlKey === 'boolean' ? mouse.ctrlKey : undefined,
+    altKey: typeof mouse.altKey === 'boolean' ? mouse.altKey : undefined,
+    metaKey: typeof mouse.metaKey === 'boolean' ? mouse.metaKey : undefined,
+    deltaX: num(wheel.deltaX) ?? (wheelFam ? 0 : undefined),
+    deltaY: num(wheel.deltaY) ?? (wheelFam ? 0 : undefined),
+    deltaMode:
+      num(wheel.deltaMode) ??
+      (wheelFam || typeof wheel.deltaX === 'number' || typeof wheel.deltaY === 'number'
+        ? 0
+        : undefined),
+    pointerType: typeof pointer.pointerType === 'string' ? pointer.pointerType : undefined,
+    scrollTop: input instanceof HTMLElement ? input.scrollTop : undefined,
+    targetId,
+  };
+}
+
 /** Per-island realm counter — see the realm key note in mountIsland. */
 let islandSeq = 0;
 
@@ -224,71 +279,12 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
 
   function listenerFor(handlerId: number): EventListener {
     return (e: Event) => {
-      const target = e.target as HTMLInputElement | null;
-      const mouse = e as MouseEvent;
-      const wheel = e as WheelEvent;
-      const pointer = e as PointerEvent;
-      // Real DOM guarantees numeric pointer fields on every MouseEvent-
-      // family object — WheelEvent, DragEvent, PointerEvent included. An
-      // environment that under-fills them (happy-dom's WheelEvent extends
-      // UIEvent and has NO clientX at all) would otherwise ship `undefined`
-      // across the wire, and worker-side geometry math — Leaflet's
-      // `e.clientX - offset.left` in getMousePosition — turns undefined
-      // into NaN coordinates and throws. For those event types the wire
-      // always carries numbers: absent fields default to 0, matching what
-      // the real DOM reports for a pointer at the origin.
-      const pointerFam =
-        POINTER_FAMILY.test(e.type) ||
-        (typeof MouseEvent !== 'undefined' && e instanceof MouseEvent);
-      const wheelFam =
-        WHEEL_FAMILY.test(e.type) ||
-        (typeof WheelEvent !== 'undefined' && e instanceof WheelEvent);
-      const num = (v: unknown): number | undefined =>
-        typeof v === 'number' ? v : undefined;
-      const coord = (v: unknown): number | undefined =>
-        num(v) ?? (pointerFam ? 0 : undefined);
-      const button = num(mouse.button) ?? (pointerFam ? 0 : undefined);
-      const payload: EventPayload = {
-        type: e.type,
-        value: target && 'value' in target ? target.value : undefined,
-        checked: target && 'checked' in target ? target.checked : undefined,
-        key: (e as KeyboardEvent).key,
-        // Best-effort enrichment: mouse coords/button, wheel deltas,
-        // pointerType, the target's scroll offset, and the instance id of
-        // the target when it's an op-created node (shell DOM has no id).
-        clientX: coord(mouse.clientX),
-        clientY: coord(mouse.clientY),
-        screenX: coord(mouse.screenX),
-        screenY: coord(mouse.screenY),
-        button,
-        // `which` is non-standard but browsers compute it as button+1 on
-        // mouse events; environments that don't expose it (and libs like
-        // Leaflet that gate drags on `e.which === 1`) get the same value.
-        which:
-          typeof mouse.which === 'number' && mouse.which !== 0
-            ? mouse.which
-            : button !== undefined
-              ? button + 1
-              : undefined,
-        shiftKey: typeof mouse.shiftKey === 'boolean' ? mouse.shiftKey : undefined,
-        ctrlKey: typeof mouse.ctrlKey === 'boolean' ? mouse.ctrlKey : undefined,
-        altKey: typeof mouse.altKey === 'boolean' ? mouse.altKey : undefined,
-        metaKey: typeof mouse.metaKey === 'boolean' ? mouse.metaKey : undefined,
-        deltaX: num(wheel.deltaX) ?? (wheelFam ? 0 : undefined),
-        deltaY: num(wheel.deltaY) ?? (wheelFam ? 0 : undefined),
-        // WheelEvent.deltaMode is always a real number in browsers; when an
-        // environment leaves it undefined but deltas exist, normalize to
-        // 0 (pixels) so worker-side wheel math (Leaflet's getWheelDelta
-        // checks `deltaMode === 0`) behaves like the real DOM.
-        deltaMode:
-          num(wheel.deltaMode) ??
-          (wheelFam || typeof wheel.deltaX === 'number' || typeof wheel.deltaY === 'number'
-            ? 0
-            : undefined),
-        pointerType: typeof pointer.pointerType === 'string' ? pointer.pointerType : undefined,
-        scrollTop: target instanceof HTMLElement ? target.scrollTop : undefined,
-        targetId: target ? nodeIds.get(target) : undefined,
-      };
+      const target = e.target;
+      const payload = buildEventPayload(
+        e,
+        target,
+        target !== null ? nodeIds.get(target as Node) : undefined,
+      );
       // The whole point: an event = one postMessage round-trip. The worker
       // re-renders, we apply whatever ops come back.
       void client

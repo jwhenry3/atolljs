@@ -45,7 +45,6 @@ export {
   createProxyDocument,
   installDomShim,
   installRealmDispatcher,
-  InternalDocument,
   ProxyElement,
   ProxyFragment,
   ProxyNode,
@@ -54,6 +53,7 @@ export {
 } from './proxyDom';
 export type {
   AdjacentPosition,
+  InternalDocument,
   ProxyClassList,
   ProxyDocument,
   ProxyEventHandler,

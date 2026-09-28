@@ -96,7 +96,7 @@ export interface ImperativeIslandApp {
 /** The apps an island can mount — keyed by the name the shell passes to mount(). */
 export type IslandApp = ReactIslandApp | ImperativeIslandApp;
 
-export interface DefineIslandWorkerOptions {
+export interface DefineIslandWorkerRegistry {
   /** Name → app registry. The shell's `mountIsland({ app: name })` picks one. */
   apps: Record<string, IslandApp>;
   /**
@@ -107,6 +107,11 @@ export interface DefineIslandWorkerOptions {
    */
   sharedMemory?: SharedMemory<DoorbellSpec>;
 }
+
+/** Either a registry of apps or a single app for a 1:1 realm worker. */
+export type DefineIslandWorkerInput = IslandApp | DefineIslandWorkerRegistry;
+/** @deprecated Use DefineIslandWorkerRegistry instead. */
+export type DefineIslandWorkerOptions = DefineIslandWorkerRegistry;
 
 const isImperative = (app: IslandApp | undefined): app is ImperativeIslandApp =>
   typeof app === 'object' && app !== null && 'imperative' in app;
@@ -154,6 +159,13 @@ const realms = new Map<string, Realm>();
  * defineRealmWorker registers its single app.
  */
 const APP_REGISTRY = new Map<string, IslandApp>();
+
+const isRegistry = (input: DefineIslandWorkerInput): input is DefineIslandWorkerRegistry =>
+  typeof input === 'object' && input !== null && 'apps' in input;
+
+const registerSingleApp = (name: string, app: IslandApp): void => {
+  APP_REGISTRY.set(name, app);
+};
 
 /**
  * Resolve a mount's registry name → app. A single-entry registry is
@@ -485,49 +497,41 @@ function createIslandRuntime(
 }
 
 /**
- * Registry worker — one worker script serving a whole `apps` map. Islands
- * mount by name (`<Island app="charts"/>` or a stamped component
- * reference), and several islands may share one client/worker when you
- * actually want co-located realms. The worker's bundle carries every app
- * in the registry.
+ * Define a worker that serves one or more apps. Pass a single app for a
+ * 1:1 realm worker, or an `{ apps }` registry for a multi-app worker.
+ * The shell can mount a registry worker by name; a single-app worker
+ * resolves its sole app regardless of the supplied name, so `app` is
+ * optional on <Island/> for 1:1 topologies.
  */
 export function defineIslandWorker(
-  options: DefineIslandWorkerOptions,
+  input: DefineIslandWorkerInput,
+  options?: { sharedMemory?: SharedMemory<DoorbellSpec> },
 ): WorkerDefinition<DoorbellSpec, IslandWorkerMethods> {
-  // A stamped app mounted under a DIFFERENT key means <Island app={Comp}>
-  // resolves a name the registry doesn't hold — flag it at definition time.
-  for (const [key, app] of Object.entries(options.apps)) {
-    const stamped = islandAppNameOf(app);
-    if (stamped !== undefined && stamped !== key) {
-      console.warn(
-        `[defineIslandWorker] app registered as "${key}" but stamped "${stamped}" — ` +
-          `component-reference mounts resolve "${stamped}" and will fail. Fix the key or the stamp.`,
-      );
+  if (isRegistry(input)) {
+    for (const [key, app] of Object.entries(input.apps)) {
+      const stamped = islandAppNameOf(app);
+      if (stamped !== undefined && stamped !== key) {
+        console.warn(
+          `[defineIslandWorker] app registered as "${key}" but stamped "${stamped}" — ` +
+            `component-reference mounts resolve "${stamped}" and will fail. Fix the key or the stamp.`,
+        );
+      }
+      registerSingleApp(key, app);
     }
-    APP_REGISTRY.set(key, app);
+    return createIslandRuntime(input.sharedMemory ?? options?.sharedMemory);
   }
-  return createIslandRuntime(options.sharedMemory);
+  const stamp = (input as { islandAppName?: unknown }).islandAppName;
+  registerSingleApp(typeof stamp === 'string' && stamp !== '' ? stamp : 'main', input);
+  return createIslandRuntime(options?.sharedMemory);
 }
 
 /**
- * Realm worker — one worker script serving ONE app (1:1). The simple
- * topology: the worker's bundle carries only this app's dependencies
- * (imperative apps ship with no React/reconciler at all), and the shell
- * mounts it namelessly — `app` can be omitted, or any name resolves to the
- * sole registered app.
- *
- * ```ts
- * // charts.worker.ts
- * export const chartsWorker = defineRealmWorker(ChartsApp);
- * ```
+ * Realm worker — one worker script serving ONE app (1:1). This is now a thin
+ * alias for `defineIslandWorker(app)`; kept for backwards compatibility.
  */
 export function defineRealmWorker(
   app: IslandApp,
-  options?: Pick<DefineIslandWorkerOptions, 'sharedMemory'>,
+  options?: { sharedMemory?: SharedMemory<DoorbellSpec> },
 ): WorkerDefinition<DoorbellSpec, IslandWorkerMethods> {
-  // The explicit stamp or 'main' — NOT islandAppNameOf: its fn.name fallback
-  // is how 'imperative' (the property name) leaks in as a bogus key.
-  const stamped = (app as { islandAppName?: unknown }).islandAppName;
-  APP_REGISTRY.set(typeof stamped === 'string' && stamped !== '' ? stamped : 'main', app);
-  return createIslandRuntime(options?.sharedMemory);
+  return defineIslandWorker(app, options);
 }
