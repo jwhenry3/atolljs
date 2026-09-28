@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.1.1 — packaging
+
+No API changes — this release fixes what ships and how it ships.
+
+- **Published tarball 139 kB → 60 kB.** `*.test.ts` sources and dist
+  sourcemaps no longer ship (the `src/sdk` TypeScript sources still do, via
+  the `./sdk/*` export).
+- **Core `dist` is now per-module, not a 230 kB monolith.** Dependencies
+  (`zod`, `msgpackr`, `@msgpack/msgpack`, `solid-js`) are external instead of
+  inlined, so importing only `WorkerPool`/`connectWorker` no longer pulls
+  `mz`/zod into your bundle — consumer bundlers tree-shake the parts you
+  don't use.
+- `fast-json-stringify` moved to `devDependencies` — it was a
+  benchmark-only dependency being installed by consumers.
+- `workerBootstrap` is marked as the package's one side-effectful module so
+  bundlers don't drop its `self.onmessage` wiring when pruning.
+- `mesh-node` and `mesh-nestjs` now ship READMEs.
+- Release pipeline: CI **stages** packages with `npm stage publish` —
+  versions stay non-installable until maintainer 2FA approval — and supports
+  OIDC trusted publishing (`npm trust github … --allow-stage-publish`) so the
+  workflow can be run secretless and stage-only.
+
 ## 0.1.0 — initial release
 
 Typed shared-memory worker pools for TypeScript. The worker file is the
