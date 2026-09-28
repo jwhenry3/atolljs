@@ -63,6 +63,40 @@ function setMode(next: Mode): void {
 pushBtn.onclick = () => setMode('push');
 pollBtn.onclick = () => setMode('poll');
 
+/* ── Transclusion demo: a live canvas the SHELL owns inside a worker tree ─ */
+
+/** Draw a rolling waveform into a slot element — real DOM, real rAF, no ops. */
+let sparkRaf: number | undefined;
+function mountSparkline(el: HTMLElement | null): void {
+  if (sparkRaf !== undefined) cancelAnimationFrame(sparkRaf);
+  sparkRaf = undefined;
+  if (el === null) return; // unmounted by the worker tree — stop drawing
+
+  const canvas = document.createElement('canvas');
+  canvas.style.cssText = 'width:100%;height:100%;display:block;border-radius:4px;background:#0d1117';
+  el.appendChild(canvas);
+  const ctx = canvas.getContext('2d')!;
+  const trace: number[] = [];
+  const tick = (t: number): void => {
+    const w = (canvas.width = el.clientWidth);
+    const h = (canvas.height = el.clientHeight);
+    trace.push((Math.sin(t / 320) + Math.sin(t / 97) * 0.5) / 1.5);
+    if (trace.length > w) trace.shift();
+    ctx.clearRect(0, 0, w, h);
+    ctx.strokeStyle = '#58a6ff';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    trace.forEach((v, i) => {
+      const y = h / 2 + v * h * 0.4;
+      if (i === 0) ctx.moveTo(i, y);
+      else ctx.lineTo(i, y);
+    });
+    ctx.stroke();
+    sparkRaf = requestAnimationFrame(tick);
+  };
+  sparkRaf = requestAnimationFrame(tick);
+}
+
 /* ── Boot ───────────────────────────────────────────────────────────────── */
 
 async function main(): Promise<void> {
@@ -72,7 +106,8 @@ async function main(): Promise<void> {
     client: connectIslandWorker(),
     el: $('island-stats'),
     app: 'stats',
-    props: { visible: 2000, total: 2000 },
+    props: { visible: 2000, total: 2000, spark: 'wave' },
+    slots: { wave: mountSparkline },
     onActivity: renderStats,
   });
   islands.push(stats);

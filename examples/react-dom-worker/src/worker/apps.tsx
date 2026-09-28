@@ -202,6 +202,25 @@ export function TableApp({ filter = '', desc = false }: TableProps) {
   );
 }
 
+/* ── transclusion slot ──────────────────────────────────────────────────── */
+
+/**
+ * A transclusion slot — renders a leaf element marked `data-mesh-slot`.
+ * The element's BOX belongs to this tree (layout/style ops apply as usual);
+ * its CONTENTS belong to the shell: when the create op lands on the main
+ * thread, the island's `slots[name]` callback gets the real element and can
+ * mount anything inside — a canvas, Monaco, a main-thread React root — all
+ * real DOM with real events and zero wire traffic.
+ *
+ * Must stay a LEAF in this tree: if worker-side children were appended here
+ * their ops would interleave with shell-owned content. There is also no
+ * measurement channel yet — the island knows the box it laid out, not the
+ * pixel size the shell put inside it.
+ */
+export function Slot({ name, style }: { name: string; style?: Record<string, unknown> }) {
+  return <div data-mesh-slot={name} style={style} />;
+}
+
 /* ── stats ──────────────────────────────────────────────────────────────── */
 
 /** A visibly non-trivial calculation — runs on the worker's thread, so the
@@ -217,6 +236,8 @@ function busyCompute(seed: number): number {
 export interface StatsProps {
   visible?: number;
   total?: number;
+  /** Slot name for the shell-owned sparkline panel; omit to render no slot. */
+  spark?: string;
 }
 
 /**
@@ -225,7 +246,7 @@ export interface StatsProps {
  * The useEffect marker proves async commits still flush through the
  * per-island doorbell.
  */
-export function StatsApp({ visible = 0, total = 0 }: StatsProps) {
+export function StatsApp({ visible = 0, total = 0, spark }: StatsProps) {
   const [computeSeed, setComputeSeed] = useState(1);
   const [effectRan, setEffectRan] = useState(false);
 
@@ -250,6 +271,14 @@ export function StatsApp({ visible = 0, total = 0 }: StatsProps) {
           compute result: <code>{computeResult}</code>
         </span>
       </div>
+      {spark ? (
+        <div>
+          <p style={{ margin: '10px 0 4px', color: '#9aa4b2', fontSize: '12px' }}>
+            ↓ transcluded slot — a canvas the SHELL draws into this worker-rendered tree
+          </p>
+          <Slot name={spark} style={{ height: '56px' }} />
+        </div>
+      ) : null}
     </section>
   );
 }

@@ -57,6 +57,16 @@ export interface MountIslandOptions {
   props?: Record<string, unknown>;
   /** Island → shell channel: receives every `emit` op the app produces. */
   onEvent?: (name: string, payload: unknown) => void;
+  /**
+   * Transclusion slots — worker markup renders `<div data-mesh-slot="name">`
+   * as a LEAF; when its create op lands, the real element is handed to
+   * `slots[name](el)` so the shell can mount main-thread content inside it
+   * (a widget, a canvas, even a main-thread React root — real DOM, real
+   * events, zero wire). Called again with `null` when the worker removes or
+   * renames the element, so the shell can tear down. The element itself
+   * stays worker-owned — its box/layout props apply normally.
+   */
+  slots?: Record<string, (el: HTMLElement | null) => void>;
   /** Fired after each applied op batch — the shell uses it for stats. */
   onActivity?: () => void;
 }
@@ -90,7 +100,7 @@ export interface IslandHandle {
 let islandSeq = 0;
 
 export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandle> {
-  const { client, el, app, onEvent, onActivity } = opts;
+  const { client, el, app, onEvent, onActivity, slots } = opts;
   const props = opts.props ?? {};
 
   // Realm key = 'app@N' — the instance suffix keeps each island's realm
@@ -107,6 +117,38 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
   const prevProps = new Map<number, WireProps>();
   /** instance id → event name → attached listener (kept for removal). */
   const nodeListeners = new Map<number, Map<string, EventListener>>();
+  /** instance id → slot name, for elements carrying `data-mesh-slot`. */
+  const slotNodes = new Map<number, string>();
+
+  /** Hand a live element to its slot mount callback (or drop it silently). */
+  const mountSlot = (node: HTMLElement, id: number, name: string): void => {
+    // Always set the attribute — nested-remove detection below finds slot
+    // elements inside detached subtrees by querying for it.
+    node.setAttribute('data-mesh-slot', name);
+    const prev = slotNodes.get(id);
+    if (prev !== undefined && prev !== name) opts.slots?.[prev]?.(null);
+    slotNodes.set(id, name);
+    slots?.[name]?.(node);
+  };
+
+  const unmountSlot = (id: number): void => {
+    const name = slotNodes.get(id);
+    if (name !== undefined) {
+      slots?.[name]?.(null);
+      slotNodes.delete(id);
+    }
+  };
+
+  /** Unmount every slot inside a detached subtree (React removes whole
+   *  subtrees with ONE `remove` op — a slot deep inside gets no op of its
+   *  own). Elements created by ops are the only things in the tree, so a
+   *  DOM query for the marker attribute is exact. */
+  const unmountSlotSubtree = (node: Node): void => {
+    if (!(node instanceof HTMLElement)) return;
+    for (const [id, slotEl] of Array.from(slotNodes.entries()).map(([id]) => [id, nodes.get(id)] as const)) {
+      if (slotEl === node || node.contains(slotEl as Node)) unmountSlot(id);
+    }
+  };
 
   let opsApplied = 0;
   let flushCalls = 0;
@@ -131,6 +173,10 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
   }
 
   function setProp(el: HTMLElement, id: number, name: string, value: unknown): void {
+    if (name === 'data-mesh-slot') {
+      mountSlot(el, id, String(value));
+      return;
+    }
     if (isEventRef(value)) {
       const eventName = name.slice(2).toLowerCase();
       let table = nodeListeners.get(id);
@@ -179,6 +225,11 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
   }
 
   function removeProp(el: HTMLElement, id: number, name: string, oldValue: unknown): void {
+    if (name === 'data-mesh-slot') {
+      unmountSlot(id);
+      el.removeAttribute('data-mesh-slot');
+      return;
+    }
     if (isEventRef(oldValue)) {
       const eventName = name.slice(2).toLowerCase();
       const listener = nodeListeners.get(id)?.get(eventName);
@@ -235,6 +286,7 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
       }
       case 'remove': {
         const child = nodes.get(op.child);
+        if (child !== undefined) unmountSlotSubtree(child);
         child?.parentNode?.removeChild(child);
         break;
       }

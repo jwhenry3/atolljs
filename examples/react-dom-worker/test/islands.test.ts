@@ -183,4 +183,43 @@ describe('react-dom-worker islands', () => {
     a.destroy();
     b.destroy();
   });
+
+  it('transclusion: a data-mesh-slot element is handed to the shell, unmounted on removal', async () => {
+    const el = document.createElement('div');
+    document.body.appendChild(el);
+
+    const mounted: HTMLElement[] = [];
+    const unmounted: (null)[] = [];
+    const island = await mountIsland({
+      client: connectIslandWorker(),
+      el,
+      app: 'stats',
+      props: { spark: 'wave' },
+      slots: {
+        wave: (node) => {
+          if (node === null) unmounted.push(null);
+          else {
+            mounted.push(node);
+            node.appendChild(document.createElement('canvas')); // shell-owned content
+          }
+        },
+      },
+    });
+
+    // The slot element is real DOM inside the island's tree, marked so the
+    // shell can find it — and its children are shell-owned (the worker tree
+    // rendered a leaf).
+    expect(mounted.length).toBe(1);
+    const slotEl = mounted[0];
+    expect(slotEl.getAttribute('data-mesh-slot')).toBe('wave');
+    expect(el.contains(slotEl)).toBe(true);
+    expect(slotEl.querySelector('canvas')).not.toBeNull();
+
+    // Worker removes the slot (prop drops it from the tree) → shell teardown
+    // fires with null, even though the remove op targeted the wrapper above it.
+    await island.updateProps({ spark: undefined });
+    await vi.waitFor(() => expect(unmounted.length).toBe(1));
+    expect(el.contains(slotEl)).toBe(false);
+    island.destroy();
+  });
 });

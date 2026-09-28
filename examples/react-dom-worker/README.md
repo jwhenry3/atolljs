@@ -28,6 +28,20 @@ worker only ever hosts one realm, so that collision can't happen.
 pooling can't be re-enabled even through a cast — everything else
 (`concurrency`, `taskTimeout`, `respawn`, `lazy`…) still passes through.
 
+**Transclusion — main-thread DOM inside a worker tree.** A worker app can
+render `<Slot name="x"/>` (a leaf `<div data-mesh-slot="x">`): the island
+owns the element's *box* — its layout, styles, and position in the op
+stream — while the shell owns its *contents*. When the create op lands, the
+driver calls `mountIsland({ slots: { x: (el) => … } })` with the real
+element; mount a canvas, a Monaco editor, an AG Grid, or even a
+`createRoot()` of main-thread React inside it — real DOM, real events, zero
+wire traffic. The demo's stats island hosts a live waveform canvas drawn
+by `requestAnimationFrame` on the main thread. Removal works too: when the
+worker drops the element (directly or inside a removed subtree), the slot
+callback fires with `null` for teardown. This is the escape hatch for every
+library in the "structurally can't run in a worker" bucket — it doesn't
+port into the worker, it gets *transcluded* around it.
+
 Islands never talk to each other directly — the **shell mediates**:
 
 ```
@@ -109,6 +123,14 @@ it, so the shell sees `island.updateProps(props)`):
   route to that realm's queue (multi-realm module state exists for the
   in-process test, where one module instance plays every worker — and is
   also what makes same-app multi-instance testable).
+- **Slots are transclusion holes.** `data-mesh-slot` marks a leaf element:
+  the driver calls `slots[name](el)` when it appears and `slots[name](null)`
+  when the worker tree removes it — including when it's inside a subtree cut
+  by a single `remove` op (the driver finds nested slots via the DOM
+  attribute). Keep slot elements leaf-only on the worker side, and note
+  there's no measurement channel: the island lays out the box but can't read
+  the pixel size of what the shell put inside it — feed that back via
+  `dispatch`/`updateProps` if a worker app needs it.
 - **`emit` is the island→shell channel.** Island code calls `emit(name,
   payload)` inside event handlers or commit-phase effects (the demo uses
   `useLayoutEffect` for `rowsChanged`). Payloads are structured-cloned like
