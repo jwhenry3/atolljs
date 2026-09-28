@@ -2,22 +2,16 @@ export {
   ProxyNode,
   ProxyText,
   ProxyFragment,
+} from './dom/node';
+export type { ProxyEventHandler } from './dom/node';
+export {
   ProxyElement,
-  allocPhantomId,
-  parseChildren,
-  parseSelector,
-  matchCompound,
-  matchesChain,
-  serializeNode,
-} from './dom/tree';
+} from './dom/element';
 export type {
   AdjacentPosition,
   ProxyClassList,
-  ProxyEventHandler,
-} from './dom/tree';
+} from './dom/element';
 export {
-  activeRealmDoc,
-  ambientDoc,
   createProxyDocument,
   realmDocFor,
 } from './dom/document';

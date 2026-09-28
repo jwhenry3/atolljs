@@ -18,16 +18,12 @@ import {
   ProxyNode,
   ProxyText,
   ProxyFragment,
-  ProxyElement,
-  ProxyClassList,
   allocPhantomId,
-  parseChildren,
-  parseSelector,
-  matchCompound,
-  matchesChain,
-  serializeNode,
   type ProxyEventHandler,
-} from './tree';
+} from './node';
+import { ProxyElement, ProxyClassList } from './element';
+import { parseChildren, serializeNode } from './html';
+import { parseSelector, matchCompound, matchesChain } from './selectors';
 import type { WindowShim, WindowFacadeBundle } from './window';
 
 /* ── The document ──────────────────────────────────────────────────────── */

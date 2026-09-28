@@ -22,7 +22,8 @@ import {
   type InternalDocument,
   type ProxyDocument,
 } from './document';
-import { ProxyElement, type ProxyEventHandler } from './tree';
+import { ProxyElement } from './element';
+import type { ProxyEventHandler } from './node';
 
 /* ── The global shim ───────────────────────────────────────────────────── */
 
