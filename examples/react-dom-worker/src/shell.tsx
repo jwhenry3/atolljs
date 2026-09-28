@@ -4,12 +4,10 @@
  * (@jwhenry123/mesh-worker-dom/react).
  *
  * What changes versus main.ts:
- *   - `mountIsland({ el, ... })` becomes `<Island app={…} onEvent={…} />` —
- *     the div it renders IS the island container; badges come from onReady.
- *     The data-table and charts islands go further: `islandComponent` and
- *     `lazyIsland` proxies make the worker app render like a LOCAL
- *     component — `<TableIsland filter={filter} />` — with the same props
- *     contract, no `props={}` nesting.
+ *   - Every island mounts through a `lazyIsland` proxy — the worker app
+ *     types like a LOCAL component (`<TableIsland filter={f}/>`), each
+ *     dynamic import is a code-split boundary covered by <Suspense>, and
+ *     the `fallback` prop covers the worker-mount window.
  *   - Mediation is real data flow: a controls emit is setState, the table's
  *     props are that state — the component's updateProps call replaces the
  *     hand-wired `table.updateProps(...)` (and dedups repeats).
@@ -21,9 +19,8 @@
 import { useEffect, useMemo, useRef, useState, Suspense } from 'react';
 import type { ReactElement, ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { Island, islandComponent, lazyIsland } from '@jwhenry123/mesh-worker-dom/react';
+import { lazyIsland } from '@jwhenry123/mesh-worker-dom/react';
 import type { IslandHandle, Mode } from '@jwhenry123/mesh-worker-dom';
-import type { ChartsProps, TableProps } from './worker/apps';
 // Leaflet's stylesheet is shell-side: the worker fabricates the DOM Leaflet
 // builds but CSS was always the shell's job.
 import 'leaflet/dist/leaflet.css';
@@ -33,20 +30,36 @@ const renderWorker = (): Worker =>
   new Worker(new URL('./worker/render.worker.ts', import.meta.url), { type: 'module' });
 
 /*
- * The two proxy styles — both render the WORKER app as if it were a local
- * component (props inline, not nested under `props`):
- *
- *   lazyIsland      — React.lazy mirrored: suspends on the dynamic import
- *                     (also code-splits recharts out of this bundle), then
- *                     mounts by stamped component reference.
- *   islandComponent — the pure-contract proxy: the shell NEVER imports the
- *                     implementation. The registry key + a type-only props
- *                     import is the whole contract — zero bundle cost.
+ * Every island is a lazyIsland proxy — the worker app types like a LOCAL
+ * component (props inline, no `props={}` nesting). Each dynamic import is a
+ * bundler split point: the worker-side modules (recharts, leaflet, the
+ * proxy-DOM imperative apps) only fetch when that island mounts, and
+ * <Suspense> covers the load while `fallback` covers the mount window.
  */
-const ChartsIsland = lazyIsland(
-  () => import('./worker/apps').then((m) => ({ default: m.ChartsApp })),
+const ControlsIsland = lazyIsland(() =>
+  import('./worker/apps').then((m) => ({ default: m.ControlsApp })),
 );
-const TableIsland = islandComponent<TableProps>('data-table');
+const TableIsland = lazyIsland(() =>
+  import('./worker/apps').then((m) => ({ default: m.TableApp })),
+);
+const StatsIsland = lazyIsland(() =>
+  import('./worker/apps').then((m) => ({ default: m.StatsApp })),
+);
+const ChartsIsland = lazyIsland(() =>
+  import('./worker/apps').then((m) => ({ default: m.ChartsApp })),
+);
+const VanillaIsland = lazyIsland(() =>
+  import('./worker/vanilla').then((m) => ({ default: m.vanillaApp })),
+);
+const MapIsland = lazyIsland(() =>
+  import('./worker/map').then((m) => ({ default: m.mapApp })),
+);
+
+const loading = (
+  <div className="island-root" style={{ color: '#7d8a9c' }}>
+    loading worker module…
+  </div>
+);
 
 /* ── Transclusion demo: a live canvas the SHELL owns inside a worker tree ─ */
 
@@ -167,13 +180,13 @@ export function Shell({ worker = renderWorker }: { worker?: () => Worker }): Rea
       <div id="status-line">{status}</div>
 
       <IslandPanel title="app: controls" badge={pids.controls}>
-        <Island
-          worker={renderWorker}
-          app="controls"
-          className="island-root"
-          onReady={ready('controls')}
-          onActivity={bump}
-          onEvent={(name, payload) => {
+        <Suspense fallback={loading}>
+          <ControlsIsland
+            worker={renderWorker}
+            containerProps={{ className: 'island-root' }}
+            onReady={ready('controls')}
+            onActivity={bump}
+            onEvent={(name, payload) => {
             const p = payload as { filter?: string; desc?: boolean; count?: number };
             if (name === 'filterChanged') {
               setFilter(p.filter ?? '');
@@ -186,10 +199,12 @@ export function Shell({ worker = renderWorker }: { worker?: () => Worker }): Rea
             if (name === 'countChanged')
               setStatus(`controls island counter → ${p.count} (state stayed in the worker)`);
           }}
-        />
+          />
+        </Suspense>
       </IslandPanel>
 
       <IslandPanel title="app: data-table" badge={pids.table}>
+        <Suspense fallback={loading}>
         <TableIsland
           worker={renderWorker}
           // The mediation IS this line — controls' emits land as props here.
@@ -205,12 +220,14 @@ export function Shell({ worker = renderWorker }: { worker?: () => Worker }): Rea
               setStatus(`table island emitted rowSelected → shell (row #${p.id})`);
           }}
         />
+        </Suspense>
       </IslandPanel>
 
       <IslandPanel
         title="app: data-table (second instance — same microfrontend, different worker + props)"
         badge={pids.table2}
       >
+        <Suspense fallback={loading}>
         <TableIsland
           worker={renderWorker}
           filter="eu-central"
@@ -224,37 +241,42 @@ export function Shell({ worker = renderWorker }: { worker?: () => Worker }): Rea
               setStatus(`second data-table instance emitted rowSelected (row #${p.id})`);
           }}
         />
+        </Suspense>
       </IslandPanel>
 
       <IslandPanel title="app: stats" badge={pids.stats}>
-        <Island
-          worker={renderWorker}
-          app="stats"
-          props={{ visible, total: 2000, spark: 'wave' }}
-          slots={slots}
-          className="island-root"
-          onReady={ready('stats')}
-          onActivity={bump}
-        />
+        <Suspense fallback={loading}>
+          <StatsIsland
+            worker={renderWorker}
+            visible={visible}
+            total={2000}
+            spark="wave"
+            slots={slots}
+            containerProps={{ className: 'island-root' }}
+            onReady={ready('stats')}
+            onActivity={bump}
+          />
+        </Suspense>
       </IslandPanel>
 
       <IslandPanel
         title="app: vanilla (imperative proxy DOM — no React in this worker)"
         badge={pids.vanilla}
       >
-        <Island
-          worker={renderWorker}
-          app="vanilla"
-          props={{ title: 'vanilla island — imperative proxy DOM, zero React in this worker' }}
-          className="island-root"
-          onReady={ready('vanilla')}
-          onActivity={bump}
-          onEvent={(name, payload) => {
-            const p = payload as { color?: string; x?: number; y?: number };
-            if (name === 'colorPicked')
-              setStatus(`vanilla island emitted colorPicked → ${p.color} @ (${p.x}, ${p.y})`);
-          }}
-        />
+        <Suspense fallback={loading}>
+          <VanillaIsland
+            worker={renderWorker}
+            title="vanilla island — imperative proxy DOM, zero React in this worker"
+            containerProps={{ className: 'island-root' }}
+            onReady={ready('vanilla')}
+            onActivity={bump}
+            onEvent={(name, payload) => {
+              const p = payload as { color?: string; x?: number; y?: number };
+              if (name === 'colorPicked')
+                setStatus(`vanilla island emitted colorPicked → ${p.color} @ (${p.x}, ${p.y})`);
+            }}
+          />
+        </Suspense>
       </IslandPanel>
 
       <IslandPanel
@@ -288,20 +310,23 @@ export function Shell({ worker = renderWorker }: { worker?: () => Worker }): Rea
         title="app: map (real Leaflet 1.9 — unmodified — on the proxy DOM)"
         badge={pids.map}
       >
-        <Island
-          worker={renderWorker}
-          app="map"
-          className="island-root"
-          id="island-map"
-          onReady={ready('map')}
-          onActivity={bump}
-          onEvent={(name, payload) => {
-            const p = payload as { label?: string; name?: string; zoom?: number };
-            if (name === 'markerClicked') setStatus(`map island emitted markerClicked → ${p.label}`);
-            if (name === 'placeSelected') setStatus(`map island emitted placeSelected → ${p.name}`);
-            if (name === 'zoomChanged') setStatus(`map island emitted zoomChanged → zoom ${p.zoom}`);
-          }}
-        />
+        <Suspense fallback={loading}>
+          <MapIsland
+            worker={renderWorker}
+            containerProps={{ className: 'island-root', id: 'island-map' }}
+            onReady={ready('map')}
+            onActivity={bump}
+            onEvent={(name, payload) => {
+              const p = payload as { label?: string; name?: string; zoom?: number };
+              if (name === 'markerClicked')
+                setStatus(`map island emitted markerClicked → ${p.label}`);
+              if (name === 'placeSelected')
+                setStatus(`map island emitted placeSelected → ${p.name}`);
+              if (name === 'zoomChanged')
+                setStatus(`map island emitted zoomChanged → zoom ${p.zoom}`);
+            }}
+          />
+        </Suspense>
       </IslandPanel>
     </>
   );

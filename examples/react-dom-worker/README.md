@@ -65,19 +65,18 @@ plus hand-wired `island.updateProps` mediation — its bundle is ~4 kB.
 becomes a component, badges ride `onReady` → state, and the
 controls→table mediation is literally `onEvent → setState →
 <Island props={…}>` — the component's deduped `updateProps` replaces the
-hand-wiring. Two islands go further and mount through **worker-loaded
-proxies**, where the worker app types like a local component with props
-inline:
+hand-wiring. All seven islands mount through **`lazyIsland` proxies**, so
+the worker app types like a local component with props inline —
+`<TableIsland filter={f} desc/>` — and every dynamic import is a code-split
+boundary covered by `<Suspense>` (react-shell chunk ~230 kB; recharts,
+leaflet, and the imperative apps fetch as separate lazy chunks only when
+their island mounts). The `fallback` prop covers the worker-mount window —
+mount can't suspend because suspended trees never commit and mounting
+needs the container in the DOM.
 
-- `TableIsland = islandComponent<TableProps>('data-table')` — the
-  pure-contract proxy: a type-only props import + registry key, the shell
-  never imports the implementation.
-- `ChartsIsland = lazyIsland(() => import('./worker/apps').then(m => ({default: m.ChartsApp})))`
-  — the React.lazy mirror: `<Suspense>` covers the module load (which
-  code-splits recharts out of the shell chunk — react-shell ~230 kB), the
-  `fallback` prop covers the worker-mount window.
-
-String registry keys still work everywhere (`<Island app="vanilla"/>`).
+For shells that want zero worker-module imports, `islandComponent<P>('name')`
+builds the same proxy from a registry key + type-only props contract.
+And plain `<Island app="vanilla"/>` string mounting stays supported.
 
 **Worker-side proxy DOM — the "WorkerDOM" pattern.** Transclusion covers
 libraries that must run on the main thread; `src/worker/proxyDom.ts` covers

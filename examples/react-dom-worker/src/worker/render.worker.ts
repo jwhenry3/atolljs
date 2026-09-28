@@ -10,17 +10,19 @@
  */
 import { defineIslandWorker } from '@jwhenry123/mesh-worker-dom/worker';
 import { ChartsApp, ControlsApp, StatsApp, TableApp } from './apps';
-import { buildMap } from './map';
-import { buildVanilla } from './vanilla';
+import { mapApp } from './map';
+import { vanillaApp } from './vanilla';
 
+// Every value is the islandApp-stamped definition — the shell can mount by
+// component reference (lazyIsland) and a stamp/key drift warns here.
 export const renderWorker = defineIslandWorker({
   apps: {
     controls: ControlsApp,
     'data-table': TableApp,
     stats: StatsApp,
     charts: ChartsApp,
-    vanilla: { imperative: buildVanilla },
-    map: { imperative: buildMap },
+    vanilla: vanillaApp,
+    map: mapApp,
   },
 });
 

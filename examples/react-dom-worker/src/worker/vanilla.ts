@@ -27,6 +27,7 @@
 import {
   emit,
   installDomShim,
+  islandApp,
   type EventPayload,
   type ProxyDocument,
 } from '@jwhenry123/mesh-worker-dom/worker';
@@ -133,3 +134,6 @@ export function buildVanilla(doc: ProxyDocument, props: Record<string, unknown>)
     }`,
   );
 }
+
+/** Stamped registry def — mountable by reference (`lazyIsland(() => import('./vanilla'))`). */
+export const vanillaApp = islandApp('vanilla', { imperative: buildVanilla });

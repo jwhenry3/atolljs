@@ -41,7 +41,7 @@ const handler = <E,>(fn: (e: EventPayload) => void): ((e: E) => void) =>
  * Every control change is emitted to the shell; the counter is the demo's
  * "still alive" heartbeat (its state stays inside this worker).
  */
-export function ControlsApp() {
+export const ControlsApp = islandApp('controls', function ControlsApp() {
   const [filter, setFilter] = useState('');
   const [desc, setDesc] = useState(false);
   const [count, setCount] = useState(0);
@@ -83,7 +83,7 @@ export function ControlsApp() {
       </div>
     </section>
   );
-}
+});
 
 /* ── data-table ─────────────────────────────────────────────────────────── */
 
@@ -154,7 +154,7 @@ export interface TableProps {
  * Emits `rowSelected` on click and `rowsChanged` whenever the visible set
  * changes — the shell feeds that count to the stats island.
  */
-export function TableApp({ filter = '', desc = false }: TableProps) {
+export const TableApp = islandApp('data-table', function TableApp({ filter = '', desc = false }: TableProps) {
   const [selected, setSelected] = useState<number | null>(null);
 
   const rows = useMemo(() => {
@@ -209,7 +209,7 @@ export function TableApp({ filter = '', desc = false }: TableProps) {
       </table>
     </section>
   );
-}
+});
 
 /* ── stats ──────────────────────────────────────────────────────────────── */
 
@@ -236,7 +236,7 @@ export interface StatsProps {
  * The useEffect marker proves async commits still flush through the
  * per-island doorbell.
  */
-export function StatsApp({ visible = 0, total = 0, spark }: StatsProps) {
+export const StatsApp = islandApp('stats', function StatsApp({ visible = 0, total = 0, spark }: StatsProps) {
   const [computeSeed, setComputeSeed] = useState(1);
   const [effectRan, setEffectRan] = useState(false);
 
@@ -271,7 +271,7 @@ export function StatsApp({ visible = 0, total = 0, spark }: StatsProps) {
       ) : null}
     </section>
   );
-}
+});
 
 /* ── charts (recharts) ──────────────────────────────────────────────────── */
 

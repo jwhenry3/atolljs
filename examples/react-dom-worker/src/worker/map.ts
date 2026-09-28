@@ -27,6 +27,7 @@ import {
   emit,
   getActiveRealm,
   installDomShim,
+  islandApp,
   runInRealm,
   type ProxyDocument,
 } from '@jwhenry123/mesh-worker-dom/worker';
@@ -168,3 +169,6 @@ function startLeaflet(
     });
   });
 }
+
+/** Stamped registry def — mountable by reference (`lazyIsland(() => import('./map'))`). */
+export const mapApp = islandApp('map', { imperative: buildMap });
