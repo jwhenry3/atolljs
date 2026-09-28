@@ -1,58 +1,83 @@
 /**
  * Per-island mounter — the main-thread half of one React tree in one worker.
  *
- * `mountIsland` does everything the old main.ts did for the single tree, but
- * scoped so several islands can coexist on one page: each island gets its own
- * `connectWorker` client (own pool of ONE worker, own doorbell buffer via
- * `makeDoorbell()`), its own nodes/props/listeners maps (op ids are only
- * unique within a worker — sharing maps between islands would corrupt them),
- * and its own `onEvent` sink for `emit` ops.
+ * `mountIsland` mounts one island scoped so several can coexist on one page:
+ * each island gets its own `connectWorker` client (own pool of ONE worker,
+ * own doorbell buffer via `makeDoorbell()`), its own nodes/props/listeners
+ * maps (op ids are only unique within a worker — sharing maps between
+ * islands would corrupt them), and its own `onEvent` sink for `emit` ops.
  *
- * There is still NO React on this thread — the driver below just replays ops.
+ * There is no React on this thread — the driver below just replays ops.
  *
  * poolSize: 1 is REQUIRED per island — the reconciled tree lives in one
  * worker's memory. A real pool can't serve islands today anyway: task routing
  * is least-busy round-robin, so a second worker would receive dispatches for
- * a tree it doesn't hold (sticky routing is future work — see README).
+ * a tree it doesn't hold (sticky routing is future work).
  */
 import { connectWorker, observe } from '@jwhenry123/mesh/sdk';
-import type { ConnectWorkerConfig, SharedSpec } from '@jwhenry123/mesh/sdk';
-import { makeDoorbell } from './memory';
-import { isEventRef, type EventPayload, type Op, type WireProps } from './ops';
-import type { RenderWorker } from './worker/render.worker';
+import type {
+  ConnectWorkerConfig,
+  SharedSpec,
+  WorkerClient,
+  WorkerDefinition,
+} from '@jwhenry123/mesh/sdk';
+import { makeDoorbell, type DoorbellSpec } from './memory';
+import {
+  isEventRef,
+  type EventPayload,
+  type IslandWorkerMethods,
+  type Op,
+  type WireProps,
+} from './ops';
 
 export type Mode = 'push' | 'poll';
+
+/** The worker definition every `defineIslandWorker` call produces. */
+export type IslandWorkerDefinition = WorkerDefinition<DoorbellSpec, IslandWorkerMethods>;
+
+/** One island client: one pool, one worker, one doorbell buffer. */
+export type IslandClient = WorkerClient<IslandWorkerDefinition, DoorbellSpec>;
 
 /**
  * Islands are microfrontend containers: each owns ONE worker holding ONE
  * reconciled tree, so pooling is disabled by construction — the type omits
  * `poolSize`/`worker`/`sharedMemory` (all island-internal) and the literal
  * below pins `poolSize: 1` after the spread, so a wider pool can't sneak
- * through a cast either. What remains configurable (concurrency, taskTimeout,
- * respawn, lazy…) still passes through.
+ * through a cast either. `worker` is supplied per call — the package can't
+ * know where the consumer's worker entry lives — everything else
+ * (concurrency, taskTimeout, respawn, lazy…) still passes through.
  */
 export type IslandWorkerOptions = Omit<
   ConnectWorkerConfig<SharedSpec>,
   'sharedMemory' | 'worker' | 'poolSize'
 >;
 
+export interface ConnectIslandWorkerConfig extends IslandWorkerOptions {
+  /**
+   * Bundler-detectable factory `() => new Worker(new URL('./x.worker.ts',
+   * import.meta.url), { type: 'module' })`, or a URL. The worker script must
+   * call `defineIslandWorker({ apps })` from '@jwhenry123/mesh-worker-dom/worker'.
+   */
+  worker: (() => Worker) | URL;
+}
+
 /** One island client: one pool, one worker, one doorbell buffer. */
-export const connectIslandWorker = (options: IslandWorkerOptions = {}) =>
-  connectWorker<RenderWorker>({
+export const connectIslandWorker = <W extends IslandWorkerDefinition = IslandWorkerDefinition>({
+  worker,
+  ...options
+}: ConnectIslandWorkerConfig): WorkerClient<W, DoorbellSpec> =>
+  connectWorker<W, DoorbellSpec>({
     ...options,
     sharedMemory: makeDoorbell(),
-    worker: () =>
-      new Worker(new URL('./worker/render.worker.ts', import.meta.url), { type: 'module' }),
+    worker,
     poolSize: 1,
   });
-
-export type IslandClient = ReturnType<typeof connectIslandWorker>;
 
 export interface MountIslandOptions {
   client: IslandClient;
   /** Container element the island's ops are applied into. */
   el: HTMLElement;
-  /** Registry app name — 'controls' | 'data-table' | 'stats'. */
+  /** Registry app name — a key of the `apps` map passed to defineIslandWorker. */
   app: string;
   props?: Record<string, unknown>;
   /** Island → shell channel: receives every `emit` op the app produces. */
@@ -335,10 +360,16 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
     prevProps.set(id, prev);
   }
 
+  /* The island's real DOM lives in the container's own document — NOT the
+   * ambient `document` global. In in-process tests (and any same-realm
+   * embedding) the worker-side installDomShim swaps globalThis.document for
+   * a proxy document; el.ownerDocument is immune. */
+  const realDocument = el.ownerDocument ?? document;
+
   function applyOp(op: Op): void {
     switch (op.t) {
       case 'create': {
-        const node = document.createElement(op.type);
+        const node = realDocument.createElement(op.type);
         nodes.set(op.id, node);
         nodeIds.set(node, op.id);
         prevProps.set(op.id, op.props);
@@ -346,7 +377,7 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
         break;
       }
       case 'text': {
-        const node = document.createTextNode(op.text);
+        const node = realDocument.createTextNode(op.text);
         nodes.set(op.id, node);
         nodeIds.set(node, op.id);
         break;
@@ -395,7 +426,9 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
         if (!(node instanceof HTMLElement)) break;
         // Keyed by type + handler id so proxy listeners can't collide with
         // the React-prop listener for the same event name, and so unlisten
-        // detaches exactly the pair addEventListener created.
+        // detaches exactly the pair addEventListener created. Id 0 is the
+        // island's container — where document/window listeners land, so
+        // delegated handlers see every bubbling event inside the island.
         const key = `${op.type}#${op.handler}`;
         let table = nodeListeners.get(op.id);
         if (!table) nodeListeners.set(op.id, (table = new Map()));

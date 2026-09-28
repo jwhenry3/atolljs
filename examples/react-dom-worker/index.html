@@ -45,6 +45,15 @@
       .swatch.active { outline: 2px solid #e6edf3; outline-offset: 1px; }
       .vanilla-log { margin-top: 8px; font: 11px/1.7 monospace; color: #7d8a9c; }
       .vanilla-log-line { border-left: 2px solid #2a3340; padding-left: 8px; }
+      /* the vendored MiniWidget — markup built via innerHTML inside the
+         worker shim; these rules are shell-side styling of op-applied DOM */
+      .mini-widget { margin-top: 12px; border-top: 1px dashed #2a3340; padding-top: 10px; }
+      .mini-widget .mw-bar { display: flex; gap: 10px; align-items: center; }
+      .mini-widget .mw-label { font: 12px monospace; color: #7fb6ff; }
+      .mini-widget .mw-btn { padding: 3px 10px; background: #22354f; font-size: 12px; }
+      .mini-widget .mw-btn:hover { background: #2d4365; }
+      .mini-widget .mw-log { margin: 6px 0 0; padding: 0 0 0 16px; font: 11px/1.6 monospace; color: #9aa4b2; }
+      .mini-widget .mw-entry { list-style: '» '; }
     </style>
   </head>
   <body>

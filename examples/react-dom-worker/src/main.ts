@@ -19,9 +19,20 @@
  *       both tables emit rowSelected / controls emits countChanged → status line
  *
  * There is still NO React on this thread — every visible element below the
- * toolbar arrives via op replay.
+ * toolbar arrives via op replay. The whole islands pattern lives in
+ * @jwhenry123/mesh-worker-dom; this file supplies the worker entrypoint and
+ * the mediation glue.
  */
-import { connectIslandWorker, mountIsland, type IslandHandle, type Mode } from './island';
+import {
+  connectIslandWorker,
+  mountIsland,
+  type IslandHandle,
+  type Mode,
+} from '@jwhenry123/mesh-worker-dom';
+
+/** One fresh worker per island — poolSize is pinned to 1 inside connectIslandWorker. */
+const islandWorker = (): Worker =>
+  new Worker(new URL('./worker/render.worker.ts', import.meta.url), { type: 'module' });
 
 const rootEl = document.getElementById('root');
 if (!rootEl) throw new Error('#root missing from index.html');
@@ -106,7 +117,7 @@ async function main(): Promise<void> {
   // Mount order: stats first so the table's initial rowsChanged emit has a
   // listener, then table, then controls (its events only travel outward).
   const stats = await mountIsland({
-    client: connectIslandWorker(),
+    client: connectIslandWorker({ worker: islandWorker }),
     el: $('island-stats'),
     app: 'stats',
     props: { visible: 2000, total: 2000, spark: 'wave' },
@@ -117,7 +128,7 @@ async function main(): Promise<void> {
   $('badge-stats').textContent = `worker ${stats.pid}`;
 
   const table = await mountIsland({
-    client: connectIslandWorker(),
+    client: connectIslandWorker({ worker: islandWorker }),
     el: $('island-table'),
     app: 'data-table',
     props: { filter: state.filter, desc: state.desc },
@@ -133,7 +144,7 @@ async function main(): Promise<void> {
   $('badge-table').textContent = `worker ${table.pid}`;
 
   const controls = await mountIsland({
-    client: connectIslandWorker(),
+    client: connectIslandWorker({ worker: islandWorker }),
     el: $('island-controls'),
     app: 'controls',
     onEvent: (name, payload) => {
@@ -161,7 +172,7 @@ async function main(): Promise<void> {
   // This copy starts filtered to eu-central and isn't wired into stats —
   // its emits still work, they just only reach this island's onEvent sink.
   const table2 = await mountIsland({
-    client: connectIslandWorker(),
+    client: connectIslandWorker({ worker: islandWorker }),
     el: $('island-table-2'),
     app: 'data-table',
     props: { filter: 'eu-central', desc: true },
@@ -179,7 +190,7 @@ async function main(): Promise<void> {
   // it's build(doc) over the worker-side proxy DOM. Mount, events, and emit
   // all ride the same protocol; the worker just holds no React.
   const vanilla = await mountIsland({
-    client: connectIslandWorker(),
+    client: connectIslandWorker({ worker: islandWorker }),
     el: $('island-vanilla'),
     app: 'vanilla',
     props: { title: 'vanilla island — imperative proxy DOM, zero React in this worker' },

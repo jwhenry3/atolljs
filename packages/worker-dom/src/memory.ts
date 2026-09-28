@@ -10,6 +10,9 @@ const doorbellSpec = {
   opsVersion: field.number(),
 };
 
+/** The spec `renderMemory`/`makeDoorbell` share — pinned to the doorbell layout. */
+export type DoorbellSpec = typeof doorbellSpec;
+
 /**
  * The worker-side contract. A worker script has ONE module-level instance —
  * the pool's INIT_MEMORY handshake binds it to that worker's own buffer, so

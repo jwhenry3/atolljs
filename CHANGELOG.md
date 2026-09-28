@@ -1,5 +1,28 @@
 # Changelog
 
+## Unreleased
+
+- **New package: `@jwhenry123/mesh-worker-dom`** — the React-in-worker
+  islands pattern extracted from the react-dom-worker example into an
+  opt-in package. `defineIslandWorker({ apps })` is the whole worker entry
+  (React realms via a real `react-reconciler@0.34`, or `{ imperative }`
+  realms on the worker-side proxy DOM); `connectIslandWorker({ worker })`
+  + `mountIsland()` are the main-thread driver — no React on the main
+  thread, just op replay.
+- **Global DOM shim + innerHTML in the proxy DOM.** `installDomShim(doc)`
+  sets `globalThis.document` and a `window` facade (never touching
+  `globalThis.addEventListener`/`self` — the pool's channel lives there), so
+  real DOM-dependent libraries run unmodified inside a realm: `innerHTML`
+  parses via htmlparser2, `document`/`window.addEventListener` emit `listen`
+  ops on the island container (id 0) for delegation, and dispatched
+  `EventPayload`s gain a synthesized `target` proxy node. Also new on proxy
+  elements: `outerHTML`, `insertAdjacentHTML/Element`, `cloneNode`,
+  `append`/`prepend`/`replaceChildren`/`remove`, `closest`/`matches`,
+  `getRootNode`, `ownerDocument`; `document.addEventListener` and text-node
+  `data`/`nodeValue` accessors.
+- The react-dom-worker example now consumes the package (a `file:` dep +
+  source aliases) and demos the shim with a vendored plain-JS widget.
+
 ## 0.1.1 — packaging
 
 No API changes — this release fixes what ships and how it ships.

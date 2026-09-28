@@ -8,6 +8,12 @@ mutation-phase hook appends a serialized op to a queue; task methods return the
 flushed batch, and the main thread's only job is to replay the ops as real DOM
 mutations.
 
+**The whole pattern lives in `@jwhenry123/mesh-worker-dom`** — this example is
+the consumer: its worker entry is a ~20-line `defineIslandWorker({ apps })`
+call, its shell calls `connectIslandWorker({ worker })` + `mountIsland()`, and
+its imperative island demos the worker-side proxy DOM plus the global
+`document`/`window` shim.
+
 **The shell + islands model — worker-hosted microfrontends:** the page
 mounts several independent islands. Each island is its own
 `connectWorker` client — one pool, **poolSize pinned to 1**, one worker —
@@ -27,10 +33,11 @@ two islands in two different workers, each with its own props and content
 to `eu-central`, descending). Mounting the same app *inside one worker*
 would collide on the realm key and remount instead — but in production each
 worker only ever hosts one realm, so that collision can't happen.
-`connectIslandWorker(options)` type-level omits `poolSize`/`worker`/
-`sharedMemory` (island-internal) and pins `poolSize: 1` after the spread, so
-pooling can't be re-enabled even through a cast — everything else
-(`concurrency`, `taskTimeout`, `respawn`, `lazy`…) still passes through.
+`connectIslandWorker({ worker, ...options })` takes the worker factory (the
+package can't know where your entry lives) while `poolSize`/`sharedMemory`
+stay island-internal — `poolSize: 1` is pinned after the spread, so pooling
+can't be re-enabled even through a cast; everything else (`concurrency`,
+`taskTimeout`, `respawn`, `lazy`…) still passes through.
 
 **Transclusion — main-thread DOM inside a worker tree.** A worker app can
 render `<Slot name="x"/>` (a leaf `<div data-mesh-slot="x">`): the island
@@ -68,6 +75,20 @@ reconciler, no JSX, no React import. `mount` runs `build(doc)` inside
 *clear + rebuild on a fresh document*; `dispatch` runs the handler inside
 the realm so `emit()` and mutations route to the island's queue.
 
+**The global DOM shim — unmodified libraries in a realm.** `installDomShim(doc)`
+puts the realm's proxy document on `globalThis.document` plus a `window`
+facade object (navigator/location stubs, timers + rAF, `addEventListener`).
+Real DOM-dependent libraries — which reach for globals, build markup with
+`innerHTML` (parsed worker-side via htmlparser2), and delegate events on
+`document.addEventListener` — then run *unmodified* inside the realm.
+`document`/`window` listeners emit `listen` ops on the island's container
+(id 0) so delegated handlers see bubbling events, and dispatched payloads
+get `target` synthesized to the proxy node (`e.target.closest()` works).
+`globalThis.addEventListener`/`self` are never touched — the pool's message
+channel lives there. The demo: `src/vendor/miniwidget.js` is a plain-JS
+vendored widget mounted inside the vanilla island alongside the
+hand-written proxy-DOM code — that's all a real library needs.
+
 Islands never talk to each other directly — the **shell mediates**:
 
 ```
@@ -86,16 +107,17 @@ realm).
 
 ## Files
 
-- `src/worker/render.worker.ts` — `defineWorker` entry; app registry + per-realm (`app`/`app@instance` keyed) reconciler/container/queue/pid; imperative realms hold no reconciler; exposes `mount` / `updateProps` / `dispatch` / `flush` / `whoami`
-- `src/worker/hostConfig.ts` — the ~150-field host config: realm-tagged instances, per-realm op queues, the `emit()` helper; also exports the shared `instances`/`allocId`/`pushOp`/`registerHandler`/`runInRealm` plumbing the proxy DOM reuses
-- `src/worker/proxyDom.ts` — the worker-side proxy DOM: `ProxyNode`/`ProxyElement`/`ProxyText` over shared host instances, a local shadow tree for navigation reads, `attr`/`style`/`listen`/`unlisten` op emission, honest write-path-only measurement stubs
-- `src/worker/vanilla.ts` — the imperative island app: a swatch picker + log built ONLY on the proxy DOM (no React import)
+Package code (`packages/worker-dom/`) does the heavy lifting:
+`defineIslandWorker` (realms, reconcilers, op queues), `hostConfig`,
+`proxyDom` + `installDomShim`, `mountIsland`/`connectIslandWorker` + the
+op protocol + doorbell contract. The example keeps:
+
+- `src/worker/render.worker.ts` — ~20 lines: `defineIslandWorker({ apps })` mapping island app names to components/imperative builders
 - `src/worker/apps.tsx` — the three React island apps: `ControlsApp` (emits filter/sort/counter events), `TableApp` (2000-row memoized table, props-driven, emits rowSelected/rowsChanged), `StatsApp` (row count + busy-loop compute)
-- `src/island.ts` — `mountIsland({ client, el, app, props, onEvent })`: per-island DOM driver, doorbell subscription, `{ updateProps, setMode, destroy }`
-- `src/main.ts` — the thin shell: layout, one `connectIslandWorker()` + `mountIsland()` per island, event mediation, global transport toggle
-- `src/memory.ts` — the doorbell contract: `renderMemory` (worker side) + `makeDoorbell()` (per-island main-side instance)
-- `src/ops.ts` — the wire protocol
-- `test/islands.test.ts` — in-process E2E (InProcessWorker + happy-dom): distinct pids, emit → updateProps mediation, doorbell flush, remount semantics, same-app multi-instance
+- `src/worker/vanilla.ts` — the imperative island app: a hand-written swatch picker + log on the proxy DOM, AND the vendored MiniWidget running on `installDomShim`'s globals (no React import)
+- `src/vendor/miniwidget.js` (+ `.d.ts`) — a plain-JS "third-party" widget: global `document`, `innerHTML` template, delegated `document.addEventListener` — mounted unmodified inside the island
+- `src/main.ts` — the thin shell: layout, one `connectIslandWorker({ worker })` + `mountIsland()` per island, event mediation, global transport toggle
+- `test/islands.test.ts` — in-process E2E (InProcessWorker + happy-dom): distinct pids, emit → updateProps mediation, doorbell flush, remount semantics, same-app multi-instance, vendored-widget delegation
 
 ## Protocol
 

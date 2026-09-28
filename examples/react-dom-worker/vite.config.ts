@@ -1,9 +1,12 @@
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
 
-// The sdk lives in the workspace root — alias the package name to its source
-// so the example runs against it without a build step.
+// The sdk and the worker-dom package live in the workspace root — alias the
+// package names to their sources so the example runs against them without a
+// build step. (The file: dependency in package.json would also resolve, but
+// aliases make dev/test robust regardless of install state.)
 const sdkRoot = fileURLToPath(new URL('../../src/sdk/', import.meta.url)).replace(/\\/g, '/');
+const workerDomRoot = fileURLToPath(new URL('../../packages/worker-dom/src/', import.meta.url)).replace(/\\/g, '/');
 
 export default defineConfig(({ command }) => ({
   // Built output is mounted at /react-dom-worker/ under the unified dist root; dev serves /.
@@ -17,12 +20,14 @@ export default defineConfig(({ command }) => ({
       { find: /^@jwhenry123\/mesh$/, replacement: `${sdkRoot}index.ts` },
       { find: /^@jwhenry123\/mesh\/sdk$/, replacement: `${sdkRoot}index.ts` },
       { find: /^@jwhenry123\/mesh\/sdk\//, replacement: sdkRoot },
+      { find: /^@jwhenry123\/mesh-worker-dom$/, replacement: `${workerDomRoot}index.ts` },
+      { find: /^@jwhenry123\/mesh-worker-dom\/worker$/, replacement: `${workerDomRoot}worker/index.ts` },
     ],
   },
   // The ops themselves still ride postMessage — but the push transport uses
-  // a SharedArrayBuffer doorbell (see src/memory.ts), which requires
-  // cross-origin isolation. Poll mode needs none of this — that's the
-  // tradeoff the toolbar lets you feel.
+  // a SharedArrayBuffer doorbell (see packages/worker-dom memory.ts), which
+  // requires cross-origin isolation. Poll mode needs none of this — that's
+  // the tradeoff the toolbar lets you feel.
   server: {
     fs: { allow: ['../..'] },
     port: 5177,

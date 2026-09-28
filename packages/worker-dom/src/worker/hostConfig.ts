@@ -4,10 +4,10 @@
  * "Host instances" are plain records in a Map — `{ kind:'element', id, type }`
  * or `{ kind:'text', id, text }`. Every render-phase and mutation-phase hook
  * the reconciler calls appends a serialized {@link Op} to a queue; the task
- * methods in render.worker.ts flush that queue back to the main thread,
- * which replays the ops as real DOM mutations. The reconciler itself never
- * touches `document`, `window`, or `self.postMessage` — that is the point of
- * the demo: React's render logic is DOM-free.
+ * methods created by `defineIslandWorker` flush that queue back to the main
+ * thread, which replays the ops as real DOM mutations. The reconciler itself
+ * never touches `document`, `window`, or `self.postMessage` — that is the
+ * point of the pattern: React's render logic is DOM-free.
  *
  * react-reconciler@0.34 reads ~150 fields off the config object. Most are
  * stubs for features this renderer doesn't implement (hydration,
@@ -120,6 +120,26 @@ export const pushOp = (realm: string, op: Op): void => {
   queue.push(op);
 };
 
+/** The minimum surface `bumpOpsVersion` needs off the doorbell contract. */
+interface DoorbellContract {
+  readonly bound: boolean;
+  connector(path: string): { read(): unknown; write(v: unknown): void };
+}
+
+/**
+ * The contract `bumpOpsVersion` writes to — `renderMemory` by default, or
+ * whatever doorbell-shaped contract `defineIslandWorker({ sharedMemory })`
+ * was handed. Overriding requires the SAME spec as the main-side
+ * `makeDoorbell()` (the pool sizes the buffer for it), so this is a rarely
+ * needed escape hatch, not a general field contract.
+ */
+let doorbell: DoorbellContract = renderMemory;
+
+/** Point the doorbell writes at a different doorbell-spec contract. */
+export const setDoorbellContract = (contract: DoorbellContract): void => {
+  doorbell = contract;
+};
+
 /**
  * The doorbell write resetAfterCommit performs, exported so non-React op
  * producers (the proxy DOM) can ring it too — a commit made outside any
@@ -127,9 +147,9 @@ export const pushOp = (realm: string, op: Op): void => {
  * contract is unbound (before the pool's INIT_MEMORY handshake).
  */
 export const bumpOpsVersion = (): void => {
-  if (!renderMemory.bound) return;
-  const bell = renderMemory.connector('opsVersion');
-  bell.write((bell.read() ?? 0) + 1);
+  if (!doorbell.bound) return;
+  const bell = doorbell.connector('opsVersion');
+  bell.write(Number(bell.read() ?? 0) + 1);
 };
 
 /** Drain one realm's queued ops — called by the worker's task methods. */
@@ -256,7 +276,7 @@ const DEFAULT_HOST_CONTEXT = Object.freeze({});
 export const hostConfig = {
   // Identity / capabilities
   rendererVersion: '0.34.0',
-  rendererPackageName: 'react-dom-worker',
+  rendererPackageName: '@jwhenry123/mesh-worker-dom',
   extraDevToolsConfig: null,
   isPrimaryRenderer: true,
   warnsIfNotActing: false,
@@ -481,8 +501,8 @@ export const hostConfig = {
   getFirstHydratableChild: NULL,
   getFirstHydratableChildWithinContainer: NULL,
   getFirstHydratableChildWithinActivityInstance: NULL,
-  getFirstHydratableChildWithinSuspenseInstance: NULL,
   getFirstHydratableChildWithinSingleton: NULL,
+  getFirstHydratableChildWithinSuspenseInstance: NULL,
   canHydrateInstance: NULL,
   canHydrateTextInstance: NULL,
   canHydrateActivityInstance: NULL,
@@ -497,7 +517,6 @@ export const hostConfig = {
   getNextHydratableInstanceAfterSuspenseInstance: NULL,
   commitHydratedInstance: noop,
   commitHydratedContainer: noop,
-  commitHydratedActivityInstance: noop,
   commitHydratedSuspenseInstance: noop,
   finalizeHydratedChildren: FALSE,
   flushHydrationEvents: noop,

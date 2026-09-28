@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@jwhenry123/mesh-worker-dom": "file:../../packages/worker-dom",
     "react": "^19.3.0",
     "react-reconciler": "^0.34.0"
   },

@@ -4,7 +4,7 @@
     "module": "ESNext",
     "moduleResolution": "bundler",
     "lib": ["ESNext", "DOM", "WebWorker"],
-    "types": ["vite/client", "node"],
+    "types": ["vite/client"],
     "strict": true,
     "noEmit": true,
     "isolatedModules": true,
@@ -12,10 +12,8 @@
     "skipLibCheck": true,
     "paths": {
       "@jwhenry123/mesh/sdk": ["../../src/sdk/index.ts"],
-      "@jwhenry123/mesh/sdk/*": ["../../src/sdk/*"],
-      "@jwhenry123/mesh-worker-dom": ["../../packages/worker-dom/src/index.ts"],
-      "@jwhenry123/mesh-worker-dom/worker": ["../../packages/worker-dom/src/worker/index.ts"]
+      "@jwhenry123/mesh/sdk/*": ["../../src/sdk/*"]
     }
   },
-  "include": ["src", "test", "vite.config.ts"]
+  "include": ["src", "test"]
 }

@@ -19,6 +19,7 @@ layouts, first-class task methods, and cross-thread reactive state.
 | `@jwhenry123/mesh-nextjs` | Next.js client-component bindings (React re-export) |
 | `@jwhenry123/mesh-node` | `node:worker_threads` runtime adapter |
 | `@jwhenry123/mesh-nestjs` | NestJS module/decorators for worker pools |
+| `@jwhenry123/mesh-worker-dom` | worker-side React reconciler + proxy DOM islands — opt-in DOM rendering |
 
 Framework bindings are published independently — install only the one you use:
 

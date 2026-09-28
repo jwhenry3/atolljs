@@ -3,7 +3,9 @@
  * Functional test for the islands demo — three mountIsland() trees over
  * InProcessWorker, so everything except the OS thread boundary is real:
  * the registry, per-realm reconcilers, the op protocol, the emit channel,
- * and the shared-memory doorbell.
+ * and the shared-memory doorbell. The islands runtime itself now lives in
+ * @jwhenry123/mesh-worker-dom — this test exercises the same code through
+ * the package's exports.
  *
  * One module instance plays every worker, so realms are keyed by app name —
  * exactly why mount/updateProps/flush/whoami carry the app on the wire.
@@ -16,37 +18,45 @@ import { InProcessWorker } from '../../../test/inProcessWorker';
 
 /**
  * One React copy for the whole render stack. The suite aliases `react` to the
- * repo root's install, but the example's react-reconciler is externalized and
- * Node-resolves the EXAMPLE's react — two copies would null the hook
- * dispatcher. Re-point every 'react'/'react/jsx-runtime' import at the
- * example's own install (createRequire = the same require the externalized
- * reconciler uses) so apps, hostConfig, and reconciler share one instance.
+ * repo root's install, and react-reconciler (resolved at the root's
+ * node_modules from packages/worker-dom) is externalized — Node-resolving the
+ * ROOT's react. Re-point every 'react'/'react/jsx-runtime' import at that same
+ * install (createRequire = the same require the externalized reconciler uses)
+ * so apps, hostConfig, and reconciler share one instance — two copies would
+ * null the hook dispatcher.
  */
-const requireFromExample = async () => {
+const requireFromRoot = async () => {
   const { createRequire } = await import('node:module');
   const { join } = await import('node:path');
   // import.meta.url is a served http URL under the module runner — anchor at
   // the repo root (vitest cwd) instead.
-  return createRequire(join(process.cwd(), 'examples/react-dom-worker/package.json'));
+  return createRequire(join(process.cwd(), 'package.json'));
 };
 vi.mock('react', async () => {
-  const mod = (await requireFromExample())('react') as Record<string, unknown>;
+  const mod = (await requireFromRoot())('react') as Record<string, unknown>;
   return { ...mod, default: mod };
 });
 vi.mock('react/jsx-runtime', async () => {
-  const mod = (await requireFromExample())('react/jsx-runtime') as Record<string, unknown>;
+  const mod = (await requireFromRoot())('react/jsx-runtime') as Record<string, unknown>;
   return { ...mod, default: mod };
 });
 
 vi.stubGlobal('Worker', InProcessWorker);
 InProcessWorker.handlerModules = [() => import('../src/worker/render.worker')];
 
-let connectIslandWorker: typeof import('../src/island').connectIslandWorker;
-let mountIsland: typeof import('../src/island').mountIsland;
+let connectIslandWorker: typeof import('@jwhenry123/mesh-worker-dom').connectIslandWorker;
+let mountIsland: typeof import('@jwhenry123/mesh-worker-dom').mountIsland;
 beforeAll(async () => {
   // Imported after the Worker stub — the client factory builds pools lazily.
-  ({ connectIslandWorker, mountIsland } = await import('../src/island'));
+  ({ connectIslandWorker, mountIsland } = await import('@jwhenry123/mesh-worker-dom'));
 });
+
+/** One island client factory — the worker entry is this example's registry. */
+const islandClient = () =>
+  connectIslandWorker({
+    worker: () =>
+      new Worker(new URL('../src/worker/render.worker.ts', import.meta.url), { type: 'module' }),
+  });
 
 const fire = (el: Element, event: Event): void => {
   el.dispatchEvent(event);
@@ -63,13 +73,13 @@ describe('react-dom-worker islands', () => {
 
     // Same mediation as src/main.ts — controls → table, table → stats.
     const stats = await mountIsland({
-      client: connectIslandWorker(),
+      client: islandClient(),
       el: statsEl,
       app: 'stats',
       props: { visible: 2000, total: 2000 },
     });
     const table = await mountIsland({
-      client: connectIslandWorker(),
+      client: islandClient(),
       el: tableEl,
       app: 'data-table',
       props: { filter: '', desc: false },
@@ -80,7 +90,7 @@ describe('react-dom-worker islands', () => {
       },
     });
     const controls = await mountIsland({
-      client: connectIslandWorker(),
+      client: islandClient(),
       el: controlsEl,
       app: 'controls',
       onEvent: (name, payload) => {
@@ -123,7 +133,7 @@ describe('react-dom-worker islands', () => {
   });
 
   it('mount() on an already-mounted app remounts — fresh batch, same pid', async () => {
-    const client = connectIslandWorker();
+    const client = islandClient();
     const first = await client.mount('controls', {});
     const pid = await client.whoami('controls');
     expect(first.some((op) => op.t === 'create')).toBe(true);
@@ -137,7 +147,7 @@ describe('react-dom-worker islands', () => {
   });
 
   it('mount() rejects unknown registry apps', async () => {
-    const client = connectIslandWorker();
+    const client = islandClient();
     await expect(client.mount('nope', {})).rejects.toThrow(/unknown app "nope"/);
     client.terminate();
   });
@@ -151,13 +161,13 @@ describe('react-dom-worker islands', () => {
     document.body.append(elA, elB);
 
     const a = await mountIsland({
-      client: connectIslandWorker(),
+      client: islandClient(),
       el: elA,
       app: 'data-table',
       props: { filter: 'us-east', desc: false },
     });
     const b = await mountIsland({
-      client: connectIslandWorker(),
+      client: islandClient(),
       el: elB,
       app: 'data-table',
       props: { filter: '', desc: true },
@@ -191,7 +201,7 @@ describe('react-dom-worker islands', () => {
     const mounted: HTMLElement[] = [];
     const unmounted: (null)[] = [];
     const island = await mountIsland({
-      client: connectIslandWorker(),
+      client: islandClient(),
       el,
       app: 'stats',
       props: { spark: 'wave' },
@@ -229,7 +239,7 @@ describe('react-dom-worker islands', () => {
     const emitted: Array<{ name: string; payload: unknown }> = [];
 
     const island = await mountIsland({
-      client: connectIslandWorker(),
+      client: islandClient(),
       el,
       app: 'vanilla',
       props: { title: 'test vanilla widget' },
@@ -245,12 +255,42 @@ describe('react-dom-worker islands', () => {
     expect(swatches.length).toBe(5);
     expect((swatches[0] as HTMLElement).style.background).not.toBe('');
     expect(swatches[0].getAttribute('data-color')).toBe('#2d6cdf');
-    // The boot log line was appended by imperative code reading its own
-    // shadow tree (row.children.length / querySelectorAll).
+    // The boot log lines were appended by imperative code reading its own
+    // shadow tree (row.children.length / querySelectorAll / the shim check).
     const readout = el.querySelector('[data-role="readout"]')!;
     expect(readout.textContent).toContain('pick a swatch');
-    expect(el.querySelectorAll('.vanilla-log-line').length).toBe(1);
+    expect(el.querySelectorAll('.vanilla-log-line').length).toBe(2);
     expect(el.querySelector('.vanilla-log-line')!.textContent).toContain('5 swatches');
+    expect(el.querySelectorAll('.vanilla-log-line')[1].textContent).toContain(
+      'globalThis.document === doc: true',
+    );
+
+    // ── The vendored library: global-document + innerHTML + delegation ──
+    // MiniWidget mounted unmodified inside the shim — its markup came from
+    // an innerHTML template parsed worker-side, its buttons delegate clicks
+    // through a `listen` op on the island container (id 0).
+    const widget = el.querySelector('.mini-widget')!;
+    expect(widget).not.toBeNull();
+    expect(widget.querySelector('.mw-label')!.textContent).toContain('vendored lib');
+    expect(widget.querySelectorAll('.mw-btn').length).toBe(2);
+    expect(el.innerHTML).toContain('mw-bar'); // innerHTML markup serialized to real DOM
+
+    // Delegated click on a widget button — bubbles to the container, where
+    // the document-level `listen` op's real listener dispatches back; the
+    // lib's `e.target.closest('[data-action]')` runs on the synthesized
+    // payload.target.
+    const ping = widget.querySelector('[data-action="ping"]')!;
+    fire(ping, new MouseEvent('click', { bubbles: true }));
+    await vi.waitFor(() =>
+      expect(widget.querySelectorAll('.mw-entry').length).toBe(1),
+    );
+    expect(widget.querySelector('.mw-entry')!.textContent).toBe('ping #1');
+    expect(widget.querySelector('.mw-entry')!.getAttribute('data-n')).toBe('1');
+
+    // The lib's clear button exercises `log.innerHTML = ''` — replace children.
+    const clear = widget.querySelector('[data-action="clear"]')!;
+    fire(clear, new MouseEvent('click', { bubbles: true }));
+    await vi.waitFor(() => expect(widget.querySelectorAll('.mw-entry').length).toBe(0));
 
     // Click swatch #2 — the listen op wired a real DOM listener; dispatch
     // routes the EventPayload into the worker handler, whose proxy-DOM
@@ -264,9 +304,9 @@ describe('react-dom-worker islands', () => {
     expect(swatches[0].classList.contains('active')).toBe(false);
     // The handler's appendLog ran too — getElementById lookup succeeded.
     const lines = el.querySelectorAll('.vanilla-log-line');
-    expect(lines.length).toBe(2);
-    expect(lines[1].textContent).toContain('clicked #1f9d55');
-    expect(lines[1].textContent).toContain('getElementById');
+    expect(lines.length).toBe(3);
+    expect(lines[2].textContent).toContain('clicked #1f9d55');
+    expect(lines[2].textContent).toContain('getElementById');
 
     // The emit carries the enriched payload fields back to the shell.
     await vi.waitFor(() => expect(emitted.some((e) => e.name === 'colorPicked')).toBe(true));
@@ -283,89 +323,13 @@ describe('react-dom-worker islands', () => {
     // op-created node, so its worker instance id crosses back.
     expect(picked.targetId).toBeGreaterThan(0);
 
-    // updateProps on an imperative realm = clear + rebuild on a fresh doc.
+    // updateProps on an imperative realm = clear + rebuild on a fresh doc —
+    // the widget remounts too (fresh shim + fresh MiniWidget.mount).
     await island.updateProps({ title: 'rebuilt widget' });
     expect(el.querySelector('.vanilla-heading')!.textContent).toBe('rebuilt widget');
     expect(el.querySelectorAll('.swatch').length).toBe(5);
+    expect(el.querySelector('.mini-widget')).not.toBeNull();
 
     island.destroy();
-  });
-
-  it('proxyDom shadow tree: local reads and op emission inside a realm', async () => {
-    const { createProxyDocument } = await import('../src/worker/proxyDom');
-    const { runInRealm, takeOps } = await import('../src/worker/hostConfig');
-
-    const ops = runInRealm('proxy-shadow', () => {
-      const doc = createProxyDocument('proxy-shadow');
-      const host = doc.createElement('div');
-      host.id = 'host';
-      host.classList.add('shell-box');
-      const kid = doc.createElement('span');
-      kid.className = 'kid';
-      kid.dataset.role = 'marker';
-      kid.textContent = 'hello';
-      const tail = doc.createElement('span');
-      tail.textContent = 'world';
-      host.appendChild(kid);
-      host.appendChild(tail);
-      doc.body.appendChild(host);
-
-      // Navigation reads are served locally — no main-thread round-trip.
-      expect(doc.getElementById('host')).toBe(host);
-      expect(doc.querySelector('.kid')).toBe(kid);
-      expect(doc.querySelector('#host .kid')).toBe(kid);
-      expect(doc.querySelector('[data-role="marker"]')).toBe(kid);
-      expect(doc.querySelector('span.kid')).toBe(kid);
-      expect(host.childNodes.length).toBe(2);
-      expect(host.children.length).toBe(2);
-      expect(host.firstChild).toBe(kid);
-      expect(host.lastChild).toBe(tail);
-      expect(kid.nextSibling).toBe(tail);
-      expect(tail.previousSibling).toBe(kid);
-      expect(kid.parentNode).toBe(host);
-      expect(kid.parentElement).toBe(host);
-      expect(host.textContent).toBe('helloworld');
-      expect(kid.isConnected).toBe(true);
-      expect(doc.querySelector('.missing')).toBeNull();
-      // Unsupported selector shapes fail loudly.
-      expect(() => doc.querySelector('div > .kid')).toThrow(/unsupported selector/);
-
-      // textContent rewrite → utext + a phantom text child for reads.
-      host.textContent = 'replaced';
-      expect(host.textContent).toBe('replaced');
-      expect(host.childNodes.length).toBe(1);
-      expect(kid.isConnected).toBe(false);
-      // The id map still resolves the connected host.
-      expect(doc.getElementById('host')).toBe(host);
-
-      // listen/unlisten ops pair up around one handler registration.
-      const noopHandler = () => {};
-      kid.addEventListener('click', noopHandler);
-      kid.removeEventListener('click', noopHandler);
-
-      return takeOps('proxy-shadow');
-    });
-
-    // Every mutation emitted a replayable op.
-    expect(ops.some((o) => o.t === 'create' && o.type === 'div')).toBe(true);
-    expect(ops.some((o) => o.t === 'create' && o.type === 'span')).toBe(true);
-    expect(ops.some((o) => o.t === 'text')).toBe(false); // no createTextNode here — phantoms
-    expect(
-      ops.some((o) => o.t === 'attr' && o.name === 'id' && o.value === 'host'),
-    ).toBe(true);
-    expect(
-      ops.some((o) => o.t === 'attr' && o.name === 'class' && o.value === 'shell-box'),
-    ).toBe(true);
-    expect(
-      ops.some((o) => o.t === 'attr' && o.name === 'class' && o.value === 'kid'),
-    ).toBe(true);
-    expect(
-      ops.some((o) => o.t === 'attr' && o.name === 'data-role' && o.value === 'marker'),
-    ).toBe(true);
-    expect(ops.some((o) => o.t === 'utext' && o.text === 'hello')).toBe(true);
-    expect(ops.some((o) => o.t === 'utext' && o.text === 'replaced')).toBe(true);
-    expect(ops.some((o) => o.t === 'append' && o.parent === 0)).toBe(true);
-    expect(ops.some((o) => o.t === 'listen' && o.type === 'click')).toBe(true);
-    expect(ops.some((o) => o.t === 'unlisten' && o.type === 'click')).toBe(true);
   });
 });

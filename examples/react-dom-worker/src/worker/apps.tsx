@@ -13,8 +13,7 @@
  */
 
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
-import { emit } from './hostConfig';
-import type { EventPayload } from '../ops';
+import { emit, Slot, type EventPayload } from '@jwhenry123/mesh-worker-dom/worker';
 
 /**
  * Worker-side event handlers receive the plain wire payload — { type, value,
@@ -200,25 +199,6 @@ export function TableApp({ filter = '', desc = false }: TableProps) {
       </table>
     </section>
   );
-}
-
-/* ── transclusion slot ──────────────────────────────────────────────────── */
-
-/**
- * A transclusion slot — renders a leaf element marked `data-mesh-slot`.
- * The element's BOX belongs to this tree (layout/style ops apply as usual);
- * its CONTENTS belong to the shell: when the create op lands on the main
- * thread, the island's `slots[name]` callback gets the real element and can
- * mount anything inside — a canvas, Monaco, a main-thread React root — all
- * real DOM with real events and zero wire traffic.
- *
- * Must stay a LEAF in this tree: if worker-side children were appended here
- * their ops would interleave with shell-owned content. There is also no
- * measurement channel yet — the island knows the box it laid out, not the
- * pixel size the shell put inside it.
- */
-export function Slot({ name, style }: { name: string; style?: Record<string, unknown> }) {
-  return <div data-mesh-slot={name} style={style} />;
 }
 
 /* ── stats ──────────────────────────────────────────────────────────────── */

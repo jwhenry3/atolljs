@@ -46,7 +46,9 @@ export type Op =
   /**
    * Attach a DOM listener for a proxy-DOM `addEventListener` — `handler` is
    * a worker handler-table id (same currency as `__evt` refs); the driver
-   * wires it to `client.dispatch(handler, payload)`.
+   * wires it to `client.dispatch(handler, payload)`. `id: 0` targets the
+   * island's root container — that's where `document`/`window` listeners
+   * land, which makes delegated handlers work.
    */
   | { t: 'listen'; id: number; type: string; handler: number }
   /** Detach the listener a `listen` op attached (type + handler identify it). */
@@ -100,4 +102,32 @@ export interface EventPayload {
   scrollTop?: number;
   /** The worker instance id of `event.target`, when it maps to one. */
   targetId?: number;
+  /**
+   * The proxy-DOM node for `targetId` — SYNTHESIZED worker-side by the proxy
+   * DOM when it wraps a listener (it never crosses the wire). Lets delegated
+   * handlers written for the real DOM — `e.target.closest('.row')`,
+   * `e.target.dataset` — run unmodified. Only set when the target maps to a
+   * known worker instance; DOM-fidelity only for nodes built through the
+   * same proxy document.
+   */
+  target?: unknown;
 }
+
+/**
+ * The task methods every island worker exposes — what `defineIslandWorker`
+ * registers on the worker side and what `connectIslandWorker`'s typed client
+ * calls on the main thread. Every signature leads with the realm key
+ * (`'app'` or `'app@instance'`) — `mountIsland` binds it per island.
+ */
+export type IslandWorkerMethods = {
+  /** Mount the realm's registry app; returns the initial op batch. */
+  mount(realm: string, props?: Record<string, unknown>): Op[];
+  /** Re-render the realm's root with new serializable props. */
+  updateProps(realm: string, props: Record<string, unknown>): Op[];
+  /** Invoke the worker handler a `__evt` ref or `listen` op points at. */
+  dispatch(handlerId: number, payload: EventPayload): Op[];
+  /** Drain ops committed outside a task (passive effects, timers). */
+  flush(realm: string): Op[];
+  /** The mounted realm's random id — the island's "worker pid" badge. */
+  whoami(realm: string): string;
+};

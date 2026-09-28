@@ -1,12 +1,19 @@
 /**
  * The 'vanilla' island app — an imperative widget built ONLY on the proxy
- * DOM (src/worker/proxyDom.ts). There is no React anywhere in this realm:
- * no reconciler, no container, no JSX — this file doesn't even import
- * react. Every mutation in build() IS an op, queued straight onto the
- * realm's op stream; the worker's mount() just runs build() inside
- * runInRealm and drains the queue (see render.worker.ts).
+ * DOM (@jwhenry123/mesh-worker-dom/worker). There is no React anywhere in
+ * this realm: no reconciler, no container, no JSX — this file doesn't even
+ * import react. Every mutation in build() IS an op, queued straight onto
+ * the realm's op stream; the worker's mount() just runs build() inside
+ * runInRealm and drains the queue.
  *
- * What it exercises:
+ * TWO styles coexist here on purpose:
+ *   1. the hand-written swatch picker — proxy-DOM calls made directly
+ *   2. the vendored MiniWidget (src/vendor/miniwidget.js) — unmodified
+ *      "third-party" JS that reaches for the GLOBAL document/window, builds
+ *      markup via innerHTML, and delegates clicks on document.addEventListener.
+ *      `installDomShim(doc)` is the only glue it needs.
+ *
+ * What the hand-written part exercises:
  *   - nested createElement/createTextNode + appendChild
  *   - className, classList.add/toggle, setAttribute, dataset
  *   - style mutation via the style Proxy
@@ -17,9 +24,13 @@
  *   - getElementById / querySelectorAll on the local tree
  *   - emit() back to the shell, carrying event coordinates
  */
-import { emit } from './hostConfig';
-import type { ProxyDocument } from './proxyDom';
-import type { EventPayload } from '../ops';
+import {
+  emit,
+  installDomShim,
+  type EventPayload,
+  type ProxyDocument,
+} from '@jwhenry123/mesh-worker-dom/worker';
+import { MiniWidget } from '../vendor/miniwidget.js';
 
 const SWATCHES = [
   { name: 'blue', color: '#2d6cdf' },
@@ -102,4 +113,23 @@ export function buildVanilla(doc: ProxyDocument, props: Record<string, unknown>)
 
   // A seed line that proves local-tree reads ran worker-side at mount.
   appendLog(`${row.children.length} swatches · querySelectorAll('.swatch') → ${doc.querySelectorAll('.swatch').length}`);
+
+  /* ── The vendored-library half: global document + innerHTML + delegation ──
+   *
+   * installDomShim puts this realm's proxy document on globalThis.document
+   * (plus a window facade). MiniWidget.mount then does exactly what real
+   * libraries do — document.createElement, host.innerHTML = template,
+   * document.addEventListener('click', delegate) — and every call lands on
+   * the proxy DOM. Its delegated clicks dispatch with payload.target
+   * synthesized to the proxy node, so `e.target.closest('[data-action]')`
+   * works unmodified.
+   */
+  installDomShim(doc);
+  MiniWidget.mount(doc.body);
+  MiniWidget.setLabel('miniwidget — vendored lib via installDomShim');
+  appendLog(
+    `miniwidget mounted via installDomShim — globalThis.document === doc: ${
+      (globalThis as { document?: unknown }).document === doc
+    }`,
+  );
 }

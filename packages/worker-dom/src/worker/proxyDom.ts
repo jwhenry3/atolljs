@@ -20,6 +20,14 @@
  * tree only tracks mutations made THROUGH the proxy: children React
  * appends under an adopted parent aren't visible to it.
  *
+ * GLOBAL SHIM: `installDomShim(doc)` assigns `globalThis.document = doc`
+ * plus a `globalThis.window` facade, so DOM-dependent libraries written
+ * for the real global scope run unmodified inside a realm — createElement,
+ * innerHTML templates (parsed worker-side via htmlparser2), delegated
+ * `document.addEventListener`/`window.addEventListener` (both land as
+ * `listen` ops on the island's container — id 0 — where bubbling events
+ * reach them). See installDomShim for exactly what is and isn't faked.
+ *
  * REALM ROUTING: like `emit`, imperative DOM writes only happen while a
  * realm task holds the active realm — mount/dispatch wrap the app in
  * `runInRealm`, and worker-initiated work (timers, continuations) should
@@ -34,6 +42,7 @@
  * future work, deliberately not faked here.
  */
 
+import { parseDocument, ElementType } from 'htmlparser2';
 import {
   allocId,
   bumpOpsVersion,
@@ -46,7 +55,8 @@ import {
 import type { ElementInstance, HostInstance, TextInstance } from './hostConfig';
 import type { EventPayload, Op } from '../ops';
 
-/** Handler signature for proxy addEventListener — the plain wire payload. */
+/** Handler signature for proxy addEventListener — the wire payload plus a
+ *  synthesized `target` (the proxy node for `targetId`, when known). */
 export type ProxyEventHandler = (payload: EventPayload) => void;
 
 const hyphenate = (k: string): string => k.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`);
@@ -78,6 +88,12 @@ export class ProxyNode {
 
   get nodeType(): number {
     return 0;
+  }
+
+  /** The proxy document that owns this node — what real DOM code reads as
+   *  `el.ownerDocument`. */
+  get ownerDocument(): ProxyDocument {
+    return this.doc;
   }
 
   get parentNode(): ProxyNode | null {
@@ -116,6 +132,17 @@ export class ProxyNode {
       n = n._parent;
     }
     return false;
+  }
+
+  /**
+   * The topmost shadow-tree ancestor — the root container element when the
+   * node is connected. (The facade has no separate Document node object;
+   * `doc.body`/`documentElement` ARE that root.)
+   */
+  getRootNode(): ProxyNode {
+    let n: ProxyNode = this;
+    while (n._parent !== null) n = n._parent;
+    return n;
   }
 
   /** Concatenated descendant text — walked from the shadow tree. */
@@ -184,6 +211,11 @@ export class ProxyNode {
   /** Detach from the parent — no-op when already orphaned (like the DOM). */
   remove(): void {
     this._parent?.removeChild(this);
+  }
+
+  /** The node's own line of markup — start tag, children, end tag. */
+  get outerHTML(): string {
+    return serializeNode(this);
   }
 
   /**
@@ -266,6 +298,9 @@ export interface ProxyClassList {
   contains(token: string): boolean;
   readonly value: string;
 }
+
+/** Positions `insertAdjacentHTML`/`insertAdjacentElement` accept. */
+export type AdjacentPosition = 'beforebegin' | 'afterbegin' | 'beforeend' | 'afterend';
 
 export class ProxyElement extends ProxyNode {
   declare readonly instance: ElementInstance;
@@ -433,12 +468,13 @@ export class ProxyElement extends ProxyNode {
   }
 
   /* Events — registers a worker handler-table entry and emits listen.
-   * The driver's listenerFor dispatches EventPayloads back into the worker. */
+   * The driver's listenerFor dispatches EventPayloads back into the worker;
+   * the payload is enriched with a synthesized `target` proxy node first. */
   addEventListener(type: string, fn: ProxyEventHandler): void {
     this.doc._assertAlive();
     // The real DOM dedupes identical (type, listener) pairs — so do we.
     if (this._listeners.some((l) => l.type === type && l.fn === fn)) return;
-    const hid = registerHandler((p) => fn(p as EventPayload), this.instance.realm);
+    const hid = registerHandler((p) => fn(this.doc._enrichEvent(p as EventPayload)), this.instance.realm);
     this._listeners.push({ type, fn, hid });
     this.doc._handlerIds.add(hid);
     this._op({ t: 'listen', id: this.instance.id, type, handler: hid });
@@ -456,6 +492,149 @@ export class ProxyElement extends ProxyNode {
   /* Selector matching — compound selectors only (see parseSelector). */
   matches(selector: string): boolean {
     return matchesChain(this, parseSelector(selector));
+  }
+
+  /** Nearest element (self inclusive) matching the selector — walks the
+   *  shadow tree upward through ancestors. */
+  closest(selector: string): ProxyElement | null {
+    const chain = parseSelector(selector);
+    let n: ProxyNode | null = this;
+    while (n !== null) {
+      if (n instanceof ProxyElement && matchesChain(n, chain)) return n;
+      n = n._parent;
+    }
+    return null;
+  }
+
+  /** Scoped local-tree query — descendants only, same engine and the same
+   *  supported-selector subset as document.querySelectorAll. */
+  querySelector(selector: string): ProxyElement | null {
+    return this.querySelectorAll(selector)[0] ?? null;
+  }
+
+  querySelectorAll(selector: string): ProxyElement[] {
+    const chain = parseSelector(selector);
+    const out: ProxyElement[] = [];
+    const walk = (node: ProxyNode): void => {
+      for (const child of node._children) {
+        if (child instanceof ProxyElement && matchesChain(child, chain)) out.push(child);
+        walk(child);
+      }
+    };
+    walk(this);
+    return out;
+  }
+
+  /* ── innerHTML + friends: real HTML parsing worker-side ──────────────── */
+
+  /** Serialized shadow-tree children — the only innerHTML there CAN be over
+   *  an async op channel (it reflects writes made through this facade, not
+   *  the real DOM's current markup). */
+  get innerHTML(): string {
+    return this._children.map((child) => serializeNode(child)).join('');
+  }
+  /**
+   * Parse `html` worker-side (htmlparser2 — pure JS, worker-safe) and
+   * rebuild this element's children as proxy nodes: each parsed element is
+   * createElement + setAttribute + recursive children, each text run a
+   * createTextNode — all emitting ordinary create/attr/append ops. Existing
+   * children are removed first (one remove op each). Comments and
+   * directives are skipped.
+   */
+  set innerHTML(html: string) {
+    this.doc._assertAlive();
+    for (const child of this._children.slice()) this.removeChild(child);
+    for (const node of parseChildren(this.doc, html)) this.appendChild(node);
+  }
+
+  /**
+   * Parse `html` and insert the resulting nodes relative to this element —
+   * 'beforebegin'/'afterend' require a parent and no-op without one (like
+   * the DOM on detached elements).
+   */
+  insertAdjacentHTML(position: AdjacentPosition, html: string): void {
+    this.doc._assertAlive();
+    this._insertAt(position, parseChildren(this.doc, html));
+  }
+
+  /** insertAdjacentElement — returns the inserted element like the DOM. */
+  insertAdjacentElement(position: AdjacentPosition, el: ProxyElement): ProxyElement | null {
+    this.doc._assertAlive();
+    if (!(el instanceof ProxyElement)) return null;
+    this._insertAt(position, [el]);
+    return el;
+  }
+
+  private _insertAt(position: AdjacentPosition, nodes: ProxyNode[]): void {
+    switch (position) {
+      case 'beforebegin': {
+        if (this._parent === null) return;
+        for (const n of nodes) this._parent.insertBefore(n, this);
+        return;
+      }
+      case 'afterbegin': {
+        const ref = this.firstChild;
+        for (const n of nodes) this.insertBefore(n, ref);
+        return;
+      }
+      case 'beforeend': {
+        for (const n of nodes) this.appendChild(n);
+        return;
+      }
+      case 'afterend': {
+        if (this._parent === null) return;
+        const ref = this.nextSibling;
+        for (const n of nodes) this._parent.insertBefore(n, ref);
+        return;
+      }
+      default:
+        throw new Error(`proxyDom.insertAdjacent*: unknown position "${String(position)}"`);
+    }
+  }
+
+  /**
+   * Clone as new ops — the copy gets its own instance id (it's a real new
+   * element on the main thread, not a shared record). Attributes and the
+   * style-proxy properties are copied; listeners are NOT (matches the DOM).
+   * `deep` clones element children recursively and text children as fresh
+   * text nodes.
+   */
+  cloneNode(deep?: boolean): ProxyElement {
+    this.doc._assertAlive();
+    const copy = this.doc.createElement(this.instance.type);
+    for (const [name, value] of this._attrs) copy.setAttribute(name, value);
+    for (const [k, v] of Object.entries(this._styleProps)) copy._writeStyle(k, v);
+    if (deep === true) {
+      for (const child of this._children) {
+        if (child instanceof ProxyElement) copy.appendChild(child.cloneNode(true));
+        else if (child instanceof ProxyText) copy.appendChild(this.doc.createTextNode(child.textContent));
+      }
+    }
+    return copy;
+  }
+
+  /** append(...nodes) — strings become text nodes, like the DOM. */
+  append(...nodes: Array<ProxyNode | string>): void {
+    this.doc._assertAlive();
+    for (const n of nodes) {
+      this.appendChild(typeof n === 'string' ? this.doc.createTextNode(n) : n);
+    }
+  }
+
+  /** prepend(...nodes) — inserts at the front, in argument order. */
+  prepend(...nodes: Array<ProxyNode | string>): void {
+    this.doc._assertAlive();
+    const ref = this.firstChild;
+    for (const n of nodes) {
+      this.insertBefore(typeof n === 'string' ? this.doc.createTextNode(n) : n, ref);
+    }
+  }
+
+  /** replaceChildren(...nodes) — remove every child, then append the set. */
+  replaceChildren(...nodes: Array<ProxyNode | string>): void {
+    this.doc._assertAlive();
+    for (const child of this._children.slice()) this.removeChild(child);
+    this.append(...nodes);
   }
 
   /* ── Write-path-only stubs: NO measurement channel exists. Returning a
@@ -497,22 +676,6 @@ export class ProxyElement extends ProxyNode {
   get scrollWidth(): number {
     this.doc._warn('scrollWidth');
     return 0;
-  }
-
-  /**
-   * innerHTML would need an HTML parser worker-side AND a "set innerHTML"
-   * wire op — neither exists. Throw loudly rather than silently writing an
-   * expando the main thread never sees.
-   */
-  get innerHTML(): string {
-    throw new Error(
-      'proxyDom: innerHTML is not supported — build nodes with createElement/createTextNode + appendChild',
-    );
-  }
-  set innerHTML(_v: string) {
-    throw new Error(
-      'proxyDom: innerHTML is not supported — build nodes with createElement/createTextNode + appendChild',
-    );
   }
 
   /* internals */
@@ -652,6 +815,82 @@ function matchesChain(el: ProxyElement, chain: CompoundSelector[]): boolean {
   return true;
 }
 
+/* ── HTML: parse (htmlparser2) + serialize (shadow tree) ───────────────── */
+
+/**
+ * Parse an HTML fragment into fresh proxy nodes — one createElement/
+ * createTextNode/appendChild chain per parsed node, so setting innerHTML or
+ * calling insertAdjacentHTML emits the same op stream hand-built code
+ * would. htmlparser2 is pure JS — no DOM, worker-safe.
+ */
+/** A node in htmlparser2's parse tree — typed off the public API so no
+ *  transitive domhandler import is needed. */
+type ParsedNode = ReturnType<typeof parseDocument>['children'][number];
+
+function parseChildren(doc: InternalDocument, html: string): ProxyNode[] {
+  const parsed = parseDocument(String(html));
+  const build = (nodes: readonly ParsedNode[]): ProxyNode[] => {
+    const out: ProxyNode[] = [];
+    for (const node of nodes) {
+      switch (node.type) {
+        case ElementType.Tag:
+        case ElementType.Script:
+        case ElementType.Style: {
+          const el = doc.createElement(node.name);
+          for (const [name, value] of Object.entries(node.attribs)) el.setAttribute(name, value);
+          for (const child of build(node.children)) el.appendChild(child);
+          out.push(el);
+          break;
+        }
+        case ElementType.Text: {
+          if (node.data !== '') out.push(doc.createTextNode(node.data));
+          break;
+        }
+        case ElementType.CDATA: {
+          // CDATA carries its text as children — flatten like the DOM does.
+          for (const child of build(node.children)) out.push(child);
+          break;
+        }
+        default:
+          break; // comments/directives/doctype: skipped.
+      }
+    }
+    return out;
+  };
+  return build(parsed.children);
+}
+
+/** Elements the HTML serializer emits without an end tag. */
+const VOID_ELEMENTS = new Set([
+  'area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input',
+  'link', 'meta', 'param', 'source', 'track', 'wbr',
+]);
+
+const escapeText = (s: string): string =>
+  s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const escapeAttr = (s: string): string =>
+  s.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+
+/** Serialize a shadow node — elements with attrs (+ inline style from the
+ *  style proxy), text escaped. Reads the shadow tree only; nothing the
+ *  proxy didn't write appears here. */
+function serializeNode(node: ProxyNode): string {
+  if (node instanceof ProxyText) return escapeText(node.textContent);
+  if (!(node instanceof ProxyElement)) return '';
+  const tag = node.instance.type;
+  const attrs = new Map(node._attrs);
+  const styleText = Object.entries(node._styleProps)
+    .map(([k, v]) => `${hyphenate(k)}: ${v};`)
+    .join(' ');
+  if (styleText !== '') attrs.set('style', styleText);
+  let out = `<${tag}`;
+  for (const [name, value] of attrs) out += ` ${name}="${escapeAttr(value)}"`;
+  if (VOID_ELEMENTS.has(tag)) return `${out}>`;
+  out += '>';
+  for (const child of node._children) out += serializeNode(child);
+  return `${out}</${tag}>`;
+}
+
 /* ── The document ──────────────────────────────────────────────────────── */
 
 export interface ProxyDocument {
@@ -665,6 +904,14 @@ export interface ProxyDocument {
   readonly documentElement: ProxyElement;
   createElement(tag: string): ProxyElement;
   createTextNode(text: string): ProxyText;
+  /**
+   * Document-level listeners: emitted as `listen` ops on id 0 — the driver
+   * attaches them to the island's real container element, so delegated
+   * handlers see every event that bubbles inside the island. This is what
+   * library-style `document.addEventListener('click', delegate)` needs.
+   */
+  addEventListener(type: string, fn: ProxyEventHandler): void;
+  removeEventListener(type: string, fn: ProxyEventHandler): void;
   /** id-map lookup over the CONNECTED shadow tree (disconnected nodes with
    *  an id set are remembered but not returned, matching real-DOM scoping). */
   getElementById(id: string): ProxyElement | null;
@@ -692,8 +939,14 @@ export class InternalDocument implements ProxyDocument {
   readonly _ids = new Map<string, ProxyElement>();
   /** handler ids this document registered — disposed on rebuild. */
   readonly _handlerIds = new Set<number>();
+  /** Document-level listeners — separate table from the root element's, so
+   *  doc.addEventListener and body.addEventListener don't wrongly dedupe
+   *  against each other. Both emit `listen` on id 0. */
+  private readonly _docListeners: Array<{ type: string; fn: ProxyEventHandler; hid: number }> = [];
   private readonly _warned = new Set<string>();
-  private _disposed = false;
+  _disposed = false;
+  /** Set by installDomShim — restore globals when this document dies. */
+  _uninstallShim: (() => void) | null = null;
 
   constructor(realm: string) {
     this.realm = realm;
@@ -753,6 +1006,20 @@ export class InternalDocument implements ProxyDocument {
     return t;
   }
 
+  /**
+   * Give a dispatched payload its `target` — the proxy node for targetId,
+   * looked up in the shared instance space and wrapped in THIS document's
+   * wrapper map (so `e.target.closest`/`.dataset`/`.contains` behave like
+   * the real DOM for proxy-created nodes).
+   */
+  _enrichEvent(payload: EventPayload): EventPayload {
+    const id = payload.targetId;
+    if (typeof id !== 'number') return payload;
+    const instance = instances.get(id);
+    if (instance === undefined) return payload;
+    return { ...payload, target: this._wrap(instance) };
+  }
+
   createElement(tag: string): ProxyElement {
     this._assertAlive();
     const instance: ElementInstance = {
@@ -801,6 +1068,34 @@ export class InternalDocument implements ProxyDocument {
     return node;
   }
 
+  /**
+   * Document-level listener — same currency as element addEventListener but
+   * targeting id 0 (the island's container element). The driver's listen op
+   * attaches a real DOM listener on the container, so events bubbling up
+   * from any island child dispatch back here. Used by library code doing
+   * delegated `document.addEventListener(...)`.
+   */
+  addEventListener(type: string, fn: ProxyEventHandler): void {
+    this._assertAlive();
+    if (this._docListeners.some((l) => l.type === type && l.fn === fn)) return;
+    const hid = registerHandler((p) => fn(this._enrichEvent(p as EventPayload)), this.realm);
+    this._docListeners.push({ type, fn, hid });
+    this._handlerIds.add(hid);
+    pushOp(this.realm, { t: 'listen', id: 0, type, handler: hid });
+    if (getActiveRealm() !== this.realm) bumpOpsVersion();
+  }
+
+  removeEventListener(type: string, fn: ProxyEventHandler): void {
+    this._assertAlive();
+    const index = this._docListeners.findIndex((l) => l.type === type && l.fn === fn);
+    if (index === -1) return;
+    const [entry] = this._docListeners.splice(index, 1);
+    unregisterHandler(entry.hid);
+    this._handlerIds.delete(entry.hid);
+    pushOp(this.realm, { t: 'unlisten', id: 0, type, handler: entry.hid });
+    if (getActiveRealm() !== this.realm) bumpOpsVersion();
+  }
+
   getElementById(id: string): ProxyElement | null {
     const el = this._ids.get(id);
     return el !== undefined && el.isConnected ? el : null;
@@ -832,6 +1127,10 @@ export class InternalDocument implements ProxyDocument {
   }
 
   dispose(): void {
+    // Restore globals FIRST if this doc was installed as the shim — the
+    // rebuild path (updateProps) swaps in a fresh doc and re-installs.
+    this._uninstallShim?.();
+    this._uninstallShim = null;
     this._disposed = true;
     for (const hid of this._handlerIds) unregisterHandler(hid);
     this._handlerIds.clear();
@@ -845,3 +1144,180 @@ export class InternalDocument implements ProxyDocument {
  */
 export const createProxyDocument = (realm: string): ProxyDocument =>
   new InternalDocument(realm);
+
+/* ── The global shim ───────────────────────────────────────────────────── */
+
+/** What installDomShim puts on globalThis.window — a facade OBJECT, not
+ *  globalThis itself (the pool's message channel lives on self). */
+export interface WindowShim {
+  document: ProxyDocument;
+  navigator: { userAgent: string };
+  location: { href: string; reload(): void; assign(url: string): void; replace(url: string): void };
+  innerWidth: number;
+  innerHeight: number;
+  devicePixelRatio: number;
+  requestAnimationFrame(cb: (time: number) => void): number;
+  cancelAnimationFrame(id: number): void;
+  setTimeout: typeof setTimeout;
+  clearTimeout: typeof clearTimeout;
+  setInterval: typeof setInterval;
+  clearInterval: typeof clearInterval;
+  getComputedStyle(el: unknown): Record<string, never>;
+  addEventListener(type: string, fn: ProxyEventHandler): void;
+  removeEventListener(type: string, fn: ProxyEventHandler): void;
+}
+
+/**
+ * The uninstall currently returned by the latest installDomShim — chained
+ * so installing a fresh document's shim first unwinds the previous one
+ * (otherwise uninstalling would restore a STALE proxy document).
+ */
+let activeShimUninstall: (() => void) | null = null;
+
+/**
+ * Install a proxy document as `globalThis.document` plus a `window` facade
+ * — the entry point for running real DOM-dependent libraries unmodified
+ * inside an island realm:
+ *
+ *   const doc = createProxyDocument(realm);
+ *   installDomShim(doc);
+ *   SomeVendorLib.mount(doc.body);  // uses document./window./innerHTML…
+ *
+ * What gets faked:
+ *  - `globalThis.document` = the proxy document (all proxy behavior above)
+ *  - `globalThis.window` = a facade OBJECT: navigator, location stubs,
+ *    timers + rAF passthrough (setTimeout fallback where workers lack rAF),
+ *    innerWidth/innerHeight/devicePixelRatio constants, empty
+ *    getComputedStyle, and addEventListener.
+ *  - `window.addEventListener` keeps a SEPARATE listener table and emits
+ *    `listen`/`unlisten` ops on id 0 — same as `document.addEventListener`:
+ *    the driver attaches real listeners to the island's container, so DOM
+ *    events that bubble inside the island dispatch to window listeners too
+ *    (matching real document→window bubbling for content events; there are
+ *    no true window-level events — resize & co. never fire).
+ *  - Events dispatched to shim listeners get `payload.target` synthesized
+ *    to the proxy node for `targetId` — delegated handlers using
+ *    `e.target.closest(…)`/`.dataset` work unmodified.
+ *
+ * What does NOT get touched — deliberately:
+ *  - `globalThis.addEventListener`/`removeEventListener` and `self` — the
+ *    pool's `self.onmessage` channel lives there; `window` is a facade
+ *    object, not the global.
+ *  - Any other global (history, fetch, localStorage…) — libraries touching
+ *    them fail loudly, which is the honest answer.
+ *
+ * Returns `uninstall()` restoring the prior globals exactly. Also runs
+ * automatically on `doc.dispose()` (the updateProps rebuild path) and is
+ * superseded by a later installDomShim call — the last install wins.
+ */
+export function installDomShim(doc: ProxyDocument): () => void {
+  const internal = doc as InternalDocument;
+  const g = globalThis as Record<string, unknown>;
+
+  // Unwind any previous install first — its captured "prior globals" are the
+  // real originals (or globals from before the first shim).
+  activeShimUninstall?.();
+  activeShimUninstall = null;
+
+  const hadDocument = 'document' in g;
+  const prevDocument = g.document;
+  const hadWindow = 'window' in g;
+  const prevWindow = g.window;
+
+  /** type → fn → handler id. Window listeners get their own table (a lib
+   *  removing a document listener must not detach its window twin), but
+   *  land on the same id-0 container as document listeners. */
+  const windowListeners = new Map<string, Map<ProxyEventHandler, number>>();
+
+  const pushDocOp = (op: Op): void => {
+    pushOp(internal.realm, op);
+    if (getActiveRealm() !== internal.realm) bumpOpsVersion();
+  };
+
+  const windowAddEventListener = (type: string, fn: ProxyEventHandler): void => {
+    internal._assertAlive();
+    let table = windowListeners.get(type);
+    if (table === undefined) windowListeners.set(type, (table = new Map()));
+    if (table.has(fn)) return; // real DOM dedupes identical pairs
+    const hid = registerHandler(
+      (p) => fn(internal._enrichEvent(p as EventPayload)),
+      internal.realm,
+    );
+    table.set(fn, hid);
+    internal._handlerIds.add(hid);
+    pushDocOp({ t: 'listen', id: 0, type, handler: hid });
+  };
+
+  const windowRemoveEventListener = (type: string, fn: ProxyEventHandler): void => {
+    internal._assertAlive();
+    const table = windowListeners.get(type);
+    const hid = table?.get(fn);
+    if (hid === undefined) return;
+    table!.delete(fn);
+    unregisterHandler(hid);
+    internal._handlerIds.delete(hid);
+    pushDocOp({ t: 'unlisten', id: 0, type, handler: hid });
+  };
+
+  const raf = (g.requestAnimationFrame as ((cb: (time: number) => void) => number) | undefined);
+  const caf = (g.cancelAnimationFrame as ((id: number) => void) | undefined);
+
+  const windowFacade: WindowShim = {
+    document: doc,
+    navigator: { userAgent: 'mesh-worker-dom' },
+    location: {
+      href: 'about:blank',
+      reload() {},
+      assign(_url: string) {},
+      replace(_url: string) {},
+    },
+    innerWidth: 0,
+    innerHeight: 0,
+    devicePixelRatio: 1,
+    // Workers normally have no rAF — pass through when one exists (in-process
+    // test), degrade to a 16ms timer otherwise.
+    requestAnimationFrame(cb: (time: number) => void): number {
+      return typeof raf === 'function'
+        ? raf.call(globalThis, cb)
+        : (setTimeout(() => cb(Date.now()), 16) as unknown as number);
+    },
+    cancelAnimationFrame(id: number): void {
+      if (typeof caf === 'function') caf.call(globalThis, id);
+      else clearTimeout(id);
+    },
+    setTimeout: setTimeout.bind(globalThis),
+    clearTimeout: clearTimeout.bind(globalThis),
+    setInterval: setInterval.bind(globalThis),
+    clearInterval: clearInterval.bind(globalThis),
+    // No measurement channel — an empty declaration, same honesty rule as
+    // doc.getComputedStyle (which warns once); the facade stays silent.
+    getComputedStyle: () => ({}),
+    addEventListener: windowAddEventListener,
+    removeEventListener: windowRemoveEventListener,
+  };
+
+  g.document = doc;
+  g.window = windowFacade;
+
+  const uninstall = (): void => {
+    // Tear down surviving window listeners first — both wire ops and the
+    // worker-side handler table entries.
+    for (const [type, table] of windowListeners) {
+      for (const hid of table.values()) {
+        unregisterHandler(hid);
+        internal._handlerIds.delete(hid);
+        if (!internal._disposed) pushOp(internal.realm, { t: 'unlisten', id: 0, type, handler: hid });
+      }
+      table.clear();
+    }
+    if (hadDocument) g.document = prevDocument;
+    else delete g.document;
+    if (hadWindow) g.window = prevWindow;
+    else delete g.window;
+    if (activeShimUninstall === uninstall) activeShimUninstall = null;
+  };
+
+  internal._uninstallShim = uninstall;
+  activeShimUninstall = uninstall;
+  return uninstall;
+}
