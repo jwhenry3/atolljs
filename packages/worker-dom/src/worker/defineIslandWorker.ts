@@ -1,24 +1,34 @@
 /**
- * `defineIslandWorker` — the whole worker-side island runtime except the
- * app registry (which is the parameter):
+ * Two entry points, two topologies:
  *
- *   // render.worker.ts — the entire worker entry
+ *   // render.worker.ts — a REGISTRY worker: one script, many apps
  *   import { defineIslandWorker } from '@jwhenry123/mesh-worker-dom/worker';
  *   export const renderWorker = defineIslandWorker({
- *     apps: { controls: ControlsApp, table: TableApp, vanilla: { imperative: build } },
+ *     apps: { controls: ControlsApp, table: TableApp },
  *   });
  *
- * APP REGISTRY: every island's worker runs the same script. `mount(realm,
- * props)` picks a component out of `apps` and reconciles it into that
- * realm's own root: its own reconciler, container, op queue, and pid.
- * In production each worker mounts exactly one realm — one client,
- * poolSize 1, one tree. Multiple realms in one module only happen in the
- * in-process test, where every island shares the module graph.
+ *   // charts.worker.ts — a REALM worker: one script, one app (1:1)
+ *   export const chartsWorker = defineRealmWorker(ChartsApp);
+ *
+ * `defineIslandWorker` serves a registry — every island's worker runs the
+ * same script and `mount(realm, props)` picks a component out of `apps`.
+ * `defineRealmWorker` serves exactly one app: the shell mounts it without
+ * naming a registry key (or with any name — a single-registered-app worker
+ * resolves its sole app regardless), and the worker's bundle carries only
+ * that app's dependencies.
+ *
+ * APP REGISTRY is module-level: in a real worker each entry file loads its
+ * own module graph (a realm worker sees exactly its app); under the
+ * in-process test harness several worker entries share one graph, so
+ * registration is a UNION and mounts still resolve — same semantics both
+ * worlds.
  *
  * REALM KEYS are `app` or `app@instance` — the part before the last '@'
- * names the registry app, the rest distinguishes instances so the same
- * microfrontend can mount more than once (mountIsland mints a fresh key
- * per island). Wire signatures carry the realm key (`updateProps(realm,
+ * names the registry app (or 'main' for unnamed realm-worker mounts), the
+ * rest distinguishes instances so the same app can mount more than once —
+ * INCLUDING into one shared worker when two islands share a client
+ * (multi-island-per-worker: one worker, two realms, two reconcilers).
+ * MountIsland mints a fresh key per island. Wire signatures carry the realm key (`updateProps(realm,
  * props)`, `flush(realm)`, `whoami(realm)`) so a call routes to its realm —
  * the main-thread mountIsland helper binds it, so shell code just calls
  * `island.updateProps(props)`.
@@ -40,6 +50,7 @@ import { createElement, type ReactElement } from 'react';
 import Reconciler from 'react-reconciler';
 import { defineWorker } from '@jwhenry123/mesh/sdk';
 import type { SharedMemory, WorkerDefinition } from '@jwhenry123/mesh/sdk';
+import { islandAppNameOf } from '../app';
 import { renderMemory, type DoorbellSpec } from '../memory';
 import {
   createProxyDocument,
@@ -123,8 +134,26 @@ export type Realm = ReactRealm | ImperativeRealm;
 
 const isImperativeRealm = (r: Realm): r is ImperativeRealm => r.imperative !== undefined;
 
-/** realm key → mounted realm. Production workers hold exactly one entry. */
+/** realm key → mounted realm. Production workers hold one entry per island
+ *  mounted into them — more than one only when islands share a client. */
 const realms = new Map<string, Realm>();
+
+/**
+ * Module-level app registry — one module graph = one registry (see the
+ * header note). defineIslandWorker registers its whole `apps` map;
+ * defineRealmWorker registers its single app.
+ */
+const APP_REGISTRY = new Map<string, IslandApp>();
+
+/**
+ * Resolve a mount's registry name → app. A single-entry registry is
+ * name-blind: a realm worker mounts its one app whatever realm key arrives
+ * ('main@1' from an un-named <Island/>, 'charts@2' from a stamped one), so
+ * `app` is genuinely optional on the shell side for 1:1 workers.
+ */
+const resolveApp = (name: string): IslandApp | undefined =>
+  APP_REGISTRY.get(name) ??
+  (APP_REGISTRY.size === 1 ? APP_REGISTRY.values().next().value : undefined);
 
 const newPid = (): string => `w-${Math.random().toString(36).slice(2, 8)}`;
 
@@ -137,24 +166,12 @@ const appNameOf = (realm: string): string => {
 /**
  * The worker-side half of an island — registers mount / updateProps /
  * dispatch / flush / whoami on the worker's task surface and wires the
- * doorbell contract. Everything except the app registry is handled here.
+ * doorbell contract. Shared by both entry points; they differ only in what
+ * they register.
  */
-export function defineIslandWorker(
-  options: DefineIslandWorkerOptions,
+function createIslandRuntime(
+  sharedMemory: SharedMemory<DoorbellSpec> = renderMemory,
 ): WorkerDefinition<DoorbellSpec, IslandWorkerMethods> {
-  const { apps } = options;
-  // A stamped app mounted under a DIFFERENT key means <Island app={Comp}>
-  // resolves a name the registry doesn't hold — flag it at definition time.
-  for (const [key, app] of Object.entries(apps)) {
-    const stamped = (app as { islandAppName?: unknown }).islandAppName;
-    if (typeof stamped === 'string' && stamped !== '' && stamped !== key) {
-      console.warn(
-        `[defineIslandWorker] app registered as "${key}" but stamped "${stamped}" — ` +
-          `component-reference mounts resolve "${stamped}" and will fail. Fix the key or the stamp.`,
-      );
-    }
-  }
-  const sharedMemory = options.sharedMemory ?? renderMemory;
   // Point bumpOpsVersion at the declared contract (it's the same object as
   // renderMemory unless a custom doorbell instance was passed).
   setDoorbellContract(sharedMemory);
@@ -170,7 +187,7 @@ export function defineIslandWorker(
   // first realm's tree. Imperative realms skip the reconciler entirely —
   // their "host environment" is the proxy DOM, and build() emits ops itself.
   function createRealm(key: string, pid: string): Realm {
-    const app = apps[appNameOf(key)];
+    const app = resolveApp(appNameOf(key));
     if (isImperative(app)) {
       return {
         key,
@@ -254,10 +271,10 @@ export function defineIslandWorker(
        * replays cleanly onto an emptied root. The pid is kept across remounts.
        */
       mount(realm: string, props: Record<string, unknown> = {}): Op[] {
-        const App = apps[appNameOf(realm)];
+        const App = resolveApp(appNameOf(realm));
         if (App === undefined) {
           throw new Error(
-            `mount: unknown app "${realm}" — registry has: ${Object.keys(apps).join(', ')}`,
+            `mount: unknown app "${realm}" — registry has: ${[...APP_REGISTRY.keys()].join(', ')}`,
           );
         }
 
@@ -322,7 +339,7 @@ export function defineIslandWorker(
         // root and re-run build(props) on a fresh proxy document. Documented
         // as the honest semantics; fine for widgets, not for huge trees.
         if (isImperativeRealm(mounted)) return rebuildImperative(mounted, props);
-        const App = apps[mounted.app] as (props: Record<string, unknown>) => ReactElement;
+        const App = resolveApp(mounted.app) as (props: Record<string, unknown>) => ReactElement;
         return syncCommit(mounted, () => {
           mounted.reconciler.updateContainer(createElement(App, props), mounted.container, null, null);
         });
@@ -396,6 +413,27 @@ export function defineIslandWorker(
       },
 
       /**
+       * Tear down ONE realm while the worker keeps serving its others —
+       * the multi-island-per-worker counterpart to process death: unmounts
+       * the React tree (or disposes the imperative realm's proxy document),
+       * drops the realm entry, and returns the detach op batch. Stale
+       * handler dispatches then no-op via the realms.get() guard.
+       */
+      unmount(realm: string): Op[] {
+        const mounted = realms.get(realm);
+        if (mounted === undefined) return [];
+        realms.delete(realm);
+        if (isImperativeRealm(mounted)) {
+          // Disposing the doc unwinds its DOM shim and drops its handlers.
+          runInRealm(realm, () => mounted.imperative.doc.dispose());
+          return [{ t: 'clear' }];
+        }
+        return syncCommit(mounted, () => {
+          mounted.reconciler.updateContainer(null, mounted.container, null, null);
+        });
+      },
+
+      /**
        * Drain one realm's ops committed outside a sync task — passive effects
        * (useEffect), timers, async setState. The pool protocol has no push
        * channel, so the main thread polls this (or the doorbell pushes it).
@@ -422,4 +460,52 @@ export function defineIslandWorker(
       },
     },
   });
+}
+
+/**
+ * Registry worker — one worker script serving a whole `apps` map. Islands
+ * mount by name (`<Island app="charts"/>` or a stamped component
+ * reference), and several islands may share one client/worker when you
+ * actually want co-located realms. The worker's bundle carries every app
+ * in the registry.
+ */
+export function defineIslandWorker(
+  options: DefineIslandWorkerOptions,
+): WorkerDefinition<DoorbellSpec, IslandWorkerMethods> {
+  // A stamped app mounted under a DIFFERENT key means <Island app={Comp}>
+  // resolves a name the registry doesn't hold — flag it at definition time.
+  for (const [key, app] of Object.entries(options.apps)) {
+    const stamped = islandAppNameOf(app);
+    if (stamped !== undefined && stamped !== key) {
+      console.warn(
+        `[defineIslandWorker] app registered as "${key}" but stamped "${stamped}" — ` +
+          `component-reference mounts resolve "${stamped}" and will fail. Fix the key or the stamp.`,
+      );
+    }
+    APP_REGISTRY.set(key, app);
+  }
+  return createIslandRuntime(options.sharedMemory);
+}
+
+/**
+ * Realm worker — one worker script serving ONE app (1:1). The simple
+ * topology: the worker's bundle carries only this app's dependencies
+ * (imperative apps ship with no React/reconciler at all), and the shell
+ * mounts it namelessly — `app` can be omitted, or any name resolves to the
+ * sole registered app.
+ *
+ * ```ts
+ * // charts.worker.ts
+ * export const chartsWorker = defineRealmWorker(ChartsApp);
+ * ```
+ */
+export function defineRealmWorker(
+  app: IslandApp,
+  options?: Pick<DefineIslandWorkerOptions, 'sharedMemory'>,
+): WorkerDefinition<DoorbellSpec, IslandWorkerMethods> {
+  // The explicit stamp or 'main' — NOT islandAppNameOf: its fn.name fallback
+  // is how 'imperative' (the property name) leaks in as a bogus key.
+  const stamped = (app as { islandAppName?: unknown }).islandAppName;
+  APP_REGISTRY.set(typeof stamped === 'string' && stamped !== '' ? stamped : 'main', app);
+  return createIslandRuntime(options?.sharedMemory);
 }

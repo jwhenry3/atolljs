@@ -13,7 +13,12 @@ import type { IslandHandle } from '../src/index';
 import { echoApp } from './fixtures/echo.worker';
 
 vi.stubGlobal('Worker', InProcessWorker);
-InProcessWorker.handlerModules = [() => import('./fixtures/echo.worker')];
+// In-process workers share one module graph — both worker entries register
+// into it (the echo registry app and the solo realm worker's 'main').
+InProcessWorker.handlerModules = [
+  () => import('./fixtures/echo.worker'),
+  () => import('./fixtures/solo.worker'),
+];
 
 (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -31,6 +36,8 @@ beforeAll(async () => {
 
 const renderWorker = () =>
   new Worker(new URL('./fixtures/echo.worker.ts', import.meta.url), { type: 'module' });
+const soloWorker = () =>
+  new Worker(new URL('./fixtures/solo.worker.ts', import.meta.url), { type: 'module' });
 
 /** A typed component handle — proves `props` infers from the reference's own
  *  signature; the registry's 'echo' app is what actually renders. */
@@ -163,6 +170,67 @@ describe('worker-loaded component proxies', () => {
     });
   });
 
+  it('islandComponent() mounts a realm worker namelessly', async () => {
+    // 1:1 topology — no registry key, no app prop: the worker's single
+    // registered app ('main') is the whole contract.
+    const Solo = islandComponent<{ label?: string }>();
+    const host = realDoc.createElement('div');
+    realDoc.body.appendChild(host);
+
+    const root = createRoot(host);
+    await act(async () => {
+      root.render(<Solo worker={soloWorker} label="nameless mount" />);
+    });
+
+    await vi.waitFor(() =>
+      expect(host.querySelector('.solo')?.textContent).toBe('nameless mount'),
+    );
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('a shared client mounts two realms into one worker — teardown is ref-counted', async () => {
+    const { connectIslandWorker } = await import('@jwhenry123/mesh-worker-dom');
+    const client = connectIslandWorker({ worker: soloWorker });
+    const before = InProcessWorker.created.length;
+
+    const Solo = islandComponent<{ label?: string }>('main');
+    const hostA = realDoc.createElement('div');
+    const hostB = realDoc.createElement('div');
+    realDoc.body.append(hostA, hostB);
+
+    const rootA = createRoot(hostA);
+    const rootB = createRoot(hostB);
+    await act(async () => {
+      rootA.render(<Solo client={client} label="realm A" />);
+      rootB.render(<Solo client={client} label="realm B" />);
+    });
+
+    // ONE worker spawned for both islands — two realms in the same thread.
+    await vi.waitFor(() => {
+      expect(hostA.querySelector('.solo')?.textContent).toBe('realm A');
+      expect(hostB.querySelector('.solo')?.textContent).toBe('realm B');
+    });
+    const workers = InProcessWorker.created.slice(before);
+    expect(workers).toHaveLength(1);
+
+    // First unmount: realm A hands back to the shared worker, which LIVES.
+    await act(async () => {
+      rootA.unmount();
+    });
+    expect(workers[0].terminated).toBe(false);
+    await vi.waitFor(() =>
+      expect(hostB.querySelector('.solo')?.textContent).toBe('realm B'),
+    );
+
+    // Last island to leave terminates the worker.
+    await act(async () => {
+      rootB.unmount();
+    });
+    expect(workers[0].terminated).toBe(true);
+  });
+
   it('lazyIsland suspends on the loader, then mounts by stamped reference', async () => {
     const LazyEcho = lazyIsland(() => Promise.resolve({ default: TypedEcho }));
     const host = realDoc.createElement('div');
@@ -184,6 +252,32 @@ describe('worker-loaded component proxies', () => {
     );
     expect(host.querySelector('.lazy-fallback')).toBeNull();
 
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('lazyIsland resolves a { app, worker } contract module — the island carries its own worker', async () => {
+    // The 1:1 contract-module convention: one import gives the app AND the
+    // worker factory, so the call site passes nothing but props.
+    const LazySolo = lazyIsland(() =>
+      Promise.resolve({ app: TypedEcho, worker: renderWorker }),
+    );
+    const host = realDoc.createElement('div');
+    realDoc.body.appendChild(host);
+
+    const root = createRoot(host);
+    await act(async () => {
+      root.render(
+        <Suspense fallback={<div className="lazy-fallback">loading…</div>}>
+          <LazySolo text="contract worker" />
+        </Suspense>,
+      );
+    });
+
+    await vi.waitFor(() =>
+      expect(host.querySelector('.echo')?.textContent).toBe('contract worker'),
+    );
     await act(async () => {
       root.unmount();
     });

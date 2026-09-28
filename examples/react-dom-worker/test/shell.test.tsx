@@ -30,7 +30,13 @@ vi.mock('react-dom/client', async () => {
 });
 
 vi.stubGlobal('Worker', InProcessWorker);
-InProcessWorker.handlerModules = [() => import('../src/worker/render.worker')];
+// The shell mounts the registry worker AND the two realm workers — all
+// entries register into the shared in-process module graph.
+InProcessWorker.handlerModules = [
+  () => import('../src/worker/render.worker'),
+  () => import('../src/worker/vanilla.worker'),
+  () => import('../src/worker/map.worker'),
+];
 
 const waitFor = async (fn: () => unknown, timeoutMs = 15_000): Promise<void> => {
   const start = Date.now();

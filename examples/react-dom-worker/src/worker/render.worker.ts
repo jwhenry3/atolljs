@@ -1,17 +1,16 @@
 /**
- * Worker entry — the whole island runtime comes from the package; this file
- * only declares WHICH apps the registry holds. Every island's worker runs
- * this same script; `mount(realm, props)` picks an app by name and renders
- * it into the realm's own root (its own reconciler, op queue, and pid).
+ * Registry worker — the multi-app topology: one script, four React apps.
+ * `mount(realm, props)` picks a component out of `apps` and renders it into
+ * the realm's own root (its own reconciler, op queue, and pid). Two islands
+ * can even share ONE client to co-locate their realms in a single worker —
+ * the shell's two data-table islands do exactly that.
  *
- * Registry shapes: a React component (reconciled), or
- * `{ imperative: (doc, props) => void }` — realms with no React at all,
- * driven entirely through the worker-side proxy DOM.
+ * Registry shape here: React components (reconciled). The two imperative
+ * islands live in their own realm workers instead (map.worker.ts,
+ * vanilla.worker.ts) — 1:1 scripts that ship zero React.
  */
 import { defineIslandWorker } from '@jwhenry123/mesh-worker-dom/worker';
 import { ChartsApp, ControlsApp, StatsApp, TableApp } from './apps';
-import { mapApp } from './map';
-import { vanillaApp } from './vanilla';
 
 // Every value is the islandApp-stamped definition — the shell can mount by
 // component reference (lazyIsland) and a stamp/key drift warns here.
@@ -21,8 +20,6 @@ export const renderWorker = defineIslandWorker({
     'data-table': TableApp,
     stats: StatsApp,
     charts: ChartsApp,
-    vanilla: vanillaApp,
-    map: mapApp,
   },
 });
 

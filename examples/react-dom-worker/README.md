@@ -1,4 +1,4 @@
-# React Worker Islands — one worker script, N React trees
+# React Worker Islands — registry + realm workers, N React trees
 
 A standalone proof that **React's render logic needs no DOM** — scaled out to
 islands. The real `react-reconciler@0.34` (the same package react-dom is built
@@ -9,33 +9,40 @@ flushed batch, and the main thread's only job is to replay the ops as real DOM
 mutations.
 
 **The whole pattern lives in `@jwhenry123/mesh-worker-dom`** — this example is
-the consumer: its worker entry is a ~20-line `defineIslandWorker({ apps })`
-call, its shell calls `connectIslandWorker({ worker })` + `mountIsland()`, and
-its imperative island demos the worker-side proxy DOM plus the global
-`document`/`window` shim.
+the consumer: its worker entries are ~20-line `defineIslandWorker({ apps })` /
+`defineRealmWorker(app)` calls, its shell calls `connectIslandWorker({ worker })`
++ `mountIsland()`, and its imperative island demos the worker-side proxy DOM
+plus the global `document`/`window` shim.
 
-**The shell + islands model — worker-hosted microfrontends:** the page
-mounts several independent islands. Each island is its own
-`connectWorker` client — one pool, **poolSize pinned to 1**, one worker —
-running the **same worker script**. The worker exposes an app registry
-(`controls` / `data-table` / `stats` / `vanilla` / `map` / `charts`);
-`mount(app, props)` picks what the island renders. Registry entries are either React
-components — reconciled into the realm's own root — or
-`{ imperative: (doc, props) => void }` — apps built on the worker-side
-**proxy DOM** with no React at all (see below). There is **no React on the
-main thread**: `src/island.ts` is a dumb op applier plus an event sink per
-island. (If your shell *is* a React app, `@jwhenry123/mesh-react-island`
-exports `<Island/>` — the same mount/updateProps/destroy lifecycle as a
-component, and `app` can take the `islandApp`-stamped component itself —
-`<Island app={ChartsApp} props={{ width }}/>` — for inferred props.)
+**The shell + islands model — worker-hosted microfrontends, two worker
+topologies.** The demo mixes them deliberately:
 
-**A microfrontend is not limited to one instance.** Islands are identified
-by their worker, not their app name — mount `'data-table'` twice and you get
-two islands in two different workers, each with its own props and content
-(the demo does exactly this: the second `data-table` island starts filtered
-to `eu-central`, descending). Mounting the same app *inside one worker*
-would collide on the realm key and remount instead — but in production each
-worker only ever hosts one realm, so that collision can't happen.
+- **Registry worker** (`defineIslandWorker({ apps })`) — `render.worker.ts`
+  serves the React apps (`controls` / `data-table` / `stats` / `charts`) by
+  name. Islands each get a `connectWorker` client — one pool, **poolSize
+  pinned to 1**, one worker. The React shell goes further: the two
+  `data-table` islands share ONE client, so both realms live in a single
+  worker — separate reconcilers, op queues, and pids in one OS thread —
+  and `destroy()` unmounts a realm without killing its sibling's worker.
+- **Realm workers** (`defineRealmWorker(app)`) — `map.worker.ts` and
+  `vanilla.worker.ts` are the 1:1 form: one script, one app, mounted
+  namelessly (a single-app worker resolves its sole app whatever name is
+  asked). Their bundles carry only that app's dependencies — no recharts,
+  no other React apps.
+
+Registry entries are either React components — reconciled into the realm's
+own root — or `{ imperative: (doc, props) => void }` — apps built on the
+worker-side **proxy DOM** with no React usage (see below). There is **no
+React on the main thread of `index.html`**: `src/island.ts` is a dumb op
+applier plus an event sink per island. (If your shell *is* a React app,
+`@jwhenry123/mesh-react-island` exports `<Island/>` — the same
+mount/updateProps/destroy lifecycle as a component — see `react-shell.html`.)
+
+**A microfrontend is not limited to one instance.** Realm keys are
+`app@N` — minted per island — so `'data-table'` mounts twice with
+independent props and content, whether into separate workers (the vanilla
+shell) or the same one (the React shell's shared client). `unmount` on the
+wire tears a realm down without touching its siblings.
 `connectIslandWorker({ worker, ...options })` takes the worker factory (the
 package can't know where your entry lives) while `poolSize`/`sharedMemory`
 stay island-internal — `poolSize: 1` is pinned after the spread, so pooling

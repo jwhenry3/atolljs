@@ -23,9 +23,10 @@ export function ReactWorkerIslands() {
 
       <h2>Live demo — React shell</h2>
       <p>
-        Seven islands, each in its own worker — two share the same app, one runs
-        zero React (imperative proxy DOM), one runs real Leaflet 1.9, one runs real
-        recharts. Every mount below is a <code>lazyIsland</code> proxy wrapped in{' '}
+        Seven islands across three topologies — the React apps ride a registry
+        worker (the two data-tables share ONE client, two realms in one worker),
+        the imperative islands get dedicated realm workers bundling only their
+        own deps. Every mount below is a <code>lazyIsland</code> proxy wrapped in{' '}
         <code>&lt;Suspense&gt;</code>.
       </p>
       <DemoFrame
@@ -83,8 +84,16 @@ export function ReactWorkerIslands() {
             <td><code>defineIslandWorker</code></td>
             <td><code>defineIslandWorker({'{'} apps {'}'})</code></td>
             <td>
-              The worker entry — registry of mountable apps, one reconciler + op
-              queue + realm per island.
+              Registry worker — one script serving a whole apps map; islands
+              mount by name and several may share one client/worker.
+            </td>
+          </tr>
+          <tr>
+            <td><code>defineRealmWorker</code></td>
+            <td><code>defineRealmWorker(app)</code></td>
+            <td>
+              Realm worker — the 1:1 topology: one script, one app, mounted
+              namelessly. Its bundle carries only that app's dependencies.
             </td>
           </tr>
           <tr>
@@ -115,12 +124,16 @@ export function ReactWorkerIslands() {
         code={shellSource}
       />
 
-      <h2>The worker side — one registry, N realms</h2>
+      <h2>The worker side — two topologies</h2>
       <p>
-        The same worker script hosts every island; each island is its own worker
-        (poolSize pinned to 1 — one reconciled tree lives in one worker's memory).
-        Every registry value is stamped, so shell-side component references resolve
-        to the right key and drift warns at definition time.
+        <b>Registry workers</b> (<code>defineIslandWorker</code>) serve a whole
+        apps map from one script — the React islands mount by name, and the two
+        data-table islands share ONE client so both realms live in a single
+        worker (separate reconcilers, op queues, and pids — one OS thread).
+        <b>Realm workers</b> (<code>defineRealmWorker</code>) are the 1:1 form —
+        one script per app, mounted namelessly, bundling only that app's
+        dependencies (map/vanilla shed recharts and the other React apps; the
+        shared worker chunk still carries the reconciler).
       </p>
       <CodeBlock
         file="examples/react-dom-worker/src/worker/render.worker.ts"

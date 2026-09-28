@@ -184,6 +184,13 @@ export type IslandWorkerMethods = {
   setSize(realm: string, width: number, height: number): Op[];
   /** Drain ops committed outside a task (passive effects, timers). */
   flush(realm: string): Op[];
+  /**
+   * Tear down one realm — unmounts its tree / disposes its proxy document
+   * and drops the realm, leaving the worker alive for its other realms.
+   * Returned ops are the detach batch (the driver may skip applying them if
+   * the island element is already gone).
+   */
+  unmount(realm: string): Op[];
   /** The mounted realm's random id — the island's "worker pid" badge. */
   whoami(realm: string): string;
 };

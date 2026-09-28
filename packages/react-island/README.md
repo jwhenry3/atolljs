@@ -100,3 +100,27 @@ path splits them out, and `islandComponent` never imports them at all.
 `islandComponent` overloads: `islandComponent<P>('name')` for the
 type-contract form above, or `islandComponent(StampedApp)` to infer `P`
 from a stamped reference the shell already has.
+
+## Worker topologies — registry, realm, shared client
+
+Two worker entry points, mixable in one app:
+
+```ts
+// render.worker.ts — REGISTRY worker: one script, many named apps
+export const renderWorker = defineIslandWorker({ apps: { charts: ChartsApp, table: TableApp } });
+
+// map.worker.ts — REALM worker: one script, ONE app (1:1)
+export const mapWorker = defineRealmWorker(mapApp);
+```
+
+A realm worker's app resolves regardless of the requested registry name, so
+the shell mounts it **namelessly** — `<Island worker={mapWorker}/>` or
+`islandComponent<P>()` with no key — and its bundle carries only that app's
+dependencies. `lazyIsland` accepts the worker module itself as the contract:
+`lazyIsland(() => import('./worker/map.worker'))` resolves `{ app, worker }`
+so the island carries its own worker.
+
+For multi-island-per-worker, share a client: `client={connectIslandWorker({ worker })}`
+mounts each island's realm into the SAME worker (separate reconcilers, op
+queues, and pids — one OS thread). `destroy()` on one island unmounts just
+its realm; the worker dies with the last island to leave.

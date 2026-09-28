@@ -24,7 +24,7 @@ vi.mock('react/jsx-runtime', async () => {
 });
 
 vi.stubGlobal('Worker', InProcessWorker);
-InProcessWorker.handlerModules = [() => import('../src/worker/render.worker')];
+InProcessWorker.handlerModules = [() => import('../src/worker/map.worker')];
 
 let connectIslandWorker: typeof import('@jwhenry123/mesh-worker-dom').connectIslandWorker;
 let mountIsland: typeof import('@jwhenry123/mesh-worker-dom').mountIsland;
@@ -35,7 +35,7 @@ beforeAll(async () => {
 const islandClient = () =>
   connectIslandWorker({
     worker: () =>
-      new Worker(new URL('../src/worker/render.worker.ts', import.meta.url), { type: 'module' }),
+      new Worker(new URL('../src/worker/map.worker.ts', import.meta.url), { type: 'module' }),
   });
 
 const fire = (el: Element, event: Event): void => {

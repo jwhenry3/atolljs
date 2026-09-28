@@ -3,14 +3,14 @@
  *
  * Seven islands render on this page, each inside its OWN Web Worker (one
  * connectWorker client per island, pooling disabled — see island.ts for why
- * pooling can't go wider). Four run reconciled React trees ('charts' is real
- * recharts rendering namespaced SVG); 'vanilla' is a purely IMPERATIVE app
- * (no React in that worker at all — its DOM writes go through the worker-side
- * proxy DOM); and 'map' is a REAL unmodified Leaflet 1.9 running on the proxy
- * DOM + DOM shim. Two islands run the SAME 'data-table'
- * app — a microfrontend isn't limited to one instance; each island is its
- * own worker, so the same app can mount as many times as you like with
- * different props. The shell:
+ * pooling can't go wider). Four run reconciled React trees out of the
+ * registry worker ('charts' is real recharts rendering namespaced SVG);
+ * 'vanilla' and 'map' run on dedicated REALM workers (defineRealmWorker —
+ * the 1:1 topology): 'vanilla' is a purely IMPERATIVE app on the worker-side
+ * proxy DOM, 'map' a REAL unmodified Leaflet 1.9 on proxy DOM + DOM shim —
+ * and neither worker's bundle carries the React apps. Two islands run the
+ * SAME 'data-table' app — a microfrontend isn't limited to one instance.
+ * The shell:
  *
  *   - creates the layout + per-island containers and badges,
  *   - mounts one registry app per island via mountIsland(),
@@ -37,6 +37,12 @@ import 'leaflet/dist/leaflet.css';
 /** One fresh worker per island — poolSize is pinned to 1 inside connectIslandWorker. */
 const islandWorker = (): Worker =>
   new Worker(new URL('./worker/render.worker.ts', import.meta.url), { type: 'module' });
+// The imperative islands run dedicated realm workers (defineRealmWorker —
+// 1:1 script per app): their bundles carry no React at all.
+const vanillaWorker = (): Worker =>
+  new Worker(new URL('./worker/vanilla.worker.ts', import.meta.url), { type: 'module' });
+const mapWorker = (): Worker =>
+  new Worker(new URL('./worker/map.worker.ts', import.meta.url), { type: 'module' });
 
 const rootEl = document.getElementById('root');
 if (!rootEl) throw new Error('#root missing from index.html');
@@ -194,7 +200,7 @@ async function main(): Promise<void> {
   // it's build(doc) over the worker-side proxy DOM. Mount, events, and emit
   // all ride the same protocol; the worker just holds no React.
   const vanilla = await mountIsland({
-    client: connectIslandWorker({ worker: islandWorker }),
+    client: connectIslandWorker({ worker: vanillaWorker }),
     el: $('island-vanilla'),
     app: 'vanilla',
     props: { title: 'vanilla island — imperative proxy DOM, zero React in this worker' },
@@ -214,7 +220,7 @@ async function main(): Promise<void> {
   // drag-pan and wheel zoom all work through the op stream; the only thing
   // shell-side is the stylesheet (imported above) and tile <img> loading.
   const map = await mountIsland({
-    client: connectIslandWorker({ worker: islandWorker }),
+    client: connectIslandWorker({ worker: mapWorker }),
     el: $('island-map'),
     app: 'map',
     onEvent: (name, payload) => {

@@ -42,7 +42,13 @@ vi.mock('react/jsx-runtime', async () => {
 });
 
 vi.stubGlobal('Worker', InProcessWorker);
-InProcessWorker.handlerModules = [() => import('../src/worker/render.worker')];
+// In-process workers share one module graph — every worker entry registers
+// into it (defineIslandWorker's registry + the realm workers' single apps).
+InProcessWorker.handlerModules = [
+  () => import('../src/worker/render.worker'),
+  () => import('../src/worker/vanilla.worker'),
+  () => import('../src/worker/map.worker'),
+];
 
 let connectIslandWorker: typeof import('@jwhenry123/mesh-worker-dom').connectIslandWorker;
 let mountIsland: typeof import('@jwhenry123/mesh-worker-dom').mountIsland;

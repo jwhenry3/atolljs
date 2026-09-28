@@ -60,9 +60,19 @@ shell-side component reference resolves to the wire key, and
 
 - **poolSize is pinned to 1.** One tree lives in one worker's memory —
   scale out with more islands (`connectIslandWorker` per island), not wider pools.
+- **Two worker entries.** `defineIslandWorker({ apps })` is a registry —
+  one script serves many named apps. `defineRealmWorker(app)` is the 1:1
+  form — one script, one app, bundled with only that app's dependencies and
+  mounted namelessly (`mountIsland({ client, el })`, no `app`). A
+  single-registered-app worker resolves its sole app regardless of the
+  requested name.
 - **Realm keys** are `app` or `app@N`; `mountIsland` mints them, the same app
   can mount in many islands at once, and `mount`/`updateProps`/`dispatch`/
-  `flush`/`whoami` all take the realm first.
+  `flush`/`unmount`/`whoami` all take the realm first.
+- **Clients can be shared.** Several `mountIsland`s into ONE
+  `connectIslandWorker` co-locate their realms in one worker (multi-island-
+  per-worker). `destroy()` unmounts just that realm via `unmount`; the
+  worker terminates when its last island leaves.
 - **`emit(name, payload)`** is the island→shell channel — call inside handlers
   or commit-phase effects while a task holds the realm. From a library
   callback that fires on a timer or promise (no realm active), wrap it:

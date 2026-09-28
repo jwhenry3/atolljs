@@ -9,7 +9,7 @@
  * channel), `runInRealm` (realm scoping for worker-initiated work), `Slot`
  * (transclusion), `createProxyDocument`/`installDomShim` (imperative DOM).
  */
-export { defineIslandWorker } from './defineIslandWorker';
+export { defineIslandWorker, defineRealmWorker } from './defineIslandWorker';
 export type {
   DefineIslandWorkerOptions,
   ImperativeIslandApp,

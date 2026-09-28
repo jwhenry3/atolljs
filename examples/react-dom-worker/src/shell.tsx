@@ -20,14 +20,21 @@ import { useEffect, useMemo, useRef, useState, Suspense } from 'react';
 import type { ReactElement, ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { lazyIsland } from '@jwhenry123/mesh-react-island';
+import { connectIslandWorker } from '@jwhenry123/mesh-worker-dom';
 import type { IslandHandle, Mode } from '@jwhenry123/mesh-worker-dom';
 // Leaflet's stylesheet is shell-side: the worker fabricates the DOM Leaflet
 // builds but CSS was always the shell's job.
 import 'leaflet/dist/leaflet.css';
 
-/** One fresh worker per island — poolSize is pinned to 1 inside connectIslandWorker. */
+/** The registry worker — one script serving all four React apps. */
 const renderWorker = (): Worker =>
   new Worker(new URL('./worker/render.worker.ts', import.meta.url), { type: 'module' });
+// The imperative islands run dedicated realm workers (defineRealmWorker —
+// the 1:1 topology): their bundles carry no React or reconciler at all.
+const vanillaWorker = (): Worker =>
+  new Worker(new URL('./worker/vanilla.worker.ts', import.meta.url), { type: 'module' });
+const mapWorker = (): Worker =>
+  new Worker(new URL('./worker/map.worker.ts', import.meta.url), { type: 'module' });
 
 /*
  * Every island is a lazyIsland proxy — the worker app types like a LOCAL
@@ -132,6 +139,12 @@ export function Shell({ worker = renderWorker }: { worker?: () => Worker }): Rea
   const modeRef = useRef(mode);
   modeRef.current = mode;
 
+  // MULTI-ISLAND-PER-WORKER: one client = one worker. Both data-table
+  // islands mount their realms into it ('data-table@N' keys — separate
+  // reconcilers, op queues, and pids in ONE OS thread). The complex-
+  // architecture counterpoint to the realm workers map/vanilla run on.
+  const tableClient = useMemo(() => connectIslandWorker({ worker }), [worker]);
+
   const ready = (key: string) => (h: IslandHandle): void => {
     handles.current.set(key, h);
     h.setMode(modeRef.current); // doorbell binds lazily — set on ready
@@ -154,7 +167,8 @@ export function Shell({ worker = renderWorker }: { worker?: () => Worker }): Rea
     <>
       <h1>React islands — React shell edition</h1>
       <p style={{ font: '12px monospace', color: '#9aa4b2', marginTop: -8 }}>
-        same workers, same registry — the shell is React + <code>{'<Island/>'}</code>.{' '}
+        registry worker + realm workers + one shared client — the shell is React +{' '}
+        <code>{'<Island/>'}</code>.{' '}
         <a href="/" style={{ color: '#7fb6ff' }}>framework-free shell →</a>
       </p>
       <div id="transport-bar">
@@ -203,10 +217,10 @@ export function Shell({ worker = renderWorker }: { worker?: () => Worker }): Rea
         </Suspense>
       </IslandPanel>
 
-      <IslandPanel title="app: data-table" badge={pids.table}>
+      <IslandPanel title="app: data-table (shares a worker with the second instance)" badge={pids.table}>
         <Suspense fallback={loading}>
         <TableIsland
-          worker={renderWorker}
+          client={tableClient}
           // The mediation IS this line — controls' emits land as props here.
           filter={filter}
           desc={desc}
@@ -224,12 +238,12 @@ export function Shell({ worker = renderWorker }: { worker?: () => Worker }): Rea
       </IslandPanel>
 
       <IslandPanel
-        title="app: data-table (second instance — same microfrontend, different worker + props)"
+        title="app: data-table (second realm — SAME worker as the first, one client)"
         badge={pids.table2}
       >
         <Suspense fallback={loading}>
         <TableIsland
-          worker={renderWorker}
+          client={tableClient}
           filter="eu-central"
           desc
           containerProps={{ className: 'island-root', id: 'island-table-2' }}
@@ -260,12 +274,12 @@ export function Shell({ worker = renderWorker }: { worker?: () => Worker }): Rea
       </IslandPanel>
 
       <IslandPanel
-        title="app: vanilla (imperative proxy DOM — no React in this worker)"
+        title="app: vanilla (realm worker — its bundle has no React at all)"
         badge={pids.vanilla}
       >
         <Suspense fallback={loading}>
           <VanillaIsland
-            worker={renderWorker}
+            worker={vanillaWorker}
             title="vanilla island — imperative proxy DOM, zero React in this worker"
             containerProps={{ className: 'island-root' }}
             onReady={ready('vanilla')}
@@ -307,12 +321,12 @@ export function Shell({ worker = renderWorker }: { worker?: () => Worker }): Rea
       </IslandPanel>
 
       <IslandPanel
-        title="app: map (real Leaflet 1.9 — unmodified — on the proxy DOM)"
+        title="app: map (realm worker — real Leaflet 1.9, no React in the bundle)"
         badge={pids.map}
       >
         <Suspense fallback={loading}>
           <MapIsland
-            worker={renderWorker}
+            worker={mapWorker}
             containerProps={{ className: 'island-root', id: 'island-map' }}
             onReady={ready('map')}
             onActivity={bump}

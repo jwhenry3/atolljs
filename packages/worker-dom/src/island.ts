@@ -77,8 +77,12 @@ export interface MountIslandOptions {
   client: IslandClient;
   /** Container element the island's ops are applied into. */
   el: HTMLElement;
-  /** Registry app name — a key of the `apps` map passed to defineIslandWorker. */
-  app: string;
+  /**
+   * Registry app name — a key of the `apps` map passed to
+   * `defineIslandWorker`. Optional against a realm worker
+   * (`defineRealmWorker`), which resolves its single app regardless.
+   */
+  app?: string;
   props?: Record<string, unknown>;
   /** Island → shell channel: receives every `emit` op the app produces. */
   onEvent?: (name: string, payload: unknown) => void;
@@ -115,7 +119,12 @@ export interface IslandHandle {
   setMode(mode: Mode): void;
   /** Manual flush — drains ops committed outside task calls. */
   flush(): Promise<void>;
-  /** Stop transport timers/subscriptions and terminate the worker. */
+  /**
+   * Stop transport timers/subscriptions and release the realm. When this
+   * island owns the client the worker terminates; when the client is shared
+   * (several islands mounted into it) the realm unmounts and the worker
+   * lives on for its siblings — it dies with the last island to leave.
+   */
   destroy(): void;
 }
 
@@ -135,17 +144,28 @@ const WHEEL_FAMILY = /^(wheel|mousewheel|DOMMouseScroll)$/;
 /** Per-island realm counter — see the realm key note in mountIsland. */
 let islandSeq = 0;
 
+/**
+ * Live island count per client — a client is shared infrastructure when
+ * several islands mount into it (multi-island-per-worker). destroy() gives
+ * its realm back via `unmount`; only the LAST island to leave terminates
+ * the worker.
+ */
+const clientMounts = new WeakMap<object, number>();
+
 export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandle> {
-  const { client, el, app, onEvent, onActivity, slots } = opts;
+  const { client, el, onEvent, onActivity, slots } = opts;
   const props = opts.props ?? {};
+  // 'main' is the unnamed-island name — realm workers (defineRealmWorker)
+  // resolve their single app regardless of it.
+  const app = opts.app ?? 'main';
 
   // Realm key = 'app@N' — the instance suffix keeps each island's realm
-  // distinct even when several islands mount the SAME microfrontend. In
-  // production each worker holds one realm anyway so the suffix is
-  // inert, but under the in-process test one module plays every worker —
-  // without it, mounting 'data-table' twice would remount one shared realm
+  // distinct even when several islands mount the SAME microfrontend — in
+  // the same worker (shared client) or across workers. Without it, mounting
+  // 'data-table' twice into one worker would remount one shared realm
   // instead of giving each island its own (and they would share a pid).
   const realm = `${app}@${++islandSeq}`;
+  clientMounts.set(client, (clientMounts.get(client) ?? 0) + 1);
 
   /** instance id → live DOM node. Id 0 is the root container sentinel. */
   const nodes = new Map<number, Node>([[0, el]]);
@@ -576,6 +596,7 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
     mode = next;
     unsubscribe?.();
     unsubscribe = null;
+
     if (pollTimer !== null) {
       clearInterval(pollTimer);
       pollTimer = null;
@@ -658,7 +679,17 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
       resizeObserver?.disconnect();
       if (pollTimer !== null) clearInterval(pollTimer);
       if (sizeTimer !== null) clearTimeout(sizeTimer);
-      client.terminate();
+      const remaining = (clientMounts.get(client) ?? 1) - 1;
+      clientMounts.set(client, remaining);
+      if (remaining > 0) {
+        // The worker still serves sibling realms — hand this one back. The
+        // detach ops are irrelevant if our element is already gone, so the
+        // return batch is dropped. Best-effort: the realm map and its
+        // handlers release regardless.
+        void client.unmount(realm).catch(() => {});
+      } else {
+        client.terminate();
+      }
     },
   };
   return handle;
