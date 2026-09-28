@@ -17,6 +17,7 @@
  */
 
 import { createContext } from 'react';
+import { renderMemory } from '../memory';
 import type { Op, WireProps } from '../ops';
 
 /* ── Host instances ─────────────────────────────────────────────────────── */
@@ -154,7 +155,15 @@ export const hostConfig = {
   getRootHostContext: () => DEFAULT_HOST_CONTEXT,
   getChildHostContext: (parent: unknown) => parent,
   prepareForCommit: NULL,
-  resetAfterCommit: noop,
+  // The doorbell: every commit bumps opsVersion once — the main thread's
+  // observe() wakes (Atomics.waitAsync) and flushes the op queue, so commits
+  // made outside task calls (effects, timers, async setState) arrive as a
+  // push instead of waiting on a poll. Task-returned ops bump too; the
+  // follow-up flush just finds an empty queue.
+  resetAfterCommit: () => {
+    const bell = renderMemory.connector('opsVersion');
+    bell.write((bell.read() ?? 0) + 1);
+  },
 
   // Creation — emit ops
   createInstance: (

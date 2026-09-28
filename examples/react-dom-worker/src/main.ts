@@ -8,11 +8,13 @@
  * in one worker's memory. A second worker would emit ops for a different
  * tree with colliding instance ids, and the node map below would corrupt.
  */
-import { connectWorker } from '@jwhenry123/mesh/sdk';
+import { connectWorker, observe } from '@jwhenry123/mesh/sdk';
 import type { RenderWorker } from './worker/render.worker';
+import { renderMemory } from './memory';
 import { isEventRef, type EventPayload, type Op, type WireProps } from './ops';
 
 const client = connectWorker<RenderWorker>({
+  sharedMemory: renderMemory,
   worker: () =>
     new Worker(new URL('./worker/render.worker.ts', import.meta.url), { type: 'module' }),
   poolSize: 1,
@@ -174,21 +176,73 @@ function applyOp(op: Op): void {
   }
 }
 
+/* ── Transport: push (shared-memory doorbell) vs poll ───────────────────── */
+
+let opsApplied = 0;
+let flushCalls = 0;
+
 function applyOps(ops: Op[]): void {
+  opsApplied += ops.length;
+  renderStats();
   for (const op of ops) applyOp(op);
+}
+
+const doFlush = (): void => {
+  flushCalls++;
+  void client.flush().then(applyOps);
+};
+
+type Mode = 'push' | 'poll';
+let mode: Mode = 'push';
+let unsubscribe: (() => void) | null = null;
+let pollTimer: number | null = null;
+
+// The doorbell — opsVersion bumps once per commit in the worker;
+// observe() wakes via Atomics.waitAsync, so worker-initiated commits arrive
+// as a push instead of waiting on a poll tick.
+const doorbell = observe(renderMemory, 'opsVersion');
+
+function setMode(next: Mode): void {
+  mode = next;
+  unsubscribe?.();
+  unsubscribe = null;
+  if (pollTimer !== null) {
+    clearInterval(pollTimer);
+    pollTimer = null;
+  }
+  if (mode === 'push') unsubscribe = doorbell.subscribe(doFlush);
+  else pollTimer = window.setInterval(doFlush, 50);
+  renderStats();
+}
+
+/* ── Toolbar (real DOM — the worker's tree starts below it) ─────────────── */
+
+const bar = document.createElement('div');
+bar.style.cssText =
+  'display:flex;gap:16px;align-items:center;font:12px monospace;' +
+  'color:#9aa4b2;padding:8px 12px;border:1px solid #2a3340;border-radius:6px;margin-bottom:12px;';
+const pushBtn = document.createElement('button');
+const pollBtn = document.createElement('button');
+const stats = document.createElement('span');
+pushBtn.textContent = 'push (SAB doorbell)';
+pollBtn.textContent = 'poll (50ms)';
+pushBtn.onclick = () => setMode('push');
+pollBtn.onclick = () => setMode('poll');
+
+function renderStats(): void {
+  pushBtn.style.fontWeight = mode === 'push' ? '700' : '400';
+  pollBtn.style.fontWeight = mode === 'poll' ? '700' : '400';
+  stats.textContent = `sync: ${mode} · flush calls: ${flushCalls} · ops applied: ${opsApplied}`;
 }
 
 /* ── Boot ───────────────────────────────────────────────────────────────── */
 
 async function main(): Promise<void> {
-  applyOps(await client.mount());
+  bar.append('transport:', pushBtn, pollBtn, stats);
+  document.body.insertBefore(bar, rootEl);
 
-  // Anything committed outside a task call — passive effects, timers, async
-  // setState — waits in the worker's op queue until we ask. The pool
-  // protocol has no push channel, so poll flush() at a modest cadence.
-  setInterval(() => {
-    void client.flush().then(applyOps);
-  }, 50);
+  applyOps(await client.mount());
+  setMode('push');
 }
 
 void main();

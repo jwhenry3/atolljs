@@ -8,16 +8,20 @@ appends a serialized op to a queue; task methods return the flushed batch, and
 the main thread's only job is to replay the ops as real DOM mutations.
 
 There is **no React on the main thread** — `src/main.ts` is a dumb op applier.
-And there is **no shared memory** — every op and every event rides the pool's
-ordinary postMessage channel, which is the other point of the demo: shared
-memory in this sdk is opt-in, not a requirement.
+The ops themselves always ride postMessage; the toolbar at the top of the page
+switches how async commits get *noticed*: **push** uses a SharedArrayBuffer
+doorbell (`opsVersion` bumped per commit, `observe()` wakes via
+`Atomics.waitAsync`), **poll** uses a 50 ms `setInterval`. Push mode is why
+the dev server sends COOP/COEP — the poll path needs none of it, which is the
+message-only/shared-memory tradeoff made visible.
 
 ## Files
 
 - `src/worker/render.worker.ts` — `defineWorker` entry; owns the reconciler, exposes `mount`/`dispatch`/`flush`
 - `src/worker/hostConfig.ts` — the ~150-field host config: instances as `{ id, type, props }` records, ops emitted per hook
 - `src/worker/App.tsx` — demo app: memoized 2000-row list, filter input, sort toggle, counter, busy-loop compute
-- `src/main.ts` — main thread: `connectWorker` client + `applyOps` DOM driver
+- `src/main.ts` — main thread: `connectWorker` client + `applyOps` DOM driver + transport toggle
+- `src/memory.ts` — the doorbell contract: one `opsVersion` counter
 - `src/ops.ts` — the wire protocol
 
 ## Protocol
@@ -64,8 +68,13 @@ Main → worker:
   internals don't cross postMessage.
 - **Async updates need `flush()`.** `useEffect` state updates, timers, and
   promise continuations commit on the worker's own scheduler task; their ops
-  sit in the queue until asked for. `main.ts` polls `flush()` every 50 ms —
-  the pool protocol has no push channel yet.
+  sit in the queue until asked for. The pool protocol has no push channel, so
+  the doorbell pattern supplies it: `hostConfig.resetAfterCommit` bumps
+  `opsVersion` in shared memory, the main thread's `observe()` wakes on
+  `Atomics.waitAsync` and calls `flush()`. Toggle to **poll** in the toolbar
+  and the same flush runs on a 50 ms `setInterval` — watch the flush-call
+  counter to see what the doorbell saves (each poll tick is a round trip that
+  usually returns `[]`).
 - **Commits are synchronous only inside tasks.** `mount`/`dispatch` wrap work
   in `flushSyncFromReconciler`, which pins the update lane to sync and flushes
   in its `finally` — `updateContainer` alone in 0.34 only *schedules*.

@@ -19,12 +19,17 @@ export default defineConfig(({ command }) => ({
       { find: /^@jwhenry123\/mesh\/sdk\//, replacement: sdkRoot },
     ],
   },
-  // Message-only transport — NO SharedArrayBuffer, so NO cross-origin
-  // isolation (COOP/COEP) headers. The whole point of this example: ops
-  // ride postMessage; shared memory is opt-in, not required.
+  // The ops themselves still ride postMessage — but the push transport uses
+  // a SharedArrayBuffer doorbell (see src/memory.ts), which requires
+  // cross-origin isolation. Poll mode needs none of this — that's the
+  // tradeoff the toolbar lets you feel.
   server: {
     fs: { allow: ['../..'] },
     port: 5177,
     strictPort: true,
+    headers: {
+      'Cross-Origin-Opener-Policy': 'same-origin',
+      'Cross-Origin-Embedder-Policy': 'require-corp',
+    },
   },
 }));

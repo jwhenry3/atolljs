@@ -1,15 +1,17 @@
 /**
  * Worker entry — owns the reconciler and exposes three task methods.
  *
- * Note what's NOT here: no sharedMemory on the defineWorker call. Every op
- * rides back through the pool's ordinary postMessage channel — shared memory
- * is opt-in in this sdk, and this example exists to prove the message-only
- * path is enough for a real React renderer.
+ * Ops still ride back through the pool's ordinary postMessage channel — the
+ * sharedMemory contract here is only the doorbell (see memory.ts): a commit
+ * counter the main thread observe()s to trigger flush() as a push. Drop it
+ * entirely and the example still works on the 50ms poll — that's the
+ * message-only mode.
  */
 
 import { createElement } from 'react';
 import Reconciler from 'react-reconciler';
 import { defineWorker } from '@jwhenry123/mesh/sdk';
+import { renderMemory } from '../memory';
 import { App } from './App';
 import { getHandler, hostConfig, ROOT_CONTAINER, takeOps } from './hostConfig';
 import type { EventPayload, Op } from '../ops';
@@ -47,6 +49,7 @@ function syncCommit(fn: () => void): Op[] {
 }
 
 export const renderWorker = defineWorker({
+  sharedMemory: renderMemory,
   methods: {
     /** Mount <App/> into the root container; returns the initial op batch. */
     mount(): Op[] {
