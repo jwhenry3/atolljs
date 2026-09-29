@@ -29,6 +29,12 @@ jobs:
             package-lock.json
             examples/nestjs/package-lock.json
             examples/nextjs/package-lock.json
+            examples/react-dom-worker/package-lock.json
+            examples/express/package-lock.json
+            examples/fastify/package-lock.json
+            examples/hono/package-lock.json
+            examples/koa/package-lock.json
+            examples/http-offload/package-lock.json
 
       - name: Install dependencies
         run: |
@@ -43,6 +49,12 @@ jobs:
           # without them worker-module imports never resolve and every mount
           # await hangs into the 30s test timeout.
           (cd examples/react-dom-worker && npm ci)
+          # The backend example e2e suites run `npm run bundle` (esbuild)
+          # inside each example — its devDeps must be installed for the
+          # binary to resolve.
+          for ex in express fastify hono koa http-offload; do
+            (cd "examples/$ex" && npm ci)
+          done
 
       - name: Typecheck — core SDK + app sources
         run: npx tsc --noEmit
