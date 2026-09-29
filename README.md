@@ -1,4 +1,4 @@
-# Atoll
+# AtollJS
 
 [![CI](https://github.com/jwhenry3/atolljs/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/jwhenry3/atolljs/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/jwhenry3/atolljs/graph/badge.svg?branch=master)](https://codecov.io/gh/jwhenry3/atolljs)

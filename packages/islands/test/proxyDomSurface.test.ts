@@ -27,7 +27,7 @@ const inInstance = (instance: string, fn: () => void): Op[] =>
   });
 
 const attrOps = (ops: Op[], name: string) =>
-  ops.filter((o) => o.t === 'attr' && o.name === name);
+  ops.filter((o): o is Extract<Op, { t: 'attr' }> => o.t === 'attr' && o.name === name);
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -476,8 +476,12 @@ describe('window facade', () => {
       win.addEventListener('ping', onPing); // deduped
       win.removeEventListener('ping', onPing);
       const ops = takeOps('winfacade');
-      const listen = ops.filter((o) => o.t === 'listen' && o.type === 'ping');
-      const unlisten = ops.filter((o) => o.t === 'unlisten' && o.type === 'ping');
+      const listen = ops.filter(
+        (o): o is Extract<Op, { t: 'listen' }> => o.t === 'listen' && o.type === 'ping',
+      );
+      const unlisten = ops.filter(
+        (o): o is Extract<Op, { t: 'unlisten' }> => o.t === 'unlisten' && o.type === 'ping',
+      );
       expect(listen.length).toBe(1);
       expect(listen[0].id).toBe(0);
       expect(unlisten.length).toBe(1);
