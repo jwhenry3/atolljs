@@ -6,7 +6,7 @@
  * the worker entry's defineMonoWorker in this module graph).
  */
 import { beforeAll, describe, expect, it, vi } from 'vitest';
-import { InProcessWorker } from '@atolljs/core/sdk/testing/inProcessWorker';
+import { InProcessWorker } from '@atolljs/core/testing/inProcessWorker';
 import type { IslandHandle } from '../src/index';
 import { echoApp } from './fixtures/echo.worker';
 

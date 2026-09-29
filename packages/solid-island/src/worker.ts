@@ -83,7 +83,7 @@ import {
   type RenderedHandle,
   type RenderedIslandApp,
 } from '@atolljs/islands/worker';
-import type { SharedMemory, WorkerDefinition } from '@atolljs/core/sdk';
+import type { SharedMemory, WorkerDefinition } from '@atolljs/core';
 
 /** A Solid component the worker renderer can mount — props arrive as the
  *  reactive record the wire serialized. */

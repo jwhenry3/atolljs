@@ -21,8 +21,9 @@
       "@angular/core": ["./node_modules/@angular/core"],
       "tslib": ["./node_modules/tslib"],
       "@atolljs/incidents": ["../../packages/incidents/src/index.ts"],
-      "@atolljs/core/sdk": ["../../src/sdk/index.ts"],
-      "@atolljs/core/sdk/*": ["../../src/sdk/*"]
+      "@atolljs/incidents/*": ["../../packages/incidents/src/*"],
+      "@atolljs/core": ["../../src/index.ts"],
+      "@atolljs/core/*": ["../../src/*"]
     }
   },
   "angularCompilerOptions": {

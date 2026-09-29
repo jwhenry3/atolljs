@@ -82,7 +82,7 @@ import type {
   RenderedHandle,
   RenderedIslandApp,
 } from '@atolljs/islands/worker';
-import type { SharedMemory, WorkerDefinition } from '@atolljs/core/sdk';
+import type { SharedMemory, WorkerDefinition } from '@atolljs/core';
 import { createPropsBox } from './props.svelte';
 
 /** A compiled Svelte 5 component — what `mount()` accepts. */

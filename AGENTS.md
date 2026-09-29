@@ -27,7 +27,7 @@ npm run serve:all   # build everything, serve one origin on :4173
 Per-package checks: each `packages/*` dir is independently buildable; example
 apps live in `examples/*`. Node tests run under `happy-dom`; browser-only
 behavior is exercised via `InProcessWorker`
-(`src/sdk/testing/inProcessWorker.ts`).
+(`src/testing/inProcessWorker.ts`).
 
 ## Non-negotiable rules
 
@@ -51,7 +51,7 @@ behavior is exercised via `InProcessWorker`
 ## Repo shape
 
 ```
-src/sdk/              core SDK (contract/ pool/ shared/ worker/ testing/)
+src/              core SDK (contract/ pool/ shared/ worker/ testing/)
 packages/incidents/   demo domain package
 packages/<fw>/        framework bindings (react, vue, solidjs, svelte, angular, nextjs)
 packages/islands/     island engine — driver, op protocol, proxy DOM

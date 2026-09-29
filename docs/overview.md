@@ -38,8 +38,8 @@ onto real DOM as a serialized op stream — see [islands.md](islands.md).
 
 | Path | Contents |
 |---|---|
-| `src/sdk/` | `@atolljs/core/sdk` — contracts, pool, worker runtime, reactivity, logging |
-| `src/sdk/testing/` | `InProcessWorker` — in-process `Worker` test double |
+| `src/` | `@atolljs/core` — contracts, pool, worker runtime, reactivity, logging |
+| `src/testing/` | `InProcessWorker` — in-process `Worker` test double |
 | `packages/incidents/` | `@atolljs/incidents` — the demo domain: incident contract, worker, pool, tasks |
 | `packages/<framework>/` | `@atolljs/<framework>` — generic bindings, no domain code |
 | `packages/islands/` | `@atolljs/islands` — the island engine: mount driver, op protocol, proxy DOM, worker runtimes |
@@ -52,11 +52,11 @@ onto real DOM as a serialized op stream — see [islands.md](islands.md).
 
 ```ts
 // counter.memory.ts — one contract, imported by both threads
-import { defineSharedMemory, field } from '@atolljs/core/sdk';
+import { defineSharedMemory, field } from '@atolljs/core';
 export const counterMemory = defineSharedMemory({ count: field.number() });
 
 // counter.worker.ts — the worker owns the runtime + the method list
-import { defineWorker } from '@atolljs/core/sdk';
+import { defineWorker } from '@atolljs/core';
 export const counterWorker = defineWorker({
   sharedMemory: counterMemory,
   methods: {
@@ -70,7 +70,7 @@ export const counterWorker = defineWorker({
 export type CounterWorker = typeof counterWorker;
 
 // counter.ts — main thread imports the TYPE only; the client is a Proxy
-import { connectWorker } from '@atolljs/core/sdk';
+import { connectWorker } from '@atolljs/core';
 import type { CounterWorker } from './counter.worker';
 export const counter = connectWorker<CounterWorker>({
   sharedMemory: counterMemory,
@@ -97,7 +97,7 @@ A message-only pool (no `sharedMemory`) needs neither the headers nor SAB.
 ## Running everything
 
 ```bash
-npm run dev:all    # dev servers: root :4173 · consumer-docs :4181 · react :5173 · vue :5174
+npm run dev:all    # dev servers: consumer-docs :4181 · react :5173 · vue :5174
                    # solid :5175 · svelte :5176 · angular :4201 · next :3001 · islands :5177
 
 npm run serve:all  # builds all apps into dist/<name>/ and serves one origin:

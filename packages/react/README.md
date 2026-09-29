@@ -1,6 +1,6 @@
 # @atolljs/react
 
-React bindings for `@atolljs/core/sdk` — framework adapter only, no domain code.
+React bindings for `@atolljs/core` — framework adapter only, no domain code.
 
 - `useObservable(source)` — subscribe to any `ObservableValue` via `useSyncExternalStore`.
 - `useSharedValue(memory, key)` — a shared-memory field as React state.

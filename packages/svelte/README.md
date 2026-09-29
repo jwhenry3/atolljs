@@ -1,6 +1,6 @@
 # @atolljs/svelte
 
-Svelte 5 bindings for `@atolljs/core/sdk` — framework adapter only, no domain code.
+Svelte 5 bindings for `@atolljs/core` — framework adapter only, no domain code.
 Rune-based; call during component init.
 
 - `observableValue(source)` — any `ObservableValue` as `{ value }` rune state.

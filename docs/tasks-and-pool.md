@@ -1,6 +1,6 @@
 # Worker pool & tasks
 
-Read when: working on `src/sdk/pool/`, `src/sdk/worker/`, `src/sdk/service.ts`,
+Read when: working on `src/pool/`, `src/worker/`, `src/service.ts`,
 task dispatch, timeouts/cancellation, or `packages/node`.
 
 Tasks are the only message-passing boundary, split the way tRPC splits a
@@ -55,7 +55,7 @@ first call, so importing the client is SSR-safe; `start()` spawns eagerly,
 per-call controls; `pool.stats()` exposes queue/in-flight counts and wait/run
 aggregates; `pool.close()` drains then terminates. A `signal` abort rejects
 the call with `TaskAbortedError` (all four errors are exported from
-`@atolljs/core/sdk`): a queued call is dropped, an in-flight one rejects
+`@atolljs/core`): a queued call is dropped, an in-flight one rejects
 the caller but holds the worker's slot until its reply arrives — JS can't
 interrupt a running task, so the pool never double-books a busy worker.
 
@@ -71,7 +71,7 @@ at runtime.
 ## Explicit service contracts (advanced)
 
 `defineWorker`/`connectWorker` build on a lower, framework-neutral layer
-(`src/sdk/service.ts`) — the same one the NestJS binding dispatches through.
+(`src/service.ts`) — the same one the NestJS binding dispatches through.
 Reach for it when both threads need the contract object at runtime — feeding a
 hand-built `WorkerPool`, a DI provider, or a test stub:
 
@@ -84,7 +84,7 @@ hand-built `WorkerPool`, a DI provider, or a test stub:
 | `rpc<A, R>({ taskId? })` | Escape hatch for method declarations schemas can't carry — typed args with no validation, or an explicit wire id for interop. |
 
 ```ts
-import { defineService, implementService, createClient, rpc } from '@atolljs/core/sdk';
+import { defineService, implementService, createClient, rpc } from '@atolljs/core';
 
 // Both threads import the same object — ids can never drift:
 export const pricing = defineService('pricing', {

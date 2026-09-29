@@ -35,7 +35,7 @@
 No API changes — this release fixes what ships and how it ships.
 
 - **Published tarball 139 kB → 60 kB.** `*.test.ts` sources and dist
-  sourcemaps no longer ship (the `src/sdk` TypeScript sources still do, via
+  sourcemaps no longer ship (the `src` TypeScript sources still do, via
   the `./sdk/*` export).
 - **Core `dist` is now per-module, not a 230 kB monolith.** Dependencies
   (`zod`, `msgpackr`, `@msgpack/msgpack`, `solid-js`) are external instead of

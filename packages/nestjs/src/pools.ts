@@ -10,7 +10,7 @@ import {
   type SharedSpec,
   type TaskMap,
   type WorkerPoolConfig,
-} from '@atolljs/core/sdk';
+} from '@atolljs/core';
 import { createNodePool } from '@atolljs/node';
 
 export interface AtollPoolConfig<S extends SharedSpec = SharedSpec, T extends TaskMap = TaskMap>

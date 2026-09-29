@@ -9,16 +9,13 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
-    "./sdk": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
-    },
-    "./sdk/*": "./src/sdk/*"
+    "./package.json": "./package.json",
+    "./*": "./src/*"
   },
   "files": [
     "dist",
-    "src/sdk",
-    "!src/sdk/**/*.test.ts",
+    "src",
+    "!src/**/*.test.ts",
     "!dist/**/*.map"
   ],
   "sideEffects": [
@@ -26,11 +23,10 @@
     "**/workerBootstrap.js"
   ],
   "scripts": {
-    "dev": "vite",
     "dev:all": "node scripts/dev-all.mjs",
     "kill:all": "node scripts/kill-all.mjs",
     "serve:all": "node scripts/serve-all.mjs",
-    "build": "tsc --noEmit && vite build && vite build --config vite.app.config.ts",
+    "build": "tsc --noEmit && vite build",
     "test": "vitest run",
     "build:pages": "node scripts/build-pages.mjs",
     "assemble:pages": "node scripts/assemble-pages.mjs"

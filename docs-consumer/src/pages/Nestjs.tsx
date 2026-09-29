@@ -45,7 +45,7 @@ export class DigestAtollModule {}
 
 const USAGE_SERVICE = `import { Inject, Injectable } from '@nestjs/common';
 import { AtollService } from '@atolljs/nestjs/decorators';
-import { defineSharedMemory, field } from '@atolljs/core/sdk';
+import { defineSharedMemory, field } from '@atolljs/core';
 
 export const digestMemory = defineSharedMemory({ jobsDone: field.number() });
 
@@ -70,7 +70,7 @@ export class DigestService {
 
 const USAGE_CONTROLLER = `import { Controller, Get } from '@nestjs/common';
 import { InjectAtollPool } from '@atolljs/nestjs';
-import { workerClient, type WorkerPool } from '@atolljs/core/sdk';
+import { workerClient, type WorkerPool } from '@atolljs/core';
 import type { IncidentsWorker } from '@atolljs/incidents';
 
 @Controller('api/incidents')

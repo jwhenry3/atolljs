@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { defineSharedMemory, field, type TaskContract } from '@atolljs/core/sdk';
+import { defineSharedMemory, field, type TaskContract } from '@atolljs/core';
 
 // The pool's own shared contract — a separate buffer from the browser demo's
 // incidents memory. The route handler reads jobsDone directly (zero dispatch).

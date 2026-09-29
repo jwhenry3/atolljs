@@ -11,8 +11,8 @@
     "skipLibCheck": true,
     "paths": {
       "@atolljs/react": ["../react/src/index.ts"],
-      "@atolljs/core/sdk": ["../../src/sdk/index.ts"],
-      "@atolljs/core/sdk/*": ["../../src/sdk/*"]
+      "@atolljs/core": ["../../src/index.ts"],
+      "@atolljs/core/*": ["../../src/*"]
     }
   },
   "include": ["src", "test", "../react/src"]

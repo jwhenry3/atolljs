@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { TaskRegistry } from '@atolljs/core/sdk';
+import { TaskRegistry } from '@atolljs/core';
 import { AtollTask } from '../src/decorators';
 import { registerAtollHandlers } from '../src/handlers';
 

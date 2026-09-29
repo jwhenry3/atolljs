@@ -14,7 +14,7 @@ import {
   type SharedSpec,
   type TaskMap,
   type WorkerPoolConfig,
-} from '@atolljs/core/sdk';
+} from '@atolljs/core';
 
 /**
  * The lifecycle surface every connectWorker client exposes. Declared

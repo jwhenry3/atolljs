@@ -1,6 +1,6 @@
 # Shared memory contracts
 
-Read when: working on `src/sdk/contract/`, adding/changing field kinds,
+Read when: working on `src/contract/`, adding/changing field kinds,
 debugging layout or codec behavior.
 
 `defineSharedMemory(spec, options?)` declares a fixed, deterministic layout
@@ -80,13 +80,13 @@ carrying their own validation. Register custom field kinds globally with
 
 A field kind is just a registered `ConnectorFactory` —
 `(descriptor: FieldDescriptor, ctx: ConnectorContext, byteOffset) => Connector`
-(`src/sdk/contract/sharedMemory.ts`). The context hands the factory the
+(`src/contract/sharedMemory.ts`). The context hands the factory the
 `SharedArrayBuffer`, the contract's codec, and the field's slot in the shared
 version counter; the returned connector's `read()`/`write(v)` own that region.
 `registerConnectorFactory(kind, factory)` registers a custom storage backend
 SDK-wide; `plugins` overrides per contract.
 
-Underneath the pool sits `MemoryManager` (`src/sdk/pool/memory.ts`) — the
+Underneath the pool sits `MemoryManager` (`src/pool/memory.ts`) — the
 allocator it wraps when `sharedMemory` is configured. It owns a shared
 `WebAssembly.Memory` (`initialPages` 16 = 1 MB, `maximumPages` 16384 = 1 GB by
 default), grows it via `ensureCapacity(bytes)`, and exposes storage through

@@ -93,7 +93,7 @@ doc.createElement('div').setAttribute('data-atoll-slot', 'preview'); // any app`
 
       <h2>Testing in-process</h2>
       <CodeBlock
-        code={`import { InProcessWorker } from '@atolljs/core/sdk/testing/inProcessWorker';
+        code={`import { InProcessWorker } from '@atolljs/core/testing/inProcessWorker';
 vi.stubGlobal('Worker', InProcessWorker);
 InProcessWorker.handlerModules = [() => import('./my.worker')];
 

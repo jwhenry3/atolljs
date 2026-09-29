@@ -184,12 +184,12 @@ The four `*-island` packages in `packages/` are the reference implementations.
 
 ## Testing islands in-process
 
-`@atolljs/core/sdk/testing/inProcessWorker` ships a `Worker` test double
+`@atolljs/core/testing/inProcessWorker` ships a `Worker` test double
 that runs the whole protocol in-process — real task registry, real op stream,
 real shared-memory binding; only the thread boundary is faked:
 
 ```ts
-import { InProcessWorker } from '@atolljs/core/sdk/testing/inProcessWorker';
+import { InProcessWorker } from '@atolljs/core/testing/inProcessWorker';
 vi.stubGlobal('Worker', InProcessWorker);
 InProcessWorker.handlerModules = [() => import('./my.worker')];
 

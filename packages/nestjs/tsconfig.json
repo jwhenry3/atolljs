@@ -11,8 +11,8 @@
     "isolatedModules": true,
     "skipLibCheck": true,
     "paths": {
-      "@atolljs/core/sdk": ["../../src/sdk/index.ts"],
-      "@atolljs/core/sdk/*": ["../../src/sdk/*"],
+      "@atolljs/core": ["../../src/index.ts"],
+      "@atolljs/core/*": ["../../src/*"],
       "@atolljs/node": ["../../packages/node/src/index.ts"],
       "@atolljs/node/*": ["../../packages/node/src/*"]
     }

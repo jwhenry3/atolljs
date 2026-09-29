@@ -10,7 +10,7 @@ import {
 } from '@nestjs/common';
 import { DiscoveryModule, DiscoveryService } from '@nestjs/core';
 import { isMainThread } from 'node:worker_threads';
-import { scoped, type WorkerPool } from '@atolljs/core/sdk';
+import { scoped, type WorkerPool } from '@atolljs/core';
 import { getAtollTaskMeta } from './decorators';
 import {
   buildAtollPool,

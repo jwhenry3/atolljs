@@ -7,7 +7,7 @@ import { defineSharedMemory, field } from '../contract/sharedMemory';
 import { serviceMethod } from '../service';
 import type { TaskRunner } from '../service';
 import type { TaskContract } from '../contract/types';
-import { InProcessWorker } from '@atolljs/core/sdk/testing/inProcessWorker';
+import { InProcessWorker } from '@atolljs/core/testing/inProcessWorker';
 
 vi.stubGlobal('Worker', InProcessWorker);
 

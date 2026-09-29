@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createEnvironmentInjector, runInInjectionContext, type EnvironmentInjector } from '@angular/core';
-import { defineSharedMemory, defineTask, field, observe, WorkerPool } from '@atolljs/core/sdk';
+import { defineSharedMemory, defineTask, field, observe, WorkerPool } from '@atolljs/core';
 import { injectAtollPool, observableSignal, provideAtoll, sharedValue, taskState } from '../src/index';
 
 const mem = defineSharedMemory({ n: field.number(), label: field.string({ maxBytes: 64 }) });

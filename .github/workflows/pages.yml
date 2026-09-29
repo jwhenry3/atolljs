@@ -19,7 +19,7 @@ on:
       - 'docs-consumer/**'
       - 'examples/**'
       - 'packages/**'
-      - 'src/sdk/**'
+      - 'src/**'
       - 'scripts/**'
       - '.github/workflows/pages.yml'
   workflow_dispatch:

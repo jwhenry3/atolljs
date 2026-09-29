@@ -14,8 +14,8 @@
     "paths": {
       "@atolljs/solidjs": ["../../packages/solidjs/src/index.ts"],
       "@atolljs/incidents": ["../../packages/incidents/src/index.ts"],
-      "@atolljs/core/sdk": ["../../src/sdk/index.ts"],
-      "@atolljs/core/sdk/*": ["../../src/sdk/*"]
+      "@atolljs/core": ["../../src/index.ts"],
+      "@atolljs/core/*": ["../../src/*"]
     }
   },
   "include": ["src", "vite.config.ts"]

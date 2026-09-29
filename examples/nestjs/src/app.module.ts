@@ -1,6 +1,6 @@
 import { Injectable, Module, OnApplicationBootstrap } from '@nestjs/common';
 import { InjectAtollPool, AtollModule } from '@atolljs/nestjs';
-import { workerClient, type WorkerPool } from '@atolljs/core/sdk';
+import { workerClient, type WorkerPool } from '@atolljs/core';
 import { type IncidentsWorker } from '@atolljs/incidents';
 import { IncidentsController } from './incidents.controller';
 import { IncidentsAtollModule } from './shared/incidents-atoll.module';

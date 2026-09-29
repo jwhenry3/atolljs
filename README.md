@@ -87,7 +87,7 @@ when no token is present) — the secret can be revoked after.
 ## Layout
 
 ```
-src/sdk/            core SDK — contract/ (shared protocol), pool/, worker/
+src/            core SDK — contract/ (shared protocol), pool/, worker/
 packages/<fw>/      independently publishable framework bindings
 packages/incidents/ demo domain package (contract + worker + pool)
 examples/<fw>/      per-framework demo apps
@@ -105,4 +105,6 @@ npm run build:pages # consumer docs + examples → dist-pages (GitHub Pages arti
 ```
 
 Worker demos require cross-origin isolation (COOP/COEP) — the dev servers set it;
-GitHub Pages cannot, so embedded live demos there are inert.
+GitHub Pages cannot send headers, so the Pages artifact ships `coi-sw.js`, a
+service worker that injects them (first visit reloads once; islands fall back to
+their poll transport where isolation still isn't available).

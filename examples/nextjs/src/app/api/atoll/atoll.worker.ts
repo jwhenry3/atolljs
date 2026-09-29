@@ -2,8 +2,8 @@
 // be first: it binds self = parentPort before workerBootstrap wires
 // INIT_MEMORY / EXECUTE_TASK onto the node:worker_threads MessagePort.
 import '@atolljs/node/shim';
-import '@atolljs/core/sdk/worker/workerBootstrap';
-import { TaskRegistry } from '@atolljs/core/sdk';
+import '@atolljs/core/worker/workerBootstrap';
+import { TaskRegistry } from '@atolljs/core';
 import { createHash } from 'node:crypto';
 import { digestMemory, HashDigest } from './digest.contract';
 

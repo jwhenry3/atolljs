@@ -1,6 +1,6 @@
 # Continuous integration — typechecks + unit tests.
 #
-# The root vitest config runs every suite in the repo: src/sdk plus all
+# The root vitest config runs every suite in the repo: src plus all
 # packages/*/test (bindings, incidents domain, node/nestjs adapters).
 # Typechecks run per-tsconfig so each publishable package is verified against
 # only its own declared peer dependency graph.

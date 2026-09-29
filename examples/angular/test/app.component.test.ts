@@ -9,11 +9,11 @@ import { BrowserDynamicTestingModule, platformBrowserDynamicTesting } from '@ang
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { provideAtoll } from '@atolljs/angular';
 import { incidents } from '@atolljs/incidents';
-import { InProcessWorker } from '@atolljs/core/sdk/testing/inProcessWorker';
+import { InProcessWorker } from '@atolljs/core/testing/inProcessWorker';
 
 vi.stubGlobal('Worker', InProcessWorker);
 InProcessWorker.handlerModules = [
-  () => import('@atolljs/core/incidents/worker/incidents.worker'),
+  () => import('@atolljs/incidents/worker/incidents.worker'),
 ];
 
 let AppComponent: typeof import('../src/app.component').AppComponent;

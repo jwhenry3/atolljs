@@ -1,4 +1,4 @@
-import { connectWorker, scoped } from '@atolljs/core/sdk';
+import { connectWorker, scoped } from '@atolljs/core';
 import { incidentsMemory } from './contract/memory.contracts';
 // TYPE ONLY — the worker file registers handlers; nothing on the main
 // thread may import it at runtime (the client proxies by method name).

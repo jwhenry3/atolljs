@@ -1,6 +1,6 @@
 # @atolljs/angular
 
-Angular bindings for `@atolljs/core/sdk` — framework adapter only, no domain code.
+Angular bindings for `@atolljs/core` — framework adapter only, no domain code.
 Signal-based; call in an injection context (field initializer or constructor)
 so subscriptions are released on destroy.
 

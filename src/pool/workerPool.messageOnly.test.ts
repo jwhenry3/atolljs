@@ -7,7 +7,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { WorkerPool } from './workerPool';
 import { TaskRegistry } from '../worker/registry';
-import { InProcessWorker } from '@atolljs/core/sdk/testing/inProcessWorker';
+import { InProcessWorker } from '@atolljs/core/testing/inProcessWorker';
 
 vi.stubGlobal('Worker', InProcessWorker);
 vi.stubGlobal('crossOriginIsolated', false);

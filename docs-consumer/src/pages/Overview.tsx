@@ -30,7 +30,7 @@ export function Overview() {
       <CodeBlock code={`npm install @atolljs/core`} language="bash" />
       <p>
         The core package ships the SDK — imported as{' '}
-        <code>@atolljs/core/sdk</code>. Framework bindings are separate,
+        <code>@atolljs/core</code>. Framework bindings are separate,
         independently published packages — <code>@atolljs/&lt;framework&gt;</code> —
         so you only install the framework you actually use.
       </p>
@@ -55,7 +55,7 @@ export function Overview() {
         </thead>
         <tbody>
           <tr>
-            <td><code>@atolljs/core/sdk</code></td>
+            <td><code>@atolljs/core</code></td>
             <td>Shared-memory contracts, worker pool, worker bootstrap, observables, tasks, codecs, logging</td>
           </tr>
           <tr>

@@ -4,7 +4,7 @@ import {
   type SharedSpec,
   type TaskMap,
   type WorkerPoolConfig,
-} from '@atolljs/core/sdk';
+} from '@atolljs/core';
 import { createNodeWorker } from './worker';
 
 /**

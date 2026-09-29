@@ -14,13 +14,13 @@
  * is least-busy round-robin, so a second worker would receive dispatches for
  * a tree it doesn't hold (sticky routing is future work).
  */
-import { connectWorker, observe } from '@atolljs/core/sdk';
+import { connectWorker, observe } from '@atolljs/core';
 import type {
   ConnectWorkerConfig,
   SharedSpec,
   WorkerClient,
   WorkerDefinition,
-} from '@atolljs/core/sdk';
+} from '@atolljs/core';
 import { makeDoorbell, type DoorbellSpec } from './memory';
 import {
   isEventRef,

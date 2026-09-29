@@ -1,20 +1,21 @@
 # Incidents demo — framework examples
 
 The same incidents pattern ported to six frameworks. Each folder is an isolated
-project with its own dependencies; every one consumes the `@atolljs/core/sdk` sdk
-directly from source via an `@atolljs/core/sdk` → `../../src/sdk` alias (no build step
+project with its own dependencies; every one consumes the `@atolljs/core` sdk
+directly from source via an `@atolljs/core` → `../../src` alias (no build step
 needed for the sdk).
 
-Run the root dashboard and all six examples together from the repository root:
+Run all examples together from the repository root:
 
 ```sh
-npm run dev:all    # dev servers (HMR) for every app
+npm run dev:all    # dev servers (HMR) for every app + the consumer docs site
 npm run serve:all  # builds everything, then serves the production output
 ```
 
-Both open `http://localhost:4173` and use the framework cards to navigate
-between apps; Ctrl+C stops the complete process group. `serve:all` serves the
-built `dist/` output on the same ports (Next.js via `next start`) — pass
+`dev:all` launches each example on its own port (consumer docs on 4181);
+Ctrl+C stops the complete process group. `serve:all` serves the built `dist/`
+output on `http://localhost:4173` — the landing page links to every mount
+(`/consumer/`, `/react/`, …) and Next.js runs via `next start` — pass
 `--no-build` to skip rebuilding.
 
 The consumer docs site (`docs-consumer/`, port 4181) is launched alongside —

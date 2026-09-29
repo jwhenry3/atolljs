@@ -46,7 +46,7 @@ import type {
   RenderedHandle,
   RenderedIslandApp,
 } from '@atolljs/islands/worker';
-import type { SharedMemory, WorkerDefinition } from '@atolljs/core/sdk';
+import type { SharedMemory, WorkerDefinition } from '@atolljs/core';
 
 // Worker entries shouldn't need a second package specifier for the
 // island→shell channel — `import { emit } from 'atoll-vue-island/worker'`.

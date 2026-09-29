@@ -6,7 +6,7 @@ import {
   TaskRegistry,
   type ServiceContract,
   type TaskContract,
-} from '@atolljs/core/sdk';
+} from '@atolljs/core';
 import { getAtollPool } from './pools';
 
 export interface AtollTaskMeta {
