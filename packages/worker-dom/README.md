@@ -23,13 +23,11 @@ export const renderWorker = defineIslandWorker({
 ```
 
 ```ts
-// main thread
-import { connectIslandWorker, mountIsland } from '@jwhenry123/mesh-worker-dom';
+// main thread — one call: `worker` builds an island-owned client internally
+import { mountIsland } from '@jwhenry123/mesh-worker-dom';
 
 const island = await mountIsland({
-  client: connectIslandWorker({
-    worker: () => new Worker(new URL('./render.worker.ts', import.meta.url), { type: 'module' }),
-  }),
+  worker: () => new Worker(new URL('./render.worker.ts', import.meta.url), { type: 'module' }),
   el: document.getElementById('island')!,
   app: 'dashboard',
   props: { ... },
@@ -39,6 +37,10 @@ const island = await mountIsland({
 island.updateProps({ ... });
 island.destroy();
 ```
+
+Pass `client: connectIslandWorker({ worker })` instead of `worker` when
+several islands should share one worker (multi-island-per-worker — the
+client is released when its last island destroys).
 
 ## React shells: `@jwhenry123/mesh-react-island`
 
@@ -55,6 +57,34 @@ registry name (a data property — minification-proof, unlike `fn.name`) so a
 shell-side component reference resolves to the wire key, and
 `defineIslandWorker` warns if a stamp and its registry key drift apart.
 `IslandAppProps<A>` infers a reference's props type from its signature.
+
+## Framework worker renderers
+
+The third app kind: `RenderedIslandApp` — `{ mount({realm, doc, props}) →
+{ update?, dispose? } }`. The app renders into the realm's proxy document
+with its own native renderer; every mutation emits the same op stream, and
+`update`/`dispose` give the framework fine-grained `updateProps` and clean
+teardown instead of the imperative clear-and-rebuild. Framework bindings
+ship as `*-island` packages — each re-exports `defineIslandWorker`/`emit`
+so the worker entry needs no direct worker-dom import:
+
+```ts
+// vue:  import { defineVueIslandWorker }  from '@jwhenry123/mesh-vue-island/worker'
+// svelte: import { defineSvelteIslandWorker } from '@jwhenry123/mesh-svelte-island/worker'
+// solid: import { defineSolidIslandWorker }  from '@jwhenry123/mesh-solid-island/worker'
+// angular: import { defineAngularIslandWorker } from '@jwhenry123/mesh-angular-island/worker'
+export const worker = defineVueIslandWorker({ counter: Counter });
+```
+
+| Package | Worker renderer | updateProps | Notes |
+|---|---|---|---|
+| `mesh-vue-island` | Vue `createRenderer` → proxy DOM | fine-grained (`cloneVNode` + `render`) | `.once`/`.passive`/`.capture` modifiers ride the wire; out-of-task commits arrive on `flush()`/doorbell |
+| `mesh-svelte-island` | Svelte 5 `mount()` into `doc.body`, `$state` props box | fine-grained | Compiled components only (vite-plugin-svelte); `emit`/`runInRealm` re-exported |
+| `mesh-solid-island` | `solid-js/universal` `createRenderer` | fine-grained (per-key signal props) | **Pin the client build** — `worker`/`node` resolve conditions pick the SSR build; the adapter probes and throws if it happens anyway. JSX needs `babel-preset-solid` `{generate:'universal'}` (see its README) |
+| `mesh-angular-island` | `RendererFactory2`/`Renderer2` → proxy DOM + `createComponent`, zoneless | `setInput` + manual CD | JIT components need `import '@angular/compiler'` in the worker entry (missing it throws a named error); AOT/`ɵcmp` components need nothing |
+
+All four speak the same protocol — a registry worker can mix React,
+Vue, Svelte, Solid, Angular, and imperative apps freely.
 
 ## Island rules
 

@@ -104,11 +104,19 @@ import {
 } from '@angular/core';
 import {
   bumpOpsVersion,
+  defineIslandWorker,
   getActiveRealm,
   pushOp,
   runInRealm,
 } from '@jwhenry123/mesh-worker-dom/worker';
+import type { SharedMemory, WorkerDefinition } from '@jwhenry123/mesh/sdk';
+
+// Worker entries shouldn't need a second package specifier for the
+// island→shell channel — `import { emit } from 'mesh-angular-island/worker'`.
+export { emit, runInRealm } from '@jwhenry123/mesh-worker-dom/worker';
 import type {
+  DoorbellSpec,
+  IslandWorkerMethods,
   ProxyComment,
   ProxyDocument,
   ProxyElement,
@@ -802,4 +810,52 @@ export function angularIslandApp(
       };
     },
   };
+}
+
+/** A registry entry: the component, or `{ component, providers }` when the
+ *  app needs injector extras (`angularIslandApp`'s options). */
+export type AngularIslandEntry = Type<unknown> | ({ component: Type<unknown> } & AngularIslandAppOptions);
+
+export interface DefineAngularIslandWorkerRegistry {
+  /** Name → Angular component (or configured entry) registry. */
+  apps: Record<string, AngularIslandEntry>;
+  /** Doorbell contract override — forwarded to `defineIslandWorker`. */
+  sharedMemory?: SharedMemory<DoorbellSpec>;
+}
+
+/** Either a single component (1:1 realm worker) or an `{ apps }` registry. */
+export type DefineAngularIslandWorkerInput =
+  | Type<unknown>
+  | DefineAngularIslandWorkerRegistry;
+
+const isAngularRegistry = (
+  input: DefineAngularIslandWorkerInput,
+): input is DefineAngularIslandWorkerRegistry =>
+  typeof input === 'object' && input !== null && 'apps' in input;
+
+/**
+ * `defineIslandWorker` for Angular apps — maps each component through
+ * `angularIslandApp` and delegates. A bare component registers as the
+ * worker's single app ('main'); an `{ apps }` object registers a
+ * name-addressable registry. Per-app injector extras pass through the
+ * `{ component, providers }` entry form.
+ */
+export function defineAngularIslandWorker(
+  input: DefineAngularIslandWorkerInput,
+  options?: { sharedMemory?: SharedMemory<DoorbellSpec> },
+): WorkerDefinition<DoorbellSpec, IslandWorkerMethods> {
+  if (isAngularRegistry(input)) {
+    const apps: Record<string, RenderedIslandApp> = {};
+    for (const [key, entry] of Object.entries(input.apps)) {
+      apps[key] =
+        typeof entry === 'function'
+          ? angularIslandApp(entry)
+          : angularIslandApp(entry.component, entry);
+    }
+    return defineIslandWorker({
+      apps,
+      sharedMemory: input.sharedMemory ?? options?.sharedMemory,
+    });
+  }
+  return defineIslandWorker(angularIslandApp(input), options);
 }

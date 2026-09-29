@@ -45,6 +45,10 @@ import type {
 } from '@jwhenry123/mesh-worker-dom/worker';
 import type { SharedMemory, WorkerDefinition } from '@jwhenry123/mesh/sdk';
 
+// Worker entries shouldn't need a second package specifier for the
+// island→shell channel — `import { emit } from 'mesh-vue-island/worker'`.
+export { emit, runInRealm } from '@jwhenry123/mesh-worker-dom/worker';
+
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const MATH_NS = 'http://www.w3.org/1998/Math/MathML';
 

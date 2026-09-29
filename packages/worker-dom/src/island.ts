@@ -73,8 +73,7 @@ export const connectIslandWorker = <W extends IslandWorkerDefinition = IslandWor
     poolSize: 1,
   });
 
-export interface MountIslandOptions {
-  client: IslandClient;
+interface MountIslandBaseOptions {
   /** Container element the island's ops are applied into. */
   el: HTMLElement;
   /**
@@ -105,6 +104,19 @@ export interface MountIslandOptions {
    */
   onOps?: (ops: readonly Op[], elapsedMs: number) => void;
 }
+
+/**
+ * The mount needs one worker-side endpoint: either a `client` a
+ * `connectIslandWorker` call produced (shareable — several islands can
+ * mount into one worker), or a `worker` entry factory/URL this call builds
+ * its own client from (the common one-island-per-worker form — the client
+ * is island-internal and dies with `destroy()`).
+ */
+export type MountIslandOptions = MountIslandBaseOptions &
+  (
+    | { client: IslandClient; worker?: undefined }
+    | (IslandWorkerOptions & { worker: (() => Worker) | URL; client?: undefined })
+  );
 
 export interface IslandHandle {
   readonly app: string;
@@ -213,12 +225,74 @@ let islandSeq = 0;
  */
 const clientMounts = new WeakMap<object, number>();
 
+/* ── Prop serializability ─────────────────────────────────────────────────
+ * Props cross to the worker inside a postMessage'd task — a function, DOM
+ * node, or other uncloneable value dies in the pool's postMessage call as a
+ * bare DataCloneError, far from the caller. Pre-flight the props here so
+ * the error names the offending key path. Runs before mount/updateProps;
+ * the success path costs one structuredClone (cheap at props sizes). */
+
+const canClone = (v: unknown): boolean => {
+  try {
+    structuredClone(v);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+const isPlainObject = (v: unknown): v is Record<string, unknown> => {
+  if (typeof v !== 'object' || v === null) return false;
+  const proto: unknown = Object.getPrototypeOf(v);
+  return proto === Object.prototype || proto === null;
+};
+
+/** Descend a known-uncloneable value to the first uncloneable leaf's path. */
+const uncloneablePath = (value: unknown, path: string): string => {
+  const kids: Array<[string, unknown]> = Array.isArray(value)
+    ? value.map((v, i) => [`[${i}]`, v])
+    : isPlainObject(value)
+      ? Object.entries(value)
+      : [];
+  for (const [k, v] of kids) {
+    if (!canClone(v)) {
+      const next = path === '' ? k : k.startsWith('[') ? `${path}${k}` : `${path}.${k}`;
+      return uncloneablePath(v, next);
+    }
+  }
+  return path;
+};
+
+const assertCloneableProps = (props: Record<string, unknown>, context: string): void => {
+  if (canClone(props)) return;
+  const path = uncloneablePath(props, '');
+  throw new Error(
+    `[island] ${context}: prop '${path}' is not structured-cloneable — props cross the worker ` +
+      'boundary via postMessage. Pass plain data; behavior crosses through emit/onEvent, ' +
+      'slots, or a task method on the worker.',
+  );
+};
+
 export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandle> {
-  const { client, el, onEvent, onActivity, onOps, slots } = opts;
-  const props = opts.props ?? {};
+  const {
+    el, onEvent, onActivity, onOps, slots,
+    client: givenClient, worker, app: givenApp, props: givenProps,
+    ...workerConfig
+  } = opts;
+  const props = givenProps ?? {};
+  if (givenClient === undefined && worker === undefined) {
+    throw new Error(
+      'mountIsland: pass `worker` (a `() => new Worker(...)`/URL entry — this call builds the ' +
+        'island-owned client) or `client` (a shared connectIslandWorker — several islands, one worker)',
+    );
+  }
+  const client: IslandClient =
+    givenClient ??
+    connectIslandWorker({ ...workerConfig, worker } as ConnectIslandWorkerConfig);
+  assertCloneableProps(props, `mountIsland(${givenApp ?? 'main'})`);
   // 'main' is the unnamed-island name — realm workers (defineRealmWorker)
   // resolve their single app regardless of it.
-  const app = opts.app ?? 'main';
+  const app = givenApp ?? 'main';
 
   // Realm key = 'app@N' — the instance suffix keeps each island's realm
   // distinct even when several islands mount the SAME microfrontend — in
@@ -691,6 +765,7 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
     },
     setMode,
     updateProps: async (next: Record<string, unknown>) => {
+      assertCloneableProps(next, `updateProps(${app})`);
       applyOps(await client.updateProps(realm, next));
     },
     flush: async () => {

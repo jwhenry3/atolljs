@@ -54,6 +54,7 @@ import {
   createComponent as solidCreateComponent,
   createMemo,
   createRenderEffect,
+  createRoot,
   createSignal,
   mergeProps,
   untrack,
@@ -312,6 +313,43 @@ const wireProps = (initial: Record<string, unknown>): {
 /* ── The app wrapper ────────────────────────────────────────────────────── */
 
 /**
+ * Fail fast on the SSR-build footgun: toolchains that apply the `worker`/
+ * `node`/`deno` exports condition resolve `solid-js` to `dist/server.js`,
+ * where effects NEVER re-run — the island mounts and silently stays frozen.
+ * Probe it once at the first mount: bump a signal an effect reads and
+ * require the second run (the server build's createRenderEffect runs fn
+ * once at creation and nothing ever re-fires).
+ */
+let reactivityVerified = false;
+const assertClientBuild = (): void => {
+  if (reactivityVerified) return;
+  reactivityVerified = true;
+  let runs = 0;
+  // The write must land AFTER the root's create pass returns — a set issued
+  // while the effect is still mid-subscription is swallowed by the
+  // updatedAt bookkeeping in any build, so this separates "never re-runs"
+  // (server) from "re-runs" (client).
+  let bump: ((v: number) => number) | undefined;
+  createRoot(() => {
+    const [tick, setTick] = createSignal(0);
+    bump = setTick;
+    createRenderEffect(() => {
+      tick();
+      runs++;
+    });
+  });
+  bump?.(1);
+  if (runs < 2) {
+    throw new Error(
+      '[mesh-solid-island] `solid-js` resolved to its server (SSR) build — effects never ' +
+        're-run, so this island would mount frozen. Pin the client build in the worker bundle: ' +
+        "alias 'solid-js' → 'solid-js/dist/solid.js', or drop 'worker'/'node' from " +
+        'resolve.conditions. See the mesh-solid-island README → "the worker/node exports condition".',
+    );
+  }
+};
+
+/**
  * Wrap a plain Solid component into a `RenderedIslandApp` for
  * `defineIslandWorker`/`defineRealmWorker` — usually stamped with
  * `islandApp(name, solidIslandApp(Component))` so the shell can mount by
@@ -322,6 +360,7 @@ export function solidIslandApp<P extends Record<string, unknown>>(
 ): RenderedIslandApp {
   return {
     mount({ doc, props }: RenderContext): RenderedHandle {
+      assertClientBuild();
       lastMountedDoc = doc;
       const renderer = rendererFor(doc);
       const wire = wireProps(props);
