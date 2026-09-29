@@ -19,7 +19,7 @@ import {
 } from '@angular/platform-browser-dynamic/testing';
 import { connectIslandWorker } from '@atolljs/islands';
 import type { IslandClient, IslandHandle } from '@atolljs/islands';
-import { InProcessWorker } from '@atolljs/core/sdk/testing/inProcessWorker';
+import { InProcessWorker } from '@atolljs/core/testing/inProcessWorker';
 import { AtollIslandComponent, AtollIslandDirective } from '../src/index';
 
 vi.stubGlobal('Worker', InProcessWorker);

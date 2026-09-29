@@ -6,7 +6,7 @@
  */
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { createApp, effectScope, h, reactive } from 'vue';
-import { InProcessWorker } from '@atolljs/core/sdk/testing/inProcessWorker';
+import { InProcessWorker } from '@atolljs/core/testing/inProcessWorker';
 import { connectIslandWorker } from '@atolljs/islands';
 import type { IslandHandle } from '../src/index';
 

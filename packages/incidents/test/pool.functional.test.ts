@@ -1,6 +1,6 @@
 import { afterAll, describe, expect, it, vi } from 'vitest';
-import { toTask } from '@atolljs/core/sdk';
-import { InProcessWorker } from '@atolljs/core/sdk/testing/inProcessWorker';
+import { toTask } from '@atolljs/core';
+import { InProcessWorker } from '@atolljs/core/testing/inProcessWorker';
 
 /**
  * Full incidents pipeline, everything real except the OS thread: the pool

@@ -7,7 +7,7 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { act, Suspense } from 'react';
 import { createRoot } from 'react-dom/client';
-import { InProcessWorker } from '@atolljs/core/sdk/testing/inProcessWorker';
+import { InProcessWorker } from '@atolljs/core/testing/inProcessWorker';
 import { islandApp, islandAppNameOf } from '@atolljs/islands';
 import type { IslandHandle } from '../src/index';
 import { echoApp } from './fixtures/echo.worker';

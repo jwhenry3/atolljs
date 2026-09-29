@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { defineSharedMemory, field, WorkerPool } from '@atolljs/core/sdk';
+import { defineSharedMemory, field, WorkerPool } from '@atolljs/core';
 import {
   buildAtollPool,
   getAtollPool,
@@ -7,7 +7,7 @@ import {
   registerAtollPool,
   unregisterAtollPool,
 } from '../src/pools';
-import { InProcessWorker } from '@atolljs/core/sdk/testing/inProcessWorker';
+import { InProcessWorker } from '@atolljs/core/testing/inProcessWorker';
 
 const mem = () => defineSharedMemory({ n: field.number() });
 

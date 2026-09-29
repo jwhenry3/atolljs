@@ -7,7 +7,7 @@
  * real op protocol via the registry worker in `surface.worker.ts`.
  */
 import { beforeAll, describe, expect, it, vi } from 'vitest';
-import { InProcessWorker } from '@atolljs/core/sdk/testing/inProcessWorker';
+import { InProcessWorker } from '@atolljs/core/testing/inProcessWorker';
 import {
   connectIslandWorker,
   mountIsland,

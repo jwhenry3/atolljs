@@ -6,8 +6,8 @@
   "compilerOptions": {
     "noEmit": false,
     "emitDeclarationOnly": true,
-    "rootDir": "src/sdk",
+    "rootDir": "src",
     "outDir": "dist"
   },
-  "include": ["src/sdk/index.ts"]
+  "include": ["src/index.ts"]
 }

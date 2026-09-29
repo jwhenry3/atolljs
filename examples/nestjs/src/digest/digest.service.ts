@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { threadId } from 'node:worker_threads';
 import { Inject, Injectable } from '@nestjs/common';
 import { AtollTask } from '@atolljs/nestjs/decorators';
-import { defineSharedMemory, field } from '@atolljs/core/sdk';
+import { defineSharedMemory, field } from '@atolljs/core';
 import { ScanTelemetry } from '../shared/scan-telemetry.service';
 
 // The digest pool's own shared contract — a completely separate buffer from

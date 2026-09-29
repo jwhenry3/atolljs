@@ -1,6 +1,6 @@
 import { createSignal, onCleanup, type Accessor } from 'solid-js';
-import { observe, toTask } from '@atolljs/core/sdk';
-import type { AsyncTask, ObservableValue, PathConnector, SharedMemory, SharedSpec, SpecPath, SliceOptions, TaskSnapshot } from '@atolljs/core/sdk';
+import { observe, toTask } from '@atolljs/core';
+import type { AsyncTask, ObservableValue, PathConnector, SharedMemory, SharedSpec, SpecPath, SliceOptions, TaskSnapshot } from '@atolljs/core';
 
 /** Wrap any sdk ObservableValue (task snapshot, field observable) in an Accessor. */
 export function createObservable<T>(source: ObservableValue<T>): Accessor<T> {

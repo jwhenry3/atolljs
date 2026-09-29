@@ -39,11 +39,11 @@
       "@atolljs/node/*": [
         "../../packages/node/src/*"
       ],
-      "@atolljs/core/sdk": [
-        "../../src/sdk/index.ts"
+      "@atolljs/core": [
+        "../../src/index.ts"
       ],
-      "@atolljs/core/sdk/*": [
-        "../../src/sdk/*"
+      "@atolljs/core/*": [
+        "../../src/*"
       ]
     }
   },

@@ -4,7 +4,7 @@ import { defineConfig } from 'vite';
 
 // The sdk lives in the workspace root — alias the package name to its source
 // so the example runs against it without a build step.
-const sdkRoot = fileURLToPath(new URL('../../src/sdk/', import.meta.url)).replace(/\\/g, '/');
+const coreRoot = fileURLToPath(new URL('../../src/', import.meta.url)).replace(/\\/g, '/');
 const incidentsRoot = fileURLToPath(new URL('../../packages/incidents/src/', import.meta.url)).replace(/\\/g, '/');
 const reactBindingsRoot = fileURLToPath(new URL('../../packages/react/src/', import.meta.url)).replace(/\\/g, '/');
 
@@ -20,9 +20,8 @@ export default defineConfig(({ command }) => ({
     alias: [
       { find: '@atolljs/react', replacement: `${reactBindingsRoot}index.ts` },
       { find: '@atolljs/incidents', replacement: `${incidentsRoot}index.ts` },
-      { find: /^@atolljs\/core$/, replacement: `${sdkRoot}index.ts` },
-      { find: /^@atolljs\/core\/sdk$/, replacement: `${sdkRoot}index.ts` },
-      { find: /^@atolljs\/core\/sdk\//, replacement: sdkRoot },
+      { find: /^@atolljs\/core$/, replacement: `${coreRoot}index.ts` },
+      { find: /^@atolljs\/core\//, replacement: coreRoot },
     ],
   },
   // SharedArrayBuffer requires a cross-origin isolated context

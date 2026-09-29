@@ -1,6 +1,6 @@
 # Reactivity & tasks
 
-Read when: working on `src/sdk/reactive.ts`, `observable.ts`, `task.ts`,
+Read when: working on `src/reactive.ts`, `observable.ts`, `task.ts`,
 `log.ts`, or any framework binding's subscription adapters.
 
 The SDK's reactivity layer is framework-neutral: everything reduces to
@@ -10,7 +10,7 @@ The SDK's reactivity layer is framework-neutral: everything reduces to
 ## `observe()` — fields as snapshots
 
 ```ts
-import { observe } from '@atolljs/core/sdk';
+import { observe } from '@atolljs/core';
 
 // ObservableValue<T> — get() + subscribe(). Binds lazily: undefined until the
 // contract is bound, activates its watch when bind() lands.
@@ -26,7 +26,7 @@ starts on the first subscriber, stops on the last unsubscribe).
 ## `watch()` / `reactive()` — low-level
 
 ```ts
-import { reactive, watch } from '@atolljs/core/sdk';
+import { reactive, watch } from '@atolljs/core';
 
 // Low-level: observe writes through the shared version counter.
 const unwatch = watch(incidentsMemory.state.metrics, (m) => render(m));
@@ -42,7 +42,7 @@ const conn = reactive(incidentsMemory.signals.seedProgress);
 ## `defineTask()` / `toTask()` — latest-wins async
 
 ```ts
-import { defineTask, toTask } from '@atolljs/core/sdk';
+import { defineTask, toTask } from '@atolljs/core';
 
 // Latest-wins async runner: rapid re-runs drop stale results.
 // Snapshot: { data, pending, settled, elapsedMs, error }.
@@ -69,7 +69,7 @@ function like the incidents package's `initIncidents`.
 ## Logging
 
 ```ts
-import { scoped, setLogLevel, setLogSink } from '@atolljs/core/sdk';
+import { scoped, setLogLevel, setLogSink } from '@atolljs/core';
 
 const log = scoped('my-domain');
 log.debug('...', { detail: 1 });

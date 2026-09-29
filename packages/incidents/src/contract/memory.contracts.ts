@@ -1,4 +1,4 @@
-import { defineSharedMemory, field, mz, type InferField, type ListRecord } from '@atolljs/core/sdk';
+import { defineSharedMemory, field, mz, type InferField, type ListRecord } from '@atolljs/core';
 
 export const SEVERITIES = ['info', 'minor', 'major', 'critical'] as const;
 export const STATUSES = ['open', 'acknowledged', 'resolved'] as const;

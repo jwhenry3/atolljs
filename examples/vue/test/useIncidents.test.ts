@@ -3,12 +3,12 @@
  */
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { effectScope, ref } from 'vue';
-import { InProcessWorker } from '@atolljs/core/sdk/testing/inProcessWorker';
-import type { QueryArgs } from '@atolljs/core/incidents';
+import { InProcessWorker } from '@atolljs/core/testing/inProcessWorker';
+import type { QueryArgs } from '@atolljs/incidents';
 
 vi.stubGlobal('Worker', InProcessWorker);
 InProcessWorker.handlerModules = [
-  () => import('@atolljs/core/incidents/worker/incidents.worker'),
+  () => import('@atolljs/incidents/worker/incidents.worker'),
 ];
 
 const QUERY: QueryArgs = {

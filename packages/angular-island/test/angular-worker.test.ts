@@ -11,7 +11,7 @@
  */
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { connectIslandWorker, mountIsland } from '@atolljs/islands';
-import { InProcessWorker } from '@atolljs/core/sdk/testing/inProcessWorker';
+import { InProcessWorker } from '@atolljs/core/testing/inProcessWorker';
 
 vi.stubGlobal('Worker', InProcessWorker);
 InProcessWorker.handlerModules = [() => import('./fixtures/counter.worker')];

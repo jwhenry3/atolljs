@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { TaskRegistry, type TaskContract } from '@atolljs/core/sdk';
+import { TaskRegistry, type TaskContract } from '@atolljs/core';
 import { getAtollTaskMeta, AtollTask } from '../src/decorators';
 import { getAtollPool, registerAtollPool, unregisterAtollPool } from '../src/pools';
 

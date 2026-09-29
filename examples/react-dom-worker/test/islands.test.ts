@@ -15,7 +15,7 @@
  * auto-subscribe at mount.
  */
 import { beforeAll, describe, expect, it, vi } from 'vitest';
-import { InProcessWorker } from '@atolljs/core/sdk/testing/inProcessWorker';
+import { InProcessWorker } from '@atolljs/core/testing/inProcessWorker';
 
 /**
  * One React copy for the whole render stack. The suite aliases `react` to the

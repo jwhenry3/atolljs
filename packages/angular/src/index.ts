@@ -1,6 +1,6 @@
 import { DestroyRef, inject, signal, type Signal } from '@angular/core';
-import { observe, toTask } from '@atolljs/core/sdk';
-import type { AsyncTask, ObservableValue, PathConnector, SharedMemory, SharedSpec, SpecPath, SliceOptions, TaskSnapshot } from '@atolljs/core/sdk';
+import { observe, toTask } from '@atolljs/core';
+import type { AsyncTask, ObservableValue, PathConnector, SharedMemory, SharedSpec, SpecPath, SliceOptions, TaskSnapshot } from '@atolljs/core';
 
 function unhook(stop: () => void) {
   inject(DestroyRef, { optional: true })?.onDestroy(stop);

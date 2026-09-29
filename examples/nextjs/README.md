@@ -1,6 +1,6 @@
 # Telecom Incident Explorer — Next.js
 
-The incidents demo on the `@atolljs/core/sdk` sdk: 1M fixed-layout records seeded into
+The incidents demo on the `@atolljs/core` sdk: 1M fixed-layout records seeded into
 shared memory by a worker pool; the main thread publishes queries, the worker
 scans/sorts/aggregates, and only the visible page crosses postMessage.
 
@@ -49,7 +49,7 @@ npm run dev   # http://localhost:3001
 ```
 
 SharedArrayBuffer needs cross-origin isolation — `next.config.ts` sets COOP/COEP
-headers and aliases `@atolljs/core/sdk` to the sdk source (webpack + turbopack).
+headers and aliases `@atolljs/core` to the sdk source (webpack + turbopack).
 the shared package's `pool.ts` uses the bundler-detectable
 `new Worker(new URL(..., import.meta.url))` pattern via `createWorker`.
 The worker pool only constructs on the client (`typeof window` guard in the

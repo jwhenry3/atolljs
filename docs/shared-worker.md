@@ -1,6 +1,6 @@
 # Shared worker
 
-Read when: working on `src/sdk/shared/` — `sharedWorkerClient.ts` /
+Read when: working on `src/shared/` — `sharedWorkerClient.ts` /
 `sharedWorkerHost.ts`, or the cross-context handshake.
 
 `connectSharedWorker` + `sharedWorkerHost` extend the shared-memory pattern
@@ -61,17 +61,17 @@ and error replies are identical to the pool path.
 ## Host — worker entry
 
 ```ts
-import { sharedWorkerHost } from '@atolljs/core/sdk';
+import { sharedWorkerHost } from '@atolljs/core';
 import './task.handlers';   // TaskRegistry.register(...) calls
 sharedWorkerHost();         // installs onconnect → attachSharedPort(port)
 ```
 
-Source: `src/sdk/shared/sharedWorkerHost.ts`.
+Source: `src/shared/sharedWorkerHost.ts`.
 
 ## Client — page side
 
 ```ts
-import { connectSharedWorker } from '@atolljs/core/sdk';
+import { connectSharedWorker } from '@atolljs/core';
 
 const worker = await connectSharedWorker({
   createWorker: () => new SharedWorker(
@@ -87,7 +87,7 @@ worker.sharedMemory.metrics.read();                     // same buffer as every 
 worker.disconnect();                                    // this client only — worker stays up
 ```
 
-Source: `src/sdk/shared/sharedWorkerClient.ts`.
+Source: `src/shared/sharedWorkerClient.ts`.
 
 ## Notes
 

@@ -87,7 +87,7 @@ export function attachSharedPort(port: MessagePort): void {
  * module, after registering task handlers:
  *
  * ```ts
- * import { sharedWorkerHost, TaskRegistry } from '@atolljs/core/sdk';
+ * import { sharedWorkerHost, TaskRegistry } from '@atolljs/core';
  * import './tasks';            // TaskRegistry.register(...) calls
  * sharedWorkerHost();
  * ```

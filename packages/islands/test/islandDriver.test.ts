@@ -7,7 +7,7 @@
  * update-op diff hits every setProp/removeProp branch.
  */
 import { beforeAll, describe, expect, it, vi } from 'vitest';
-import { InProcessWorker } from '@atolljs/core/sdk/testing/inProcessWorker';
+import { InProcessWorker } from '@atolljs/core/testing/inProcessWorker';
 import type { IslandClient, IslandHandle } from '../src/index';
 
 vi.stubGlobal('Worker', InProcessWorker);

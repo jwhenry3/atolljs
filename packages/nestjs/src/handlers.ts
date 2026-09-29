@@ -1,5 +1,5 @@
 // Framework-free worker-side registration — safe inside worker bundles.
-import { TaskRegistry } from '@atolljs/core/sdk';
+import { TaskRegistry } from '@atolljs/core';
 import { bindAtollWorkerInstance, getAtollTaskMeta } from './decorators';
 
 /**

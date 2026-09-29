@@ -1,10 +1,10 @@
 // Copies each built app into dist/<name>/ under the root dist, so one static
 // server can reach every app's index.html by path:
-//   /            root dashboard (dist/index.html)
+//   /            pages-landing index (copied in below)
 //   /consumer/   docs-consumer site
 //   /react/ /vue/ /solid/ /svelte/ /angular/   framework examples
 // (Next.js is server-rendered — it isn't copied; `next start` serves it.)
-import { cpSync, existsSync, rmSync } from 'node:fs';
+import { cpSync, copyFileSync, existsSync, mkdirSync, rmSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 
@@ -22,9 +22,11 @@ const mounts = [
   ['react-dom-worker', 'examples/react-dom-worker/dist'],
 ];
 
-if (!existsSync(join(root, 'dist/index.html'))) {
-  console.error('assemble: dist/index.html missing — build the root app first');
-  process.exit(1);
+// The root page is the static landing — the dashboard app was removed when
+// src/ became the package source root (lib build emits to dist/ alongside).
+mkdirSync(join(root, 'dist'), { recursive: true });
+for (const f of ['index.html', 'coi-sw.js']) {
+  copyFileSync(join(root, 'pages-landing', f), join(root, 'dist', f));
 }
 
 for (const [name, dir] of mounts) {

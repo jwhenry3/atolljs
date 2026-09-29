@@ -2,13 +2,13 @@ import 'reflect-metadata';
 import { describe, expect, it } from 'vitest';
 import { Inject, Injectable, Module } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
-import { defineSharedMemory, field, setLogSink, TaskRegistry, WorkerPool, type LogEntry } from '@atolljs/core/sdk';
+import { defineSharedMemory, field, setLogSink, TaskRegistry, WorkerPool, type LogEntry } from '@atolljs/core';
 import { InjectAtollPool } from '../src/injectPool';
 import { AtollModule } from '../src/module';
 import { AtollTask } from '../src/decorators';
 import { getAtollPool } from '../src/pools';
 import { runAtollWorker } from '../src/worker';
-import { InProcessWorker } from '@atolljs/core/sdk/testing/inProcessWorker';
+import { InProcessWorker } from '@atolljs/core/testing/inProcessWorker';
 
 const mem = defineSharedMemory({ n: field.number() });
 const newWorker = () => new InProcessWorker(new URL('https://t.test/w.js')) as unknown as Worker;

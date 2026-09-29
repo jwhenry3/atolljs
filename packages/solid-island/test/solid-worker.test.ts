@@ -6,7 +6,7 @@
  * updateProps ops replay onto real DOM here exactly as they do in a browser.
  */
 import { beforeAll, describe, expect, it, vi } from 'vitest';
-import { InProcessWorker } from '@atolljs/core/sdk/testing/inProcessWorker';
+import { InProcessWorker } from '@atolljs/core/testing/inProcessWorker';
 import {
   connectIslandWorker,
   mountIsland,

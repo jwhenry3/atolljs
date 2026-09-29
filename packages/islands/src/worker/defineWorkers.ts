@@ -54,8 +54,8 @@
 
 import type { ReactElement } from 'react';
 import type { ReactInstance } from './reactInstance';
-import { defineWorker } from '@atolljs/core/sdk';
-import type { SharedMemory, WorkerDefinition } from '@atolljs/core/sdk';
+import { defineWorker } from '@atolljs/core';
+import type { SharedMemory, WorkerDefinition } from '@atolljs/core';
 import { islandAppNameOf } from '../app';
 import { renderMemory, type DoorbellSpec } from '../memory';
 import { CALLBACK_EVENT, unmarshalCallbackProps } from '../callbackProps';

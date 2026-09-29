@@ -15,10 +15,10 @@ repository — internals, contracts, and conventions.
 | If you're working on… | Read |
 |---|---|
 | Anything (first contact) | [overview.md](overview.md) — architecture, repo layout, how to run |
-| `src/sdk/contract/` — memory layout, fields, codecs | [shared-memory.md](shared-memory.md) |
-| `src/sdk/pool/`, `src/sdk/worker/`, task dispatch | [tasks-and-pool.md](tasks-and-pool.md) |
-| `src/sdk/reactive.ts`, `observable.ts`, `task.ts`, `log.ts` | [reactivity.md](reactivity.md) |
-| `src/sdk/shared/` — SharedWorker host/client | [shared-worker.md](shared-worker.md) |
+| `src/contract/` — memory layout, fields, codecs | [shared-memory.md](shared-memory.md) |
+| `src/pool/`, `src/worker/`, task dispatch | [tasks-and-pool.md](tasks-and-pool.md) |
+| `src/reactive.ts`, `observable.ts`, `task.ts`, `log.ts` | [reactivity.md](reactivity.md) |
+| `src/shared/` — SharedWorker host/client | [shared-worker.md](shared-worker.md) |
 | COOP/COEP headers, iframe embedding, `SharedArrayBuffer` availability | [cross-origin-isolation.md](cross-origin-isolation.md) |
 | `packages/islands/` — `mountIsland`, driver, op protocol | [islands.md](islands.md) |
 | `packages/islands/src/worker/` — proxy DOM, instances, worker entries | [islands-worker.md](islands-worker.md) |

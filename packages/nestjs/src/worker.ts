@@ -5,10 +5,10 @@
 // bootstrap wires INIT_MEMORY / EXECUTE_TASK onto it. Both are no-ops on the
 // main thread, so this module is also safe to pull in via the package barrel.
 import '@atolljs/node/shim';
-import '@atolljs/core/sdk/worker/workerBootstrap';
+import '@atolljs/core/worker/workerBootstrap';
 import { DiscoveryModule, DiscoveryService, NestFactory } from '@nestjs/core';
 import { Module, type INestApplicationContext, type Type } from '@nestjs/common';
-import { scoped } from '@atolljs/core/sdk';
+import { scoped } from '@atolljs/core';
 import { getAtollTaskMeta } from './decorators';
 import { registerAtollHandlers } from './handlers';
 

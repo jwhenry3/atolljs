@@ -8,7 +8,7 @@
  * round-trip into the island's emit channel.
  */
 import { beforeAll, describe, expect, it, vi } from 'vitest';
-import { InProcessWorker } from '@atolljs/core/sdk/testing/inProcessWorker';
+import { InProcessWorker } from '@atolljs/core/testing/inProcessWorker';
 
 const requireFromRoot = async () => {
   const { createRequire } = await import('node:module');

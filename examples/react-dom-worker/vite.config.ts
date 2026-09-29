@@ -5,7 +5,7 @@ import { defineConfig } from 'vite';
 // package names to their sources so the example runs against them without a
 // build step. (The file: dependency in package.json would also resolve, but
 // aliases make dev/test robust regardless of install state.)
-const sdkRoot = fileURLToPath(new URL('../../src/sdk/', import.meta.url)).replace(/\\/g, '/');
+const coreRoot = fileURLToPath(new URL('../../src/', import.meta.url)).replace(/\\/g, '/');
 const islandsRoot = fileURLToPath(new URL('../../packages/islands/src/', import.meta.url)).replace(/\\/g, '/');
 const vueIslandRoot = fileURLToPath(new URL('../../packages/vue-island/src/', import.meta.url)).replace(/\\/g, '/');
 
@@ -18,9 +18,8 @@ export default defineConfig(({ command }) => ({
     // dispatcher. Force a single copy for the whole example.
     dedupe: ['react'],
     alias: [
-      { find: /^@atolljs\/core$/, replacement: `${sdkRoot}index.ts` },
-      { find: /^@atolljs\/core\/sdk$/, replacement: `${sdkRoot}index.ts` },
-      { find: /^@atolljs\/core\/sdk\//, replacement: sdkRoot },
+      { find: /^@atolljs\/core$/, replacement: `${coreRoot}index.ts` },
+      { find: /^@atolljs\/core\//, replacement: coreRoot },
       { find: /^@atolljs\/islands$/, replacement: `${islandsRoot}index.ts` },
       { find: /^@atolljs\/islands\/worker$/, replacement: `${islandsRoot}worker/index.ts` },
       {

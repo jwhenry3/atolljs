@@ -1,4 +1,4 @@
-import { defineWorker } from '@atolljs/core/sdk';
+import { defineWorker } from '@atolljs/core';
 import { incidentsMemory } from '../contract/memory.contracts';
 import { computeMetrics } from '../service/computeMetrics';
 import { queryIncidents } from '../service/queryIncidents';

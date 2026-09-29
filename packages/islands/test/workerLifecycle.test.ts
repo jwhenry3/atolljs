@@ -6,7 +6,7 @@
  * renderer internals — Suspense hide/unhide and portal insertion.
  */
 import { beforeAll, describe, expect, it, vi } from 'vitest';
-import { InProcessWorker } from '@atolljs/core/sdk/testing/inProcessWorker';
+import { InProcessWorker } from '@atolljs/core/testing/inProcessWorker';
 import type { IslandHandle } from '../src/index';
 
 vi.stubGlobal('Worker', InProcessWorker);

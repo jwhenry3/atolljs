@@ -1,6 +1,6 @@
 import { Controller, Get, Inject, NotFoundException, Param, ParseIntPipe, Post, Query } from '@nestjs/common';
 import { InjectAtollPool } from '@atolljs/nestjs';
-import { workerClient, type WorkerPool } from '@atolljs/core/sdk';
+import { workerClient, type WorkerPool } from '@atolljs/core';
 import {
   incidentsMemory,
   REGIONS,

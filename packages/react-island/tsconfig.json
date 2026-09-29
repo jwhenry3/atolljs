@@ -11,8 +11,8 @@
     "jsx": "react-jsx",
     "skipLibCheck": true,
     "paths": {
-      "@atolljs/core/sdk": ["../../src/sdk/index.ts"],
-      "@atolljs/core/sdk/*": ["../../src/sdk/*"],
+      "@atolljs/core": ["../../src/index.ts"],
+      "@atolljs/core/*": ["../../src/*"],
       "@atolljs/islands": ["../../packages/islands/src/index.ts"],
       "@atolljs/islands/*": ["../../packages/islands/src/*"]
     }

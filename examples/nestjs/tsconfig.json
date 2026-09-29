@@ -12,8 +12,8 @@
     "isolatedModules": true,
     "skipLibCheck": true,
     "paths": {
-      "@atolljs/core/sdk": ["../../src/sdk/index.ts"],
-      "@atolljs/core/sdk/*": ["../../src/sdk/*"],
+      "@atolljs/core": ["../../src/index.ts"],
+      "@atolljs/core/*": ["../../src/*"],
       "@atolljs/incidents": ["../../packages/incidents/src/index.ts"],
       "@atolljs/incidents/*": ["../../packages/incidents/src/*"],
       "@atolljs/nestjs": ["../../packages/nestjs/src/index.ts"],

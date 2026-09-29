@@ -7,13 +7,13 @@
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
-import { InProcessWorker } from '@atolljs/core/sdk/testing/inProcessWorker';
-import type { QueryArgs } from '@atolljs/core/incidents';
+import { InProcessWorker } from '@atolljs/core/testing/inProcessWorker';
+import type { QueryArgs } from '@atolljs/incidents';
 
 (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
 vi.stubGlobal('Worker', InProcessWorker);
 InProcessWorker.handlerModules = [
-  () => import('@atolljs/core/incidents/worker/incidents.worker'),
+  () => import('@atolljs/incidents/worker/incidents.worker'),
 ];
 
 const QUERY: QueryArgs = {

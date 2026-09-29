@@ -2,7 +2,7 @@
 import { act, type ReactElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { defineSharedMemory, defineTask, field, observe } from '@atolljs/core/sdk';
+import { defineSharedMemory, defineTask, field, observe } from '@atolljs/core';
 import { useObservable, useSharedValue, useTask } from '../src/index';
 
 (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;

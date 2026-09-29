@@ -17,7 +17,7 @@ import {
   defineSharedMemory,
   field,
   TaskRegistry,
-} from '@atolljs/core/sdk';
+} from '@atolljs/core';
 import { bindAtollWorkerInstance, AtollService, AtollTask } from '../src/decorators';
 import { AtollModule } from '../src/module';
 import { getAtollPoolToken } from '../src/pools';

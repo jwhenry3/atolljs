@@ -3,13 +3,13 @@
  * in-process. `inRoot` supplies the rune effect root the example expects.
  */
 import { beforeAll, describe, expect, it, vi } from 'vitest';
-import { InProcessWorker } from '@atolljs/core/sdk/testing/inProcessWorker';
+import { InProcessWorker } from '@atolljs/core/testing/inProcessWorker';
 import { inRoot } from './root.svelte.js';
-import type { QueryArgs } from '@atolljs/core/incidents';
+import type { QueryArgs } from '@atolljs/incidents';
 
 vi.stubGlobal('Worker', InProcessWorker);
 InProcessWorker.handlerModules = [
-  () => import('@atolljs/core/incidents/worker/incidents.worker'),
+  () => import('@atolljs/incidents/worker/incidents.worker'),
 ];
 
 const QUERY: QueryArgs = {
