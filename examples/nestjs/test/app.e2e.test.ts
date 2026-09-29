@@ -56,6 +56,53 @@ describe('nestjs example e2e', () => {
     expect(hs[0]).toHaveProperty('site');
   });
 
+  it('houses a partial API entirely inside workers', async () => {
+    // /api/housed/* proxies to a Nest app living in the pool workers —
+    // the controller + DI run off the API thread and stamp the threadId.
+    // Workers announce their internal ports async — retry until it lands.
+    let who: { worker?: number } = {};
+    const deadline = Date.now() + 30_000;
+    for (;;) {
+      const res = await fetch(`${base}/housed/incidents/whoami`);
+      if (res.ok) {
+        who = await res.json();
+        break;
+      }
+      if (Date.now() > deadline) throw new Error('housed API never came up');
+      await new Promise((r) => setTimeout(r, 300));
+    }
+    expect(who.worker).toBeGreaterThan(0);
+
+    const stats = await (await fetch(`${base}/housed/incidents/stats`)).json();
+    expect(stats.worker).toBeGreaterThan(0);
+    expect(stats.total).toBe(1_000_000);
+    expect(stats.open + stats.acknowledged + stats.resolved).toBe(1_000_000);
+
+    const query = await (
+      await fetch(`${base}/housed/incidents/query?severity=critical&limit=5`)
+    ).json();
+    expect(query.worker).toBeGreaterThan(0);
+    expect(query.total).toBe(1_000_000);
+    for (const row of query.rows) expect(row.severity).toBe(3);
+
+    // DI in the worker: hotspots runs IncidentsAnalytics with this worker's
+    // own ScanTelemetry instance.
+    const hs = await (await fetch(`${base}/housed/incidents/hotspots?limit=3`)).json();
+    expect(hs.worker).toBeGreaterThan(0);
+    expect(hs.hotspots.length).toBeGreaterThan(0);
+    expect(hs.hotspots[0]).toHaveProperty('site');
+  });
+
+  it('proxies housed routes to workers round-robin', async () => {
+    const hits = await Promise.all(
+      Array.from({ length: 6 }, () =>
+        fetch(`${base}/housed/incidents/whoami`).then((r) => r.json()),
+      ),
+    );
+    // 'auto' pool is >1 worker — round-robin selection lands on more than one.
+    expect(new Set(hits.map((h) => h.worker)).size).toBeGreaterThan(1);
+  });
+
   it('runs the second (digest) pool on its own workers', async () => {
     const res = await fetch(`${base}/digest/hash`, {
       method: 'POST',

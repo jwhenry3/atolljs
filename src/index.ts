@@ -1,6 +1,6 @@
 /* ── Contract — shared memory declarations (both threads) ───────────────── */
 
-export { defineSharedMemory, field, getDefinedSharedMemoryCount, jsonCodec, registerConnectorFactory } from './contract/sharedMemory';
+export { bindSharedMemories, defineSharedMemory, field, getDefinedSharedMemoryCount, jsonCodec, registerConnectorFactory } from './contract/sharedMemory';
 export { mz } from './contract/mz';
 export type {
   Codec,

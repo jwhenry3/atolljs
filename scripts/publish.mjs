@@ -14,7 +14,7 @@
 // on the registry. Run it interactively (2FA prompts per package) to create
 // each package; provenance is dropped since it needs Actions OIDC.
 import { execFileSync } from 'node:child_process';
-import { readFileSync, writeFileSync, readdirSync, statSync } from 'node:fs';
+import { appendFileSync, readFileSync, writeFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
 const root = new URL('..', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1');
@@ -65,6 +65,60 @@ const sorted = [...packages].sort(
             (order.indexOf(b.pkg.name) === -1 ? 99 : order.indexOf(b.pkg.name)),
 );
 
+/* ── Transparency preamble ──────────────────────────────────────────────── */
+
+const REGISTRY = 'https://registry.npmjs.org';
+
+// Declared destination per package — publishConfig.registry pins the
+// registry in the manifest itself so a stray ~/.npmrc scope mapping (or a
+// GitHub Packages config) can't silently redirect the publish.
+for (const { pkg } of packages) {
+  const reg = pkg.publishConfig?.registry;
+  if (reg !== REGISTRY) {
+    console.warn(
+      `WARN ${pkg.name}: publishConfig.registry is ${reg ?? 'unset'} — ` +
+        `expected ${REGISTRY}. A missing pin means whoever/whatever runs ` +
+        `publish decides the destination.`,
+    );
+  }
+}
+
+// Auth posture — which credential the npm CLI will actually use. OIDC
+// trusted publishing is the intended path; NODE_AUTH_TOKEN is the
+// transitional fallback until every package has a stage-only trust
+// relationship (`npm trust github ... --allow-stage-publish`).
+console.log(
+  process.env.NODE_AUTH_TOKEN
+    ? 'auth: NODE_AUTH_TOKEN secret present — npm may use it where a package lacks OIDC trust'
+    : 'auth: no NODE_AUTH_TOKEN — OIDC trusted publishing only (npm stage + provenance)',
+);
+
+// `--dry-run` transparency: show the actual tarball contents each package
+// would ship (npm pack's own dry run), not just the command we'd run.
+if (dryRun) {
+  for (const { dir, pkg } of sorted) {
+    try {
+      const out = execFileSync('npm', ['pack', '--dry-run', '--json'], {
+        cwd: dir,
+        encoding: 'utf8',
+        shell: process.platform === 'win32',
+      });
+      const [pack] = JSON.parse(out);
+      const kb = (n) => (n / 1024).toFixed(1);
+      console.log(
+        `\n${pkg.name}@${version} — ${pack.entryCount ?? pack.files.length} files, ` +
+          `${kb(pack.size)} kB tarball (${kb(pack.unpackedSize)} kB unpacked)`,
+      );
+      for (const f of pack.files) console.log(`  ${f.path}`);
+    } catch {
+      console.log(`\n${pkg.name}@${version} — npm pack --dry-run failed (files not listed)`);
+    }
+  }
+}
+
+/* ── Stage (or publish) each package, recording the outcome ─────────────── */
+
+const results = [];
 for (const { dir, pkg } of sorted) {
   // --direct: one-time bootstrap publish — staging requires an existing
   // package; --provenance is CI-only (needs Actions OIDC).
@@ -72,5 +126,38 @@ for (const { dir, pkg } of sorted) {
     ? ['publish', '--access', 'public']
     : ['stage', 'publish', '--access', 'public', '--provenance'];
   console.log(`${dryRun ? '[dry-run] ' : ''}npm ${cmd.join(' ')}  ${pkg.name}@${version}`);
-  if (!dryRun) execFileSync('npm', cmd, { cwd: dir, stdio: 'inherit', shell: process.platform === 'win32' });
+  if (dryRun) {
+    results.push({ name: pkg.name, status: 'dry-run' });
+    continue;
+  }
+  try {
+    execFileSync('npm', cmd, { cwd: dir, stdio: 'inherit', shell: process.platform === 'win32' });
+    results.push({ name: pkg.name, status: direct ? 'published' : 'staged' });
+  } catch {
+    results.push({ name: pkg.name, status: 'FAILED' });
+    throw new Error(`${pkg.name} failed — see npm output above`);
+  }
+}
+
+/* ── The run's durable record ──────────────────────────────────────────────
+ * GitHub renders $GITHUB_STEP_SUMMARY on the workflow run page — the
+ * at-a-glance list of what this release staged, without digging through
+ * npm's per-package log output. Outside Actions the same table prints to
+ * stdout.
+ */
+const table = [
+  `| package | version | result |`,
+  `| --- | --- | --- |`,
+  ...results.map((r) => `| \`${r.name}\` | \`${version}\` | ${r.status} |`),
+].join('\n');
+const summary =
+  `### ${direct ? 'Published' : 'Staged'} packages — ${tag}\n\n` +
+  `${table}\n\n` +
+  (direct
+    ? ''
+    : `Staged versions are **not installable** until approved — \`npm stage list\` / \`npm stage approve <id>\` (2FA), or the Staged Packages tab on npmjs.com.\n`);
+if (process.env.GITHUB_STEP_SUMMARY) {
+  appendFileSync(process.env.GITHUB_STEP_SUMMARY, summary);
+} else {
+  console.log(`\n${summary}`);
 }

@@ -4,3 +4,4 @@ export { NodeWorkerAdapter, createNodeWorker } from './worker';
 export type { WorkerErrorEvent } from './worker';
 export { createNodePool } from './pool';
 export type { NodePoolConfig } from './pool';
+export { bindSharedBuffer, withSharedBuffer } from './sharedBuffer';

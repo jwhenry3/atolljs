@@ -29,6 +29,7 @@
     "build": "tsc --noEmit && vite build",
     "test": "vitest run",
     "build:pages": "node scripts/build-pages.mjs",
+    "serve:pages": "node scripts/serve-pages.mjs",
     "assemble:pages": "node scripts/assemble-pages.mjs"
   },
   "devDependencies": {
@@ -64,5 +65,12 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/jwhenry3/atolljs"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  },
+  "bugs": {
+    "url": "https://github.com/jwhenry3/atolljs/issues"
   }
 }

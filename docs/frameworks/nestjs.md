@@ -43,8 +43,44 @@ Usage references: `examples/nestjs/src/shared/incidents-analytics.service.ts`
 (one service, two runtimes — the same class file is the contract),
 `examples/nestjs/src/incidents.controller.ts` (injected pool wrapped once with
 `workerClient<IncidentsWorker>` — calls read like the worker's own method
-names), `examples/nestjs/src/digest.worker.ts` (worker entry: two imports —
+names), `examples/nestjs/src/digest/digest.worker.ts` (worker entry: two imports —
 `runAtollWorker` plus the feature module).
+
+## Housing partial APIs inside workers
+
+Beyond task dispatch, a route subtree can live *only* in workers — the
+gateway/proxy model from [node.md](node.md), but the worker side runs a
+full Nest app, so housed controllers keep decorators, DI, and guards. The
+example gives housed traffic its **own pool and its own worker entry** —
+each entry file stays single-purpose:
+
+- **`src/housed/housed.worker.ts`** — the dedicated entry: `await bindSharedBuffer()`
+  receives the incidents buffer and binds all contracts, then
+  `NestFactory.create(HousedApiModule)` + `app.init()` +
+  `serveHttp(app.getHttpServer(), { listen: 0 })` binds an internal
+  `127.0.0.1` port and announces it via the `HTTP_PORT` handshake.
+  No `runAtollWorker`/bootstrap — housed workers serve HTTP, not tasks.
+- **`src/housed/housed-atoll.module.ts`** — registers the `'housed'` pool,
+  *message-only*: a pool's `sharedMemory` creates a NEW buffer, so the worker
+  factory is `withSharedBuffer` (`@atolljs/node`) fed by
+  `getAtollPool('incidents')?.sharedBuffer`, evaluated lazily per spawn so
+  respawns get it too — import order puts IncidentsAtollModule first. Two
+  pools' workers, one shared buffer.
+- **Main thread** (`src/main.ts`): `getAtollPool('housed')` →
+  `workerHttpPorts(pool)` → `app.use('/api/housed', proxyToWorker({ pool,
+  tracker, to: '/api/housed', worker }))`. Express strips the mount prefix;
+  `to:` restores it for the worker's routes.
+- `worker:` is a slot index or a selector over the live `pool.workers`
+  snapshot — round-robin, or pin to one slot; respawned workers re-announce
+  and take their routes back automatically (the `HTTP_PORT_QUERY` handshake
+  covers announcements that raced the tracker).
+- **Housed controllers** (`src/housed/`): plain `@Controller`s under
+  `api/housed/*`. Injecting `IncidentsAnalytics` shows the two-runtime
+  story: its `@AtollService` methods see an empty pool registry in-worker
+  and run their real bodies on this worker's DI'd instance — per-worker
+  state like `workerTelemetry()` is genuinely per-worker.
+- `HousedApiModule` (the worker-side module) imports **no** `registerPool` —
+  pools only exist on the main thread.
 
 ## Build — plain `nest build`
 

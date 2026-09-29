@@ -24,8 +24,12 @@ export class NodeWorkerAdapter {
 
   constructor(private readonly worker: NodeWorker) {}
 
-  postMessage(message: unknown): void {
-    this.worker.postMessage(message);
+  postMessage(message: unknown, transferList?: unknown[]): void {
+    if (transferList === undefined) {
+      this.worker.postMessage(message);
+    } else {
+      this.worker.postMessage(message, transferList as never);
+    }
   }
 
   terminate(): void {

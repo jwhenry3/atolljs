@@ -40,6 +40,22 @@ wires the incident tasks and shared fields through the framework bindings.
 | Angular  | `examples/angular` | `npm run dev`   | 4201 |
 | Next.js  | `examples/nextjs`  | `npm run dev`   | 3001 |
 
+### Node backends
+
+The Node examples flip the demo around: instead of a UI consuming the pool,
+an HTTP server fronts it.
+
+| Example | Dir | Command | Port |
+|---|---|---|---|
+| HTTP offload | `examples/http-offload` | `npm run dev` | 3204 |
+
+`http-offload` runs Express inside the pool: a gateway on :3204 pins
+`/api/a/*` to worker A, `/api/b/*` to worker B, and serves the rest on the
+API thread (any Node), plus a pure socket-transfer listener on :3205 that
+hands accepted connections to workers unseen (Node ≥ 26). Its worker entry
+is bundled with esbuild because `worker_threads` spawn plain Node
+(tsx/tsconfig `paths` don't propagate).
+
 ## SharedArrayBuffer requirements
 
 Workers share memory through `SharedArrayBuffer`, which browsers only expose in

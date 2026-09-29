@@ -10,7 +10,8 @@
     "src"
   ],
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
   },
   "peerDependencies": {
     "@atolljs/core": "0.1.0",
@@ -20,5 +21,8 @@
     "type": "git",
     "url": "https://github.com/jwhenry3/atolljs",
     "directory": "packages/vue"
+  },
+  "bugs": {
+    "url": "https://github.com/jwhenry3/atolljs/issues"
   }
 }

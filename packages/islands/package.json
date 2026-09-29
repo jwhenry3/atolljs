@@ -11,7 +11,8 @@
     "src"
   ],
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
   },
   "dependencies": {
     "htmlparser2": "^12.0.0"
@@ -25,5 +26,8 @@
     "type": "git",
     "url": "https://github.com/jwhenry3/atolljs",
     "directory": "packages/islands"
+  },
+  "bugs": {
+    "url": "https://github.com/jwhenry3/atolljs/issues"
   }
 }

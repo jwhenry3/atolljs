@@ -29,7 +29,8 @@ repository — internals, contracts, and conventions.
 | `packages/svelte`, `packages/svelte-island` | [frameworks/svelte.md](frameworks/svelte.md) |
 | `packages/angular`, `packages/angular-island` | [frameworks/angular.md](frameworks/angular.md) |
 | `packages/nextjs` | [frameworks/nextjs.md](frameworks/nextjs.md) |
-| `packages/nestjs`, `packages/node` | [frameworks/nestjs.md](frameworks/nestjs.md) |
+| `packages/nestjs` | [frameworks/nestjs.md](frameworks/nestjs.md) |
+| `packages/node` — adapter, HTTP offload (socket transfer, gateway, housed APIs), cross-pool buffer sharing | [frameworks/node.md](frameworks/node.md) |
 
 ## Core concepts (read in order)
 

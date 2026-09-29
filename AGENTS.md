@@ -56,9 +56,10 @@ packages/incidents/   demo domain package
 packages/<fw>/        framework bindings (react, vue, solidjs, svelte, angular, nextjs)
 packages/islands/     island engine — driver, op protocol, proxy DOM
 packages/<fw>-island/ per-framework island shell + worker renderer
-packages/node/        node:worker_threads adapter
+packages/node/        node:worker_threads adapter (+ ./http socket routing)
 packages/nestjs/      NestJS module + decorators
-examples/<fw>/        demo apps; examples/react-dom-worker/ is the islands demo
+examples/<fw>/        demo apps; examples/react-dom-worker/ is the islands demo;
+                      examples/http-offload/ serves HTTP inside pool workers (Node ≥26)
 docs/                 this project's documentation (markdown)
 docs-consumer/        consumer docs site (Vite app)
 scripts/              dev/serve/assemble orchestration

@@ -83,6 +83,14 @@ export function Overview() {
             <td>Re-exports the React binding — App Router safe, SSR-ready</td>
           </tr>
           <tr>
+            <td><code>@atolljs/node</code></td>
+            <td><code>createNodePool</code>, <code>createNodeWorker</code>, <code>/shim</code>, <code>withSharedBuffer</code>/<code>bindSharedBuffer</code>; <code>/http</code> adds <code>routeHttpConnections</code>, <code>serveHttp</code>, <code>routeHttpGateway</code>, <code>proxyToWorker</code> — HTTP served from inside workers</td>
+          </tr>
+          <tr>
+            <td><code>@atolljs/nestjs</code></td>
+            <td><code>AtollModule</code>, <code>@AtollService</code>, <code>@AtollTask</code>, <code>runAtollWorker</code> — pools and housed APIs on <code>node:worker_threads</code></td>
+          </tr>
+          <tr>
             <td><code>@atolljs/islands</code></td>
             <td><code>mountIsland</code>, <code>connectIslandWorker</code>, <code>callbackProp</code>, <code>islandApp</code> — main-thread mounting; <code>/worker</code> exports <code>definePolyWorker</code>/<code>defineMonoWorker</code>, the proxy DOM, <code>emit</code>, <code>Slot</code></td>
           </tr>
@@ -98,6 +106,8 @@ export function Overview() {
         domain: contracts, worker handlers, and composition. The islands layer
         is separate: it moves the whole render tree into a worker — see{' '}
         <a href="#/islands">Worker islands</a> for when that's the right trade.
+        On the server, <code>@atolljs/node/http</code> moves HTTP itself into
+        workers — see <a href="#/node-servers">Node worker servers</a>.
       </p>
     </article>
   );

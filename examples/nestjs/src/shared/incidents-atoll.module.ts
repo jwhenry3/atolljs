@@ -23,7 +23,7 @@ import { ScanTelemetry } from './scan-telemetry.service';
   imports: [
     AtollModule.registerPool({
       name: 'incidents',
-      worker: () => new Worker(new URL('../incidents.worker.ts', import.meta.url)),
+      worker: () => new Worker(new URL('./incidents.worker.ts', import.meta.url)),
       sharedMemory: incidentsMemory,
       poolSize: 'auto',
     }),

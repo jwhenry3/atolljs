@@ -1,0 +1,146 @@
+# @atolljs/node — node:worker_threads adapter + HTTP connection offload
+
+`@atolljs/node` adapts the SDK's DOM-shaped `Worker` expectations to Node's
+`worker_threads` (an EventEmitter), so `WorkerPool`/`connectWorker` run in
+any Node program without a framework. `packages/node` ships three surfaces:
+
+| Import | Purpose |
+|---|---|
+| `@atolljs/node` | `createNodePool`, `createNodeWorker`, `NodeWorkerAdapter` |
+| `@atolljs/node/shim` | worker-entry prelude — binds `self = parentPort` before Atoll's bootstrap evaluates |
+| `@atolljs/node/http` | `routeHttpConnections` (main) + `serveHttp` (worker) — sockets routed into pool workers; `routeHttpGateway` — path-level routing: some routes in worker A, some in B, some on main |
+
+## Task dispatch (any Node program)
+
+```ts
+const pool = createNodePool({
+  worker: () => new Worker(new URL('./incidents.worker.ts', import.meta.url)),
+  sharedMemory: incidentsMemory,
+  poolSize: 'auto',
+});
+const incidents = workerClient<IncidentsWorker>(pool);
+await incidents.computeMetrics();
+```
+
+The `worker:` factory may return a `node:worker_threads.Worker` directly —
+`createNodePool` auto-wraps it. The DOM `new Worker(new URL(...))` literal
+stays bundler-detectable where a bundler is involved.
+
+**Two non-obvious runtime facts:**
+
+- `worker_threads` spawn **plain Node** processes. tsx hooks and tsconfig
+  `paths` do NOT propagate into workers — bundle the worker entry (e.g.
+  esbuild → `dist/x.worker.js`) and point `workerFile`/`worker:` at the
+  bundle, or keep worker-side imports resolvable by plain Node.
+- Node needs no COOP/COEP headers — `SharedArrayBuffer` is always available.
+
+## HTTP connection offload (`@atolljs/node/http`, Node ≥ 26)
+
+The pool can own the whole HTTP lifecycle, not just dispatched tasks. The
+main thread accepts TCP connections with `pauseOnConnect` (never reads
+request bytes) and transfers each `net.Socket` to a worker via
+`postMessage(msg, [socket])`. Inside the worker, an `http.Server` feeds the
+socket to Express/Fastify/Koa — parsing, routing, handler execution, and
+response serialization all run off the API thread:
+
+```ts
+// main thread — accepts + routes, never parses HTTP
+const pool = createNodePool({ worker, sharedMemory, poolSize: 'auto' });
+const routed = routeHttpConnections({ pool, port: 3204 });
+await routed.close();      // stop accepting; transferred sockets stay with workers
+```
+
+```ts
+// worker entry — after '@atolljs/node/shim'
+import { serveHttp } from '@atolljs/node/http';
+serveHttp(expressApp);            // or koa.callback(), fastify().server,
+                                  // an http.Server, or { handler }/{ server }
+```
+
+- **`pool.workers`** — the pool exposes a live snapshot of slot workers
+  (respawns included) for auxiliary messaging; `routeHttpConnections` reads
+  it fresh per connection. Task dispatch still owns `runTask`/`dispatch` —
+  HTTP connections and `EXECUTE_TASK` messages coexist on the same workers.
+- **Routing** — default round-robin; `route(socket, workers)` in options
+  overrides (e.g. hash on remote address). Returning `undefined` destroys
+  the socket.
+- **Protocol** — sockets carry `{ type: 'HTTP_CONNECTION', socket }`, a wire
+  id distinct from the task protocol; `serveHttp` filters for it, so it
+  coexists with `defineWorker` in one entry.
+- **Limits** — TCP only. `net.Server` transfer also works (a `server` option
+  accepts a custom `net.createServer({ pauseOnConnect: true })` listener).
+  TLS termination is NOT supported — a handshake would consume bytes on the
+  accepting thread; serve plain HTTP behind a proxy/terminator. The socket
+  must not have buffered data — `pauseOnConnect` is what makes this true.
+- **Capability gate** — socket transfer landed in Node.js 26. On older
+  runtimes both functions throw a clear error (`SOCKET_TRANSFER_SUPPORTED`
+  is exported for feature checks); the functional tests skip below 26.
+
+## Gateway: per-route ownership (any Node)
+
+Socket transfer routes per *connection* — it can't split a listener by URL
+path, because the accepting thread never reads request bytes. When routes
+need explicit owners — `/api/a/*` on worker A, `/api/b/*` on worker B, the
+rest on the main thread — `routeHttpGateway` takes the other approach: the
+main thread parses HTTP once and proxies matched prefixes to worker-owned
+listeners. No socket transfer, so it works on every Node version:
+
+```ts
+// worker entry — listen on an internal port and announce it
+serveHttp(app, { listen: 0 });          // → parent gets {type:'HTTP_PORT',port}
+```
+
+```ts
+// main thread
+const gateway = routeHttpGateway({
+  pool,
+  port: 3204,
+  routes: [
+    { prefix: '/api/a/', to: '/api/', worker: 0 },  // pool slot 0 owns /api/a/*
+    { prefix: '/api/b/', to: '/api/', worker: 1 },  // pool slot 1 owns /api/b/*
+  ],
+  handler: (req, res) => { /* everything else — main thread */ },
+});
+```
+
+- `worker:` is a slot index into the live `pool.workers` snapshot (or a
+  selector fn) — a respawned worker re-announces its port and takes over its
+  routes automatically.
+- `to:` rewrites the prefix — `/api/a/incidents/query` reaches the worker as
+  `/api/incidents/query`; the prefix only names the owner.
+- Workers bind `127.0.0.1` — the gateway owns the only public port.
+- A route whose worker hasn't announced yet gets a 503.
+- Main-thread handler work (cheap shared-memory reads, fan-out dispatch)
+  stays in-process — that's the "some routes on main" leg.
+
+### Embedding in a host framework — `workerHttpPorts` + `proxyToWorker`
+
+When the main thread's HTTP stack belongs to Nest/Express/etc., mount just
+the proxy piece instead of running the standalone gateway:
+
+```ts
+const tracker = workerHttpPorts(pool);          // HTTP_PORT handshake tracker
+app.use('/api/housed', proxyToWorker({
+  pool, tracker, to: '/api/housed',             // restore the stripped mount
+  worker: (w) => w[i++ % w.length],             // or a slot index to pin
+}));
+```
+
+`workerHttpPorts` tracks worker announcements (respawns re-announce on the
+next `refresh()`; `HTTP_PORT_QUERY` covers announcements that raced the
+attach). `proxyToWorker` resolves the target worker per request and forwards
+`req`/`res` to its internal port. See `examples/nestjs` for a housed Nest
+module.
+
+**Sharing one buffer across pools**: a pool's `sharedMemory` creates its own
+`WebAssembly.Memory`, so a second pool can't take the same contract — give it
+none (message-only) and hand each worker `pool.sharedBuffer` with
+`withSharedBuffer`/`bindSharedBuffer` (`@atolljs/node`): the main-side wrapper
+feeds a buffer (or thunk, evaluated per spawn) into every spawned worker's
+message channel, and the worker entry `await`s `bindSharedBuffer()` — which
+binds all defined contracts — before booting. `bindSharedBuffer` also accepts
+a manual `workerData.buffer`.
+
+Reference implementation: `examples/http-offload` — gateway on :3204 (any
+Node) plus the socket-transfer listener on :3205 (Node ≥ 26); e2e asserts
+one route shape answered by three different threads.

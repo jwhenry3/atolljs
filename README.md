@@ -50,7 +50,13 @@ and **stages** each to npm with provenance. Staged versions aren't
 installable until a maintainer approves them — `npm stage list` /
 `npm stage approve <stage-id>` (2FA at approval, not in CI), or the Staged
 Packages tab on npmjs.com. Requires a granular `NPM_TOKEN` repo secret.
-Preview the plan locally: `node scripts/publish.mjs v0.1.0 --dry-run`.
+Preview the plan locally: `node scripts/publish.mjs v0.1.0 --dry-run` —
+it lists the exact tarball contents (`npm pack --dry-run`) and the stage
+commands, with nothing written or published. The workflow run ends with a
+step-summary table of every package staged and its result; each publishable
+manifest also pins `publishConfig.registry` to `registry.npmjs.org`, so the
+destination is declared in the repo rather than resolved from the
+publisher's local npmrc.
 
 Staging needs each package to already exist on the registry, so the first
 release is a manual bootstrap — from the repo root:
@@ -61,7 +67,7 @@ npm ci && npx vite build && npx tsc -p tsconfig.build.json
 node scripts/publish.mjs 0.1.0 --direct      # prompts for 2FA per package
 ```
 
-Once all nine packages exist, release-driven `npm stage publish` works for
+Once every package exists, release-driven `npm stage publish` works for
 every subsequent version.
 
 ### Trusted publishing (OIDC)
@@ -72,7 +78,8 @@ even if compromised. Configure per package (needs the package to exist on
 npm, and npm CLI ≥ 11.10):
 
 ```bash
-for p in atoll atoll-node atoll-react atoll-angular atoll-nestjs atoll-nextjs atoll-solidjs atoll-svelte atoll-vue; do
+for p in core node react vue solidjs svelte angular nextjs nestjs \
+         islands react-island vue-island svelte-island solid-island angular-island; do
   npm trust github "@atolljs/$p" --repo jwhenry3/atolljs --file publish.yml --allow-stage-publish -y
   sleep 2
 done
@@ -80,7 +87,7 @@ done
 
 Omit `--allow-publish` — stage-only. First call prompts for 2FA; choose
 "skip for 5 minutes" and the loop finishes hands-free. Verify with
-`npm trust list @atolljs/core`. Once all nine show the relationship,
+`npm trust list @atolljs/core`. Once every package shows the relationship,
 delete the `NODE_AUTH_TOKEN` env line in `publish.yml` (npm only uses OIDC
 when no token is present) — the secret can be revoked after.
 

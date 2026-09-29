@@ -7,6 +7,7 @@ import { Hosting } from './pages/Hosting';
 import { IslandApps } from './pages/IslandApps';
 import { Islands } from './pages/Islands';
 import { Nestjs } from './pages/Nestjs';
+import { NodeServers } from './pages/NodeServers';
 import { Overview } from './pages/Overview';
 import { Quickstart } from './pages/Quickstart';
 import { Reactivity } from './pages/Reactivity';
@@ -45,6 +46,10 @@ const SECTIONS: { label: string; routes: Route[] }[] = [
       { id: 'islands', label: 'Worker islands', page: () => <Islands /> },
       { id: 'island-apps', label: 'Writing island apps', page: () => <IslandApps /> },
     ],
+  },
+  {
+    label: 'Server-side workers',
+    routes: [{ id: 'node-servers', label: 'Node servers', page: () => <NodeServers /> }],
   },
   {
     label: 'Frameworks',

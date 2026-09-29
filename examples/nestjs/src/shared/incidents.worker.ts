@@ -4,7 +4,7 @@
 // binding import + contract tasks + the module to bootstrap.
 import { runAtollWorker } from '@atolljs/nestjs/worker';
 import '@atolljs/incidents/worker/incidents.worker';
-import { IncidentsAtollModule } from './shared/incidents-atoll.module';
+import { IncidentsAtollModule } from './incidents-atoll.module';
 
 // Boot a Nest application context inside this worker: IncidentsAnalytics and
 // ScanTelemetry resolve with real DI, and every @AtollTask method registers

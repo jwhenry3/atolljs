@@ -367,6 +367,25 @@ class WorkerPoolImpl<S extends SharedSpec = SharedSpec> {
     return this.dispatch(contract, args);
   }
 
+  /**
+   * The shared buffer handed to workers via INIT_MEMORY — undefined on
+   * message-only pools. Useful for passing the same buffer to auxiliaries
+   * (e.g. a second pool of HTTP workers via withSharedBuffer).
+   */
+  public get sharedBuffer(): SharedArrayBuffer | undefined {
+    return this.memoryManager?.getBuffer();
+  }
+
+  /**
+   * Live snapshot of the pool's worker slots — for auxiliary messaging that
+   * isn't task dispatch (e.g. routing accepted sockets into workers). The
+   * array is a copy; respawned workers appear on the next read. Do NOT use
+   * this to dispatch tasks — runTask/dispatch own the scheduling protocol.
+   */
+  public get workers(): readonly Worker[] {
+    return this.slots.map((s) => s.worker);
+  }
+
   /** Running aggregates — no histograms, just counts and means. */
   public stats(): PoolStats {
     return {

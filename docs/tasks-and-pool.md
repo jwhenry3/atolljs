@@ -53,7 +53,13 @@ first call, so importing the client is SSR-safe; `start()` spawns eagerly,
 
 `client.with({ signal, timeout })` returns the same typed surface with
 per-call controls; `pool.stats()` exposes queue/in-flight counts and wait/run
-aggregates; `pool.close()` drains then terminates. A `signal` abort rejects
+aggregates; `pool.workers` exposes a live snapshot of the slot workers for
+auxiliary messaging outside task dispatch (respawns appear on the next read —
+see [frameworks/node.md](frameworks/node.md) for the socket-routing use);
+`pool.sharedBuffer` exposes the buffer handed to workers via INIT_MEMORY
+(e.g. to share one contract buffer across two pools — `withSharedBuffer` in
+`@atolljs/node` feeds it to each spawned worker);
+`pool.close()` drains then terminates. A `signal` abort rejects
 the call with `TaskAbortedError` (all four errors are exported from
 `@atolljs/core`): a queued call is dropped, an in-flight one rejects
 the caller but holds the worker's slot until its reply arrives — JS can't
