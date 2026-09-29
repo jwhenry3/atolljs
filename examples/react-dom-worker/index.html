@@ -3,13 +3,13 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>React Worker Islands — DOM ops over postMessage</title>
+    <title>Worker Islands — DOM ops over postMessage</title>
     <!--
       Minimal styling: the point of this page is that each .island-root is
-      populated entirely by ops applied in src/island.ts — there is no React
-      on the main thread at all. Each island is its own Web Worker — the
-      React apps ride the registry worker script, the imperative islands
-      get dedicated realm workers bundling only their own deps.
+      populated entirely by ops applied in src/island.ts — there is no
+      framework on the main thread at all. Each island is its own Web
+      Worker — the React apps ride the registry worker script, the Vue and
+      imperative islands get dedicated workers bundling only their own deps.
     -->
     <style>
       body { font-family: system-ui, sans-serif; margin: 0; background: #101418; color: #e6edf3; }
@@ -79,7 +79,7 @@
   </head>
   <body>
     <div id="root">
-      <h1>React islands — each in its own worker</h1>
+      <h1>Worker islands — React, Vue, imperative, real libraries</h1>
       <div id="transport-bar">
         <span>transport:</span>
         <button id="push-btn">push (SAB doorbell)</button>
@@ -114,6 +114,11 @@
       <section class="island">
         <div class="island-head"><span>app: vanilla (imperative proxy DOM — no React in this worker)</span><span class="badge" id="badge-vanilla">worker …</span></div>
         <div class="island-root" id="island-vanilla"></div>
+      </section>
+
+      <section class="island">
+        <div class="island-head"><span>app: vue-notes (real Vue 3 createRenderer — no React in this worker either)</span><span class="badge" id="badge-vue">worker …</span></div>
+        <div class="island-root" id="island-vue"></div>
       </section>
 
       <section class="island">

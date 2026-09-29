@@ -7,6 +7,7 @@ import { defineConfig } from 'vite';
 // aliases make dev/test robust regardless of install state.)
 const sdkRoot = fileURLToPath(new URL('../../src/sdk/', import.meta.url)).replace(/\\/g, '/');
 const workerDomRoot = fileURLToPath(new URL('../../packages/worker-dom/src/', import.meta.url)).replace(/\\/g, '/');
+const vueIslandRoot = fileURLToPath(new URL('../../packages/vue-island/src/', import.meta.url)).replace(/\\/g, '/');
 
 export default defineConfig(({ command }) => ({
   // Built output is mounted at /react-dom-worker/ under the unified dist root; dev serves /.
@@ -26,6 +27,11 @@ export default defineConfig(({ command }) => ({
         find: /^@jwhenry123\/mesh-react-island$/,
         replacement: `${fileURLToPath(new URL('../../packages/react-island/src/', import.meta.url)).replace(/\\/g, '/')}index.tsx`,
       },
+      // The vue island's worker entry — aliases resolve the package to its
+      // sources like worker-dom above. `vue` itself comes from the root
+      // install (the file: dep), one copy shared with nothing else here.
+      { find: /^@jwhenry123\/mesh-vue-island$/, replacement: `${vueIslandRoot}index.ts` },
+      { find: /^@jwhenry123\/mesh-vue-island\/worker$/, replacement: `${vueIslandRoot}worker.ts` },
     ],
   },
   // Two entry pages: index.html is the framework-free shell (src/main.ts),

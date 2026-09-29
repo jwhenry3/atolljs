@@ -1,15 +1,17 @@
 /**
  * The shell — main-thread orchestration for the islands demo.
  *
- * Seven islands render on this page, each inside its OWN Web Worker (one
+ * Eight islands render on this page, each inside its OWN Web Worker (one
  * connectWorker client per island, pooling disabled — see island.ts for why
  * pooling can't go wider). Four run reconciled React trees out of the
  * registry worker ('charts' is real recharts rendering namespaced SVG);
- * 'vanilla' and 'map' run on dedicated REALM workers (defineRealmWorker —
- * the 1:1 topology): 'vanilla' is a purely IMPERATIVE app on the worker-side
- * proxy DOM, 'map' a REAL unmodified Leaflet 1.9 on proxy DOM + DOM shim —
- * and neither worker's bundle carries the React apps. Two islands run the
- * SAME 'data-table' app — a microfrontend isn't limited to one instance.
+ * 'vue-notes' runs a REAL Vue createRenderer in the worker via the
+ * mesh-vue-island adapter; 'vanilla' and 'map' run on dedicated REALM
+ * workers (defineRealmWorker — the 1:1 topology): 'vanilla' is a purely
+ * IMPERATIVE app on the worker-side proxy DOM, 'map' a REAL unmodified
+ * Leaflet 1.9 on proxy DOM + DOM shim — and neither worker's bundle carries
+ * the React apps. Two islands run the SAME 'data-table' app — a
+ * microfrontend isn't limited to one instance.
  * The shell:
  *
  *   - creates the layout + per-island containers and badges,
@@ -43,6 +45,10 @@ const vanillaWorker = (): Worker =>
   new Worker(new URL('./worker/vanilla.worker.ts', import.meta.url), { type: 'module' });
 const mapWorker = (): Worker =>
   new Worker(new URL('./worker/map.worker.ts', import.meta.url), { type: 'module' });
+// The Vue island — a real Vue createRenderer runs in the worker; the bundle
+// carries Vue and no React.
+const vueWorker = (): Worker =>
+  new Worker(new URL('./worker/vue.worker.ts', import.meta.url), { type: 'module' });
 
 const rootEl = document.getElementById('root');
 if (!rootEl) throw new Error('#root missing from index.html');
@@ -215,6 +221,25 @@ async function main(): Promise<void> {
   islands.push(vanilla);
   $('badge-vanilla').textContent = `worker ${vanilla.pid}`;
 
+  // The Vue island — vue.worker.ts runs a real Vue createRenderer in the
+  // worker (vueIslandApp → RenderedIslandApp). `worker:` shorthand: this
+  // mount builds and owns its client — the one-call form for an island
+  // that doesn't share a worker.
+  const vue = await mountIsland({
+    worker: vueWorker,
+    el: $('island-vue'),
+    app: 'vue-notes',
+    props: { title: 'vue-notes — Vue createRenderer on the proxy DOM, zero React in this worker' },
+    onEvent: (name, payload) => {
+      const p = payload as { text?: string; total?: number };
+      if (name === 'noteAdded')
+        setStatus(`vue island emitted noteAdded → "${p.text}" (${p.total} total)`);
+    },
+    onActivity: renderStats,
+  });
+  islands.push(vue);
+  $('badge-vue').textContent = `worker ${vue.pid}`;
+
   // The map island — REAL Leaflet 1.9, unmodified from npm, mounted on the
   // worker-side proxy DOM after installDomShim(). Tiles, panes, controls,
   // drag-pan and wheel zoom all work through the op stream; the only thing
@@ -254,7 +279,7 @@ async function main(): Promise<void> {
   $('badge-charts').textContent = `worker ${charts.pid}`;
 
   setMode('push');
-  setStatus('seven islands mounted — two share an app, one runs no React, one runs real Leaflet + recharts');
+  setStatus('eight islands mounted — two share an app, one is imperative, one is Vue, one runs real Leaflet + recharts');
 }
 
 void main();

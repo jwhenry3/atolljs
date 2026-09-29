@@ -32,6 +32,17 @@ export default mergeConfig(
         { find: /^@jwhenry123\/mesh-worker-dom$/, replacement: r('packages/worker-dom/src/index.ts') },
         { find: /^@jwhenry123\/mesh-worker-dom\/(.*)$/, replacement: r('packages/worker-dom/src') + '/$1' },
         { find: /^@jwhenry123\/mesh-react-island$/, replacement: r('packages/react-island/src/index.tsx') },
+        // The framework island packages — tests and example worker entries
+        // import the published specifiers (incl. the ./worker subpath) and
+        // land on sources, same as worker-dom above.
+        { find: /^@jwhenry123\/mesh-vue-island$/, replacement: r('packages/vue-island/src/index.ts') },
+        { find: /^@jwhenry123\/mesh-vue-island\/(.*)$/, replacement: r('packages/vue-island/src') + '/$1' },
+        { find: /^@jwhenry123\/mesh-svelte-island$/, replacement: r('packages/svelte-island/src/index.ts') },
+        { find: /^@jwhenry123\/mesh-svelte-island\/(.*)$/, replacement: r('packages/svelte-island/src') + '/$1' },
+        { find: /^@jwhenry123\/mesh-solid-island$/, replacement: r('packages/solid-island/src/index.ts') },
+        { find: /^@jwhenry123\/mesh-solid-island\/(.*)$/, replacement: r('packages/solid-island/src') + '/$1' },
+        { find: /^@jwhenry123\/mesh-angular-island$/, replacement: r('packages/angular-island/src/index.ts') },
+        { find: /^@jwhenry123\/mesh-angular-island\/(.*)$/, replacement: r('packages/angular-island/src') + '/$1' },
         // The published exports map lacks ./incidents/*; tests reach worker
         // entries directly so worker-entry modules can be imported in-process.
         { find: /^@jwhenry123\/mesh\/incidents\/(.*)$/, replacement: r('packages/incidents/src') + '/$1' },

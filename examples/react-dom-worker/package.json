@@ -11,6 +11,8 @@
   "dependencies": {
     "@jwhenry123/mesh-worker-dom": "file:../../packages/worker-dom",
     "@jwhenry123/mesh-react-island": "file:../../packages/react-island",
+    "@jwhenry123/mesh-vue-island": "file:../../packages/vue-island",
+    "vue": "file:../../node_modules/vue",
     "leaflet": "^1.9.4",
     "react": "file:../../node_modules/react",
     "react-dom": "file:../../node_modules/react-dom",

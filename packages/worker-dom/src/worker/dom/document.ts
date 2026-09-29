@@ -289,7 +289,23 @@ export class InternalDocument implements ProxyDocument {
     const id = payload.targetId;
     if (typeof id === 'number') {
       const instance = instances.get(id);
-      if (instance !== undefined) out.target = this._wrap(instance);
+      if (instance !== undefined) {
+        const node = this._wrap(instance);
+        // Reflect the dispatched form state into the SHADOW attrs —
+        // `e.target.value`/`e.target.checked` are the DOM idioms input
+        // handlers read, but the proxy's own fields are whatever the last
+        // attr op set (stale). Writing the public setters would emit an
+        // attr op echoing the user's own keystroke back to the DOM, so the
+        // shadow map is updated directly.
+        if (node instanceof ProxyElement) {
+          if (payload.value !== undefined) node._attrs.set('value', String(payload.value));
+          if (payload.checked !== undefined) {
+            if (payload.checked) node._attrs.set('checked', '');
+            else node._attrs.delete('checked');
+          }
+        }
+        out.target = node;
+      }
     }
     if (out.composedPath === undefined) {
       const path: unknown[] = [];

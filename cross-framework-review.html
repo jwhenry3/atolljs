@@ -231,6 +231,17 @@
       <li><strong class="done">Perf instrumentation</strong> — <code>mountIsland({onOps})</code> reports per-batch replay ms; <code>packages/worker-dom/test/islandPerf.test.ts</code> measures the split (~86% worker / ~14% main JS) and stays in the suite as a regression backstop for op counts.</li>
     </ol>
 
+    <h2>Refinement round 2 — DX, landed</h2>
+    <ol>
+      <li><strong class="done">One-call mount.</strong> <code>mountIsland({ worker })</code> builds and owns its client — the <code>connectIslandWorker</code> + <code>mountIsland</code> pair collapses for the common one-island-per-worker case. Neither given → a named error.</li>
+      <li><strong class="done">Cloneable-props pre-flight.</strong> Mount and <code>updateProps</code> run a structuredClone check that names the offending key path (<code>rows[1].render</code>) instead of dying as a bare DataCloneError inside the pool's postMessage.</li>
+      <li><strong class="done">Solid SSR-build probe.</strong> The silent-frozen-island footgun now throws at first mount: a signal bump must re-run an effect — the server build's createRenderEffect runs fn once and never again.</li>
+      <li><strong class="done">Entry parity.</strong> <code>defineAngularIslandWorker</code> (with <code>{component, providers}</code> entries) + <code>angularIsland</code>/<code>vueIsland</code> stamp helpers match the svelte/solid shape; <code>emit</code>/<code>runInRealm</code> re-export from every <code>-island/worker</code> entry.</li>
+      <li><strong class="done"><code>e.target.value</code>/<code>.checked</code> stamp.</strong> <code>_enrichEvent</code> writes the dispatched form state into the wrapped target's shadow attrs — the DOM idiom input handlers read — without echoing an attr op back. (The public setters emit ops; stamping must not.)</li>
+      <li><strong class="done">Dogfooded: a Vue island in the demo.</strong> <code>examples/react-dom-worker</code> mounts <code>vue-notes</code> (real Vue createRenderer, worker bundle carries zero React) via the <code>worker</code> shorthand — typing, add, emit, and in-place patch all pass in-process E2E. Root vitest aliases now cover all four <code>-island</code> packages so published specifiers resolve to sources.</li>
+      <li><strong class="done">READMEs everywhere.</strong> worker-dom documents the RenderedIslandApp contract + per-framework table; vue/svelte/angular-island ship READMEs matching solid-island's (shell API, worker entry, caveats).</li>
+    </ol>
+
     <h2>Next steps of refinement</h2>
     <ol>
       <li><strong><code>template.content</code> direct appends emit no ops</strong> — the fragment view shares the element's shadow children under a phantom id, so <code>content.appendChild</code> never reaches the wire. The documented innerHTML→cloneNode flow is unaffected; fix only if a library appends to <code>.content</code> directly (would need driver-side routing of template-children into <code>.content</code>).</li>
@@ -239,7 +250,7 @@
       <li><strong>Solid phantom-node caveat</strong> — <code>el.textContent=</code> creates shadow-only children; mixing raw textContent writes with <code>insert()</code>-managed children can drift the two trees. Compiled JSX only uses <code>insert()</code>; document the authoring convention.</li>
       <li><strong>Vue remaining surface</strong> — <code>v-once</code>/static content (<code>insertStaticContent</code> host op unimplemented), <code>onUpdate:*</code> model listeners skipped, Teleport-into-island slots untested.</li>
       <li><strong>Event latency / capability limits are structural</strong> — every interaction is one postMessage round-trip (~1–4ms); <code>preventDefault</code> can never work (event already dispatched). High-frequency input (mousemove/wheel/scroll-driven work) is the workload to avoid putting behind islands; document guidance.</li>
-      <li><strong>Dogfood + docs</strong> — add a non-React component island to the examples app; document <code>RenderedIslandApp</code> as the public extension point; keep <code>mountIsland</code> canonical. Geometry caveat (measured dims as props) applies to every renderer equally.</li>
+      <li><strong>Docs residue</strong> — <code>RenderedIslandApp</code> is documented as the extension point; still worth a short "writing a worker renderer" guide (the five methods a custom renderer needs and the realm-resolution contract). Geometry caveat (measured dims as props) applies to every renderer equally.</li>
     </ol>
   </div>
 </body>

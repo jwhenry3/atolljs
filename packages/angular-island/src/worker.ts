@@ -106,6 +106,7 @@ import {
   bumpOpsVersion,
   defineIslandWorker,
   getActiveRealm,
+  islandApp,
   pushOp,
   runInRealm,
 } from '@jwhenry123/mesh-worker-dom/worker';
@@ -811,6 +812,16 @@ export function angularIslandApp(
     },
   };
 }
+
+/** Stamp + wrap in one step — `angularIsland('counter', CounterComponent)`
+ *  yields the registry value AND the component-reference handle the shell
+ *  can mount. */
+export const angularIsland = (
+  name: string,
+  component: Type<unknown>,
+  options?: AngularIslandAppOptions,
+): RenderedIslandApp & { readonly islandAppName: string } =>
+  islandApp(name, angularIslandApp(component, options));
 
 /** A registry entry: the component, or `{ component, providers }` when the
  *  app needs injector extras (`angularIslandApp`'s options). */

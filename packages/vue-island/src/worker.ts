@@ -30,6 +30,7 @@ import {
   defineIslandWorker,
   getActiveRealm,
   getLastActiveRealm,
+  islandApp,
   realmDocFor,
 } from '@jwhenry123/mesh-worker-dom/worker';
 import type {
@@ -327,6 +328,14 @@ export function vueIslandApp(Component: Component): RenderedIslandApp {
     },
   };
 }
+
+/** Stamp + wrap in one step — `vueIsland('counter', Counter)` yields the
+ *  registry value AND the component-reference handle the shell can mount. */
+export const vueIsland = (
+  name: string,
+  Component: Component,
+): RenderedIslandApp & { readonly islandAppName: string } =>
+  islandApp(name, vueIslandApp(Component));
 
 export interface DefineVueIslandWorkerRegistry {
   /** Name → Vue component registry, mirroring `defineIslandWorker({ apps })`. */
