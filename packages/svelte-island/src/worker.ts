@@ -2,8 +2,8 @@
  * `@jwhenry123/mesh-svelte-island/worker` — the Svelte 5 worker renderer.
  *
  * `svelteIslandApp(Component)` wraps a compiled `.svelte` component into a
- * `RenderedIslandApp` that `defineIslandWorker`/`defineRealmWorker` mount
- * into a realm's PROXY document. Rendering goes through the real
+ * `RenderedIslandApp` that `definePolyWorker`/`defineMonoWorker` mount
+ * into a instance's PROXY document. Rendering goes through the real
  * `mount()`/`unmount()`/`flushSync()` client API — the proxy facade's
  * mutations already serialize to ops, so the adapter's work is the DOM
  * surface the Svelte runtime expects but the facade lacks:
@@ -12,11 +12,11 @@
  * // counter.worker.ts
  * import Counter from './Counter.svelte';
  * export const counterApp = islandApp('counter', svelteIslandApp(Counter));
- * export const counterWorker = defineRealmWorker(counterApp);
+ * export const counterWorker = defineMonoWorker(counterApp);
  * ```
  *
  * COMPAT — most of the DOM surface Svelte's client runtime touches now
- * lives in the proxy DOM itself (`@jwhenry123/mesh-worker-dom` upstream):
+ * lives in the proxy DOM itself (`@jwhenry123/mesh-islands` upstream):
  * `ProxyComment` + `document.createComment` (nodeType 8 over a real EMPTY
  * text node driver-side, so `<!>` block anchors keep a `before:`-able
  * position while `data` writes stay shadow-only), the comment-preserving
@@ -30,8 +30,8 @@
  * `_enrichEvent` — Svelte's delegated `handle_event_propagation` reads
  * `this` as the handler element and walks the path), listener options +
  * `once`, and the `Node`/`Text`/`Comment` globals + `HTMLMediaElement`/
- * `customElements` stubs `installRealmDispatcher` installs — which
- * `defineIslandWorker`/`defineRealmWorker` already call, BEFORE mount so
+ * `customElements` stubs `installInstanceDispatcher` installs — which
+ * `definePolyWorker`/`defineMonoWorker` already call, BEFORE mount so
  * `init_operations()` caches the proxy prototypes and `first instanceof
  * Comment` resolves against the real upstream ProxyComment.
  *
@@ -40,7 +40,7 @@
  * - `flushSync()` after each wrapped listener dispatch — Svelte schedules
  *   its DOM patch on a microtask; flushing inside the handler lands the
  *   patch in the dispatch return batch, same sync-commit semantics as the
- *   React realms.
+ *   React mounts.
  * - The mount-root/document double-registration dedupe — Svelte attaches
  *   the SAME `handle_event_propagation` to `[target, document]`; both
  *   replay as `listen` ops on driver-side id 0 (the island container), so
@@ -54,31 +54,35 @@
  *   patch (only the ops changed reads touch) riding the updateProps batch.
  *   NO rebuild; DOM nodes survive prop changes.
  * - `dispose()` calls `unmount(component)` — the component root tears down
- *   before the realm's proxy document dies.
+ *   before the instance's proxy document dies.
  *
  * LIMITATIONS: effects driven by user `$effect`/`onMount` or async sources
  * commit outside tasks — their ops queue and ring the doorbell, so they
  * arrive on `island.setMode('push')`/`'poll'` or `island.flush()`, not in a
  * return batch (same contract as React passive effects). Ambient `document`
- * outside tasks resolves to the single/last-active realm — shared-client
- * multi-realm mounts should keep worker-initiated work inside
- * `runInRealm`. `<svelte:head>`/`window`, custom elements, transitions and
+ * outside tasks resolves to the single/last-active instance — shared-client
+ * multi-instance mounts should keep worker-initiated work inside
+ * `runInInstance`. `<svelte:head>`/`window`, custom elements, transitions and
  * measured geometry are outside the facade's contract.
  */
 import { flushSync, mount as svelteMount, unmount, type Component } from 'svelte';
 import {
-  defineIslandWorker,
+  defineMonoWorker,
+  definePolyWorker,
   islandApp,
   ProxyElement,
-} from '@jwhenry123/mesh-worker-dom/worker';
+} from '@jwhenry123/mesh-islands/worker';
 import type {
+  DoorbellSpec,
   InternalDocument,
+  IslandWorkerMethods,
   ProxyDocument,
   ProxyEventHandler,
   RenderContext,
   RenderedHandle,
   RenderedIslandApp,
-} from '@jwhenry123/mesh-worker-dom/worker';
+} from '@jwhenry123/mesh-islands/worker';
+import type { SharedMemory, WorkerDefinition } from '@jwhenry123/mesh/sdk';
 import { createPropsBox } from './props.svelte';
 
 /** A compiled Svelte 5 component — what `mount()` accepts. */
@@ -87,7 +91,7 @@ export type SvelteIslandComponent<P extends Record<string, unknown> = Record<str
 
 // Island components emit over the island→shell channel often enough to
 // re-export — `import { emit } from '@jwhenry123/mesh-svelte-island/worker'`.
-export { emit, runInRealm } from '@jwhenry123/mesh-worker-dom/worker';
+export { emit, runInInstance } from '@jwhenry123/mesh-islands/worker';
 
 /* ── Listener wrapping ──────────────────────────────────────────────────── */
 
@@ -126,7 +130,7 @@ const releaseShared = (doc: InternalDocument, type: string, fn: ProxyEventHandle
 /**
  * Wrap a proxy listener with the piece upstream can't supply: `this` and
  * the enriched payload (`target`/`currentTarget`/`composedPath()`) already
- * come from worker-dom's listener dispatch — the adapter adds a
+ * come from islands's listener dispatch — the adapter adds a
  * `flushSync()` after the handler so the DOM patch a `$state` mutation
  * schedules lands in the dispatch return batch.
  */
@@ -210,7 +214,7 @@ const installElementListenerPatch = (): void => {
 };
 
 /**
- * Instance-level patch on the realm's proxy document — the second half of
+ * Instance-level patch on the instance's proxy document — the second half of
  * the `[target, document]` dedupe (`doc.body` IS the id-0 element, so its
  * listeners take the proto patch's shared branch) plus the same
  * `flushSync` wrap for document-attached handlers.
@@ -284,7 +288,7 @@ const decorateDocument = (doc: ProxyDocument): void => {
 
 /**
  * Wrap a compiled Svelte 5 component into a `RenderedIslandApp` for
- * `defineIslandWorker`/`defineRealmWorker` — usually stamped with
+ * `definePolyWorker`/`defineMonoWorker` — usually stamped with
  * `islandApp(name, svelteIslandApp(Component))` so the shell can mount by
  * component reference.
  */
@@ -325,16 +329,38 @@ export const svelteIsland = <P extends Record<string, unknown>>(
 ): RenderedIslandApp & { readonly islandAppName: string } =>
   islandApp(name, svelteIslandApp(Component));
 
+export interface SveltePolyWorkerRegistry {
+  /** Name → Svelte component registry, mirroring `definePolyWorker({ apps })`. */
+  apps: Record<string, SvelteIslandComponent>;
+  /** Doorbell contract override — forwarded to `definePolyWorker`. */
+  sharedMemory?: SharedMemory<DoorbellSpec>;
+}
+
 /**
- * Registry sugar — `defineSvelteIslandWorker({ counter: Counter })` is
- * `defineIslandWorker({ apps: { counter: svelteIslandApp(Counter) } })`;
- * a bare component gives the 1:1 realm-worker form.
+ * `definePolyWorker` for Svelte apps — maps each component in the registry
+ * through `svelteIslandApp` and delegates. One worker, many Svelte islands.
  */
-export function defineSvelteIslandWorker(
-  input: Record<string, SvelteIslandComponent> | SvelteIslandComponent,
-): ReturnType<typeof defineIslandWorker> {
-  if (typeof input === 'function') return defineIslandWorker(svelteIslandApp(input));
+export function defineSveltePolyWorker(
+  registry: SveltePolyWorkerRegistry,
+  options?: { sharedMemory?: SharedMemory<DoorbellSpec> },
+): WorkerDefinition<DoorbellSpec, IslandWorkerMethods> {
   const apps: Record<string, RenderedIslandApp> = {};
-  for (const [name, component] of Object.entries(input)) apps[name] = svelteIslandApp(component);
-  return defineIslandWorker({ apps });
+  for (const [name, component] of Object.entries(registry.apps)) {
+    apps[name] = svelteIslandApp(component);
+  }
+  return definePolyWorker({
+    apps,
+    sharedMemory: registry.sharedMemory ?? options?.sharedMemory,
+  });
+}
+
+/**
+ * `defineMonoWorker` for Svelte apps — one worker pinned to a single
+ * component, the isolated-bundle host shape.
+ */
+export function defineSvelteMonoWorker(
+  component: SvelteIslandComponent,
+  options?: { sharedMemory?: SharedMemory<DoorbellSpec> },
+): WorkerDefinition<DoorbellSpec, IslandWorkerMethods> {
+  return defineMonoWorker(svelteIslandApp(component), options);
 }

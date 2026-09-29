@@ -1,7 +1,7 @@
 {
   "name": "@jwhenry123/mesh-solid-island",
   "version": "0.1.0",
-  "description": "SolidJS shell bindings for mesh-worker-dom islands — createIsland, Island",
+  "description": "SolidJS shell bindings for mesh-islands islands — createIsland, Island",
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
@@ -15,7 +15,7 @@
   },
   "peerDependencies": {
     "@jwhenry123/mesh": "0.1.0",
-    "@jwhenry123/mesh-worker-dom": "0.1.0",
+    "@jwhenry123/mesh-islands": "0.1.0",
     "solid-js": "^1.9.15"
   },
   "repository": {

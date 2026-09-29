@@ -2,12 +2,12 @@
 /**
  * Functional test for the islands demo — three mountIsland() trees over
  * InProcessWorker, so everything except the OS thread boundary is real:
- * the registry, per-realm reconcilers, the op protocol, the emit channel,
+ * the registry, per-instance reconcilers, the op protocol, the emit channel,
  * and the shared-memory doorbell. The islands runtime itself now lives in
- * @jwhenry123/mesh-worker-dom — this test exercises the same code through
+ * @jwhenry123/mesh-islands — this test exercises the same code through
  * the package's exports.
  *
- * One module instance plays every worker, so realms are keyed by app name —
+ * One module instance plays every worker, so mounts are keyed by app name —
  * exactly why mount/updateProps/flush/whoami carry the app on the wire.
  * A shared module graph also means every defined shared-memory contract ends
  * up bound to the LAST pool's buffer — doorbell subscriptions survive those
@@ -20,7 +20,7 @@ import { InProcessWorker } from '@jwhenry123/mesh/sdk/testing/inProcessWorker';
 /**
  * One React copy for the whole render stack. The suite aliases `react` to the
  * repo root's install, and react-reconciler (resolved at the root's
- * node_modules from packages/worker-dom) is externalized — Node-resolving the
+ * node_modules from packages/islands) is externalized — Node-resolving the
  * ROOT's react. Re-point every 'react'/'react/jsx-runtime' import at that same
  * install (createRequire = the same require the externalized reconciler uses)
  * so apps, hostConfig, and reconciler share one instance — two copies would
@@ -44,18 +44,18 @@ vi.mock('react/jsx-runtime', async () => {
 
 vi.stubGlobal('Worker', InProcessWorker);
 // In-process workers share one module graph — every worker entry registers
-// into it (defineIslandWorker's registry + the realm workers' single apps).
+// into it (definePolyWorker's registry + the instance workers' single apps).
 InProcessWorker.handlerModules = [
   () => import('../src/worker/render.worker'),
   () => import('../src/worker/vanilla.worker'),
   () => import('../src/worker/map.worker'),
 ];
 
-let connectIslandWorker: typeof import('@jwhenry123/mesh-worker-dom').connectIslandWorker;
-let mountIsland: typeof import('@jwhenry123/mesh-worker-dom').mountIsland;
+let connectIslandWorker: typeof import('@jwhenry123/mesh-islands').connectIslandWorker;
+let mountIsland: typeof import('@jwhenry123/mesh-islands').mountIsland;
 beforeAll(async () => {
   // Imported after the Worker stub — the client factory builds pools lazily.
-  ({ connectIslandWorker, mountIsland } = await import('@jwhenry123/mesh-worker-dom'));
+  ({ connectIslandWorker, mountIsland } = await import('@jwhenry123/mesh-islands'));
 });
 
 /** One island client factory — the worker entry is this example's registry. */
@@ -70,7 +70,7 @@ const fire = (el: Element, event: Event): void => {
 };
 
 describe('react-dom-worker islands', () => {
-  it('mounts islands with distinct realms, mediates emit → updateProps, and flushes via the doorbell', async () => {
+  it('mounts islands with distinct mounts, mediates emit → updateProps, and flushes via the doorbell', async () => {
     const controlsEl = document.createElement('div');
     const tableEl = document.createElement('div');
     const statsEl = document.createElement('div');
@@ -107,7 +107,7 @@ describe('react-dom-worker islands', () => {
       },
     });
 
-    /* distinct worker realms — the badge ids */
+    /* distinct worker mounts — the badge ids */
     expect(new Set([controls.pid, table.pid, stats.pid]).size).toBe(3);
     for (const pid of [controls.pid, table.pid, stats.pid]) expect(pid).toMatch(/^w-/);
 
@@ -329,7 +329,7 @@ describe('react-dom-worker islands', () => {
     // op-created node, so its worker instance id crosses back.
     expect(picked.targetId).toBeGreaterThan(0);
 
-    // updateProps on an imperative realm = clear + rebuild on a fresh doc —
+    // updateProps on an imperative instance = clear + rebuild on a fresh doc —
     // the widget remounts too (fresh shim + fresh MiniWidget.mount).
     await island.updateProps({ title: 'rebuilt widget' });
     expect(el.querySelector('.vanilla-heading')!.textContent).toBe('rebuilt widget');

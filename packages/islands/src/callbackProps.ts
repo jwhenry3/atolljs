@@ -9,7 +9,7 @@
  * Fire-and-forget by design: the worker can't await a shell function — the
  * call returns `undefined` in-worker. A callback invoked from a dispatched
  * event lands on the shell in the same postMessage round trip; invoked from
- * a timer/continuation it still routes correctly (realm captured at mount).
+ * a timer/continuation it still routes correctly (instance captured at mount).
  */
 
 /** Reserved emit-op name — payload `{ id, args }`, consumed by the driver. */

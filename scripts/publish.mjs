@@ -56,8 +56,8 @@ const order = [
   '@jwhenry123/mesh',
   '@jwhenry123/mesh-node',
   '@jwhenry123/mesh-react',
-  // react-island peers on worker-dom — publish the dep first.
-  '@jwhenry123/mesh-worker-dom',
+  // react-island peers on islands — publish the dep first.
+  '@jwhenry123/mesh-islands',
   '@jwhenry123/mesh-react-island',
 ];
 const sorted = [...packages].sort(

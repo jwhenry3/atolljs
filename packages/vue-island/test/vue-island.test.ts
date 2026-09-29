@@ -7,17 +7,17 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { createApp, effectScope, h, reactive } from 'vue';
 import { InProcessWorker } from '@jwhenry123/mesh/sdk/testing/inProcessWorker';
-import { connectIslandWorker } from '@jwhenry123/mesh-worker-dom';
+import { connectIslandWorker } from '@jwhenry123/mesh-islands';
 import type { IslandHandle } from '../src/index';
 
 vi.stubGlobal('Worker', InProcessWorker);
-// Importing the fixture module performs defineRealmWorker's registration
+// Importing the fixture module performs defineMonoWorker's registration
 // side effects — exactly what a bundled worker entry does at boot.
 InProcessWorker.handlerModules = [() => import('./fixtures/echo.worker')];
 
 let MeshIsland: typeof import('../src/index').MeshIsland;
 let useIsland: typeof import('../src/index').useIsland;
-// In-process artifact: once a worker realm mounts, ambient `document` can
+// In-process artifact: once a worker instance mounts, ambient `document` can
 // resolve to its PROXY document (shared globalThis) — capture the real one
 // before any mounts. Real browsers never share globals across threads.
 let realDoc: Document;

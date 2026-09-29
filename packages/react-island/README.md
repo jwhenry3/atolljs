@@ -1,13 +1,13 @@
 # @jwhenry123/mesh-react-island
 
-The React shell surface for `@jwhenry123/mesh-worker-dom` — mount a
+The React shell surface for `@jwhenry123/mesh-islands` — mount a
 worker-hosted React (or imperative proxy-DOM) tree as an ordinary element
 in a main-thread React app. The worker's render loop produces a serialized
 op stream; this package's components own the mount lifecycle and replay it
 onto a real `div`.
 
 ```bash
-npm install @jwhenry123/mesh @jwhenry123/mesh-worker-dom @jwhenry123/mesh-react-island react
+npm install @jwhenry123/mesh @jwhenry123/mesh-islands @jwhenry123/mesh-react-island react
 ```
 
 ## `<Island/>`
@@ -37,7 +37,7 @@ app itself — stamp it once with `islandApp` and both sides share one handle:
 // worker/apps.tsx — the stamp is a data property, minification-proof
 export const ChartsApp = islandApp('charts', function ChartsApp(props: ChartsProps) { ... });
 export const mapApp = islandApp('map', { imperative: buildMap });
-// worker entry: apps: { charts: ChartsApp, map: mapApp }   (defineIslandWorker
+// worker entry: apps: { charts: ChartsApp, map: mapApp }   (definePolyWorker
 // warns if a stamp and its registry key drift apart)
 ```
 
@@ -54,7 +54,7 @@ serialized identity so equal props don't cost a round-trip. `onEvent`/
 `slots`/`onActivity` are read through refs — fresh closures never remount.
 `app` remounts on change; `worker`/`client` are mount-stable (use `key` to
 swap). Unmount destroys the island and terminates its worker. All the
-[worker-dom island rules](../worker-dom/README.md#island-rules) apply
+[islands island rules](../islands/README.md#island-rules) apply
 unchanged.
 
 `examples/react-dom-worker/react-shell.html` mounts all seven demo islands
@@ -101,19 +101,19 @@ path splits them out, and `islandComponent` never imports them at all.
 type-contract form above, or `islandComponent(StampedApp)` to infer `P`
 from a stamped reference the shell already has.
 
-## Worker topologies — registry, realm, shared client
+## Worker topologies — registry, instance, shared client
 
 Two worker entry points, mixable in one app:
 
 ```ts
 // render.worker.ts — REGISTRY worker: one script, many named apps
-export const renderWorker = defineIslandWorker({ apps: { charts: ChartsApp, table: TableApp } });
+export const renderWorker = definePolyWorker({ apps: { charts: ChartsApp, table: TableApp } });
 
 // map.worker.ts — REALM worker: one script, ONE app (1:1)
-export const mapWorker = defineRealmWorker(mapApp);
+export const mapWorker = defineMonoWorker(mapApp);
 ```
 
-A realm worker's app resolves regardless of the requested registry name, so
+A instance worker's app resolves regardless of the requested registry name, so
 the shell mounts it **namelessly** — `<Island worker={mapWorker}/>` or
 `islandComponent<P>()` with no key — and its bundle carries only that app's
 dependencies. `lazyIsland` accepts the worker module itself as the contract:
@@ -121,6 +121,6 @@ dependencies. `lazyIsland` accepts the worker module itself as the contract:
 so the island carries its own worker.
 
 For multi-island-per-worker, share a client: `client={connectIslandWorker({ worker })}`
-mounts each island's realm into the SAME worker (separate reconcilers, op
+mounts each island's instance into the SAME worker (separate reconcilers, op
 queues, and pids — one OS thread). `destroy()` on one island unmounts just
-its realm; the worker dies with the last island to leave.
+its instance; the worker dies with the last island to leave.

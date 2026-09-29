@@ -2,16 +2,16 @@ import { parseDocument, ElementType } from 'htmlparser2';
 import {
   allocId,
   bumpOpsVersion,
-  getActiveRealm,
-  getLastActiveRealm,
-  getRealmSize,
+  getActiveInstance,
+  getLastActiveInstance,
+  getInstanceSize,
   instances,
-  markRealmActive,
+  markInstanceActive,
   pushOp,
   registerHandler,
   unregisterHandler,
-} from '../realm';
-import type { ElementInstance, HostInstance, TextInstance } from '../realm';
+} from '../instance';
+import type { ElementInstance, HostInstance, TextInstance } from '../instance';
 import type { EventPayload, Op } from '../../ops';
 
 import {
@@ -63,7 +63,7 @@ export interface ProxyDocument {
    */
   createDocumentFragment(): ProxyFragment;
   /** DOM `importNode` semantics — a deep/shallow clone through this
-   *  document (proxy nodes are single-realm, so cloning IS importing). */
+   *  document (proxy nodes are single-instance, so cloning IS importing). */
   importNode(node: ProxyNode, deep?: boolean): ProxyNode;
   /** 'about:blank' — no real document URL exists worker-side. */
   readonly baseURI: string;
@@ -107,7 +107,7 @@ export interface ProxyDocument {
   markContainer(el: ProxyElement): void;
   /**
    * Register a handler fired every time the driver pushes a new container
-   * size — the app's resize signal. Handlers run inside the realm's task
+   * size — the app's resize signal. Handlers run inside the instance's task
    * scope, so their proxy-DOM mutations emit ops and `emit` routes.
    */
   onResize(cb: (w: number, h: number) => void): void;
@@ -126,7 +126,7 @@ export interface ProxyDocument {
 }
 
 export class InternalDocument implements ProxyDocument {
-  readonly realm: string;
+  readonly instance: string;
   readonly _root: ProxyElement;
   readonly _wrappers = new Map<number, ProxyNode>();
   readonly _ids = new Map<string, ProxyElement>();
@@ -141,7 +141,7 @@ export class InternalDocument implements ProxyDocument {
   /** Handlers fired when a setSize task pushes a new container size. */
   private readonly _resizeHandlers = new Set<(w: number, h: number) => void>();
   /** The window facade bundle — built lazily by windowFacadeFor, shared by
-   *  installDomShim and the realm dispatcher. */
+   *  installDomShim and the instance dispatcher. */
   _windowBundle?: WindowFacadeBundle;
   /** what `document.defaultView` reads as (`window.getComputedStyle` etc). */
   get defaultView(): WindowShim | undefined {
@@ -161,15 +161,15 @@ export class InternalDocument implements ProxyDocument {
   /** Set by installDomShim — restore globals when this document dies. */
   _uninstallShim: (() => void) | null = null;
 
-  constructor(realm: string) {
-    this.realm = realm;
+  constructor(instance: string) {
+    this.instance = instance;
     // id 0 is the driver-side island container sentinel — deliberately NOT
     // registered in `instances` (the driver's nodes map already maps 0 → el).
     this._root = new ProxyElement(this, {
       kind: 'element',
       id: 0,
       type: '#root',
-      realm,
+      instance,
       props: {},
       listenerSlots: {},
     });
@@ -218,7 +218,7 @@ export class InternalDocument implements ProxyDocument {
    */
   _sizeFor(el: ProxyElement): { w: number; h: number } | undefined {
     if (!this._containerIds.has(el.instance.id)) return undefined;
-    return getRealmSize(this.realm);
+    return getInstanceSize(this.instance);
   }
 
   onResize(cb: (w: number, h: number) => void): void {
@@ -228,7 +228,7 @@ export class InternalDocument implements ProxyDocument {
 
   /**
    * Fire the doc's resize handlers — the worker's `setSize` task calls this
-   * inside the realm's scope, so handler mutations emit ops on the realm
+   * inside the instance's scope, so handler mutations emit ops on the instance
    * queue and come back in the task's return batch.
    */
   _notifySize(w: number, h: number): void {
@@ -249,7 +249,7 @@ export class InternalDocument implements ProxyDocument {
       kind: 'text',
       id: allocPhantomId(),
       text,
-      realm: parent.instance.realm,
+      instance: parent.instance.instance,
     });
     t._parent = parent;
     return t;
@@ -335,13 +335,13 @@ export class InternalDocument implements ProxyDocument {
       id: allocId(),
       type,
       ns,
-      realm: this.realm,
+      instance: this.instance,
       props: {},
       listenerSlots: {},
     };
     instances.set(instance.id, instance);
-    pushOp(this.realm, { t: 'create', id: instance.id, type: instance.type, props: {}, ns: instance.ns });
-    if (getActiveRealm() !== this.realm) bumpOpsVersion();
+    pushOp(this.instance, { t: 'create', id: instance.id, type: instance.type, props: {}, ns: instance.ns });
+    if (getActiveInstance() !== this.instance) bumpOpsVersion();
     return this._wrap(instance) as ProxyElement;
   }
 
@@ -351,11 +351,11 @@ export class InternalDocument implements ProxyDocument {
       kind: 'text',
       id: allocId(),
       text: String(text),
-      realm: this.realm,
+      instance: this.instance,
     };
     instances.set(instance.id, instance);
-    pushOp(this.realm, { t: 'text', id: instance.id, text: instance.text });
-    if (getActiveRealm() !== this.realm) bumpOpsVersion();
+    pushOp(this.instance, { t: 'text', id: instance.id, text: instance.text });
+    if (getActiveInstance() !== this.instance) bumpOpsVersion();
     return this._wrap(instance) as ProxyText;
   }
 
@@ -370,7 +370,7 @@ export class InternalDocument implements ProxyDocument {
       kind: 'element',
       id: allocPhantomId(),
       type: '#fragment',
-      realm: this.realm,
+      instance: this.instance,
       props: {},
       listenerSlots: {},
     });
@@ -452,13 +452,13 @@ export class InternalDocument implements ProxyDocument {
           if (opts.once) this.removeEventListener(type, fn, { capture: opts.capture });
         }
       },
-      this.realm,
+      this.instance,
       0, // document-level listener → target id 0 is the island root
     );
     this._docListeners.push({ type, fn, hid, capture: opts.capture });
     this._handlerIds.add(hid);
-    pushOp(this.realm, { t: 'listen', id: 0, type, handler: hid, opts: listenerOptsForWire(options) });
-    if (getActiveRealm() !== this.realm) bumpOpsVersion();
+    pushOp(this.instance, { t: 'listen', id: 0, type, handler: hid, opts: listenerOptsForWire(options) });
+    if (getActiveInstance() !== this.instance) bumpOpsVersion();
   }
 
   removeEventListener(
@@ -475,14 +475,14 @@ export class InternalDocument implements ProxyDocument {
     const [entry] = this._docListeners.splice(index, 1);
     unregisterHandler(entry.hid);
     this._handlerIds.delete(entry.hid);
-    pushOp(this.realm, {
+    pushOp(this.instance, {
       t: 'unlisten',
       id: 0,
       type,
       handler: entry.hid,
       opts: entry.capture ? { capture: true } : undefined,
     });
-    if (getActiveRealm() !== this.realm) bumpOpsVersion();
+    if (getActiveInstance() !== this.instance) bumpOpsVersion();
   }
 
   getElementById(id: string): ProxyElement | null {
@@ -535,7 +535,7 @@ export class InternalDocument implements ProxyDocument {
     this._uninstallShim?.();
     this._uninstallShim = null;
     this._disposed = true;
-    if (realmDocs.get(this.realm) === this) realmDocs.delete(this.realm);
+    if (instanceDocs.get(this.instance) === this) instanceDocs.delete(this.instance);
     this._resizeHandlers.clear();
     for (const hid of this._handlerIds) unregisterHandler(hid);
     this._handlerIds.clear();
@@ -543,49 +543,49 @@ export class InternalDocument implements ProxyDocument {
 }
 
 /**
- * A fresh proxy document scoped to one realm — created per imperative
- * mount and per rebuild (updateProps). Mutations emit ops onto the realm's
+ * A fresh proxy document scoped to one instance — created per imperative
+ * mount and per rebuild (updateProps). Mutations emit ops onto the instance's
  * queue immediately; reads are served from the shadow tree.
  */
 /**
- * realm key → the proxy document for that realm. `createProxyDocument` is
- * the only creator — imperative apps get one at mount, React realms lazily
+ * instance key → the proxy document for that instance. `createProxyDocument` is
+ * the only creator — imperative apps get one at mount, React mounts lazily
  * via `getPublicInstance` — so global `document`/`window`/`Element` can
- * dispatch to the right realm's document (see installRealmDispatcher).
+ * dispatch to the right instance's document (see installInstanceDispatcher).
  */
-const realmDocs = new Map<string, InternalDocument>();
+const instanceDocs = new Map<string, InternalDocument>();
 
-export const createProxyDocument = (realm: string): ProxyDocument => {
-  const doc = new InternalDocument(realm);
-  realmDocs.set(realm, doc);
+export const createProxyDocument = (instance: string): ProxyDocument => {
+  const doc = new InternalDocument(instance);
+  instanceDocs.set(instance, doc);
   return doc;
 };
 
 /**
- * The realm's proxy document, creating it lazily — the getPublicInstance
- * path (React realms only need a document when a library holds a ref or a
+ * The instance's proxy document, creating it lazily — the getPublicInstance
+ * path (React mounts only need a document when a library holds a ref or a
  * portal target).
  */
-export const realmDocFor = (realm: string): InternalDocument =>
-  realmDocs.get(realm) ?? (createProxyDocument(realm) as InternalDocument);
+export const docForInstance = (instance: string): InternalDocument =>
+  instanceDocs.get(instance) ?? (createProxyDocument(instance) as InternalDocument);
 
 /**
  * The document `globalThis.document` should mean right now: the active
- * realm's when a task holds one; the single registered document when only
- * one realm exists (every real island worker — timers and promise
- * continuations run outside realm tasks but unambiguously belong to it);
- * the most recently active realm's otherwise (multi-realm in-process tests
+ * instance's when a task holds one; the single registered document when only
+ * one instance exists (every real island worker — timers and promise
+ * continuations run outside instance tasks but unambiguously belong to it);
+ * the most recently active instance's otherwise (multi-instance in-process tests
  * still route deferred library callbacks sensibly).
  */
-export const activeRealmDoc = (): InternalDocument | undefined => realmDocs.get(getActiveRealm());
+export const activeInstanceDoc = (): InternalDocument | undefined => instanceDocs.get(getActiveInstance());
 
 /** The ambient document: the sole registered doc, or the most recently
- *  active realm's — for out-of-task readers (timers, continuations). */
+ *  active instance's — for out-of-task readers (timers, continuations). */
 export const ambientDoc = (): InternalDocument | undefined =>
-  realmDocs.size === 1
-    ? realmDocs.values().next().value
-    : realmDocs.get(getLastActiveRealm());
+  instanceDocs.size === 1
+    ? instanceDocs.values().next().value
+    : instanceDocs.get(getLastActiveInstance());
 
 const docForCurrentContext = (): InternalDocument | undefined =>
-  activeRealmDoc() ?? ambientDoc();
+  activeInstanceDoc() ?? ambientDoc();
 

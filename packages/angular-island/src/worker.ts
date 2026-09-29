@@ -1,14 +1,14 @@
 /**
- * `@jwhenry123/mesh-angular-island/worker` — the Angular realm renderer for
- * `@jwhenry123/mesh-worker-dom` islands: renders a standalone Angular
- * component into the realm's proxy document, whose mutations serialize to
+ * `@jwhenry123/mesh-angular-island/worker` — the Angular instance renderer for
+ * `@jwhenry123/mesh-islands` islands: renders a standalone Angular
+ * component into the instance's proxy document, whose mutations serialize to
  * ops the main thread replays as real DOM.
  *
  * ```ts
  * // counter.worker.ts
  * import '@angular/compiler'; // JIT facade — decorator components compile lazily
  * import { Component, input, signal } from '@angular/core';
- * import { defineRealmWorker, emit } from '@jwhenry123/mesh-worker-dom/worker';
+ * import { defineMonoWorker, emit } from '@jwhenry123/mesh-islands/worker';
  * import { angularIslandApp } from '@jwhenry123/mesh-angular-island/worker';
  *
  * @Component({
@@ -24,14 +24,14 @@
  *   }
  * }
  *
- * export const counterWorker = defineRealmWorker(angularIslandApp(CounterComponent));
+ * export const counterWorker = defineMonoWorker(angularIslandApp(CounterComponent));
  * ```
  *
  * HOW IT WORKS: `angularIslandApp` adapts the component to the
  * `RenderedIslandApp` contract — `mount(ctx)` creates a bare
  * `EnvironmentInjector` providing a `RendererFactory2` backed by `ctx.doc`
- * (the realm's proxy document), then calls Angular's public `createComponent`
- * with the realm root as `hostElement`. There is no platform, no zone, and
+ * (the instance's proxy document), then calls Angular's public `createComponent`
+ * with the instance root as `hostElement`. There is no platform, no zone, and
  * no scheduler — the same trick `platform-server` uses with Domino, but the
  * render target here is the op-emitting facade.
  *
@@ -42,7 +42,7 @@
  * mutations ride back in that same task's op batch, (b) after `update()`
  * delivers props via `componentRef.setInput`, and (c) on a queued microtask
  * when the scheduler is notified from out-of-band work (timers, promise
- * continuations, view effects — run inside the realm via `runInRealm`).
+ * continuations, view effects — run inside the instance via `runInInstance`).
  *
  * JIT: AOT-built components (a static `ɵcmp`) need nothing extra. JIT
  * (decorator metadata compiled on first use) needs `import '@angular/compiler'`
@@ -62,11 +62,11 @@
  * - `NgZone` → a `NoopNgZone` (there is no zone; run() runs the fn inline —
  *   honest for components that `inject(NgZone)` or run `afterRender` hooks).
  * - `ChangeDetectionScheduler` (ɵ) → a stub whose `notify()` queues a
- *   microtask `detectChanges` inside the realm's scope. This is what makes
+ *   microtask `detectChanges` inside the instance's scope. This is what makes
  *   out-of-band invalidation work: a `signal.set()` in a `setTimeout`/promise
  *   continuation marks the view dirty and the queued tick renders it — ops
  *   ride the doorbell/flush like any other commit, and `emit()`s produced
- *   by that render route to this realm (the tick runs via `runInRealm`).
+ *   by that render route to this instance (the tick runs via `runInInstance`).
  *   It also unblocks `effect()` and `afterRenderEffect()`, which inject the
  *   token unconditionally.
  * - `AfterRenderManager` (ɵ, providedIn:'root') is executed after every
@@ -104,17 +104,18 @@ import {
 } from '@angular/core';
 import {
   bumpOpsVersion,
-  defineIslandWorker,
-  getActiveRealm,
+  defineMonoWorker,
+  definePolyWorker,
+  getActiveInstance,
   islandApp,
   pushOp,
-  runInRealm,
-} from '@jwhenry123/mesh-worker-dom/worker';
+  runInInstance,
+} from '@jwhenry123/mesh-islands/worker';
 import type { SharedMemory, WorkerDefinition } from '@jwhenry123/mesh/sdk';
 
 // Worker entries shouldn't need a second package specifier for the
 // island→shell channel — `import { emit } from 'mesh-angular-island/worker'`.
-export { emit, runInRealm } from '@jwhenry123/mesh-worker-dom/worker';
+export { emit, runInInstance } from '@jwhenry123/mesh-islands/worker';
 import type {
   DoorbellSpec,
   IslandWorkerMethods,
@@ -126,7 +127,7 @@ import type {
   RenderContext,
   RenderedHandle,
   RenderedIslandApp,
-} from '@jwhenry123/mesh-worker-dom/worker';
+} from '@jwhenry123/mesh-islands/worker';
 
 /**
  * Angular namespace tokens → URIs — the same table platform-browser's
@@ -142,7 +143,7 @@ const NS_URIS: Record<string, string> = {
 };
 
 /**
- * Renderer2 over the realm's proxy document — every method is a straight
+ * Renderer2 over the instance's proxy document — every method is a straight
  * facade call, so each mutation emits the corresponding op
  * (create/text/append/remove/attr/style/listen/utext) automatically.
  */
@@ -165,12 +166,12 @@ class IslandRenderer extends Renderer2 {
   /**
    * Angular calls `destroyNode` per detached node when it's defined — the op
    * stream only needs the `remove` op removeChild already emitted, and the
-   * realm tears listener tables down on document dispose. Null opt-out.
+   * instance tears listener tables down on document dispose. Null opt-out.
    */
   destroyNode: ((node: unknown) => void) | null = null;
 
   destroy(): void {
-    // Renderer lifetime == realm lifetime; the realm disposes the document.
+    // Renderer lifetime == instance lifetime; the instance disposes the document.
   }
 
   createElement(name: string, namespace?: string | null): ProxyElement {
@@ -307,9 +308,9 @@ class IslandRenderer extends Renderer2 {
     } else {
       props[name] = value;
     }
-    const realm = el.instance.realm;
-    pushOp(realm, { t: 'update', id: el.instance.id, props: { ...props } });
-    if (getActiveRealm() !== realm) bumpOpsVersion();
+    const instance = el.instance.instance;
+    pushOp(instance, { t: 'update', id: el.instance.id, props: { ...props } });
+    if (getActiveInstance() !== instance) bumpOpsVersion();
   }
 
   setValue(node: ProxyNode, value: string): void {
@@ -607,7 +608,7 @@ export interface AngularIslandAppOptions {
 
 /**
  * Wrap a standalone Angular component as a `RenderedIslandApp` — usable as a
- * `defineRealmWorker`/`defineIslandWorker` app alongside React and imperative
+ * `defineMonoWorker`/`definePolyWorker` app alongside React and imperative
  * entries.
  *
  * mount semantics:
@@ -622,7 +623,7 @@ export interface AngularIslandAppOptions {
  *   exotic cases the interop scan missed); props that match nothing are
  *   dropped (warned once per name) — inputs are the honest Angular contract.
  * - `dispose()` destroys the component ref (running destroys/unlistens) and
- *   the environment injector before the realm's document dies.
+ *   the environment injector before the instance's document dies.
  */
 export function angularIslandApp(
   component: Type<unknown>,
@@ -670,8 +671,8 @@ export function angularIslandApp(
       // ChangeDetectionScheduler — provide one so signal writes outside a
       // dispatch (timers, promise continuations, effect()/afterRenderEffect
       // which inject the token unconditionally) still get rendered: notify()
-      // queues ONE microtask tick inside the realm's scope, so the render's
-      // ops route to this realm's queue (emit() included) instead of the
+      // queues ONE microtask tick inside the instance's scope, so the render's
+      // ops route to this instance's queue (emit() included) instead of the
       // ambient '' queue.
       const changeDetectionScheduler: ChangeDetectionScheduler = {
         get runningTick() {
@@ -683,8 +684,8 @@ export function angularIslandApp(
           queueMicrotask(() => {
             tickQueued = false;
             if (componentRef === null || ticking) return;
-            runInRealm(ctx.realm, detectChanges);
-            // The tick ran under the realm, so instance-bound ops queued
+            runInInstance(ctx.instance, detectChanges);
+            // The tick ran under the instance, so instance-bound ops queued
             // WITHOUT ringing the doorbell — ring it once here so push-mode
             // drivers flush this out-of-task commit instead of waiting on a
             // poll or the next dispatch.
@@ -728,10 +729,10 @@ export function angularIslandApp(
       // Build the document's window facade so `doc.defaultView` resolves —
       // Angular reads it via ɵɵresolveWindow for `(window:x)` listeners and
       // component code can reach `window`/timers through it. Reading the
-      // dispatcher's `window` global inside the realm's scope (mount() is
-      // always called under runInRealm) caches the facade ON this document
+      // dispatcher's `window` global inside the instance's scope (mount() is
+      // always called under runInInstance) caches the facade ON this document
       // without claiming ambient globals the way installDomShim does — so
-      // sibling realms in a shared worker keep their own facades.
+      // sibling mounts in a shared worker keep their own facades.
       void (globalThis as { window?: unknown }).window;
 
       // The component's own selector tag is its host element — what a real
@@ -827,46 +828,45 @@ export const angularIsland = (
  *  app needs injector extras (`angularIslandApp`'s options). */
 export type AngularIslandEntry = Type<unknown> | ({ component: Type<unknown> } & AngularIslandAppOptions);
 
-export interface DefineAngularIslandWorkerRegistry {
+export interface AngularPolyWorkerRegistry {
   /** Name → Angular component (or configured entry) registry. */
   apps: Record<string, AngularIslandEntry>;
-  /** Doorbell contract override — forwarded to `defineIslandWorker`. */
+  /** Doorbell contract override — forwarded to `definePolyWorker`. */
   sharedMemory?: SharedMemory<DoorbellSpec>;
 }
 
-/** Either a single component (1:1 realm worker) or an `{ apps }` registry. */
-export type DefineAngularIslandWorkerInput =
-  | Type<unknown>
-  | DefineAngularIslandWorkerRegistry;
-
-const isAngularRegistry = (
-  input: DefineAngularIslandWorkerInput,
-): input is DefineAngularIslandWorkerRegistry =>
-  typeof input === 'object' && input !== null && 'apps' in input;
-
 /**
- * `defineIslandWorker` for Angular apps — maps each component through
- * `angularIslandApp` and delegates. A bare component registers as the
- * worker's single app ('main'); an `{ apps }` object registers a
- * name-addressable registry. Per-app injector extras pass through the
+ * `definePolyWorker` for Angular apps — maps each component in the
+ * registry through `angularIslandApp` and delegates. One worker, many
+ * Angular islands. Per-app injector extras pass through the
  * `{ component, providers }` entry form.
  */
-export function defineAngularIslandWorker(
-  input: DefineAngularIslandWorkerInput,
+export function defineAngularPolyWorker(
+  registry: AngularPolyWorkerRegistry,
   options?: { sharedMemory?: SharedMemory<DoorbellSpec> },
 ): WorkerDefinition<DoorbellSpec, IslandWorkerMethods> {
-  if (isAngularRegistry(input)) {
-    const apps: Record<string, RenderedIslandApp> = {};
-    for (const [key, entry] of Object.entries(input.apps)) {
-      apps[key] =
-        typeof entry === 'function'
-          ? angularIslandApp(entry)
-          : angularIslandApp(entry.component, entry);
-    }
-    return defineIslandWorker({
-      apps,
-      sharedMemory: input.sharedMemory ?? options?.sharedMemory,
-    });
+  const apps: Record<string, RenderedIslandApp> = {};
+  for (const [key, entry] of Object.entries(registry.apps)) {
+    apps[key] =
+      typeof entry === 'function'
+        ? angularIslandApp(entry)
+        : angularIslandApp(entry.component, entry);
   }
-  return defineIslandWorker(angularIslandApp(input), options);
+  return definePolyWorker({
+    apps,
+    sharedMemory: registry.sharedMemory ?? options?.sharedMemory,
+  });
+}
+
+/**
+ * `defineMonoWorker` for Angular apps — one worker pinned to a single
+ * component, the isolated-bundle host shape. Injector extras pass through
+ * `AngularIslandAppOptions`.
+ */
+export function defineAngularMonoWorker(
+  component: Type<unknown>,
+  options?: AngularIslandAppOptions & { sharedMemory?: SharedMemory<DoorbellSpec> },
+): WorkerDefinition<DoorbellSpec, IslandWorkerMethods> {
+  const { sharedMemory, ...appOptions } = options ?? {};
+  return defineMonoWorker(angularIslandApp(component, appOptions), { sharedMemory });
 }

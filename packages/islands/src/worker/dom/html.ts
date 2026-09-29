@@ -1,16 +1,16 @@
 import {
   allocId,
   bumpOpsVersion,
-  getActiveRealm,
-  getLastActiveRealm,
-  getRealmSize,
+  getActiveInstance,
+  getLastActiveInstance,
+  getInstanceSize,
   instances,
-  markRealmActive,
+  markInstanceActive,
   pushOp,
   registerHandler,
   unregisterHandler,
-} from '../realm';
-import type { ElementInstance, HostInstance, TextInstance } from '../realm';
+} from '../instance';
+import type { ElementInstance, HostInstance, TextInstance } from '../instance';
 import type { EventPayload, Op } from '../../ops';
 import { parseDocument, ElementType } from 'htmlparser2';
 

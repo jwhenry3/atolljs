@@ -13,11 +13,11 @@
  */
 import { createElement, useState } from 'react';
 import {
-  defineIslandWorker,
+  definePolyWorker,
   emit,
   islandApp,
   type ProxyDocument,
-} from '@jwhenry123/mesh-worker-dom/worker';
+} from '@jwhenry123/mesh-islands/worker';
 
 const ROWS_DEFAULT = 200;
 
@@ -133,7 +133,7 @@ export const callbackApp = islandApp('cb', {
   },
 });
 
-export const perfWorker = defineIslandWorker({
+export const perfWorker = definePolyWorker({
   apps: {
     tree: treeApp,
     rtree: RTree,

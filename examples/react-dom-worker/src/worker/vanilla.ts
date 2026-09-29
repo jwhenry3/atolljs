@@ -1,10 +1,10 @@
 /**
  * The 'vanilla' island app — an imperative widget built ONLY on the proxy
- * DOM (@jwhenry123/mesh-worker-dom/worker). There is no React anywhere in
- * this realm: no reconciler, no container, no JSX — this file doesn't even
+ * DOM (@jwhenry123/mesh-islands/worker). There is no React anywhere in
+ * this instance: no reconciler, no container, no JSX — this file doesn't even
  * import react. Every mutation in build() IS an op, queued straight onto
- * the realm's op stream; the worker's mount() just runs build() inside
- * runInRealm and drains the queue.
+ * the instance's op stream; the worker's mount() just runs build() inside
+ * runInInstance and drains the queue.
  *
  * TWO styles coexist here on purpose:
  *   1. the hand-written swatch picker — proxy-DOM calls made directly
@@ -19,7 +19,7 @@
  *   - style mutation via the style Proxy
  *   - addEventListener → listen ops → dispatched EventPayloads that mutate
  *     OTHER nodes (readout.textContent, sibling classLists — read+write on
- *     the shadow tree inside a realm task)
+ *     the shadow tree inside a instance task)
  *   - childNodes reads + removeChild to bound a scrolling log
  *   - getElementById / querySelectorAll on the local tree
  *   - emit() back to the shell, carrying event coordinates
@@ -30,7 +30,7 @@ import {
   islandApp,
   type EventPayload,
   type ProxyDocument,
-} from '@jwhenry123/mesh-worker-dom/worker';
+} from '@jwhenry123/mesh-islands/worker';
 import { MiniWidget } from '../vendor/miniwidget.js';
 
 const SWATCHES = [
@@ -93,13 +93,13 @@ export function buildVanilla(doc: ProxyDocument, props: Record<string, unknown>)
     swatch.style.height = '28px';
     swatch.style.background = color;
     swatch.addEventListener('click', (e: EventPayload) => {
-      // Dispatched back into the worker — inside runInRealm, so emit() routes
+      // Dispatched back into the worker — inside runInInstance, so emit() routes
       // and every mutation below lands on this island's op queue.
       const picked = swatch.dataset.color ?? color;
       for (const sib of row.children) sib.classList.toggle('active', sib === swatch);
       readout.style.color = picked;
       readout.textContent = `picked ${picked} · click at (${e.clientX ?? '?'}, ${e.clientY ?? '?'})`;
-      // Shadow-tree lookups work inside the realm too — same tree the ops built.
+      // Shadow-tree lookups work inside the instance too — same tree the ops built.
       const found = doc.getElementById('vanilla-log');
       appendLog(`clicked ${picked}${found === log ? ' · log found via getElementById' : ''}`);
       emit('colorPicked', { color: picked, x: e.clientX, y: e.clientY, targetId: e.targetId });
@@ -117,7 +117,7 @@ export function buildVanilla(doc: ProxyDocument, props: Record<string, unknown>)
 
   /* ── The vendored-library half: global document + innerHTML + delegation ──
    *
-   * installDomShim puts this realm's proxy document on globalThis.document
+   * installDomShim puts this instance's proxy document on globalThis.document
    * (plus a window facade). MiniWidget.mount then does exactly what real
    * libraries do — document.createElement, host.innerHTML = template,
    * document.addEventListener('click', delegate) — and every call lands on

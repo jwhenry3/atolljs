@@ -34,7 +34,7 @@ import { marshalCallbackProps, CALLBACK_EVENT } from './callbackProps';
 
 export type Mode = 'push' | 'poll';
 
-/** The worker definition every `defineIslandWorker` call produces. */
+/** The worker definition every `definePolyWorker` call produces. */
 export type IslandWorkerDefinition = WorkerDefinition<DoorbellSpec, IslandWorkerMethods>;
 
 /** One island client: one pool, one worker, one doorbell buffer. */
@@ -58,7 +58,7 @@ export interface ConnectIslandWorkerConfig extends IslandWorkerOptions {
   /**
    * Bundler-detectable factory `() => new Worker(new URL('./x.worker.ts',
    * import.meta.url), { type: 'module' })`, or a URL. The worker script must
-   * call `defineIslandWorker({ apps })` from '@jwhenry123/mesh-worker-dom/worker'.
+   * call `definePolyWorker({ apps })` from '@jwhenry123/mesh-islands/worker'.
    */
   worker: (() => Worker) | URL;
   /**
@@ -88,8 +88,8 @@ interface MountIslandBaseOptions {
   el: HTMLElement;
   /**
    * Registry app name — a key of the `apps` map passed to
-   * `defineIslandWorker`. Optional against a realm worker
-   * (`defineRealmWorker`), which resolves its single app regardless.
+   * `definePolyWorker`. Optional against a instance worker
+   * (`defineMonoWorker`), which resolves its single app regardless.
    */
   app?: string;
   props?: Record<string, unknown>;
@@ -124,7 +124,7 @@ interface MountIslandBaseOptions {
   /**
    * Milliseconds the mount handshake (mount + whoami) may take before the
    * returned promise rejects — default 15_000, `0` disables. A worker entry
-   * that loads but never answers (no defineIslandWorker/defineRealmWorker
+   * that loads but never answers (no definePolyWorker/defineMonoWorker
    * call, an import that hangs) otherwise leaves mount pending forever;
    * hard failures (module error, crash) already reject immediately.
    */
@@ -146,7 +146,7 @@ export type MountIslandOptions = MountIslandBaseOptions &
 
 export interface IslandHandle {
   readonly app: string;
-  /** The worker-side realm's random id — proof each island is a distinct worker. */
+  /** The worker-side instance's random id — proof each island is a distinct worker. */
   readonly pid: string;
   readonly mode: Mode;
   opsApplied: number;
@@ -164,9 +164,9 @@ export interface IslandHandle {
   /** Manual flush — drains ops committed outside task calls. */
   flush(): Promise<void>;
   /**
-   * Stop transport timers/subscriptions and release the realm. When this
+   * Stop transport timers/subscriptions and release the instance. When this
    * island owns the client the worker terminates; when the client is shared
-   * (several islands mounted into it) the realm unmounts and the worker
+   * (several islands mounted into it) the instance unmounts and the worker
    * lives on for its siblings — it dies with the last island to leave.
    */
   destroy(): void;
@@ -240,13 +240,13 @@ function buildEventPayload(
   };
 }
 
-/** Per-island realm counter — see the realm key note in mountIsland. */
+/** Per-island instance counter — see the instance key note in mountIsland. */
 let islandSeq = 0;
 
 /**
  * Live island count per client — a client is shared infrastructure when
  * several islands mount into it (multi-island-per-worker). destroy() gives
- * its realm back via `unmount`; only the LAST island to leave terminates
+ * its instance back via `unmount`; only the LAST island to leave terminates
  * the worker.
  */
 const clientMounts = new WeakMap<object, number>();
@@ -331,16 +331,16 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
       doorbell: initialMode !== 'poll',
     } as ConnectIslandWorkerConfig);
   assertCloneableProps(props, `mountIsland(${givenApp ?? 'main'})`);
-  // 'main' is the unnamed-island name — realm workers (defineRealmWorker)
+  // 'main' is the unnamed-island name — instance workers (defineMonoWorker)
   // resolve their single app regardless of it.
   const app = givenApp ?? 'main';
 
-  // Realm key = 'app@N' — the instance suffix keeps each island's realm
+  // Instance key = 'app@N' — the instance suffix keeps each island's instance
   // distinct even when several islands mount the SAME microfrontend — in
   // the same worker (shared client) or across workers. Without it, mounting
-  // 'data-table' twice into one worker would remount one shared realm
+  // 'data-table' twice into one worker would remount one shared instance
   // instead of giving each island its own (and they would share a pid).
-  const realm = `${app}@${++islandSeq}`;
+  const instance = `${app}@${++islandSeq}`;
   clientMounts.set(client, (clientMounts.get(client) ?? 0) + 1);
 
   /** instance id → live DOM node. Id 0 is the root container sentinel. */
@@ -378,7 +378,7 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
    *  own). Elements created by ops are the only things in the tree, so a
    *  DOM query for the marker attribute is exact. */
   // Element-ness is checked structurally (nodeType 1), never via the global
-  // `Element` constructor — in in-process embeddings the worker-side realm
+  // `Element` constructor — in in-process embeddings the worker-side instance
   // dispatcher may have pointed that global at ProxyElement, which would
   // make every `instanceof Element` check silently reject real DOM nodes.
   const isElementNode = (node: Node | undefined): node is Element =>
@@ -411,7 +411,7 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
       void client
         .dispatch(handlerId, payload)
         .then(applyOps)
-        .catch((err) => console.error(`[island ${realm}] dispatch failed`, err));
+        .catch((err) => console.error(`[island ${instance}] dispatch failed`, err));
     };
   }
 
@@ -595,7 +595,7 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
   }
 
   /* The island's real DOM lives in the container's own document — NOT the
-   * ambient `document` global. In in-process tests (and any same-realm
+   * ambient `document` global. In in-process tests (and any same-instance
    * embedding) the worker-side installDomShim swaps globalThis.document for
    * a proxy document; el.ownerDocument is immune. */
   const realDocument = el.ownerDocument ?? document;
@@ -735,7 +735,7 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
   const doFlush = (): void => {
     if (destroyed) return;
     flushCalls++;
-    void client.flush(realm).then(applyOps);
+    void client.flush(instance).then(applyOps);
   };
 
   /* ── Transport: push (shared-memory doorbell) vs poll ─────────────────── */
@@ -778,7 +778,7 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
               new Error(
                 `mountIsland(${app}): the worker never answered within ${mountMs}ms — ` +
                   'check that the entry module loads (bundler path, uncaught import errors) ' +
-                  'and calls defineIslandWorker/defineRealmWorker. Pass { mountTimeout: 0 } to disable.',
+                  'and calls definePolyWorker/defineMonoWorker. Pass { mountTimeout: 0 } to disable.',
               ),
             ),
           mountMs,
@@ -789,15 +789,15 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
 
   let pid: string;
   try {
-    applyOps(await raced(client.mount(realm, props)));
-    pid = await raced(client.whoami(realm));
+    applyOps(await raced(client.mount(instance, props)));
+    pid = await raced(client.whoami(instance));
   } catch (err) {
-    // The realm may exist worker-side with ops we never applied — release it.
+    // The instance may exist worker-side with ops we never applied — release it.
     // An island-owned client also terminates (stops a crash→respawn loop on
-    // a permanently-broken entry); a shared client just drops the realm.
+    // a permanently-broken entry); a shared client just drops the instance.
     clientMounts.set(client, (clientMounts.get(client) ?? 1) - 1);
     if (givenClient === undefined) client.terminate();
-    else void client.unmount(realm).catch(() => {});
+    else void client.unmount(instance).catch(() => {});
     throw err;
   }
 
@@ -809,7 +809,7 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
   /* ── Pushed-size channel ─────────────────────────────────────────────────
    *
    * The proxy DOM's only geometry is the box THIS element renders — so the
-   * driver measures it and pushes {w,h} into the realm via setSize: once
+   * driver measures it and pushes {w,h} into the instance via setSize: once
    * immediately (the app's first size-aware work happens then — mount()
    * itself ran before any size existed), and on every ResizeObserver tick
    * throttled to ~100ms (trailing, plus a leading call when the window is
@@ -826,7 +826,7 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
     if (w === lastW && h === lastH) return;
     lastW = w;
     lastH = h;
-    void client.setSize(realm, w, h).then(applyOps);
+    void client.setSize(instance, w, h).then(applyOps);
   };
   const resizeObserver =
     typeof ResizeObserver === 'function'
@@ -865,10 +865,10 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
     updateProps: async (next: Record<string, unknown>) => {
       const marshalled = marshalCallbackProps(next, registerCb) as Record<string, unknown>;
       assertCloneableProps(marshalled, `updateProps(${app})`);
-      applyOps(await client.updateProps(realm, marshalled));
+      applyOps(await client.updateProps(instance, marshalled));
     },
     flush: async () => {
-      applyOps(await client.flush(realm));
+      applyOps(await client.flush(instance));
     },
     destroy: () => {
       destroyed = true;
@@ -879,20 +879,20 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
       const remaining = (clientMounts.get(client) ?? 1) - 1;
       clientMounts.set(client, remaining);
       if (remaining > 0) {
-        // The worker still serves sibling realms — hand this one back. The
+        // The worker still serves sibling mounts — hand this one back. The
         // detach ops are irrelevant if our element is already gone, so the
-        // return batch is dropped. Best-effort: the realm map and its
+        // return batch is dropped. Best-effort: the instance map and its
         // handlers release regardless.
-        void client.unmount(realm).catch(() => {});
+        void client.unmount(instance).catch(() => {});
       } else {
-        // Last island — still run the realm's teardown first so the app's
+        // Last island — still run the instance's teardown first so the app's
         // dispose hook cancels deferred work (library timers, animation
         // loops) and the proxy doc unwinds. In a real worker terminate may
         // kill the thread before unmount lands — equally fine, process
         // death is teardown — but in-process workers need this or the
-        // realm zombies on and its pending callbacks mutate foreign docs.
+        // instance zombies on and its pending callbacks mutate foreign docs.
         void client
-          .unmount(realm)
+          .unmount(instance)
           .catch(() => {})
           .finally(() => client.terminate());
       }

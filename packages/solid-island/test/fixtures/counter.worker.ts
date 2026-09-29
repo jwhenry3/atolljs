@@ -1,5 +1,5 @@
 /**
- * Island worker entry for the Solid-renderer suite — a 1:1 realm worker
+ * Island worker entry for the Solid-renderer suite — a 1:1 instance worker
  * serving one `solidIslandApp`-wrapped function component: a prop-driven
  * label, a button whose click bumps a `createSignal` (proving the
  * dispatch → handler → ops round trip) and `emit`s 'bumped' over the
@@ -8,7 +8,7 @@
  * what babel-preset-solid's universal output would emit calls into.
  */
 import { createSignal } from 'solid-js';
-import { defineRealmWorker, emit } from '@jwhenry123/mesh-worker-dom/worker';
+import { defineMonoWorker, emit } from '@jwhenry123/mesh-islands/worker';
 import { h, insert, solidIsland } from '../../src/worker';
 
 function Counter(props: Record<string, unknown>): ReturnType<typeof h> {
@@ -29,7 +29,7 @@ function Counter(props: Record<string, unknown>): ReturnType<typeof h> {
     },
     'bump',
   );
-  // The component body runs inside the mount task's realm scope, so this
+  // The component body runs inside the mount task's instance scope, so this
   // emit rides back in the mount batch — the mount-time counterpart of
   // the imperative fixture's build()-time 'ready'.
   emit('ready', { label: props.label });
@@ -37,4 +37,4 @@ function Counter(props: Record<string, unknown>): ReturnType<typeof h> {
 }
 
 export const counterApp = solidIsland('counter', Counter);
-export const counterWorker = defineRealmWorker(counterApp);
+export const counterWorker = defineMonoWorker(counterApp);

@@ -7,7 +7,7 @@
  * registry worker ('charts' is real recharts rendering namespaced SVG);
  * 'vue-notes' runs a REAL Vue createRenderer in the worker via the
  * mesh-vue-island adapter; 'vanilla' and 'map' run on dedicated REALM
- * workers (defineRealmWorker — the 1:1 topology): 'vanilla' is a purely
+ * workers (defineMonoWorker — the 1:1 topology): 'vanilla' is a purely
  * IMPERATIVE app on the worker-side proxy DOM, 'map' a REAL unmodified
  * Leaflet 1.9 on proxy DOM + DOM shim — and neither worker's bundle carries
  * the React apps. Two islands run the SAME 'data-table' app — a
@@ -23,7 +23,7 @@
  *
  * There is still NO React on this thread — every visible element below the
  * toolbar arrives via op replay. The whole islands pattern lives in
- * @jwhenry123/mesh-worker-dom; this file supplies the worker entrypoint and
+ * @jwhenry123/mesh-islands; this file supplies the worker entrypoint and
  * the mediation glue.
  */
 import {
@@ -31,7 +31,7 @@ import {
   mountIsland,
   type IslandHandle,
   type Mode,
-} from '@jwhenry123/mesh-worker-dom';
+} from '@jwhenry123/mesh-islands';
 // Leaflet's stylesheet is shell-side: the worker fabricates the DOM Leaflet
 // builds (panes, tiles, controls) but CSS was always the shell's job.
 import 'leaflet/dist/leaflet.css';
@@ -39,7 +39,7 @@ import 'leaflet/dist/leaflet.css';
 /** One fresh worker per island — poolSize is pinned to 1 inside connectIslandWorker. */
 const islandWorker = (): Worker =>
   new Worker(new URL('./worker/render.worker.ts', import.meta.url), { type: 'module' });
-// The imperative islands run dedicated realm workers (defineRealmWorker —
+// The imperative islands run dedicated instance workers (defineMonoWorker —
 // 1:1 script per app): their bundles carry no React at all.
 const vanillaWorker = (): Worker =>
   new Worker(new URL('./worker/vanilla.worker.ts', import.meta.url), { type: 'module' });

@@ -1,14 +1,14 @@
 # @jwhenry123/mesh-svelte-island
 
-The Svelte shell surface for `@jwhenry123/mesh-worker-dom` — mount a
+The Svelte shell surface for `@jwhenry123/mesh-islands` — mount a
 worker-hosted tree as an ordinary element in a main-thread Svelte app —
 plus the Svelte 5 **worker renderer**: `svelteIslandApp` runs a compiled
-component with the real `mount()`/`unmount()` against the realm's proxy
+component with the real `mount()`/`unmount()` against the instance's proxy
 document, so every DOM call the Svelte runtime makes serializes to the op
 stream the shell replays as real DOM.
 
 ```bash
-npm install @jwhenry123/mesh @jwhenry123/mesh-worker-dom @jwhenry123/mesh-svelte-island svelte
+npm install @jwhenry123/mesh @jwhenry123/mesh-islands @jwhenry123/mesh-svelte-island svelte
 ```
 
 ## The `island` action / `createIslandState`
@@ -30,18 +30,18 @@ npm install @jwhenry123/mesh @jwhenry123/mesh-worker-dom @jwhenry123/mesh-svelte
 `createIslandState(options)` is the headless form — mount/attach yourself
 and read `status`/`error`/`handle` as reactive `$state`. `worker`/`client`/
 `app` are mount-stable — swap them through `{#key}`. All the
-[worker-dom island rules](../worker-dom/README.md#island-rules) apply
+[islands island rules](../islands/README.md#island-rules) apply
 unchanged.
 
-## The worker renderer: `svelteIslandApp` / `defineSvelteIslandWorker`
+## The worker renderer: `svelteIslandApp` / `defineSveltePolyWorker`
 
 ```ts
 // counter.worker.ts — the whole worker entry
 import Counter from './Counter.svelte';
-import { defineSvelteIslandWorker, emit } from '@jwhenry123/mesh-svelte-island/worker';
+import { defineSveltePolyWorker, emit } from '@jwhenry123/mesh-svelte-island/worker';
 
-export const worker = defineSvelteIslandWorker({ counter: Counter });
-// or a 1:1 realm worker: defineSvelteIslandWorker(Counter)
+export const worker = defineSveltePolyWorker({ apps: { counter: Counter } });
+// or a 1:1 instance worker: defineSvelteMonoWorker(Counter)
 ```
 
 ```svelte
@@ -58,7 +58,7 @@ Semantics: `mount` runs the component's real `mount()` into `doc.body`
 with a `$state`-backed props box — `island.updateProps` mutates the box,
 Svelte patches in place (same DOM elements survive). Event dispatches end
 with a `flushSync()` so state updates land in the dispatch's own op batch.
-`emit`/`runInRealm` are re-exported for the island→shell channel.
+`emit`/`runInInstance` are re-exported for the island→shell channel.
 
 ## Requirements
 

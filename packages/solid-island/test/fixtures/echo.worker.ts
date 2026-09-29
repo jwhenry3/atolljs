@@ -1,16 +1,16 @@
 /**
  * Minimal island worker entry for the `createIsland`/`Island` tests — a
- * realm worker (1:1 topology) serving one `islandApp`-stamped imperative
+ * instance worker (1:1 topology) serving one `islandApp`-stamped imperative
  * app: a div echoing props.text, a button whose click dispatches back into
- * the realm and emits 'pinged', and a 'ready' emit on every build (mount
+ * the instance and emits 'pinged', and a 'ready' emit on every build (mount
  * AND each imperative updateProps rebuild).
  */
 import {
-  defineRealmWorker,
+  defineMonoWorker,
   emit,
   islandApp,
   type ProxyDocument,
-} from '@jwhenry123/mesh-worker-dom/worker';
+} from '@jwhenry123/mesh-islands/worker';
 
 export const echoApp = islandApp('echo', {
   imperative: (doc: ProxyDocument, props: Record<string, unknown>): void => {
@@ -22,9 +22,9 @@ export const echoApp = islandApp('echo', {
     btn.textContent = 'ping';
     btn.addEventListener('click', () => emit('pinged', { n: 1 }));
     doc.body.append(div, btn);
-    // Instance-less op — routes by the realm mount holds active during build.
+    // Instance-less op — routes by the instance mount holds active during build.
     emit('ready', { text: props.text ?? 'echo' });
   },
 });
 
-export const echoWorker = defineRealmWorker(echoApp);
+export const echoWorker = defineMonoWorker(echoApp);

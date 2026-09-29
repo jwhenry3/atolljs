@@ -6,7 +6,7 @@
  * `lifecycleLog` doubles as the worker-side assertion channel).
  */
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { connectIslandWorker, mountIsland } from '@jwhenry123/mesh-worker-dom';
+import { connectIslandWorker, mountIsland } from '@jwhenry123/mesh-islands';
 import { InProcessWorker } from '@jwhenry123/mesh/sdk/testing/inProcessWorker';
 import { lifecycleLog } from './fixtures/spectrum.worker';
 
@@ -27,7 +27,7 @@ beforeEach(() => {
   lifecycleLog.length = 0;
 });
 
-/** A fresh island container per mount — the realm root's real element. */
+/** A fresh island container per mount — the instance root's real element. */
 function host(): HTMLElement {
   const el = realDoc.createElement('div');
   realDoc.body.appendChild(el);

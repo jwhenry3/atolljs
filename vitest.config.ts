@@ -29,12 +29,12 @@ export default mergeConfig(
         { find: /^@jwhenry123\/mesh-nestjs\/(.*)$/, replacement: r('packages/nestjs/src') + '/$1' },
         { find: /^@jwhenry123\/mesh-incidents$/, replacement: r('packages/incidents/src/index.ts') },
         { find: /^@jwhenry123\/mesh-incidents\/(.*)$/, replacement: r('packages/incidents/src') + '/$1' },
-        { find: /^@jwhenry123\/mesh-worker-dom$/, replacement: r('packages/worker-dom/src/index.ts') },
-        { find: /^@jwhenry123\/mesh-worker-dom\/(.*)$/, replacement: r('packages/worker-dom/src') + '/$1' },
+        { find: /^@jwhenry123\/mesh-islands$/, replacement: r('packages/islands/src/index.ts') },
+        { find: /^@jwhenry123\/mesh-islands\/(.*)$/, replacement: r('packages/islands/src') + '/$1' },
         { find: /^@jwhenry123\/mesh-react-island$/, replacement: r('packages/react-island/src/index.tsx') },
         // The framework island packages — tests and example worker entries
         // import the published specifiers (incl. the ./worker subpath) and
-        // land on sources, same as worker-dom above.
+        // land on sources, same as islands above.
         { find: /^@jwhenry123\/mesh-vue-island$/, replacement: r('packages/vue-island/src/index.ts') },
         { find: /^@jwhenry123\/mesh-vue-island\/(.*)$/, replacement: r('packages/vue-island/src') + '/$1' },
         { find: /^@jwhenry123\/mesh-svelte-island$/, replacement: r('packages/svelte-island/src/index.ts') },

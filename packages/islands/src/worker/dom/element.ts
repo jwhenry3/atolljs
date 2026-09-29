@@ -1,16 +1,16 @@
 import {
   allocId,
   bumpOpsVersion,
-  getActiveRealm,
-  getLastActiveRealm,
-  getRealmSize,
+  getActiveInstance,
+  getLastActiveInstance,
+  getInstanceSize,
   instances,
-  markRealmActive,
+  markInstanceActive,
   pushOp,
   registerHandler,
   unregisterHandler,
-} from '../realm';
-import type { ElementInstance, HostInstance, TextInstance } from '../realm';
+} from '../instance';
+import type { ElementInstance, HostInstance, TextInstance } from '../instance';
 import type { EventPayload, Op } from '../../ops';
 
 import {
@@ -181,7 +181,7 @@ export class ProxyElement extends ProxyNode {
           if (opts.once) this.removeEventListener(type, fn, { capture: opts.capture });
         }
       },
-      this.instance.realm,
+      this.instance.instance,
       this.instance.id,
     );
     this._listeners.push({ type, fn, hid, capture: opts.capture });
@@ -407,7 +407,7 @@ export class ProxyElement extends ProxyNode {
       frag = this.doc.createDocumentFragment();
       frag._children = this._children;
       // A fresh fragment's phantom (negative) id would swallow every op —
-      // adopt the element's instance so parent id, realm, and op targeting
+      // adopt the element's instance so parent id, instance, and op targeting
       // all read as the template.
       (frag as { instance: unknown }).instance = this.instance;
       templateContents.set(this, frag);

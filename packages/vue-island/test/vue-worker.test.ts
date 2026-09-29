@@ -7,12 +7,12 @@
  */
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { InProcessWorker } from '@jwhenry123/mesh/sdk/testing/inProcessWorker';
-import { connectIslandWorker, mountIsland } from '@jwhenry123/mesh-worker-dom';
+import { connectIslandWorker, mountIsland } from '@jwhenry123/mesh-islands';
 
 vi.stubGlobal('Worker', InProcessWorker);
 InProcessWorker.handlerModules = [() => import('./fixtures/counter.worker')];
 
-// In-process artifact: once a worker realm mounts, ambient `document` can
+// In-process artifact: once a worker instance mounts, ambient `document` can
 // resolve to its PROXY document (shared globalThis) — capture the real one
 // before any mounts. Real browsers never share globals across threads.
 let realDoc: Document;
@@ -54,7 +54,7 @@ describe('vueIslandApp', () => {
 
     // Click → driver dispatch → worker handler → Vue re-render. Vue's
     // scheduler commits on a microtask after the dispatch task drains, so
-    // the ops land on the realm queue — flush() (or the doorbell in push
+    // the ops land on the instance queue — flush() (or the doorbell in push
     // mode) delivers them. The emit op DID ride back in the dispatch batch.
     button.dispatchEvent(new (realDoc.defaultView as typeof window).MouseEvent('click', { bubbles: true }));
     await vi.waitFor(async () => {
@@ -186,7 +186,7 @@ describe('vueIslandApp', () => {
     const client = connectIslandWorker({ worker: renderWorker });
 
     const island = await mountIsland({ client, el, app: 'teleport' });
-    // Teleported to the realm body — lands inside the island element as a
+    // Teleported to the instance body — lands inside the island element as a
     // sibling of the app's root, not inside .tele-app.
     const beamed = el.querySelector('b.beamed') as HTMLElement;
     expect(beamed?.textContent).toBe('beamed in');

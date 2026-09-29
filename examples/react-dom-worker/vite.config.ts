@@ -1,12 +1,12 @@
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
 
-// The sdk and the worker-dom package live in the workspace root — alias the
+// The sdk and the islands package live in the workspace root — alias the
 // package names to their sources so the example runs against them without a
 // build step. (The file: dependency in package.json would also resolve, but
 // aliases make dev/test robust regardless of install state.)
 const sdkRoot = fileURLToPath(new URL('../../src/sdk/', import.meta.url)).replace(/\\/g, '/');
-const workerDomRoot = fileURLToPath(new URL('../../packages/worker-dom/src/', import.meta.url)).replace(/\\/g, '/');
+const islandsRoot = fileURLToPath(new URL('../../packages/islands/src/', import.meta.url)).replace(/\\/g, '/');
 const vueIslandRoot = fileURLToPath(new URL('../../packages/vue-island/src/', import.meta.url)).replace(/\\/g, '/');
 
 export default defineConfig(({ command }) => ({
@@ -21,14 +21,14 @@ export default defineConfig(({ command }) => ({
       { find: /^@jwhenry123\/mesh$/, replacement: `${sdkRoot}index.ts` },
       { find: /^@jwhenry123\/mesh\/sdk$/, replacement: `${sdkRoot}index.ts` },
       { find: /^@jwhenry123\/mesh\/sdk\//, replacement: sdkRoot },
-      { find: /^@jwhenry123\/mesh-worker-dom$/, replacement: `${workerDomRoot}index.ts` },
-      { find: /^@jwhenry123\/mesh-worker-dom\/worker$/, replacement: `${workerDomRoot}worker/index.ts` },
+      { find: /^@jwhenry123\/mesh-islands$/, replacement: `${islandsRoot}index.ts` },
+      { find: /^@jwhenry123\/mesh-islands\/worker$/, replacement: `${islandsRoot}worker/index.ts` },
       {
         find: /^@jwhenry123\/mesh-react-island$/,
         replacement: `${fileURLToPath(new URL('../../packages/react-island/src/', import.meta.url)).replace(/\\/g, '/')}index.tsx`,
       },
       // The vue island's worker entry — aliases resolve the package to its
-      // sources like worker-dom above. `vue` itself comes from the root
+      // sources like islands above. `vue` itself comes from the root
       // install (the file: dep), one copy shared with nothing else here.
       { find: /^@jwhenry123\/mesh-vue-island$/, replacement: `${vueIslandRoot}index.ts` },
       { find: /^@jwhenry123\/mesh-vue-island\/worker$/, replacement: `${vueIslandRoot}worker.ts` },
@@ -46,7 +46,7 @@ export default defineConfig(({ command }) => ({
     },
   },
   // The ops themselves still ride postMessage — but the push transport uses
-  // a SharedArrayBuffer doorbell (see packages/worker-dom memory.ts), which
+  // a SharedArrayBuffer doorbell (see packages/islands memory.ts), which
   // requires cross-origin isolation. Poll mode needs none of this — that's
   // the tradeoff the toolbar lets you feel.
   server: {

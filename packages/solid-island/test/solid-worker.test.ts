@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 /**
- * The Solid worker renderer (`solidIslandApp`) end-to-end — a rendered-realm
+ * The Solid worker renderer (`solidIslandApp`) end-to-end — a rendered-instance
  * app written with the package's own primitives, driven through the real op
  * protocol. InProcessWorker fakes only the thread boundary: mount/dispatch/
  * updateProps ops replay onto real DOM here exactly as they do in a browser.
@@ -10,14 +10,14 @@ import { InProcessWorker } from '@jwhenry123/mesh/sdk/testing/inProcessWorker';
 import {
   connectIslandWorker,
   mountIsland,
-} from '@jwhenry123/mesh-worker-dom';
+} from '@jwhenry123/mesh-islands';
 
 vi.stubGlobal('Worker', InProcessWorker);
-// Importing the fixture performs defineRealmWorker's registration side
+// Importing the fixture performs defineMonoWorker's registration side
 // effects — what a bundled worker entry does at boot.
 InProcessWorker.handlerModules = [() => import('./fixtures/counter.worker')];
 
-// In-process artifact: once a realm mounts, ambient `document` can resolve
+// In-process artifact: once a instance mounts, ambient `document` can resolve
 // to its PROXY document — capture the real one before any mounts.
 let realDoc: Document;
 beforeAll(() => {
@@ -73,7 +73,7 @@ describe('solid worker renderer', () => {
       expect(el.querySelector('.count')?.textContent).toBe('score: 2'),
     );
 
-    // Teardown: realm unmount → Solid root disposed → worker terminates.
+    // Teardown: instance unmount → Solid root disposed → worker terminates.
     const worker = InProcessWorker.created.at(-1)!;
     island.destroy();
     await vi.waitFor(() => expect(worker.terminated).toBe(true));

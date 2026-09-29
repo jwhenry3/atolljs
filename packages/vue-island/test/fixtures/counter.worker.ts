@@ -2,7 +2,7 @@
  * Island worker entry for the Vue renderer test — a registry worker serving
  * one Vue app: a div with a button that bumps a `ref` (proving the
  * dispatch → re-render → ops round trip through the real op path) and calls
- * the worker-dom `emit()` inside the handler (proving the emit op reaches
+ * the islands `emit()` inside the handler (proving the emit op reaches
  * the island's `onEvent`). Plain `h()`/`defineComponent` — no SFC compiler.
  */
 import {
@@ -15,7 +15,7 @@ import {
   vModelText,
   withDirectives,
 } from 'vue';
-import { defineIslandWorker, emit } from '@jwhenry123/mesh-worker-dom/worker';
+import { definePolyWorker, emit } from '@jwhenry123/mesh-islands/worker';
 import { vueIslandApp } from '../../src/worker';
 
 const Counter = defineComponent({
@@ -31,7 +31,7 @@ const Counter = defineComponent({
             class: 'inc',
             onClick: () => {
               count.value += 1;
-              // Inside the dispatch task's realm scope — the emit op rides
+              // Inside the dispatch task's instance scope — the emit op rides
               // back in the same op batch and lands on onEvent.
               emit('incremented', { count: count.value });
             },
@@ -125,8 +125,8 @@ const VModelApp = defineComponent({
 });
 
 /**
- * Teleport to the realm's body — `to` resolves through the renderer's
- * querySelector host op against the realm's shadow tree. (Same as the real
+ * Teleport to the instance's body — `to` resolves through the renderer's
+ * querySelector host op against the instance's shadow tree. (Same as the real
  * DOM: the target must exist outside the mounting subtree, so 'body' —
  * the island root — is the in-island target.)
  */
@@ -141,7 +141,7 @@ const TeleportApp = defineComponent({
   },
 });
 
-export const counterWorker = defineIslandWorker({
+export const counterWorker = definePolyWorker({
   apps: {
     counter: vueIslandApp(Counter),
     controls: vueIslandApp(Controls),

@@ -1,6 +1,6 @@
 /**
  * `@jwhenry123/mesh-react-island` — the React shell surface for
- * `@jwhenry123/mesh-worker-dom` islands: a worker-hosted React (or
+ * `@jwhenry123/mesh-islands` islands: a worker-hosted React (or
  * imperative proxy-DOM) tree mounted as an ordinary element in a
  * main-thread React app.
  *
@@ -33,8 +33,8 @@
  * - `app` changes remount the island; `worker`/`client` are MOUNT-STABLE —
  *   swap them via React `key`, not by passing a new value mid-life.
  * - Unmount destroys the island; the worker terminates unless the client
- *   is SHARED (several `<Island client={c}/>` mount realms into one worker —
- *   the realm unmounts and the worker dies with the last island to leave).
+ *   is SHARED (several `<Island client={c}/>` mount mounts into one worker —
+ *   the instance unmounts and the worker dies with the last island to leave).
  *
  * The `app` prop accepts the registry name OR the app itself — a React
  * component, an `islandApp`-stamped value, or an `{ imperative }` def. Pass
@@ -49,14 +49,14 @@ import {
   connectIslandWorker,
   islandAppNameOf,
   mountIsland,
-} from '@jwhenry123/mesh-worker-dom';
+} from '@jwhenry123/mesh-islands';
 import type {
   IslandAppLike,
   IslandAppProps,
   IslandClient,
   IslandHandle,
   IslandWorkerOptions,
-} from '@jwhenry123/mesh-worker-dom';
+} from '@jwhenry123/mesh-islands';
 
 // Re-export the app-contract types the component API is generic over, so
 // consumers can name them without a second package import.
@@ -71,7 +71,7 @@ export interface IslandProps<A = string>
    * Which app to mount — the `apps` registry key ('charts') or the app
    * itself (`ChartsApp`, an `islandApp(...)`-stamped def, `{ imperative }`).
    * A reference infers `props` from its own signature. Optional against a
-   * `defineRealmWorker` (1:1) worker — its single app mounts regardless.
+   * `defineMonoWorker` (1:1) worker — its single app mounts regardless.
    */
   app?: IslandAppRef<A>;
   /**
@@ -145,7 +145,7 @@ export function Island<A = string>({
   // mount effect — worker/client identity is intentionally NOT tracked:
   // mount-stable (swap via `key`). `app` IS tracked — a different app means
   // a different island: the cleanup destroys, the re-run mounts fresh.
-  // No `app` → 'main': realm workers (defineRealmWorker) mount their single
+  // No `app` → 'main': instance workers (defineMonoWorker) mount their single
   // app namelessly; registry workers will error with the key list if 'main'
   // isn't a real key.
   const appName = app === undefined ? 'main' : islandAppNameOf(app);
@@ -410,7 +410,7 @@ export type LazyResolvedApp<T extends Promise<unknown>> =
  * `islandComponent<P>('charts')` — a proxy component for a worker app that
  * the shell NEVER imports. `P` is the contract (usually an `import type` of
  * the worker component's props); the string is the registry key. Against a
- * `defineRealmWorker` (1:1) worker the name can be omitted entirely.
+ * `defineMonoWorker` (1:1) worker the name can be omitted entirely.
  *
  * ```tsx
  * import type { TableProps } from './worker/apps';
@@ -447,13 +447,13 @@ export function islandComponent(
  * <Suspense fallback="loading…"><ChartsIsland width={520} worker={renderWorker} /></Suspense>
  * ```
  *
- * CONTRACT MODULES: for `defineRealmWorker` (1:1) topologies the loader can
+ * CONTRACT MODULES: for `defineMonoWorker` (1:1) topologies the loader can
  * resolve `{ app, worker }` — the island then carries its own worker factory
  * and call sites need no `worker` prop at all:
  *
  * ```ts
  * // worker/map.island.ts — shell-safe contract (never the .worker.ts entry
- * // itself: defining a worker installs realm globals, don't import it)
+ * // itself: defining a worker installs instance globals, don't import it)
  * export { mapApp as app } from './map';
  * export const worker = () => new Worker(new URL('./map.worker.ts', import.meta.url), { type: 'module' });
  *

@@ -13,8 +13,8 @@
     "paths": {
       "@jwhenry123/mesh/sdk": ["../../src/sdk/index.ts"],
       "@jwhenry123/mesh/sdk/*": ["../../src/sdk/*"],
-      "@jwhenry123/mesh-worker-dom": ["../../packages/worker-dom/src/index.ts"],
-      "@jwhenry123/mesh-worker-dom/worker": ["../../packages/worker-dom/src/worker/index.ts"],
+      "@jwhenry123/mesh-islands": ["../../packages/islands/src/index.ts"],
+      "@jwhenry123/mesh-islands/worker": ["../../packages/islands/src/worker/index.ts"],
       "@jwhenry123/mesh-react-island": ["../../packages/react-island/src/index.tsx"],
       "@jwhenry123/mesh-vue-island": ["../../packages/vue-island/src/index.ts"],
       "@jwhenry123/mesh-vue-island/worker": ["../../packages/vue-island/src/worker.ts"]

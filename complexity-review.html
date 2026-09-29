@@ -147,7 +147,7 @@
 
     <div class="callout">
       All high-payoff simplifications are done. The worker DOM monolith is split,
-      transclusion uses React portals, the realm backend is renderer-agnostic, and
+      transclusion uses React portals, the instance backend is renderer-agnostic, and
       the React shell APIs share one internal proxy implementation. Only documentation
       sharing remains open, and it is blocked on data-model alignment rather than code.
     </div>
@@ -155,7 +155,7 @@
     <div class="stats">
       <div class="stat">
         <div class="stat-value">8</div>
-        <div class="stat-label">worker-dom source modules (was 1 monolith)</div>
+        <div class="stat-label">islands source modules (was 1 monolith)</div>
       </div>
       <div class="stat">
         <div class="stat-value success">8</div>
@@ -198,7 +198,7 @@
         <text x="290" y="275" fill="#8a919e" font-size="11" text-anchor="end" transform="rotate(-40 290 275)">worker/hostConfig.ts</text>
         <text x="380" y="275" fill="#8a919e" font-size="11" text-anchor="end" transform="rotate(-40 380 275)">dom/document.ts</text>
         <text x="470" y="275" fill="#8a919e" font-size="11" text-anchor="end" transform="rotate(-40 470 275)">dom/window.ts</text>
-        <text x="560" y="275" fill="#8a919e" font-size="11" text-anchor="end" transform="rotate(-40 560 275)">worker/realm.ts</text>
+        <text x="560" y="275" fill="#8a919e" font-size="11" text-anchor="end" transform="rotate(-40 560 275)">worker/instance.ts</text>
         <text x="650" y="275" fill="#8a919e" font-size="11" text-anchor="end" transform="rotate(-40 650 275)">dom/node.ts</text>
         <text x="740" y="275" fill="#8a919e" font-size="11" text-anchor="end" transform="rotate(-40 740 275)">dom/css.ts</text>
         <text x="830" y="275" fill="#8a919e" font-size="11" text-anchor="end" transform="rotate(-40 830 275)">dom/selectors.ts</text>
@@ -210,7 +210,7 @@
         <text x="380" y="220" fill="#e3e6ec" font-size="12" font-weight="600" text-anchor="middle">446</text>
       </svg>
     </div>
-    <div class="caption">Source: packages/worker-dom/src/worker/dom/*.ts, packages/worker-dom/src/worker/*.ts, and packages/react-island/src/index.tsx after the realm split.</div>
+    <div class="caption">Source: packages/islands/src/worker/dom/*.ts, packages/islands/src/worker/*.ts, and packages/react-island/src/index.tsx after the instance split.</div>
 
     <h2>Completed simplifications</h2>
     <table>
@@ -231,8 +231,8 @@
           <td><span class="done">Done</span> — new <code>worker/dom/css.ts</code> owns classList/style/dataset proxies.</td>
         </tr>
         <tr>
-          <td>Unify <code>defineIslandWorker</code> / <code>defineRealmWorker</code></td>
-          <td><span class="done">Done</span> — single entry point accepts registry or single app; realm worker is an alias.</td>
+          <td>Unify <code>definePolyWorker</code> / <code>defineMonoWorker</code></td>
+          <td><span class="done">Done</span> — single entry point accepts registry or single app; instance worker is an alias.</td>
         </tr>
         <tr>
           <td>Normalize event payload builder in <code>island.ts</code></td>
@@ -243,8 +243,8 @@
           <td><span class="done">Done</span> — <code>&lt;Island slots/&gt;</code> takes <code>Record&lt;string, ReactNode&gt;</code> and renders with <code>createPortal</code>.</td>
         </tr>
         <tr>
-          <td>Split renderer-agnostic realm state from React host config</td>
-          <td><span class="done">Done</span> — new <code>worker/realm.ts</code>; <code>hostConfig.ts</code> is only the React reconciler adapter.</td>
+          <td>Split renderer-agnostic instance state from React host config</td>
+          <td><span class="done">Done</span> — new <code>worker/instance.ts</code>; <code>hostConfig.ts</code> is only the React reconciler adapter.</td>
         </tr>
         <tr>
           <td>Collapse <code>Island</code> / <code>islandComponent</code> / <code>lazyIsland</code> internals</td>

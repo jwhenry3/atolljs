@@ -3,10 +3,10 @@
  * preserving innerHTML, kind-aware cloneNode, ChildNode/ParentNode
  * conveniences, namespace-aware attributes, listener options (`once`), and
  * `<template>.content`. Same harness as proxyDom.test.ts — ops drain off
- * the realm queue, reads come from the shadow tree.
+ * the instance queue, reads come from the shadow tree.
  */
 import { describe, expect, it } from 'vitest';
-import { runInRealm, takeOps, getHandler } from '../src/worker/realm';
+import { runInInstance, takeOps, getHandler } from '../src/worker/instance';
 import {
   createProxyDocument,
   ProxyComment,
@@ -18,17 +18,17 @@ import {
 } from '../src/worker/proxyDom';
 import type { Op } from '../src/ops';
 
-/** Run `fn` inside a realm and return the ops it emitted. */
-const inRealm = (realm: string, fn: () => void): Op[] =>
-  runInRealm(realm, () => {
+/** Run `fn` inside a instance and return the ops it emitted. */
+const inInstance = (instance: string, fn: () => void): Op[] =>
+  runInInstance(instance, () => {
     fn();
-    return takeOps(realm);
+    return takeOps(instance);
   });
 
 describe('ProxyComment', () => {
   it('createComment anchors insertBefore with a real text-node id, emits only a text op', () => {
     let commentId = -1;
-    const ops = inRealm('comments', () => {
+    const ops = inInstance('comments', () => {
       const doc = createProxyDocument('comments');
       const host = doc.createElement('div');
       doc.body.appendChild(host);
@@ -67,7 +67,7 @@ describe('ProxyComment', () => {
   });
 
   it('adopt()/_wrap() returns the comment view, not a text view', () => {
-    inRealm('comment-wrap', () => {
+    inInstance('comment-wrap', () => {
       const doc = createProxyDocument('comment-wrap') as InternalDocument;
       const c = doc.createComment('x');
       expect(doc.adopt(c.instance)).toBe(c);
@@ -78,7 +78,7 @@ describe('ProxyComment', () => {
 
 describe('comment-preserving innerHTML', () => {
   it('parses <!> and <!--x--> anchors as comment children and serializes them back', () => {
-    inRealm('comment-html', () => {
+    inInstance('comment-html', () => {
       const doc = createProxyDocument('comment-html');
       const host = doc.createElement('div');
       doc.body.appendChild(host);
@@ -99,7 +99,7 @@ describe('comment-preserving innerHTML', () => {
 
 describe('kind-aware cloneNode', () => {
   it('deep clones keep comment children as comments and nested structures intact', () => {
-    const ops = inRealm('clone-kinds', () => {
+    const ops = inInstance('clone-kinds', () => {
       const doc = createProxyDocument('clone-kinds');
       const host = doc.createElement('div');
       host.innerHTML = '<ul><li>a</li><!----><li>b</li></ul><!--end-->';
@@ -136,7 +136,7 @@ describe('kind-aware cloneNode', () => {
 
 describe('ChildNode/ParentNode conveniences', () => {
   it('before/after/replaceWith insert around the node and emit append+remove ops', () => {
-    const ops = inRealm('childnode', () => {
+    const ops = inInstance('childnode', () => {
       const doc = createProxyDocument('childnode');
       const root = doc.createElement('div');
       doc.body.appendChild(root);
@@ -163,7 +163,7 @@ describe('ChildNode/ParentNode conveniences', () => {
   });
 
   it('append/prepend/replaceChildren work on the base node (fragments included)', () => {
-    inRealm('parentnode', () => {
+    inInstance('parentnode', () => {
       const doc = createProxyDocument('parentnode');
       const host = doc.createElement('div');
       doc.body.appendChild(host);
@@ -189,7 +189,7 @@ describe('ChildNode/ParentNode conveniences', () => {
   });
 
   it('nodeName reports per kind', () => {
-    inRealm('nodename', () => {
+    inInstance('nodename', () => {
       const doc = createProxyDocument('nodename');
       expect(doc.createElement('div').nodeName).toBe('DIV');
       expect(doc.createElementNS('http://www.w3.org/2000/svg', 'foreignObject').nodeName).toBe(
@@ -205,7 +205,7 @@ describe('ChildNode/ParentNode conveniences', () => {
 
 describe('namespaceURI + *AttributeNS', () => {
   it('namespaceURI reflects the create-time ns; NS attrs round-trip shadow state as qualified names', () => {
-    const ops = inRealm('ns-attrs', () => {
+    const ops = inInstance('ns-attrs', () => {
       const doc = createProxyDocument('ns-attrs');
       const svg = doc.createElementNS('http://www.w3.org/2000/svg', 'svg');
       const el = doc.createElement('div');
@@ -234,14 +234,14 @@ describe('listener options on the wire', () => {
   it('addEventListener({once:true}) emits opts and auto-detaches after one dispatch', () => {
     let calls = 0;
     let btn!: ProxyElement;
-    const doc = createProxyDocument('once-realm');
-    const ops = runInRealm('once-realm', () => {
+    const doc = createProxyDocument('once-instance');
+    const ops = runInInstance('once-instance', () => {
       btn = doc.createElement('button');
       doc.body.appendChild(btn);
       btn.addEventListener('click', () => {
         calls++;
       }, { once: true });
-      return takeOps('once-realm');
+      return takeOps('once-instance');
     });
 
     const listenOp = ops.find((o) => o.t === 'listen' && o.type === 'click') as {
@@ -259,14 +259,14 @@ describe('listener options on the wire', () => {
     expect(getHandler(listenOp.handler)).toBeUndefined();
 
     // The auto-detach emitted unlisten so the driver drops its map entry.
-    const post = takeOps('once-realm');
+    const post = takeOps('once-instance');
     expect(post.some((o) => o.t === 'unlisten' && o.handler === listenOp.handler)).toBe(true);
     doc.dispose();
   });
 
   it('capture participates in dedupe/removal and rides unlisten; passive crosses the wire', () => {
-    const doc = createProxyDocument('capture-realm');
-    const ops = runInRealm('capture-realm', () => {
+    const doc = createProxyDocument('capture-instance');
+    const ops = runInInstance('capture-instance', () => {
       const el = doc.createElement('div');
       doc.body.appendChild(el);
       const fn = () => {};
@@ -275,7 +275,7 @@ describe('listener options on the wire', () => {
       el.addEventListener('scroll', fn, { passive: true, capture: true }); // deduped
       el.removeEventListener('scroll', fn, { capture: true });
       el.removeEventListener('scroll', fn); // removes the bubble listener
-      return takeOps('capture-realm');
+      return takeOps('capture-instance');
     });
     const listens = ops.filter((o) => o.t === 'listen');
     expect(listens.length).toBe(2);
@@ -298,7 +298,7 @@ describe('listener call fidelity', () => {
     let seenCurrent: unknown;
     let seenPath: unknown[] | undefined;
     let target: ProxyNode | null = null;
-    const ops = runInRealm('fidelity', () => {
+    const ops = runInInstance('fidelity', () => {
       const host = doc.createElement('div');
       const btn = doc.createElement('button');
       host.appendChild(btn);
@@ -317,7 +317,7 @@ describe('listener call fidelity', () => {
       | undefined;
     expect(listenOp).toBeDefined();
     // Fire the registered handler the way dispatch() would.
-    runInRealm('fidelity', () => {
+    runInInstance('fidelity', () => {
       getHandler(listenOp!.handler)!.fn({ type: 'click', targetId: target!.instance.id });
       return takeOps('fidelity');
     });
@@ -338,7 +338,7 @@ describe('listener call fidelity', () => {
     let seenThis: unknown;
     let seenPath: unknown[] | undefined;
     let target: ProxyNode | null = null;
-    const ops = runInRealm('doc-fidelity', () => {
+    const ops = runInInstance('doc-fidelity', () => {
       const btn = doc.createElement('button');
       doc.body.appendChild(btn);
       doc.addEventListener('click', function (this: unknown, p) {
@@ -349,7 +349,7 @@ describe('listener call fidelity', () => {
       return takeOps('doc-fidelity');
     });
     const listenOp = ops.find((o) => o.t === 'listen') as { handler: number } | undefined;
-    runInRealm('doc-fidelity', () => {
+    runInInstance('doc-fidelity', () => {
       getHandler(listenOp!.handler)!.fn({ type: 'click', targetId: target!.instance.id });
       return takeOps('doc-fidelity');
     });
@@ -362,7 +362,7 @@ describe('listener call fidelity', () => {
 
 describe('<template>.content', () => {
   it('innerHTML on a template fills a shared fragment view; its children splice into a host', () => {
-    const ops = inRealm('template', () => {
+    const ops = inInstance('template', () => {
       const doc = createProxyDocument('template');
       const tpl = doc.createElement('template');
       tpl.innerHTML = '<span>x</span><!----><b>y</b>';
@@ -390,7 +390,7 @@ describe('<template>.content', () => {
   it('content.appendChild emits append ops targeted at the template id', () => {
     let tplId = -1;
     let childId = -1;
-    const ops = inRealm('template-append', () => {
+    const ops = inInstance('template-append', () => {
       const doc = createProxyDocument('template-append');
       const tpl = doc.createElement('template');
       tplId = tpl.instance.id;
@@ -407,7 +407,7 @@ describe('<template>.content', () => {
   });
 
   it('non-template elements read content as undefined', () => {
-    inRealm('not-template', () => {
+    inInstance('not-template', () => {
       const doc = createProxyDocument('not-template');
       expect(doc.createElement('div').content).toBeUndefined();
     });
@@ -416,7 +416,7 @@ describe('<template>.content', () => {
 
 describe('document extras', () => {
   it('importNode clones through the document; baseURI is honest', () => {
-    inRealm('doc-extras', () => {
+    inInstance('doc-extras', () => {
       const doc = createProxyDocument('doc-extras');
       const el = doc.createElement('div');
       el.append(doc.createComment('c'));

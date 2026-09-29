@@ -1,4 +1,4 @@
-# React Worker Islands — registry + realm workers, N React trees
+# React Worker Islands — registry + instance workers, N React trees
 
 A standalone proof that **React's render logic needs no DOM** — scaled out to
 islands. The real `react-reconciler@0.34` (the same package react-dom is built
@@ -8,29 +8,29 @@ mutation-phase hook appends a serialized op to a queue; task methods return the
 flushed batch, and the main thread's only job is to replay the ops as real DOM
 mutations.
 
-**The whole pattern lives in `@jwhenry123/mesh-worker-dom`** — this example is
-the consumer: its worker entries are ~20-line `defineIslandWorker({ apps })` /
-`defineRealmWorker(app)` calls, its shell calls `connectIslandWorker({ worker })`
+**The whole pattern lives in `@jwhenry123/mesh-islands`** — this example is
+the consumer: its worker entries are ~20-line `definePolyWorker({ apps })` /
+`defineMonoWorker(app)` calls, its shell calls `connectIslandWorker({ worker })`
 + `mountIsland()`, and its imperative island demos the worker-side proxy DOM
 plus the global `document`/`window` shim.
 
 **The shell + islands model — worker-hosted microfrontends, two worker
 topologies.** The demo mixes them deliberately:
 
-- **Registry worker** (`defineIslandWorker({ apps })`) — `render.worker.ts`
+- **Registry worker** (`definePolyWorker({ apps })`) — `render.worker.ts`
   serves the React apps (`controls` / `data-table` / `stats` / `charts`) by
   name. Islands each get a `connectWorker` client — one pool, **poolSize
   pinned to 1**, one worker. The React shell goes further: the two
-  `data-table` islands share ONE client, so both realms live in a single
+  `data-table` islands share ONE client, so both instances live in a single
   worker — separate reconcilers, op queues, and pids in one OS thread —
-  and `destroy()` unmounts a realm without killing its sibling's worker.
-- **Realm workers** (`defineRealmWorker(app)`) — `map.worker.ts` and
+  and `destroy()` unmounts a instance without killing its sibling's worker.
+- **Instance workers** (`defineMonoWorker(app)`) — `map.worker.ts` and
   `vanilla.worker.ts` are the 1:1 form: one script, one app, mounted
   namelessly (a single-app worker resolves its sole app whatever name is
   asked). Their bundles carry only that app's dependencies — no recharts,
   no other React apps.
 
-Registry entries are either React components — reconciled into the realm's
+Registry entries are either React components — reconciled into the instance's
 own root — or `{ imperative: (doc, props) => void }` — apps built on the
 worker-side **proxy DOM** with no React usage (see below). There is **no
 React on the main thread of `index.html`**: `src/island.ts` is a dumb op
@@ -38,11 +38,11 @@ applier plus an event sink per island. (If your shell *is* a React app,
 `@jwhenry123/mesh-react-island` exports `<Island/>` — the same
 mount/updateProps/destroy lifecycle as a component — see `react-shell.html`.)
 
-**A microfrontend is not limited to one instance.** Realm keys are
+**A microfrontend is not limited to one instance.** Instance keys are
 `app@N` — minted per island — so `'data-table'` mounts twice with
 independent props and content, whether into separate workers (the vanilla
 shell) or the same one (the React shell's shared client). `unmount` on the
-wire tears a realm down without touching its siblings.
+wire tears a instance down without touching its siblings.
 `connectIslandWorker({ worker, ...options })` takes the worker factory (the
 package can't know where your entry lives) while `poolSize`/`sharedMemory`
 stay island-internal — `poolSize: 1` is pinned after the spread, so pooling
@@ -88,7 +88,7 @@ And plain `<Island app="vanilla"/>` string mounting stays supported.
 **Worker-side proxy DOM — the "WorkerDOM" pattern.** Transclusion covers
 libraries that must run on the main thread; `src/worker/proxyDom.ts` covers
 the opposite: imperative/DOM-dependent code that should run *inside* the
-worker. `createProxyDocument(realm)` builds a fake `document` whose nodes
+worker. `createProxyDocument(instance)` builds a fake `document` whose nodes
 wrap the same host-instance records the reconciler uses — one `instances`
 map, one id counter — so `createElement`, `appendChild`, `setAttribute`,
 `classList`, `dataset`, `el.style.x`, `addEventListener`, and
@@ -101,18 +101,18 @@ op channel. Because ops are id-addressed, proxy-created elements can nest
 inside React-rendered parents and vice versa; `doc.adopt(instance)` wraps
 any shared instance record for imperative navigation.
 
-The `vanilla` island proves a realm can be **pure imperative code** — no
+The `vanilla` island proves a instance can be **pure imperative code** — no
 reconciler, no JSX, no React import. `mount` runs `build(doc)` inside
-`runInRealm` and drains the emitted ops; `updateProps` is documented as
+`runInInstance` and drains the emitted ops; `updateProps` is documented as
 *clear + rebuild on a fresh document*; `dispatch` runs the handler inside
-the realm so `emit()` and mutations route to the island's queue.
+the instance so `emit()` and mutations route to the island's queue.
 
-**The global DOM shim — unmodified libraries in a realm.** `installDomShim(doc)`
-puts the realm's proxy document on `globalThis.document` plus a `window`
+**The global DOM shim — unmodified libraries in a instance.** `installDomShim(doc)`
+puts the instance's proxy document on `globalThis.document` plus a `window`
 facade object (navigator/location stubs, timers + rAF, `addEventListener`).
 Real DOM-dependent libraries — which reach for globals, build markup with
 `innerHTML` (parsed worker-side via htmlparser2), and delegate events on
-`document.addEventListener` — then run *unmodified* inside the realm.
+`document.addEventListener` — then run *unmodified* inside the instance.
 `document`/`window` listeners emit `listen` ops on the island's container
 (id 0) so delegated handlers see bubbling events, and dispatched payloads
 get `target` synthesized to the proxy node (`e.target.closest()` works).
@@ -129,7 +129,7 @@ markers, zoom/attribution controls, a custom place-picker control,
 drag-pan, and wheel zoom all work through the op stream — Leaflet's
 `Draggable` registers document-level `mousemove`/`mouseup` listeners
 mid-gesture via `listen` ops, `ScrollWheelZoom`'s debounce timer emits
-`zoomChanged` from outside any task (wrapped in `runInRealm` +
+`zoomChanged` from outside any task (wrapped in `runInInstance` +
 `bumpOpsVersion`), and delegated marker clicks route through Leaflet's
 `_targets` stamp table onto proxy-element expandos. What makes it possible
 is the one geometry channel: the driver's `ResizeObserver` pushes the
@@ -150,9 +150,9 @@ driver calls `createElementNS` (portal children inherit their target's
 namespace too); **refs return proxy facades** — `getPublicInstance` hands
 libraries a `ProxyElement`, so recharts' tooltip/legend `createPortal` target
 (the wrapper's ref) is a valid container the host methods unwrap back to its
-instance; **realm-aware globals** — `document`/`window`/`Element` resolve per
-realm (inside tasks the active realm's doc, otherwise the sole/last-active
-realm's — and plain assignments still override for out-of-realm code), so
+instance; **instance-aware globals** — `document`/`window`/`Element` resolve per
+instance (inside tasks the active instance's doc, otherwise the sole/last-active
+instance's — and plain assignments still override for out-of-instance code), so
 recharts' `getComputedStyle`, selector calls (`getElementsByClassName`/
 `getElementsByTagName`), and portal bookkeeping run unmodified; and
 **event-object semantics** — dispatched payloads get `target`/`currentTarget`
@@ -179,20 +179,20 @@ map island: emit('markerClicked' / 'placeSelected' / 'zoomChanged') → shell st
 charts island: emit('chartClicked') ─────────────────────────────────────────→ shell status line
 ```
 
-Each island's header shows its `whoami()` pid — a random per-realm id proving
+Each island's header shows its `whoami()` pid — a random per-instance id proving
 every island is a distinct worker (in the in-process test, a distinct render
-realm).
+instance).
 
 ## Files
 
-Package code (`packages/worker-dom/` + `packages/react-island/`) does the
-heavy lifting: `defineIslandWorker` (realms, reconcilers, op queues),
+Package code (`packages/islands/` + `packages/react-island/`) does the
+heavy lifting: `definePolyWorker` (instances, reconcilers, op queues),
 `hostConfig`, `proxyDom` + `installDomShim`, `mountIsland`/
 `connectIslandWorker` + the op protocol + doorbell contract, and the
 `<Island/>`/`lazyIsland`/`islandComponent` component layer. The example
 keeps:
 
-- `src/worker/render.worker.ts` — ~20 lines: `defineIslandWorker({ apps })` mapping island app names to components/imperative builders
+- `src/worker/render.worker.ts` — ~20 lines: `definePolyWorker({ apps })` mapping island app names to components/imperative builders
 - `src/worker/apps.tsx` — the four React island apps: `ControlsApp` (emits filter/sort/counter events), `TableApp` (2000-row memoized table, props-driven, emits rowSelected/rowsChanged), `StatsApp` (row count + busy-loop compute), `ChartsApp` (real recharts 3.x `ComposedChart`, fixed dims, emits `chartClicked` on bar click)
 - `src/worker/vanilla.ts` — the imperative island app: a hand-written swatch picker + log on the proxy DOM, AND the vendored MiniWidget running on `installDomShim`'s globals (no React import)
 - `src/worker/map.ts` — the map island app: `installDomShim` + dynamic `import('leaflet')`, then unmodified Leaflet 1.9 (`L.map`, tile layer, divIcon markers, a `L.Control.extend` place picker) on the proxy DOM
@@ -223,17 +223,17 @@ Worker → main, batches of:
 | `clear` | `{}` | clear the island's root container (React remounts and imperative rebuilds) |
 | `emit` | `{name, payload}` | **not** a DOM op — invokes the island's `onEvent(name, payload)` |
 
-Main → worker (a realm key rides the wire for routing — `mountIsland` binds
+Main → worker (a instance key rides the wire for routing — `mountIsland` binds
 it, so the shell sees `island.updateProps(props)`):
 
-- `mount(realm, props)` → first op batch after a synchronous `updateContainer`
-  commit. The realm key is `app` or `app@instance`: the part before the last
+- `mount(instance, props)` → first op batch after a synchronous `updateContainer`
+  commit. The instance key is `app` or `app@instance`: the part before the last
   `@` names the registry app, the rest distinguishes instances — which is how
   the same microfrontend can live in multiple islands (mountIsland mints a
-  fresh `app@N` per island). Mounting an already-mounted realm key is a
+  fresh `app@N` per island). Mounting an already-mounted instance key is a
   **remount**: the old tree unmounts (`clear` + detached instances), a fresh
   container renders — the batch replays onto an emptied root; the pid survives.
-- `updateProps(realm, props)` → re-render the island's root with new
+- `updateProps(instance, props)` → re-render the island's root with new
   serializable props — the shell→island channel.
 - `dispatch(handlerId, payload)` → invokes the handler behind an `__evt`
   ref or a `listen` op (proxy `addEventListener` registers in the same
@@ -242,13 +242,13 @@ it, so the shell sees `island.updateProps(props)`):
   carry normalized numeric coords/deltas/buttons (see the events caveat);
   `targetId` maps the event target to its worker instance id when it's an
   op-created node (shell-owned slot content has none).
-- `setSize(realm, w, h)` → pushes the island container's measured box into
-  the realm — the ONLY geometry channel. The driver calls it once at mount
-  and on container resizes (throttled); imperative realms additionally fire
+- `setSize(instance, w, h)` → pushes the island container's measured box into
+  the instance — the ONLY geometry channel. The driver calls it once at mount
+  and on container resizes (throttled); imperative instances additionally fire
   their `doc.onResize` handlers and return their ops in the batch.
-- `flush(realm)` → drains that realm's ops committed outside a task call
+- `flush(instance)` → drains that instance's ops committed outside a task call
   (passive effects, timers).
-- `whoami(realm)` → the realm's random pid.
+- `whoami(instance)` → the instance's random pid.
 
 ## Notes & caveats
 
@@ -257,7 +257,7 @@ it, so the shell sees `island.updateProps(props)`):
   and pins it to 1 internally. The reason is structural: one reconciled tree
   lives in one worker's memory, and a second worker in the pool would
   receive `dispatch`/`updateProps` calls for a tree it doesn't hold (its
-  handler ids and instance ids belong to a different realm). A real pool
+  handler ids and instance ids belong to a different instance). A real pool
   can't serve islands anyway — task routing is least-busy round-robin —
   until the SDK grows sticky routing / per-worker task affinity (documented
   future work). **Scaling out means more islands, not wider pools**: each
@@ -267,8 +267,8 @@ it, so the shell sees `island.updateProps(props)`):
 - **Ops are isolated per island.** Instance ids are only unique within one
   worker, so each island keeps its own nodes/props/listeners maps — sharing
   them would corrupt. On the worker side the same rule applies to ops: each
-  instance records the realm key it was created under (`app@N`), and ops
-  route to that realm's queue (multi-realm module state exists for the
+  instance records the instance key it was created under (`app@N`), and ops
+  route to that instance's queue (multi-instance module state exists for the
   in-process test, where one module instance plays every worker — and is
   also what makes same-app multi-instance testable).
 - **Slots are transclusion holes.** `data-mesh-slot` marks a leaf element:
@@ -282,12 +282,12 @@ it, so the shell sees `island.updateProps(props)`):
 - **`emit` is the island→shell channel.** Island code calls `emit(name,
   payload)` inside event handlers or commit-phase effects (the demo uses
   `useLayoutEffect` for `rowsChanged`). Payloads are structured-cloned like
-  props. Don't emit from a passive effect — outside a task there's no realm
+  props. Don't emit from a passive effect — outside a task there's no instance
   to route the op to.
 - **The proxy DOM is write-path plus ONE measured box.** Its reads are
   served by a local shadow tree that only tracks proxy-side mutations, and
   geometry is limited to the pushed container size: the driver's
-  `ResizeObserver` calls `setSize(realm, w, h)` (once at mount, then
+  `ResizeObserver` calls `setSize(instance, w, h)` (once at mount, then
   throttled on resize), and `doc.body`/`documentElement`/`markContainer`ed
   elements report it via `clientWidth`/`offsetWidth`/`getBoundingClientRect`.
   That single box is what lets Leaflet size its pane tree. Everything else —
@@ -295,14 +295,14 @@ it, so the shell sees `island.updateProps(props)`):
   `getComputedStyle` — returns 0/empty and warns once per document
   (Partytown-style synchronous reads via `Atomics` blocking calls are
   possible future work — deliberately not faked). Imperative writes follow
-  the same realm rule as `emit`: they must happen inside
-  `runInRealm(realm, fn)` — mount/dispatch provide it automatically;
+  the same instance rule as `emit`: they must happen inside
+  `runInInstance(instance, fn)` — mount/dispatch provide it automatically;
   worker-initiated work (timers, promise continuations, library callbacks
   like Leaflet's `zoomend`) must wrap itself and ring the doorbell
   (`bumpOpsVersion()`), since ops still queue correctly but nothing drains
-  them until a task or flush runs — and `emit` outside a realm drops the op.
-- **Imperative realms rebuild, not diff.** `updateProps` on an imperative
-  realm emits `clear` and re-runs `build(props)` on a fresh proxy document
+  them until a task or flush runs — and `emit` outside a instance drops the op.
+- **Imperative instances rebuild, not diff.** `updateProps` on an imperative
+  instance emits `clear` and re-runs `build(props)` on a fresh proxy document
   (the old document is disposed — its handler ids unregister and mutating
   it throws). That's the honest semantics for code with no reconciler:
   correct for widgets, not for huge trees.
@@ -312,7 +312,7 @@ it, so the shell sees `island.updateProps(props)`):
   one module-level `renderMemory` — each worker instance binds its own copy.
 - **Async updates need `flush()`.** `useEffect` state updates, timers, and
   promise continuations commit on the worker's own scheduler task; their ops
-  sit in the realm queue until asked for. `resetAfterCommit` bumps
+  sit in the instance queue until asked for. `resetAfterCommit` bumps
   `opsVersion`, the island's `observe()` wakes on `Atomics.waitAsync`, and
   `flush(app)` drains — push mode (the default) subscribes automatically at
   mount; the toolbar's **push/poll** toggle just switches modes.
@@ -324,9 +324,9 @@ it, so the shell sees `island.updateProps(props)`):
   it only for `emit` timing is fine — it runs during commit, not render).
   Imperative code gets the *proxy* DOM instead — same-looking API,
   op-emitting mutations, shadow-tree reads, no layout. And the globals ARE
-  defined now: `defineIslandWorker` installs a realm-aware dispatcher so
-  `document`/`window`/`Element` resolve to the executing realm's proxy doc
-  (plain assignments still win out-of-realm — `installDomShim` composes on
+  defined now: `definePolyWorker` installs a instance-aware dispatcher so
+  `document`/`window`/`Element` resolve to the executing instance's proxy doc
+  (plain assignments still win out-of-instance — `installDomShim` composes on
   top). Refs point at `ProxyElement` facades (valid `createPortal`
   containers — recharts uses them), geometry reads still honest-zero.
 - **Events are plain payloads**, not SyntheticEvents:
@@ -339,7 +339,7 @@ it, so the shell sees `island.updateProps(props)`):
   `stopPropagation` on the payload are synthesized no-ops — the real event
   already dispatched; the worker can't cancel it. During dispatch the
   handler also gets `target`/`currentTarget` materialized as proxy nodes
-  (`currentTarget` = the element the listener was registered on, the realm
+  (`currentTarget` = the element the listener was registered on, the instance
   root for document-level listeners) — library code reading geometry off
   them gets honest zeros instead of `undefined` crashes. React-prop handlers are
   stable across re-renders — each (instance, prop) pair owns one `__evt`
@@ -347,7 +347,7 @@ it, so the shell sees `island.updateProps(props)`):
   `addEventListener` uses the same handler table via `listen`/`unlisten`
   ops keyed by (type, handler id).
 - **React DevTools can't see the worker trees** — each island's reconciler is
-  a separate copy of React in another realm, and fiber internals don't cross
+  a separate copy of React in another instance, and fiber internals don't cross
   postMessage.
 
 ## Run

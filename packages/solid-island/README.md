@@ -1,15 +1,15 @@
 # @jwhenry123/mesh-solid-island
 
-The Solid shell surface for `@jwhenry123/mesh-worker-dom` — mount a
+The Solid shell surface for `@jwhenry123/mesh-islands` — mount a
 worker-hosted Solid (or imperative proxy-DOM) tree as an ordinary element
 in a main-thread Solid app — plus the Solid **worker renderer** for the
 worker side: `solidIslandApp` runs a plain Solid component against
-`solid-js/universal`'s `createRenderer` bound to the realm's proxy document,
+`solid-js/universal`'s `createRenderer` bound to the instance's proxy document,
 so every node mutation serializes to the op stream the shell replays as
 real DOM.
 
 ```bash
-npm install @jwhenry123/mesh @jwhenry123/mesh-worker-dom @jwhenry123/mesh-solid-island solid-js
+npm install @jwhenry123/mesh @jwhenry123/mesh-islands @jwhenry123/mesh-solid-island solid-js
 ```
 
 ## `createIsland` / `Island`
@@ -38,16 +38,16 @@ call `updateProps`, deduped by serialized identity. Callbacks are read at
 call time (fresh closures never remount); `app`/`worker`/`client` are
 mount-stable — swap via keyed remount. `Island(options)` is the no-JSX
 component form: it returns the mounted `div` itself. All the
-[worker-dom island rules](../worker-dom/README.md#island-rules) apply
+[islands island rules](../islands/README.md#island-rules) apply
 unchanged.
 
-## The worker renderer: `solidIslandApp` / `defineSolidIslandWorker`
+## The worker renderer: `solidIslandApp` / `defineSolidPolyWorker`
 
 ```ts
 // counter.worker.ts — the whole worker entry
 import { createSignal } from 'solid-js';
 import {
-  defineSolidIslandWorker,
+  defineSolidPolyWorker,
   h,
   insert,
 } from '@jwhenry123/mesh-solid-island/worker';
@@ -63,19 +63,19 @@ function Counter(props: { label: string }) {
   return h('div', { class: 'counter' }, label, bump);
 }
 
-export const worker = defineSolidIslandWorker({ counter: Counter });
-// or a 1:1 realm worker: defineRealmWorker(solidIsland('counter', Counter))
+export const worker = defineSolidPolyWorker({ apps: { counter: Counter } });
+// or a 1:1 instance worker: defineSolidMonoWorker(Counter)
 ```
 
-Mount it namelessly (realm worker) or by registry key —
+Mount it namelessly (instance worker) or by registry key —
 `createIsland({ app: 'counter', ... })` / `mountIsland({ app: 'counter' })`.
 
-Semantics: `mount` renders the component into the realm's proxy `body` under
+Semantics: `mount` renders the component into the instance's proxy `body` under
 a Solid root (so `dispose()` tears down every signal/effect with the
 island). Wire props arrive as getter-driven per-key signals, so
 `island.updateProps` bumps only the changed keys — the DOM patch that falls
 out is exactly as fine-grained as the reads (one `utext`/`attr` op per
-changed dependent, never a rebuild). `emit`/`runInRealm` are re-exported for
+changed dependent, never a rebuild). `emit`/`runInInstance` are re-exported for
 the island→shell channel.
 
 ## Writing JSX (optional)

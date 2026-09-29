@@ -5,11 +5,11 @@
  * `<Island app={echoApp}/>` — the same object the registry holds.
  */
 import {
-  defineIslandWorker,
+  definePolyWorker,
   emit,
   islandApp,
   type ProxyDocument,
-} from '@jwhenry123/mesh-worker-dom/worker';
+} from '@jwhenry123/mesh-islands/worker';
 
 export const echoApp = islandApp('echo', {
   imperative: (doc: ProxyDocument, props: Record<string, unknown>): void => {
@@ -26,6 +26,6 @@ export const echoApp = islandApp('echo', {
   },
 });
 
-export const echoWorker = defineIslandWorker({
+export const echoWorker = definePolyWorker({
   apps: { echo: echoApp },
 });

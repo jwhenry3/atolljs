@@ -23,7 +23,7 @@ import {
   ɵɵtext,
   type Type,
 } from '@angular/core';
-import { defineIslandWorker } from '@jwhenry123/mesh-worker-dom/worker';
+import { definePolyWorker } from '@jwhenry123/mesh-islands/worker';
 import { angularIslandApp } from '../../src/worker';
 
 class AotComponent {
@@ -77,6 +77,6 @@ class AotComponent {
   });
 }
 
-export const aotWorker = defineIslandWorker({
+export const aotWorker = definePolyWorker({
   apps: { aot: angularIslandApp(AotComponent) },
 });

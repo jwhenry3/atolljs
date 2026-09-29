@@ -1,7 +1,7 @@
 {
   "name": "@jwhenry123/mesh-vue-island",
   "version": "0.1.0",
-  "description": "Vue shell bindings for mesh-worker-dom islands — useIsland composable + <MeshIsland/> component",
+  "description": "Vue shell bindings for mesh-islands islands — useIsland composable + <MeshIsland/> component",
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
@@ -15,7 +15,7 @@
   },
   "peerDependencies": {
     "@jwhenry123/mesh": "0.1.0",
-    "@jwhenry123/mesh-worker-dom": "0.1.0",
+    "@jwhenry123/mesh-islands": "0.1.0",
     "vue": "^3.5.43"
   },
   "repository": {

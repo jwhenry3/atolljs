@@ -27,10 +27,10 @@ vi.mock('react/jsx-runtime', async () => {
 vi.stubGlobal('Worker', InProcessWorker);
 InProcessWorker.handlerModules = [() => import('../src/worker/render.worker')];
 
-let connectIslandWorker: typeof import('@jwhenry123/mesh-worker-dom').connectIslandWorker;
-let mountIsland: typeof import('@jwhenry123/mesh-worker-dom').mountIsland;
+let connectIslandWorker: typeof import('@jwhenry123/mesh-islands').connectIslandWorker;
+let mountIsland: typeof import('@jwhenry123/mesh-islands').mountIsland;
 beforeAll(async () => {
-  ({ connectIslandWorker, mountIsland } = await import('@jwhenry123/mesh-worker-dom'));
+  ({ connectIslandWorker, mountIsland } = await import('@jwhenry123/mesh-islands'));
 });
 
 const islandClient = () =>

@@ -1,17 +1,17 @@
 /**
- * Minimal realm-worker fixture for the `use:island` action tests — ONE
- * imperative app stamped 'echo' via islandApp (a `defineRealmWorker`
+ * Minimal instance-worker fixture for the `use:island` action tests — ONE
+ * imperative app stamped 'echo' via islandApp (a `defineMonoWorker`
  * resolves its single app regardless of the requested name, so the shell
  * can mount it namelessly or as 'echo'). The app echoes props.text into a
  * div, emits a 'ready' event on every (re)build, and a 'pinged' event on
  * button click — enough to prove mount, emit, updateProps, and dispatch.
  */
 import {
-  defineRealmWorker,
+  defineMonoWorker,
   emit,
   islandApp,
   type ProxyDocument,
-} from '@jwhenry123/mesh-worker-dom/worker';
+} from '@jwhenry123/mesh-islands/worker';
 
 export const echoApp = islandApp('echo', {
   imperative: (doc: ProxyDocument, props: Record<string, unknown>): void => {
@@ -30,4 +30,4 @@ export const echoApp = islandApp('echo', {
   },
 });
 
-export const echoWorker = defineRealmWorker(echoApp);
+export const echoWorker = defineMonoWorker(echoApp);

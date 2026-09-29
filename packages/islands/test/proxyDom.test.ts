@@ -1,10 +1,10 @@
 /**
  * Package-internal tests for the worker-side proxy DOM + global shim.
  * These run with no Worker and no real DOM — the shadow tree is the whole
- * point: mutations emit ops onto a realm queue; reads are served locally.
+ * point: mutations emit ops onto a instance queue; reads are served locally.
  */
 import { describe, expect, it } from 'vitest';
-import { runInRealm, takeOps, getHandler, getRealmSize, setRealmSize } from '../src/worker/realm';
+import { runInInstance, takeOps, getHandler, getInstanceSize, setInstanceSize } from '../src/worker/instance';
 import {
   createProxyDocument,
   installDomShim,
@@ -13,16 +13,16 @@ import {
 } from '../src/worker/proxyDom';
 import type { Op } from '../src/ops';
 
-/** Run `fn` inside a realm and return the ops it emitted. */
-const inRealm = (realm: string, fn: () => void): Op[] =>
-  runInRealm(realm, () => {
+/** Run `fn` inside a instance and return the ops it emitted. */
+const inInstance = (instance: string, fn: () => void): Op[] =>
+  runInInstance(instance, () => {
     fn();
-    return takeOps(realm);
+    return takeOps(instance);
   });
 
 describe('proxyDom shadow tree', () => {
-  it('local reads and op emission inside a realm', () => {
-    const ops = inRealm('proxy-shadow', () => {
+  it('local reads and op emission inside a instance', () => {
+    const ops = inInstance('proxy-shadow', () => {
       const doc = createProxyDocument('proxy-shadow');
       const host = doc.createElement('div');
       host.id = 'host';
@@ -95,7 +95,7 @@ describe('proxyDom shadow tree', () => {
 
 describe('proxyDom innerHTML + html APIs', () => {
   it('set innerHTML parses real HTML into create/attr/append ops; get innerHTML serializes back', () => {
-    const ops = inRealm('html', () => {
+    const ops = inInstance('html', () => {
       const doc = createProxyDocument('html');
       const host = doc.createElement('div');
       host.id = 'host';
@@ -149,7 +149,7 @@ describe('proxyDom innerHTML + html APIs', () => {
   });
 
   it('insertAdjacentHTML/Element place nodes relative to the target', () => {
-    inRealm('adjacent', () => {
+    inInstance('adjacent', () => {
       const doc = createProxyDocument('adjacent');
       const root = doc.createElement('div');
       const mid = doc.createElement('p');
@@ -172,7 +172,7 @@ describe('proxyDom innerHTML + html APIs', () => {
   });
 
   it('cloneNode, append/prepend/replaceChildren/remove/closest', () => {
-    inRealm('misc', () => {
+    inInstance('misc', () => {
       const doc = createProxyDocument('misc');
       const list = doc.createElement('ul');
       list.className = 'items';
@@ -220,7 +220,7 @@ describe('proxyDom innerHTML + html APIs', () => {
   it('document.addEventListener emits listen on id 0 and dispatches an enriched payload.target', () => {
     let received: { targetId?: number; target?: unknown } | null = null;
     let btn: ProxyElement;
-    const ops = runInRealm('doc-listen', () => {
+    const ops = runInInstance('doc-listen', () => {
       const doc = createProxyDocument('doc-listen');
       btn = doc.createElement('button');
       btn.className = 'hit';
@@ -259,7 +259,7 @@ describe('proxyDom innerHTML + html APIs', () => {
 
 describe('installDomShim', () => {
   it('sets document + window facade, does NOT clobber globalThis listeners, uninstall restores', () => {
-    const doc = createProxyDocument('shim-realm');
+    const doc = createProxyDocument('shim-instance');
     const originalAdd = globalThis.addEventListener;
     const originalRemove = globalThis.removeEventListener;
     const hadDoc = 'document' in globalThis;
@@ -272,7 +272,7 @@ describe('installDomShim', () => {
       expect(globalThis.document).toBe(doc);
       const win = (globalThis as unknown as { window: Record<string, unknown> }).window;
       expect(win.document).toBe(doc);
-      expect((win.navigator as { userAgent: string }).userAgent).toBe('mesh-worker-dom');
+      expect((win.navigator as { userAgent: string }).userAgent).toBe('mesh-islands');
       expect((win.location as { href: string }).href).toBe('about:blank');
       expect(win.innerWidth).toBe(0);
       expect(win.devicePixelRatio).toBe(1);
@@ -286,7 +286,7 @@ describe('installDomShim', () => {
 
       // window.addEventListener → listen op on id 0 (the island container),
       // same mechanism as document.addEventListener.
-      const ops = inRealm('shim-realm', () => {
+      const ops = inInstance('shim-instance', () => {
         const fn = () => {};
         (globalThis.window as { addEventListener(t: string, f: () => void): void }).addEventListener(
           'click',
@@ -303,8 +303,8 @@ describe('installDomShim', () => {
       uninstall();
     }
 
-    // The realm dispatcher keeps `document`/`window` as permanent accessors —
-    // after uninstall, out-of-realm reads resolve ambiently, so the invariant
+    // The instance dispatcher keeps `document`/`window` as permanent accessors —
+    // after uninstall, out-of-instance reads resolve ambiently, so the invariant
     // is that this document is no longer what they return.
     if (hadDoc) expect(globalThis.document).toBe(prevDoc);
     else expect(globalThis.document).not.toBe(doc);
@@ -338,7 +338,7 @@ describe('installDomShim', () => {
     installDomShim(doc);
     expect(globalThis.document).toBe(doc);
     doc.dispose();
-    // Disposed and out of the realm registry — ambient reads can't reach it.
+    // Disposed and out of the instance registry — ambient reads can't reach it.
     expect(globalThis.document).not.toBe(doc);
     const win = globalThis.window as { document?: unknown } | undefined;
     expect(win?.document).not.toBe(doc);
@@ -364,8 +364,8 @@ describe('installDomShim', () => {
 
 describe('pushed container size (setSize channel)', () => {
   it('body/documentElement and markContainer()ed elements report the pushed box; others stay honest-0', () => {
-    const realm = 'sized';
-    const doc = createProxyDocument(realm);
+    const instance = 'sized';
+    const doc = createProxyDocument(instance);
     const map = doc.createElement('div');
     const plain = doc.createElement('div');
     doc.body.appendChild(map);
@@ -373,10 +373,10 @@ describe('pushed container size (setSize channel)', () => {
     doc.markContainer(map);
 
     // Before any push every geometry read is the honest 0.
-    expect(getRealmSize(realm)).toBeUndefined();
+    expect(getInstanceSize(instance)).toBeUndefined();
     expect(doc.body.clientWidth).toBe(0);
 
-    setRealmSize(realm, 640, 480);
+    setInstanceSize(instance, 640, 480);
 
     // The root reports the pushed box — body and documentElement are aliases.
     expect(doc.body.clientWidth).toBe(640);
@@ -403,15 +403,15 @@ describe('pushed container size (setSize channel)', () => {
     expect(plain.offsetHeight).toBe(0);
     expect(plain.getBoundingClientRect().width).toBe(0);
 
-    // A second push updates the same realm store.
-    setRealmSize(realm, 320, 240);
+    // A second push updates the same instance store.
+    setInstanceSize(instance, 320, 240);
     expect(doc.body.clientWidth).toBe(320);
     doc.dispose();
   });
 
-  it('onResize handlers fire on _notifySize inside the realm — ops route to its queue', () => {
-    const realm = 'resize-notify';
-    const doc = createProxyDocument(realm) as InternalDocument;
+  it('onResize handlers fire on _notifySize inside the instance — ops route to its queue', () => {
+    const instance = 'resize-notify';
+    const doc = createProxyDocument(instance) as InternalDocument;
     const el = doc.createElement('div');
     doc.body.appendChild(el);
     const seen: Array<[number, number]> = [];
@@ -420,10 +420,10 @@ describe('pushed container size (setSize channel)', () => {
       el.style.width = `${w}px`; // handler ops ride the setSize batch back
     });
 
-    const ops = runInRealm(realm, () => {
-      setRealmSize(realm, 800, 600);
+    const ops = runInInstance(instance, () => {
+      setInstanceSize(instance, 800, 600);
       doc._notifySize(800, 600);
-      return takeOps(realm);
+      return takeOps(instance);
     });
     expect(seen).toEqual([[800, 600]]);
     expect(ops.some((o) => o.t === 'style' && o.props.width === '800px')).toBe(true);
@@ -431,9 +431,9 @@ describe('pushed container size (setSize channel)', () => {
   });
 
   it('the shim window facade reports pushed size as innerWidth/innerHeight', () => {
-    const realm = 'sized-shim';
-    const doc = createProxyDocument(realm);
-    setRealmSize(realm, 512, 384);
+    const instance = 'sized-shim';
+    const doc = createProxyDocument(instance);
+    setInstanceSize(instance, 512, 384);
     const uninstall = installDomShim(doc);
     try {
       const win = globalThis.window as unknown as { innerWidth: number; innerHeight: number };
@@ -448,9 +448,9 @@ describe('pushed container size (setSize channel)', () => {
 
 describe('enriched event payloads', () => {
   it('proxy listeners receive preventDefault/stopPropagation noops + a synthesized target', () => {
-    const realm = 'payload-enrich';
+    const instance = 'payload-enrich';
     let received: import('../src/ops').EventPayload | null = null;
-    const doc = createProxyDocument(realm);
+    const doc = createProxyDocument(instance);
     const btn = doc.createElement('button');
     btn.className = 'hit';
     doc.body.appendChild(btn);
@@ -458,7 +458,7 @@ describe('enriched event payloads', () => {
       received = p;
     });
 
-    const drained = takeOps(realm);
+    const drained = takeOps(instance);
     const listenOp = drained.find((o) => o.t === 'listen' && o.type === 'click');
     expect(listenOp).toBeDefined();
     getHandler((listenOp as { handler: number }).handler)!.fn({
@@ -478,7 +478,7 @@ describe('enriched event payloads', () => {
 
 describe('proxyDom parent/child invariants', () => {
   it('reparents a node from one parent to another with a remove+append op pair', () => {
-    const ops = inRealm('reparent', () => {
+    const ops = inInstance('reparent', () => {
       const doc = createProxyDocument('reparent');
       const a = doc.createElement('div');
       const b = doc.createElement('div');
@@ -497,7 +497,7 @@ describe('proxyDom parent/child invariants', () => {
   });
 
   it('splices a DocumentFragment into its new parent and empties it', () => {
-    const ops = inRealm('fragment', () => {
+    const ops = inInstance('fragment', () => {
       const doc = createProxyDocument('fragment');
       const list = doc.createElement('ul');
       const frag = doc.createDocumentFragment();
@@ -516,7 +516,7 @@ describe('proxyDom parent/child invariants', () => {
   });
 
   it('rejects a foreign (non-proxy) child with a descriptive error', () => {
-    inRealm('foreign', () => {
+    inInstance('foreign', () => {
       const doc = createProxyDocument('foreign');
       const host = doc.createElement('div');
       doc.body.appendChild(host);
@@ -528,7 +528,7 @@ describe('proxyDom parent/child invariants', () => {
   });
 
   it('guards a stale non-proxy _parent instead of crashing on _detach', () => {
-    inRealm('stale-parent', () => {
+    inInstance('stale-parent', () => {
       const doc = createProxyDocument('stale-parent');
       const parent = doc.createElement('div');
       const child = doc.createElement('span');
@@ -577,7 +577,7 @@ describe('window facade teardown', () => {
 
 describe('reflected property accessors', () => {
   it('library-style `el.src = url`/tabIndex/alt emit attr ops instead of silent expandos', () => {
-    const ops = inRealm('reflected', () => {
+    const ops = inInstance('reflected', () => {
       const doc = createProxyDocument('reflected');
       const img = doc.createElement('img');
       img.src = 'https://tile.openstreetmap.org/1/2/3.png';

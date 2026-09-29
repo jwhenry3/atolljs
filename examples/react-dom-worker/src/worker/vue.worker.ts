@@ -1,6 +1,6 @@
 /**
  * Vue island worker — a registry worker serving Vue apps through
- * `vueIslandApp` (Vue's createRenderer bound to the realm's proxy DOM).
+ * `vueIslandApp` (Vue's createRenderer bound to the instance's proxy DOM).
  * Its bundle carries Vue but no React — the point of the demo: islands are
  * framework-agnostic over one op protocol.
  *
@@ -9,7 +9,7 @@
  * vite config adds @vitejs/plugin-vue.
  */
 import { defineComponent, h, ref } from 'vue';
-import { defineVueIslandWorker, emit } from '@jwhenry123/mesh-vue-island/worker';
+import { defineVuePolyWorker, emit } from '@jwhenry123/mesh-vue-island/worker';
 
 /**
  * 'vue-notes' — a tiny notes composer: input + add button + list. State
@@ -60,6 +60,6 @@ const Notes = defineComponent({
   },
 });
 
-export const vueWorker = defineVueIslandWorker({
+export const vueWorker = defineVuePolyWorker({
   apps: { 'vue-notes': Notes },
 });

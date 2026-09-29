@@ -13,15 +13,15 @@
     "paths": {
       "@jwhenry123/mesh/sdk": ["../../src/sdk/index.ts"],
       "@jwhenry123/mesh/sdk/*": ["../../src/sdk/*"],
-      "@jwhenry123/mesh-worker-dom": ["../../packages/worker-dom/src/index.ts"],
-      "@jwhenry123/mesh-worker-dom/*": ["../../packages/worker-dom/src/*"]
+      "@jwhenry123/mesh-islands": ["../../packages/islands/src/index.ts"],
+      "@jwhenry123/mesh-islands/*": ["../../packages/islands/src/*"]
     }
   },
   "include": [
     "src",
     "test",
     // The test fixture imports the worker entry, which imports
-    // react-reconciler — worker-dom's ambient module declaration.
-    "../../packages/worker-dom/src/react-reconciler.d.ts"
+    // react-reconciler — islands's ambient module declaration.
+    "../../packages/islands/src/react-reconciler.d.ts"
   ]
 }

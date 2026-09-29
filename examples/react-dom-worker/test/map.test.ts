@@ -26,10 +26,10 @@ vi.mock('react/jsx-runtime', async () => {
 vi.stubGlobal('Worker', InProcessWorker);
 InProcessWorker.handlerModules = [() => import('../src/worker/map.worker')];
 
-let connectIslandWorker: typeof import('@jwhenry123/mesh-worker-dom').connectIslandWorker;
-let mountIsland: typeof import('@jwhenry123/mesh-worker-dom').mountIsland;
+let connectIslandWorker: typeof import('@jwhenry123/mesh-islands').connectIslandWorker;
+let mountIsland: typeof import('@jwhenry123/mesh-islands').mountIsland;
 beforeAll(async () => {
-  ({ connectIslandWorker, mountIsland } = await import('@jwhenry123/mesh-worker-dom'));
+  ({ connectIslandWorker, mountIsland } = await import('@jwhenry123/mesh-islands'));
 });
 
 const islandClient = () =>
@@ -123,7 +123,7 @@ describe('leaflet map island', () => {
       await island.flush();
 
       // ── wheel zoom — deltaY payload feeds ScrollWheelZoom; the zoomend
-      //    emit comes from Leaflet's debounce timer via runInRealm.
+      //    emit comes from Leaflet's debounce timer via runInInstance.
       for (const type of ['wheel', 'mousewheel']) {
         fire(pane, new WheelEvent(type, { bubbles: true, deltaY: -240 }));
       }

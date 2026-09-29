@@ -3,7 +3,7 @@
  * `use:island` — the Svelte action mounting a worker island from a Svelte
  * shell. In-process E2E like the react-island suite: real registry + op
  * protocol, the only fake being the thread boundary (InProcessWorker runs
- * the worker entry's defineRealmWorker in this module graph).
+ * the worker entry's defineMonoWorker in this module graph).
  */
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { InProcessWorker } from '@jwhenry123/mesh/sdk/testing/inProcessWorker';
@@ -12,20 +12,20 @@ import { echoApp } from './fixtures/echo.worker';
 
 vi.stubGlobal('Worker', InProcessWorker);
 // In-process workers share one module graph — importing the entry performs
-// its defineRealmWorker registration, exactly what a bundled worker does.
+// its defineMonoWorker registration, exactly what a bundled worker does.
 InProcessWorker.handlerModules = [() => import('./fixtures/echo.worker')];
 
 let island: typeof import('../src/index').island;
 let createIslandState: typeof import('../src/index').createIslandState;
-let connectIslandWorker: typeof import('@jwhenry123/mesh-worker-dom').connectIslandWorker;
-// In-process artifact: a mounted imperative realm can point the ambient
+let connectIslandWorker: typeof import('@jwhenry123/mesh-islands').connectIslandWorker;
+// In-process artifact: a mounted imperative instance can point the ambient
 // `document` at its PROXY document (shared globalThis) — capture the real
 // one before any mounts. Real browsers never share globals across threads.
 let realDoc: Document;
 beforeAll(async () => {
   realDoc = document;
   ({ island, createIslandState } = await import('../src/index'));
-  ({ connectIslandWorker } = await import('@jwhenry123/mesh-worker-dom'));
+  ({ connectIslandWorker } = await import('@jwhenry123/mesh-islands'));
 });
 
 const renderWorker = () =>
@@ -108,12 +108,12 @@ describe('use:island', () => {
     await vi.waitFor(() => expect(worker.terminated).toBe(true));
   });
 
-  it('accepts a worker factory and mounts a realm worker namelessly', async () => {
+  it('accepts a worker factory and mounts a instance worker namelessly', async () => {
     const host = realDoc.createElement('div');
     realDoc.body.appendChild(host);
 
     // No `app`, no `client` — the action builds the client and the 1:1
-    // realm worker resolves its single app ('main' by default).
+    // instance worker resolves its single app ('main' by default).
     const action = island(host, { worker: renderWorker, props: { text: 'via worker' } });
     await vi.waitFor(() =>
       expect(host.querySelector('.echo')?.textContent).toBe('via worker'),

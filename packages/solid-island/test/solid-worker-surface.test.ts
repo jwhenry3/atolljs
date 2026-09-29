@@ -11,12 +11,12 @@ import { InProcessWorker } from '@jwhenry123/mesh/sdk/testing/inProcessWorker';
 import {
   connectIslandWorker,
   mountIsland,
-} from '@jwhenry123/mesh-worker-dom';
+} from '@jwhenry123/mesh-islands';
 
 vi.stubGlobal('Worker', InProcessWorker);
 InProcessWorker.handlerModules = [() => import('./fixtures/surface.worker')];
 
-// In-process artifact: capture the real document before a realm's proxy
+// In-process artifact: capture the real document before a instance's proxy
 // document can claim the ambient global.
 let realDoc: Document;
 beforeAll(() => {

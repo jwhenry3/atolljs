@@ -12,14 +12,14 @@ export type { AdjacentPosition } from './dom/element';
 export type { ProxyClassList } from './dom/css';
 export {
   createProxyDocument,
-  realmDocFor,
+  docForInstance,
 } from './dom/document';
 export type {
   ProxyDocument,
   InternalDocument,
 } from './dom/document';
 export {
-  installRealmDispatcher,
+  installInstanceDispatcher,
   installDomShim,
 } from './dom/window';
 export type {

@@ -1,13 +1,13 @@
 /**
  * `@jwhenry123/mesh-svelte-island` — the Svelte shell surface for
- * `@jwhenry123/mesh-worker-dom` islands: a worker-hosted React (or
+ * `@jwhenry123/mesh-islands` islands: a worker-hosted React (or
  * imperative proxy-DOM) tree mounted into an ordinary element via a
  * Svelte action.
  *
  * ```svelte
  * <script>
  *   import { island, createIslandState } from '@jwhenry123/mesh-svelte-island';
- *   import { connectIslandWorker } from '@jwhenry123/mesh-worker-dom';
+ *   import { connectIslandWorker } from '@jwhenry123/mesh-islands';
  *
  *   const client = connectIslandWorker({
  *     worker: () => new Worker(new URL('./render.worker.ts', import.meta.url), { type: 'module' }),
@@ -34,20 +34,20 @@
  *   does not remount when they change on `update`. Remount by wrapping the
  *   node in `{#key ...}` (the Svelte equivalent of React's `key`).
  * - `destroy()` destroys the island; the worker terminates unless the
- *   client is SHARED (several islands mounted into one client — the realm
+ *   client is SHARED (several islands mounted into one client — the instance
  *   unmounts and the worker dies with the last island to leave).
  */
 import {
   connectIslandWorker,
   islandAppNameOf,
   mountIsland,
-} from '@jwhenry123/mesh-worker-dom';
+} from '@jwhenry123/mesh-islands';
 import type {
   IslandAppLike,
   IslandClient,
   IslandHandle,
   IslandWorkerOptions,
-} from '@jwhenry123/mesh-worker-dom';
+} from '@jwhenry123/mesh-islands';
 import type { Action } from 'svelte/action';
 
 // Re-export the contract types consumers need without a second import.
@@ -66,7 +66,7 @@ export interface IslandActionOptions {
    * Which app to mount — the `apps` registry key ('echo'), or the app
    * itself (an `islandApp(name, …)`-stamped component/`{ imperative }`
    * def — resolved via `islandAppNameOf`). Optional against a
-   * `defineRealmWorker` (1:1) worker — its single app mounts regardless.
+   * `defineMonoWorker` (1:1) worker — its single app mounts regardless.
    */
   app?: IslandAppLike | string;
   /**
@@ -151,7 +151,7 @@ export const island: Action<HTMLElement, IslandActionOptions> = (node, options) 
 
   const appName =
     options.app === undefined
-      ? undefined // mountIsland defaults to 'main' — realm workers resolve their single app
+      ? undefined // mountIsland defaults to 'main' — instance workers resolve their single app
       : typeof options.app === 'string'
         ? options.app
         : islandAppNameOf(options.app);
@@ -190,7 +190,7 @@ export const island: Action<HTMLElement, IslandActionOptions> = (node, options) 
       handle = mounted;
       latest.onReady?.(mounted);
       // Props that changed while the mount was in flight — the mount used
-      // the attach-time snapshot, so catch the realm up now.
+      // the attach-time snapshot, so catch the instance up now.
       if (pendingProps !== null) {
         const props = pendingProps;
         pendingProps = null;

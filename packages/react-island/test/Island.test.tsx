@@ -8,14 +8,14 @@ import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { act, Suspense } from 'react';
 import { createRoot } from 'react-dom/client';
 import { InProcessWorker } from '@jwhenry123/mesh/sdk/testing/inProcessWorker';
-import { islandApp, islandAppNameOf } from '@jwhenry123/mesh-worker-dom';
+import { islandApp, islandAppNameOf } from '@jwhenry123/mesh-islands';
 import type { IslandHandle } from '../src/index';
 import { echoApp } from './fixtures/echo.worker';
 import { disposed as soloDisposed } from './fixtures/solo.worker';
 
 vi.stubGlobal('Worker', InProcessWorker);
 // In-process workers share one module graph — both worker entries register
-// into it (the echo registry app and the solo realm worker's 'main').
+// into it (the echo registry app and the solo instance worker's 'main').
 InProcessWorker.handlerModules = [
   () => import('./fixtures/echo.worker'),
   () => import('./fixtures/solo.worker'),
@@ -195,7 +195,7 @@ describe('worker-loaded component proxies', () => {
     });
   });
 
-  it('islandComponent() mounts a realm worker namelessly', async () => {
+  it('islandComponent() mounts a instance worker namelessly', async () => {
     // 1:1 topology — no registry key, no app prop: the worker's single
     // registered app ('main') is the whole contract.
     const Solo = islandComponent<{ label?: string }>();
@@ -216,8 +216,8 @@ describe('worker-loaded component proxies', () => {
     await vi.waitFor(() => expect(soloDisposed).toBe(true));
   });
 
-  it('a shared client mounts two realms into one worker — teardown is ref-counted', async () => {
-    const { connectIslandWorker } = await import('@jwhenry123/mesh-worker-dom');
+  it('a shared client mounts two mounts into one worker — teardown is ref-counted', async () => {
+    const { connectIslandWorker } = await import('@jwhenry123/mesh-islands');
     const client = connectIslandWorker({ worker: soloWorker });
     const before = InProcessWorker.created.length;
 
@@ -229,25 +229,25 @@ describe('worker-loaded component proxies', () => {
     const rootA = createRoot(hostA);
     const rootB = createRoot(hostB);
     await act(async () => {
-      rootA.render(<Solo client={client} label="realm A" />);
-      rootB.render(<Solo client={client} label="realm B" />);
+      rootA.render(<Solo client={client} label="instance A" />);
+      rootB.render(<Solo client={client} label="instance B" />);
     });
 
-    // ONE worker spawned for both islands — two realms in the same thread.
+    // ONE worker spawned for both islands — two mounts in the same thread.
     await vi.waitFor(() => {
-      expect(hostA.querySelector('.solo')?.textContent).toBe('realm A');
-      expect(hostB.querySelector('.solo')?.textContent).toBe('realm B');
+      expect(hostA.querySelector('.solo')?.textContent).toBe('instance A');
+      expect(hostB.querySelector('.solo')?.textContent).toBe('instance B');
     });
     const workers = InProcessWorker.created.slice(before);
     expect(workers).toHaveLength(1);
 
-    // First unmount: realm A hands back to the shared worker, which LIVES.
+    // First unmount: instance A hands back to the shared worker, which LIVES.
     await act(async () => {
       rootA.unmount();
     });
     expect(workers[0].terminated).toBe(false);
     await vi.waitFor(() =>
-      expect(hostB.querySelector('.solo')?.textContent).toBe('realm B'),
+      expect(hostB.querySelector('.solo')?.textContent).toBe('instance B'),
     );
 
     // Last island to leave terminates the worker.

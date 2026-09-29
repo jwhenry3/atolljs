@@ -1,6 +1,6 @@
 /**
  * `@jwhenry123/mesh-solid-island` — the Solid shell surface for
- * `@jwhenry123/mesh-worker-dom` islands: a worker-hosted React (or
+ * `@jwhenry123/mesh-islands` islands: a worker-hosted React (or
  * imperative proxy-DOM) tree mounted as an ordinary element in a
  * main-thread Solid app.
  *
@@ -38,8 +38,8 @@
  * - `app`/`worker`/`client` are MOUNT-STABLE — swap them via a keyed remount
  *   (`<Show keyed>`/control-flow remount), not by passing a new value mid-life.
  * - Owner cleanup destroys the island; the worker terminates unless the client
- *   is SHARED (several islands on one client mount realms into one worker —
- *   the realm unmounts and the worker dies with the last island to leave).
+ *   is SHARED (several islands on one client mount mounts into one worker —
+ *   the instance unmounts and the worker dies with the last island to leave).
  */
 import {
   createEffect,
@@ -53,14 +53,14 @@ import {
   connectIslandWorker,
   islandAppNameOf,
   mountIsland,
-} from '@jwhenry123/mesh-worker-dom';
+} from '@jwhenry123/mesh-islands';
 import type {
   IslandAppLike,
   IslandAppProps,
   IslandClient,
   IslandHandle,
   IslandWorkerOptions,
-} from '@jwhenry123/mesh-worker-dom';
+} from '@jwhenry123/mesh-islands';
 
 // Re-export the app-contract types the API is generic over, so consumers can
 // name them without a second package import.
@@ -79,7 +79,7 @@ export interface CreateIslandOptions<A = string> {
    * Which app to mount — the `apps` registry key ('charts') or the app
    * itself (a component, an `islandApp(...)`-stamped def, `{ imperative }`).
    * A reference infers `props` from its own signature. Optional against a
-   * `defineRealmWorker` (1:1) worker — its single app mounts regardless.
+   * `defineMonoWorker` (1:1) worker — its single app mounts regardless.
    */
   app?: IslandAppRef<A>;
   /**
@@ -279,7 +279,7 @@ export function createIsland<A = string>(
 
   const ref = (el: HTMLElement): void => {
     if (el === element) return;
-    // Rebinding to a different element remounts — release the old realm (and
+    // Rebinding to a different element remounts — release the old instance (and
     // its worker, when the client isn't shared) before the fresh mount.
     if (island !== undefined) {
       island.destroy();
@@ -316,7 +316,7 @@ export interface IslandProps<A = string> extends CreateIslandOptions<A> {
   /**
    * Document the container div is created in — defaults to the ambient
    * `document`. Only needed in exotic embeddings (in-process worker tests
-   * where a proxy document claims the global while a realm is active).
+   * where a proxy document claims the global while a instance is active).
    */
   document?: Document;
 }

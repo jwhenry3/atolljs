@@ -1,16 +1,16 @@
 import {
   allocId,
   bumpOpsVersion,
-  getActiveRealm,
-  getLastActiveRealm,
-  getRealmSize,
+  getActiveInstance,
+  getLastActiveInstance,
+  getInstanceSize,
   instances,
-  markRealmActive,
+  markInstanceActive,
   pushOp,
   registerHandler,
   unregisterHandler,
-} from '../realm';
-import type { ElementInstance, HostInstance, TextInstance } from '../realm';
+} from '../instance';
+import type { ElementInstance, HostInstance, TextInstance } from '../instance';
 import type { EventPayload, Op } from '../../ops';
 
 import type { InternalDocument, ProxyDocument } from './document';
@@ -63,7 +63,7 @@ export const allocPhantomId = (): number => nextPhantomId--;
 /**
  * A node that isn't a ProxyNode can only arrive via a foreign `document`
  * (the dispatcher's real-DOM fallback or a poisoned override) — typically a
- * library's deferred callback running after its realm was torn down, or
+ * library's deferred callback running after its instance was torn down, or
  * globals restored while worker-side timers still fire. Adopting it would
  * crash later on `child.instance`; reject it here with the actual cause.
  */
@@ -71,7 +71,7 @@ export const rejectForeignChild = (child: unknown): never => {
   throw new Error(
     'proxyDom.insertBefore: child is not a proxy node — the ambient `document`/' +
       '`createElement` resolved a foreign DOM (a stale override or the real one), ' +
-      'so this node was created outside the realm that owns the parent',
+      'so this node was created outside the instance that owns the parent',
   );
 };
 
@@ -335,13 +335,13 @@ export class ProxyNode {
   }
 
   /**
-   * Queue an op on this node's realm — the same routing hostConfig uses for
-   * instance-bound ops. Outside a realm task the op still lands on the right
+   * Queue an op on this node's instance — the same routing hostConfig uses for
+   * instance-bound ops. Outside a instance task the op still lands on the right
    * queue, and the doorbell is bumped so push-mode islands pick it up.
    */
   _op(op: Op): void {
-    pushOp(this.instance.realm, op);
-    if (getActiveRealm() !== this.instance.realm) bumpOpsVersion();
+    pushOp(this.instance.instance, op);
+    if (getActiveInstance() !== this.instance.instance) bumpOpsVersion();
   }
 
   /** Detach a child from the shadow list WITHOUT emitting an op — used when

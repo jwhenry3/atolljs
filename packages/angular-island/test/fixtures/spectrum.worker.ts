@@ -1,7 +1,7 @@
 /**
  * Island worker entry for the Angular-renderer spectrum tests — several
  * standalone components exercising the realistic surface of
- * `angularIslandApp`, registered as a registry worker (`defineIslandWorker`
+ * `angularIslandApp`, registered as a registry worker (`definePolyWorker`
  * `{apps}`) so one fixture serves every test: mount with `app: '<name>'`.
  *
  * `import '@angular/compiler'` installs the JIT facade — every component
@@ -29,7 +29,7 @@ import {
 } from '@angular/core';
 import { AsyncPipe, DatePipe, UpperCasePipe } from '@angular/common';
 import { of } from 'rxjs';
-import { defineIslandWorker, emit } from '@jwhenry123/mesh-worker-dom/worker';
+import { definePolyWorker, emit } from '@jwhenry123/mesh-islands/worker';
 import { angularIslandApp } from '../../src/worker';
 
 /* ── 1. Control flow: @if/@else/@for/@empty/trackBy ─────────────────────── */
@@ -194,7 +194,7 @@ class TwoWayComponent {
   flip(): void {
     this.checked.update((v) => !v);
     // Component events stay worker-internal — the island→shell channel is
-    // the worker-dom `emit()` op, not output() (see the adapter docblock).
+    // the islands `emit()` op, not output() (see the adapter docblock).
     this.flipped.emit(this.checked());
   }
 }
@@ -320,7 +320,7 @@ class AsyncComponent implements OnDestroy {
   readonly ticks = signal(0);
   private timer: ReturnType<typeof setInterval> | null = null;
   schedule(): void {
-    // A signal write outside any realm task — the adapter's
+    // A signal write outside any instance task — the adapter's
     // ChangeDetectionScheduler stub queues a microtask detectChanges whose
     // ops ride the doorbell/flush back like a listener-driven commit.
     this.timer = setInterval(() => {
@@ -355,7 +355,7 @@ class DeferComponent {}
 
 /* ── Registry ───────────────────────────────────────────────────────────── */
 
-export const spectrumWorker = defineIslandWorker({
+export const spectrumWorker = definePolyWorker({
   apps: {
     flow: angularIslandApp(FlowComponent),
     projection: angularIslandApp(ProjectionComponent),

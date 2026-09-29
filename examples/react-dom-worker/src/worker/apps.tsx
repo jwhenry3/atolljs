@@ -9,11 +9,11 @@
  *
  * Island → shell communication is `emit(name, payload)` — it queues an `emit`
  * op the shell's onEvent callback receives. Call it inside handlers or
- * commit-phase effects (useLayoutEffect), where a task is holding the realm.
+ * commit-phase effects (useLayoutEffect), where a task is holding the instance.
  */
 
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
-import { emit, islandApp, Slot, type EventPayload } from '@jwhenry123/mesh-worker-dom/worker';
+import { emit, islandApp, Slot, type EventPayload } from '@jwhenry123/mesh-islands/worker';
 import {
   Bar,
   CartesianGrid,
@@ -301,7 +301,7 @@ export interface ChartsProps {
  * the namespace plumbing demo: <svg>/<path>/<text> all arrive as
  * createElementNS ops via the host-context namespace tracking. A Bar's
  * onClick is invoked by recharts' own internals with the datum — inside a
- * dispatch's realm scope, so emit() routes normally. Fixed dims are
+ * dispatch's instance scope, so emit() routes normally. Fixed dims are
  * honest: ResponsiveContainer's getBoundingClientRect measurement has no
  * channel (see the geometry caveat), so the shell feeds measured size via
  * props instead.

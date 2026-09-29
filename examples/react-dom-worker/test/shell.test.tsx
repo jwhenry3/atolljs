@@ -30,7 +30,7 @@ vi.mock('react-dom/client', async () => {
 });
 
 vi.stubGlobal('Worker', InProcessWorker);
-// The shell mounts the registry worker AND the two realm workers — all
+// The shell mounts the registry worker AND the two instance workers — all
 // entries register into the shared in-process module graph.
 InProcessWorker.handlerModules = [
   () => import('../src/worker/render.worker'),
@@ -57,8 +57,8 @@ const waitFor = async (fn: () => unknown, timeoutMs = 15_000): Promise<void> => 
 
 describe('React shell', () => {
   // In-process only: once a worker island calls installDomShim, the ambient
-  // `document` getter can resolve to a worker realm's PROXY document — the
-  // realm dispatcher and this test share globalThis. Capture the real one
+  // `document` getter can resolve to a worker instance's PROXY document — the
+  // instance dispatcher and this test share globalThis. Capture the real one
   // before rendering; real browsers never share globals across threads.
   let realDoc: Document;
 

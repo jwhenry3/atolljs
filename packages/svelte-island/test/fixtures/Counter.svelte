@@ -6,7 +6,7 @@
    * branch exercises `<!>` comment anchors over the proxy DOM, and `emit`
    * proves the island→shell channel.
    */
-  import { emit } from '@jwhenry123/mesh-worker-dom/worker';
+  import { emit } from '@jwhenry123/mesh-islands/worker';
   import { untrack } from 'svelte';
 
   let { label = 'count' }: { label?: string } = $props();

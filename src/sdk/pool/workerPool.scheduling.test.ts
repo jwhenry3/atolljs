@@ -1,7 +1,7 @@
 // @vitest-environment node
 /**
  * Scheduling/dispatch tests — message-only pools over InProcessWorker, so
- * handlers are same-realm deferreds we resolve on cue.
+ * handlers are same-instance deferreds we resolve on cue.
  */
 import { describe, expect, it, vi } from 'vitest';
 import { WorkerPool } from './workerPool';

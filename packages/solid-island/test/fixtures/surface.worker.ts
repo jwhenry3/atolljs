@@ -1,6 +1,6 @@
 /**
  * Island worker entry for the renderer-surface suite — a REGISTRY worker
- * (defineSolidIslandWorker) serving three plain-function Solid components
+ * (defineSolidPolyWorker) serving three plain-function Solid components
  * that exercise the universal renderer's insertion paths through the real
  * op protocol:
  * - `conditional`: a tracked accessor swapping element branches on a signal
@@ -11,9 +11,9 @@
  *   evaluation — proving updateProps re-runs only the changed key's readers.
  */
 import { createSignal, mapArray } from 'solid-js';
-import { emit } from '@jwhenry123/mesh-worker-dom/worker';
+import { emit } from '@jwhenry123/mesh-islands/worker';
 import {
-  defineSolidIslandWorker,
+  defineSolidPolyWorker,
   h,
   insert,
 } from '../../src/worker';
@@ -67,8 +67,10 @@ function PropPatch(props: Record<string, unknown>): ReturnType<typeof h> {
   return h('div', { class: 'proppatch' }, aEl, bEl);
 }
 
-export const surfaceWorker = defineSolidIslandWorker({
-  conditional: Conditional,
-  reorder: Reorder,
-  proppatch: PropPatch,
+export const surfaceWorker = defineSolidPolyWorker({
+  apps: {
+    conditional: Conditional,
+    reorder: Reorder,
+    proppatch: PropPatch,
+  },
 });

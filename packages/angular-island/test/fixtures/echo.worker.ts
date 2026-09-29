@@ -1,16 +1,16 @@
 /**
  * Minimal island worker entry for the `[meshIsland]` / `<mesh-island>` tests
- * — one imperative realm app: a div echoing props.text plus a button that
- * emits over the island→shell channel. `defineRealmWorker` registers the
+ * — one imperative instance app: a div echoing props.text plus a button that
+ * emits over the island→shell channel. `defineMonoWorker` registers the
  * single `islandApp`-stamped def (1:1 topology — the shell's `app` input is
  * optional, though passing 'echo' documents the contract).
  */
 import {
-  defineRealmWorker,
+  defineMonoWorker,
   emit,
   islandApp,
   type ProxyDocument,
-} from '@jwhenry123/mesh-worker-dom/worker';
+} from '@jwhenry123/mesh-islands/worker';
 
 export const echoApp = islandApp('echo', {
   imperative: (doc: ProxyDocument, props: Record<string, unknown>): void => {
@@ -27,4 +27,4 @@ export const echoApp = islandApp('echo', {
   },
 });
 
-export const echoWorker = defineRealmWorker(echoApp);
+export const echoWorker = defineMonoWorker(echoApp);

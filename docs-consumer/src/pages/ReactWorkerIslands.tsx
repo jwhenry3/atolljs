@@ -24,8 +24,8 @@ export function ReactWorkerIslands() {
       <h2>Live demo — React shell</h2>
       <p>
         Seven islands across three topologies — the React apps ride a registry
-        worker (the two data-tables share ONE client, two realms in one worker),
-        the imperative islands get dedicated realm workers bundling only their
+        worker (the two data-tables share ONE client, two mounts in one worker),
+        the imperative islands get dedicated instance workers bundling only their
         own deps. Every mount below is a <code>lazyIsland</code> proxy wrapped in{' '}
         <code>&lt;Suspense&gt;</code>.
       </p>
@@ -81,18 +81,18 @@ export function ReactWorkerIslands() {
             </td>
           </tr>
           <tr>
-            <td><code>defineIslandWorker</code></td>
-            <td><code>defineIslandWorker({'{'} apps {'}'})</code></td>
+            <td><code>definePolyWorker</code></td>
+            <td><code>definePolyWorker({'{'} apps {'}'})</code></td>
             <td>
               Registry worker — one script serving a whole apps map; islands
               mount by name and several may share one client/worker.
             </td>
           </tr>
           <tr>
-            <td><code>defineRealmWorker</code></td>
-            <td><code>defineRealmWorker(app)</code></td>
+            <td><code>defineMonoWorker</code></td>
+            <td><code>defineMonoWorker(app)</code></td>
             <td>
-              Realm worker — the 1:1 topology: one script, one app, mounted
+              Instance worker — the 1:1 topology: one script, one app, mounted
               namelessly. Its bundle carries only that app's dependencies.
             </td>
           </tr>
@@ -126,11 +126,11 @@ export function ReactWorkerIslands() {
 
       <h2>The worker side — two topologies</h2>
       <p>
-        <b>Registry workers</b> (<code>defineIslandWorker</code>) serve a whole
+        <b>Registry workers</b> (<code>definePolyWorker</code>) serve a whole
         apps map from one script — the React islands mount by name, and the two
-        data-table islands share ONE client so both realms live in a single
+        data-table islands share ONE client so both mounts live in a single
         worker (separate reconcilers, op queues, and pids — one OS thread).
-        <b>Realm workers</b> (<code>defineRealmWorker</code>) are the 1:1 form —
+        <b>Instance workers</b> (<code>defineMonoWorker</code>) are the 1:1 form —
         one script per app, mounted namelessly, bundling only that app's
         dependencies (map/vanilla shed recharts and the other React apps; the
         shared worker chunk still carries the reconciler).

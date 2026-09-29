@@ -37,7 +37,7 @@ export type Op =
    *  replaces the element's children with a single text node. */
   | { t: 'utext'; id: number; text: string }
   /** Clear the root container (React's clearContainer, or an imperative
-   *  realm's rebuild). */
+   *  instance's rebuild). */
   | { t: 'clear' }
   /**
    * Set/remove a single attribute — emitted by the worker-side proxy DOM
@@ -177,39 +177,39 @@ export interface EventPayload {
 }
 
 /**
- * The task methods every island worker exposes — what `defineIslandWorker`
+ * The task methods every island worker exposes — what `definePolyWorker`
  * registers on the worker side and what `connectIslandWorker`'s typed client
- * calls on the main thread. Every signature leads with the realm key
+ * calls on the main thread. Every signature leads with the instance key
  * (`'app'` or `'app@instance'`) — `mountIsland` binds it per island.
  */
 export type IslandWorkerMethods = {
-  /** Mount the realm's registry app; returns the initial op batch. Async
+  /** Mount the instance's registry app; returns the initial op batch. Async
    *  because a React app lazily imports the reconciler on first mount. */
-  mount(realm: string, props?: Record<string, unknown>): Op[] | Promise<Op[]>;
-  /** Re-render the realm's root with new serializable props. */
-  updateProps(realm: string, props: Record<string, unknown>): Op[];
+  mount(instance: string, props?: Record<string, unknown>): Op[] | Promise<Op[]>;
+  /** Re-render the instance's root with new serializable props. */
+  updateProps(instance: string, props: Record<string, unknown>): Op[];
   /** Invoke the worker handler a `__evt` ref or `listen` op points at. */
   dispatch(handlerId: number, payload: EventPayload): Op[];
   /**
-   * Push the island container's measured box into the realm — the ONLY
+   * Push the island container's measured box into the instance — the ONLY
    * geometry channel that exists. The driver observes the island's `el`
    * with a ResizeObserver and calls this once at mount and on resizes
-   * (throttled ~100ms). The realm stores {w,h}; proxy-DOM geometry reads on
+   * (throttled ~100ms). The instance stores {w,h}; proxy-DOM geometry reads on
    * `doc.body`/`documentElement` and on elements marked via
    * `doc.markContainer(el)` then return it — deeper elements keep the
    * honest 0. Handlers registered via `doc.onResize` re-run on each push;
    * their ops ride back in this method's return batch.
    */
-  setSize(realm: string, width: number, height: number): Op[];
+  setSize(instance: string, width: number, height: number): Op[];
   /** Drain ops committed outside a task (passive effects, timers). */
-  flush(realm: string): Op[];
+  flush(instance: string): Op[];
   /**
-   * Tear down one realm — unmounts its tree / disposes its proxy document
-   * and drops the realm, leaving the worker alive for its other realms.
+   * Tear down one instance — unmounts its tree / disposes its proxy document
+   * and drops the instance, leaving the worker alive for its other mounts.
    * Returned ops are the detach batch (the driver may skip applying them if
    * the island element is already gone).
    */
-  unmount(realm: string): Op[];
-  /** The mounted realm's random id — the island's "worker pid" badge. */
-  whoami(realm: string): string;
+  unmount(instance: string): Op[];
+  /** The mounted instance's random id — the island's "worker pid" badge. */
+  whoami(instance: string): string;
 };

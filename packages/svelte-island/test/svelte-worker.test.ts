@@ -1,30 +1,30 @@
 // @vitest-environment happy-dom
 /**
  * `svelteIslandApp` — the Svelte 5 worker renderer: a compiled .svelte
- * component mounts into a realm's PROXY document and its mutations cross
+ * component mounts into a instance's PROXY document and its mutations cross
  * as ops. In-process E2E like the sibling suite: real registry + op
  * protocol, the only fake being the thread boundary (InProcessWorker runs
- * the worker entry's defineRealmWorker in this module graph).
+ * the worker entry's defineMonoWorker in this module graph).
  */
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { InProcessWorker } from '@jwhenry123/mesh/sdk/testing/inProcessWorker';
-import type { IslandHandle } from '@jwhenry123/mesh-worker-dom';
+import type { IslandHandle } from '@jwhenry123/mesh-islands';
 import { counterApp } from './fixtures/counter.worker';
 
 vi.stubGlobal('Worker', InProcessWorker);
 // In-process workers share one module graph — importing the entry performs
-// its defineRealmWorker registration, exactly what a bundled worker does.
+// its defineMonoWorker registration, exactly what a bundled worker does.
 InProcessWorker.handlerModules = [() => import('./fixtures/counter.worker')];
 
-let mountIsland: typeof import('@jwhenry123/mesh-worker-dom').mountIsland;
-let connectIslandWorker: typeof import('@jwhenry123/mesh-worker-dom').connectIslandWorker;
-// In-process artifact: a mounted realm can point the ambient `document` at
+let mountIsland: typeof import('@jwhenry123/mesh-islands').mountIsland;
+let connectIslandWorker: typeof import('@jwhenry123/mesh-islands').connectIslandWorker;
+// In-process artifact: a mounted instance can point the ambient `document` at
 // its PROXY document (shared globalThis) — capture the real one before any
 // mounts. Real browsers never share globals across threads.
 let realDoc: Document;
 beforeAll(async () => {
   realDoc = document;
-  ({ connectIslandWorker, mountIsland } = await import('@jwhenry123/mesh-worker-dom'));
+  ({ connectIslandWorker, mountIsland } = await import('@jwhenry123/mesh-islands'));
 });
 
 const renderWorker = () =>

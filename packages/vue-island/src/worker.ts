@@ -1,23 +1,23 @@
 /**
  * `@jwhenry123/mesh-vue-island/worker` — the worker-side half of Vue
- * islands: `vueIslandApp(Component)` wraps a Vue component as a worker-dom
- * `RenderedIslandApp`, so it can sit in a `defineIslandWorker` `apps`
+ * islands: `vueIslandApp(Component)` wraps a Vue component as a islands
+ * `RenderedIslandApp`, so it can sit in a `definePolyWorker` `apps`
  * registry beside React and imperative apps:
  *
  *   // render.worker.ts
- *   import { defineVueIslandWorker } from '@jwhenry123/mesh-vue-island/worker';
- *   export const renderWorker = defineVueIslandWorker({ apps: { counter: Counter } });
+ *   import { defineVuePolyWorker } from '@jwhenry123/mesh-vue-island/worker';
+ *   export const renderWorker = defineVuePolyWorker({ apps: { counter: Counter } });
  *
- * Vue's public `createRenderer` drives the realm's ProxyDocument — every
+ * Vue's public `createRenderer` drives the instance's ProxyDocument — every
  * proxy mutation already serializes to ops, so this file only maps the
  * host-op interface (createElement/insert/patchProp/…) onto the facade.
  *
- * REALM RESOLUTION: the renderer is module-level (shared across realms), so
+ * REALM RESOLUTION: the renderer is module-level (shared across mounts), so
  * the create* host ops — the only ones that receive no node argument —
- * resolve the realm's ProxyDocument via `getActiveRealm()`. Vue's scheduler
+ * resolve the instance's ProxyDocument via `getActiveInstance()`. Vue's scheduler
  * flushes state-driven re-renders on a microtask OUTSIDE any task, so the
- * fallback chain runs through worker-dom's own `getLastActiveRealm` (last
- * realm a task held) and finally a last-touched-realm stamp (recorded by
+ * fallback chain runs through islands's own `getLastActiveInstance` (last
+ * instance a task held) and finally a last-touched-instance stamp (recorded by
  * every host op that sees a node) to keep late commits on the right
  * document. Consequence: renders
  * triggered by dispatched events commit after the dispatch task returns;
@@ -27,13 +27,14 @@
 import { cloneVNode, createRenderer, h, normalizeClass, normalizeStyle } from 'vue';
 import type { App, Component, ElementNamespace, VNode } from 'vue';
 import {
-  defineIslandWorker,
-  getActiveRealm,
-  getLastActiveRealm,
-  getLastTouchedRealm,
+  defineMonoWorker,
+  definePolyWorker,
+  getActiveInstance,
+  getLastActiveInstance,
+  getLastTouchedInstance,
   islandApp,
-  realmDocFor,
-} from '@jwhenry123/mesh-worker-dom/worker';
+  docForInstance,
+} from '@jwhenry123/mesh-islands/worker';
 import type {
   DoorbellSpec,
   EventPayload,
@@ -44,23 +45,23 @@ import type {
   RenderContext,
   RenderedHandle,
   RenderedIslandApp,
-} from '@jwhenry123/mesh-worker-dom/worker';
+} from '@jwhenry123/mesh-islands/worker';
 import type { SharedMemory, WorkerDefinition } from '@jwhenry123/mesh/sdk';
 
 // Worker entries shouldn't need a second package specifier for the
 // island→shell channel — `import { emit } from 'mesh-vue-island/worker'`.
-export { emit, runInRealm } from '@jwhenry123/mesh-worker-dom/worker';
+export { emit, runInInstance } from '@jwhenry123/mesh-islands/worker';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const MATH_NS = 'http://www.w3.org/1998/Math/MathML';
 
-/** The document create* ops write into — the active realm's when a task
- *  holds one; otherwise the last realm a task ran under (worker-dom's own
- *  `getLastActiveRealm` tracking), with `getLastTouchedRealm` — the realm
+/** The document create* ops write into — the active instance's when a task
+ *  holds one; otherwise the last instance a task ran under (islands's own
+ *  `getLastActiveInstance` tracking), with `getLastTouchedInstance` — the instance
  *  the most recent pushed op targeted — as the final fallback for out-of-
  *  task flushes. */
 const docForRender = (): InternalDocument =>
-  realmDocFor(getActiveRealm() || getLastActiveRealm() || getLastTouchedRealm());
+  docForInstance(getActiveInstance() || getLastActiveInstance() || getLastTouchedInstance());
 
 /* ── patchProp helpers ─────────────────────────────────────────────────── */
 
@@ -99,7 +100,7 @@ const parseEventName = (raw: string): { name: string; opts: EventOpts } => {
 
 /**
  * Per-element event invokers — the same shape as runtime-dom's `_vei` and
- * realm.ts's `listenerSlots`: one stable function per (el, event) whose
+ * instance.ts's `listenerSlots`: one stable function per (el, event) whose
  * `value` is the CURRENT handler, so the proxy's addEventListener (and its
  * handler-table id + listen op) is attached exactly once while the invoked
  * closure tracks prop updates. The invoker also remembers the `rawKey` and
@@ -266,7 +267,7 @@ const { render, createApp } = createRenderer<ProxyNode, ProxyElement>({
   setScopeId(el, id) {
     el.setAttribute(id, '');
   },
-  // Teleport resolves `to` through this host op — scoped to the realm's
+  // Teleport resolves `to` through this host op — scoped to the instance's
   // shadow tree, so `:to` selectors can only hit in-island targets (the
   // escape hatch for main-thread DOM stays the slot system).
   querySelector(selector) {
@@ -304,14 +305,14 @@ const { render, createApp } = createRenderer<ProxyNode, ProxyElement>({
 
 /**
  * Wrap a Vue component as a `RenderedIslandApp` — mount renders it into the
- * realm's proxy document; `handle.update` clones the mounted root vnode with
+ * instance's proxy document; `handle.update` clones the mounted root vnode with
  * new props and re-`render()`s it, so Vue diffs the live tree synchronously
  * and the changed ops ride back inside the updateProps task batch;
  * `dispose` unmounts the app.
  */
 export function vueIslandApp(Component: Component): RenderedIslandApp {
   return {
-    mount({ realm, doc, props }: RenderContext): RenderedHandle {
+    mount({ instance, doc, props }: RenderContext): RenderedHandle {
 
       const container = doc.body;
       const app: App = createApp(Component, props);
@@ -351,40 +352,38 @@ export const vueIsland = (
 ): RenderedIslandApp & { readonly islandAppName: string } =>
   islandApp(name, vueIslandApp(Component));
 
-export interface DefineVueIslandWorkerRegistry {
-  /** Name → Vue component registry, mirroring `defineIslandWorker({ apps })`. */
+export interface VuePolyWorkerRegistry {
+  /** Name → Vue component registry, mirroring `definePolyWorker({ apps })`. */
   apps: Record<string, Component>;
-  /** Doorbell contract override — forwarded to `defineIslandWorker`. */
+  /** Doorbell contract override — forwarded to `definePolyWorker`. */
   sharedMemory?: SharedMemory<DoorbellSpec>;
 }
 
-/** Either a single component (1:1 realm worker) or an `{ apps }` registry. */
-export type DefineVueIslandWorkerInput = Component | DefineVueIslandWorkerRegistry;
-
-const isVueRegistry = (
-  input: DefineVueIslandWorkerInput,
-): input is DefineVueIslandWorkerRegistry =>
-  typeof input === 'object' && input !== null && 'apps' in input;
-
 /**
- * `defineIslandWorker` for Vue apps — maps each component through
- * `vueIslandApp` and delegates. A bare component registers as the worker's
- * single app ('main'); an `{ apps }` object registers a name-addressable
- * registry.
+ * `definePolyWorker` for Vue apps — maps each component in the registry
+ * through `vueIslandApp` and delegates. One worker, many Vue islands.
  */
-export function defineVueIslandWorker(
-  input: DefineVueIslandWorkerInput,
+export function defineVuePolyWorker(
+  registry: VuePolyWorkerRegistry,
   options?: { sharedMemory?: SharedMemory<DoorbellSpec> },
 ): WorkerDefinition<DoorbellSpec, IslandWorkerMethods> {
-  if (isVueRegistry(input)) {
-    const apps: Record<string, RenderedIslandApp> = {};
-    for (const [key, component] of Object.entries(input.apps)) {
-      apps[key] = vueIslandApp(component);
-    }
-    return defineIslandWorker({
-      apps,
-      sharedMemory: input.sharedMemory ?? options?.sharedMemory,
-    });
+  const apps: Record<string, RenderedIslandApp> = {};
+  for (const [key, component] of Object.entries(registry.apps)) {
+    apps[key] = vueIslandApp(component);
   }
-  return defineIslandWorker(vueIslandApp(input), options);
+  return definePolyWorker({
+    apps,
+    sharedMemory: registry.sharedMemory ?? options?.sharedMemory,
+  });
+}
+
+/**
+ * `defineMonoWorker` for Vue apps — one worker pinned to a single
+ * component, the isolated-bundle host shape.
+ */
+export function defineVueMonoWorker(
+  component: Component,
+  options?: { sharedMemory?: SharedMemory<DoorbellSpec> },
+): WorkerDefinition<DoorbellSpec, IslandWorkerMethods> {
+  return defineMonoWorker(vueIslandApp(component), options);
 }

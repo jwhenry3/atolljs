@@ -84,7 +84,7 @@ const report = (
 };
 
 describe('island perf split', () => {
-  it('measures mount / rebuild / patch / dispatch for imperative and React realms', async () => {
+  it('measures mount / rebuild / patch / dispatch for imperative and React mounts', async () => {
     const results: Record<string, { workerMs: number; mainMs: number; ops: number }> = {};
 
     /* ── Imperative app: mount 200 rows, then updateProps = full rebuild ── */

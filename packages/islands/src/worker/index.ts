@@ -1,64 +1,64 @@
 /**
- * The worker-side surface of @jwhenry123/mesh-worker-dom — import from
- * '@jwhenry123/mesh-worker-dom/worker' inside the worker entry:
+ * The worker-side surface of @jwhenry123/mesh-islands — import from
+ * '@jwhenry123/mesh-islands/worker' inside the worker entry:
  *
- *   import { defineIslandWorker } from '@jwhenry123/mesh-worker-dom/worker';
- *   export const renderWorker = defineIslandWorker({ apps: { ... } });
+ *   import { definePolyWorker } from '@jwhenry123/mesh-islands/worker';
+ *   export const renderWorker = definePolyWorker({ apps: { ... } });
  *
  * Apps (React or `{ imperative }`) also use from here: `emit` (island→shell
- * channel), `runInRealm` (realm scoping for worker-initiated work), `Slot`
+ * channel), `runInInstance` (instance scoping for worker-initiated work), `Slot`
  * (transclusion), `createProxyDocument`/`installDomShim` (imperative DOM).
  */
-export { defineIslandWorker, defineRealmWorker } from './defineIslandWorker';
+export { definePolyWorker, defineMonoWorker } from './defineWorkers';
 export type {
-  DefineIslandWorkerOptions,
   ImperativeIslandApp,
+  Instance,
   IslandApp,
+  PolyWorkerRegistry,
   ReactIslandApp,
-  Realm,
   RenderContext,
   RenderedHandle,
   RenderedIslandApp,
-} from './defineIslandWorker';
+} from './defineWorkers';
 
 export { islandApp, islandAppNameOf } from '../app';
 
 // hostConfig is deliberately NOT exported — a static re-export would pull
 // react + react-reconciler into every /worker bundle. The reconciler is
-// reachable only through defineIslandWorker's lazy import of reactRealm.
+// reachable only through definePolyWorker's lazy import of reactInstance.
 
 export {
   allocId,
   bumpOpsVersion,
   emit,
-  getActiveRealm,
+  getActiveInstance,
   getHandler,
-  getLastActiveRealm,
-  getLastTouchedRealm,
-  getRealmSize,
+  getLastActiveInstance,
+  getLastTouchedInstance,
+  getInstanceSize,
   instances,
   pushOp,
   registerHandler,
   ROOT_CONTAINER,
-  runInRealm,
-  setActiveRealm,
+  runInInstance,
+  setActiveInstance,
   setDoorbellContract,
-  setRealmSize,
+  setInstanceSize,
   takeOps,
   unregisterHandler,
-} from './realm';
-export type { ElementInstance, HostInstance, TextInstance } from './realm';
+} from './instance';
+export type { ElementInstance, HostInstance, TextInstance } from './instance';
 
 export {
   createProxyDocument,
   installDomShim,
-  installRealmDispatcher,
+  installInstanceDispatcher,
   ProxyComment,
   ProxyElement,
   ProxyFragment,
   ProxyNode,
   ProxyText,
-  realmDocFor,
+  docForInstance,
 } from './proxyDom';
 export type {
   AdjacentPosition,

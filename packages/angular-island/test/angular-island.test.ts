@@ -17,14 +17,14 @@ import {
   BrowserDynamicTestingModule,
   platformBrowserDynamicTesting,
 } from '@angular/platform-browser-dynamic/testing';
-import { connectIslandWorker } from '@jwhenry123/mesh-worker-dom';
-import type { IslandClient, IslandHandle } from '@jwhenry123/mesh-worker-dom';
+import { connectIslandWorker } from '@jwhenry123/mesh-islands';
+import type { IslandClient, IslandHandle } from '@jwhenry123/mesh-islands';
 import { InProcessWorker } from '@jwhenry123/mesh/sdk/testing/inProcessWorker';
 import { MeshIslandComponent, MeshIslandDirective } from '../src/index';
 
 vi.stubGlobal('Worker', InProcessWorker);
 // In-process workers share one module graph — importing the worker entry
-// performs its defineRealmWorker/TaskRegistry side effects at INIT_MEMORY.
+// performs its defineMonoWorker/TaskRegistry side effects at INIT_MEMORY.
 InProcessWorker.handlerModules = [() => import('./fixtures/echo.worker')];
 
 const renderWorker = () =>

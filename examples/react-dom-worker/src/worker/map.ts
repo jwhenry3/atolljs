@@ -25,12 +25,12 @@
 import {
   bumpOpsVersion,
   emit,
-  getActiveRealm,
+  getActiveInstance,
   installDomShim,
   islandApp,
-  runInRealm,
+  runInInstance,
   type ProxyDocument,
-} from '@jwhenry123/mesh-worker-dom/worker';
+} from '@jwhenry123/mesh-islands/worker';
 
 export interface MapMarker {
   id: string;
@@ -61,12 +61,12 @@ const PLACES: MapPlace[] = [
 
 type LeafletModule = typeof import('leaflet');
 
-// One map instance per realm document — keyed by doc so multiple map realms
+// One map instance per instance document — keyed by doc so multiple map mounts
 // in the same in-process module graph don't collide.
 const liveMaps = new WeakMap<ProxyDocument, { remove(): void }>();
 
 export function buildMap(doc: ProxyDocument, props: Record<string, unknown>): void {
-  const realm = getActiveRealm();
+  const instance = getActiveInstance();
 
   // Leaflet binds to globalThis.document/window — install BEFORE the
   // dynamic import so its module-scope Browser detection sees the proxy.
@@ -82,9 +82,9 @@ export function buildMap(doc: ProxyDocument, props: Record<string, unknown>): vo
 
   void import('leaflet')
     .then((L) => {
-      // Runs outside a task — hold the realm so emit()/instance-less ops
+      // Runs outside a task — hold the instance so emit()/instance-less ops
       // route, then ring the doorbell so the queue drains immediately.
-      runInRealm(realm, () => startLeaflet(L, doc, props, realm));
+      runInInstance(instance, () => startLeaflet(L, doc, props, instance));
       bumpOpsVersion();
     })
     .catch((err: unknown) => {
@@ -96,7 +96,7 @@ function startLeaflet(
   L: LeafletModule,
   doc: ProxyDocument,
   props: Record<string, unknown>,
-  realm: string,
+  instance: string,
 ): void {
   const host = doc.body as unknown as HTMLElement;
 
@@ -163,11 +163,11 @@ function startLeaflet(
   });
 
   // Leaflet fires `zoomend` from ScrollWheelZoom's debounce timer — OUTSIDE
-  // any realm task — so a bare emit() has no active realm to route to and
-  // the op would be dropped. Re-enter the realm and ring the doorbell so
+  // any instance task — so a bare emit() has no active instance to route to and
+  // the op would be dropped. Re-enter the instance and ring the doorbell so
   // the queued op wakes the driver immediately.
   map.on('zoomend', () => {
-    runInRealm(realm, () => {
+    runInInstance(instance, () => {
       emit('zoomChanged', { zoom: map.getZoom() });
       bumpOpsVersion();
     });

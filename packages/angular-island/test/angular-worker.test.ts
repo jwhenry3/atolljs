@@ -10,7 +10,7 @@
  * the rest — no platform-browser, no zone.js, no TestBed on this side.
  */
 import { beforeAll, describe, expect, it, vi } from 'vitest';
-import { connectIslandWorker, mountIsland } from '@jwhenry123/mesh-worker-dom';
+import { connectIslandWorker, mountIsland } from '@jwhenry123/mesh-islands';
 import { InProcessWorker } from '@jwhenry123/mesh/sdk/testing/inProcessWorker';
 
 vi.stubGlobal('Worker', InProcessWorker);
@@ -19,7 +19,7 @@ InProcessWorker.handlerModules = [() => import('./fixtures/counter.worker')];
 const renderWorker = () =>
   new Worker(new URL('./fixtures/counter.worker.ts', import.meta.url), { type: 'module' });
 
-// In-process artifact: once a realm mounts, ambient globalThis.document can
+// In-process artifact: once a instance mounts, ambient globalThis.document can
 // resolve to the PROXY document — capture the real one for assertions.
 let realDoc: Document;
 beforeAll(() => {

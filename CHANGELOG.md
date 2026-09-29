@@ -3,13 +3,13 @@
 ## Unreleased
 
 - **New package: `@jwhenry123/mesh-react-island`** — the React shell
-  components split out of `@jwhenry123/mesh-worker-dom` (which stays
+  components split out of `@jwhenry123/mesh-islands` (which stays
   React-free on the main thread): `<Island/>` mounts a worker app
   declaratively, `islandComponent<P>('name')` proxies a worker app as a
   local-typed component without importing it, and `lazyIsland(loader)`
   mirrors `React.lazy` — suspends on the dynamic import (a real code-split
   boundary) then mounts the `islandApp`-stamped reference.
-- **New package: `@jwhenry123/mesh-worker-dom`** — the React-in-worker
+- **New package: `@jwhenry123/mesh-islands`** — the React-in-worker
   islands pattern extracted from the react-dom-worker example into an
   opt-in package. `defineIslandWorker({ apps })` is the whole worker entry
   (React realms via a real `react-reconciler@0.34`, or `{ imperative }`

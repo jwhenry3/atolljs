@@ -1,12 +1,12 @@
 /**
  * `@jwhenry123/mesh-angular-island` — the Angular shell surface for
- * `@jwhenry123/mesh-worker-dom` islands: a worker-hosted React (or
+ * `@jwhenry123/mesh-islands` islands: a worker-hosted React (or
  * imperative proxy-DOM) tree mounted as an ordinary element in a
  * main-thread Angular app.
  *
  * ```ts
  * import { Component } from '@angular/core';
- * import { connectIslandWorker } from '@jwhenry123/mesh-worker-dom';
+ * import { connectIslandWorker } from '@jwhenry123/mesh-islands';
  * import { MeshIslandComponent } from '@jwhenry123/mesh-angular-island';
  *
  * const chartsWorker = () =>
@@ -41,8 +41,8 @@
  *   — rebinding fresh closures never remounts the worker.
  * - `app`/`client` changes remount the island (destroy + fresh mount);
  *   `ngOnDestroy` destroys the island — the worker terminates unless the
- *   client is SHARED (several islands on one client mount realms into one
- *   worker; the realm unmounts and the worker dies with the last island
+ *   client is SHARED (several islands on one client mount mounts into one
+ *   worker; the instance unmounts and the worker dies with the last island
  *   to leave).
  *
  * `MeshIslandDirective` (`[meshIsland]`) carries the same inputs and can be
@@ -65,8 +65,8 @@ import type {
   OnInit,
   SimpleChanges,
 } from '@angular/core';
-import { mountIsland } from '@jwhenry123/mesh-worker-dom';
-import type { IslandClient, IslandHandle } from '@jwhenry123/mesh-worker-dom';
+import { mountIsland } from '@jwhenry123/mesh-islands';
+import type { IslandClient, IslandHandle } from '@jwhenry123/mesh-islands';
 
 // Re-export the handle types consumers need to name — same courtesy as the
 // React binding, so a second package import is never required.
@@ -92,8 +92,8 @@ export abstract class MeshIslandBase implements OnInit, OnChanges, OnDestroy {
   @Input() client!: IslandClient;
   /**
    * Registry app name — a key of the `apps` map passed to
-   * `defineIslandWorker`. Optional against a realm worker
-   * (`defineRealmWorker`), which resolves its single app regardless.
+   * `definePolyWorker`. Optional against a instance worker
+   * (`defineMonoWorker`), which resolves its single app regardless.
    */
   @Input() app?: string;
   /** Initial + updated root props — serialized to the worker. */

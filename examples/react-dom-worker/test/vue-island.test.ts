@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 /**
  * The demo's Vue island — `vue.worker.ts` runs a real Vue createRenderer
- * against the realm's proxy DOM. In-process E2E like islands.test.ts:
+ * against the instance's proxy DOM. In-process E2E like islands.test.ts:
  * everything except the OS thread boundary is real. Also dogfoods the
  * `mountIsland({ worker })` shorthand (no connectIslandWorker call).
  */
@@ -11,9 +11,9 @@ import { InProcessWorker } from '@jwhenry123/mesh/sdk/testing/inProcessWorker';
 vi.stubGlobal('Worker', InProcessWorker);
 InProcessWorker.handlerModules = [() => import('../src/worker/vue.worker')];
 
-let mountIsland: typeof import('@jwhenry123/mesh-worker-dom').mountIsland;
+let mountIsland: typeof import('@jwhenry123/mesh-islands').mountIsland;
 beforeAll(async () => {
-  ({ mountIsland } = await import('@jwhenry123/mesh-worker-dom'));
+  ({ mountIsland } = await import('@jwhenry123/mesh-islands'));
 });
 
 const vueWorker = () =>

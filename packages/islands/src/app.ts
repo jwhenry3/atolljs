@@ -3,7 +3,7 @@
  * (React component or `{ imperative }` def) with its registry name so the
  * shell can mount by reference: `<Island app={ChartsApp} props={…}/>` gets
  * prop inference from the component's own signature while the wire still
- * carries a string realm key.
+ * carries a string instance key.
  *
  * Why a stamp instead of `Component.name`: bundlers mangle function names
  * in production builds, so `ChartsApp` → 'charts' can't be derived reliably.
@@ -15,7 +15,7 @@ const ISLAND_APP_NAME = 'islandAppName';
 
 /**
  * Stamp an app with its registry name. The stamped value IS the app — use
- * it directly as the `apps` map value in `defineIslandWorker` and as the
+ * it directly as the `apps` map value in `definePolyWorker` and as the
  * `app` prop of `<Island/>`.
  *
  * ```ts
@@ -73,7 +73,7 @@ export type IslandAppProps<A> = A extends {
 /**
  * The structural shape of a mountable app — `never` params so ANY component
  * or imperative def is assignable. Kept worker-free: importing the real
- * `IslandApp` union from `worker/defineIslandWorker` would drag worker code
+ * `IslandApp` union from `worker/definePolyWorker` would drag worker code
  * into shell bundles.
  */
 export type IslandAppLike =

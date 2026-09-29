@@ -2,23 +2,23 @@ import { parseDocument, ElementType } from 'htmlparser2';
 import {
   allocId,
   bumpOpsVersion,
-  getActiveRealm,
-  getLastActiveRealm,
-  getRealmSize,
+  getActiveInstance,
+  getLastActiveInstance,
+  getInstanceSize,
   instances,
-  markRealmActive,
+  markInstanceActive,
   pushOp,
   registerHandler,
   unregisterHandler,
-} from '../realm';
-import type { ElementInstance, HostInstance, TextInstance } from '../realm';
+} from '../instance';
+import type { ElementInstance, HostInstance, TextInstance } from '../instance';
 import type { EventPayload, Op } from '../../ops';
 
 import {
-  activeRealmDoc,
+  activeInstanceDoc,
   ambientDoc,
   createProxyDocument,
-  realmDocFor,
+  docForInstance,
   type InternalDocument,
   type ProxyDocument,
 } from './document';
@@ -90,8 +90,8 @@ export interface WindowFacadeBundle {
 }
 
 /**
- * Build the `window` facade for one realm's document — shared by
- * installDomShim (imperative apps) and the realm dispatcher (React realms
+ * Build the `window` facade for one instance's document — shared by
+ * installDomShim (imperative apps) and the instance dispatcher (React mounts
  * get a window the first time library code reads one). The bundle caches
  * on the document so both paths hand out the SAME facade — a listener
  * registered through `window` must land in the same table whichever global
@@ -109,8 +109,8 @@ const buildWindowFacade = (internal: InternalDocument): WindowFacadeBundle => {
   >();
 
   const pushDocOp = (op: Op): void => {
-    pushOp(internal.realm, op);
-    if (getActiveRealm() !== internal.realm) bumpOpsVersion();
+    pushOp(internal.instance, op);
+    if (getActiveInstance() !== internal.instance) bumpOpsVersion();
   };
 
   const windowRemoveEventListener = (
@@ -154,7 +154,7 @@ const buildWindowFacade = (internal: InternalDocument): WindowFacadeBundle => {
           if (opts.once) windowRemoveEventListener(type, fn, { capture: opts.capture });
         }
       },
-      internal.realm,
+      internal.instance,
       0, // window-level listener → target id 0 is the island root
     );
     table.push({ fn, hid, capture: opts.capture });
@@ -169,7 +169,7 @@ const buildWindowFacade = (internal: InternalDocument): WindowFacadeBundle => {
   const globalClearTimeout = g.clearTimeout as typeof clearTimeout;
   const globalClearInterval = g.clearInterval as typeof clearInterval;
 
-  // A realm owns the timers/rAFs it schedules through this facade; teardown
+  // A instance owns the timers/rAFs it schedules through this facade; teardown
   // cancels them so deferred library work (Leaflet drag inertia, scroll-zoom
   // debounces, etc.) doesn't outlive the document and mutate a dead or
   // foreign ambient DOM. We wrap callbacks so completed ones drop their id.
@@ -179,7 +179,7 @@ const buildWindowFacade = (internal: InternalDocument): WindowFacadeBundle => {
 
   const facade: WindowShim = {
     document: internal,
-    navigator: { userAgent: 'mesh-worker-dom' },
+    navigator: { userAgent: 'mesh-islands' },
     location: {
       href: 'about:blank',
       reload() {},
@@ -188,10 +188,10 @@ const buildWindowFacade = (internal: InternalDocument): WindowFacadeBundle => {
     },
     get innerWidth(): number {
       // Fed by the pushed container size — the viewport the island lives in.
-      return getRealmSize(internal.realm)?.w ?? 0;
+      return getInstanceSize(internal.instance)?.w ?? 0;
     },
     get innerHeight(): number {
-      return getRealmSize(internal.realm)?.h ?? 0;
+      return getInstanceSize(internal.instance)?.h ?? 0;
     },
     devicePixelRatio: 1,
     // Workers normally have no rAF — pass through when one exists (in-process
@@ -292,7 +292,7 @@ const buildWindowFacade = (internal: InternalDocument): WindowFacadeBundle => {
         unregisterHandler(entry.hid);
         internal._handlerIds.delete(entry.hid);
         if (!internal._disposed) {
-          pushOp(internal.realm, { t: 'unlisten', id: 0, type, handler: entry.hid });
+          pushOp(internal.instance, { t: 'unlisten', id: 0, type, handler: entry.hid });
         }
       }
       table.length = 0;
@@ -310,26 +310,26 @@ const windowFacadeFor = (internal: InternalDocument): WindowFacadeBundle => {
   return internal._windowBundle;
 };
 
-let realmDispatcherInstalled = false;
+let instanceDispatcherInstalled = false;
 
 /**
  * Define `document`/`window`/`Element` as GLOBAL GETTERS that resolve to
- * the current realm's proxy document — the mechanism that lets React-island
+ * the current instance's proxy document — the mechanism that lets React-island
  * libraries (recharts reading `window.getComputedStyle`, `document.body`)
  * work without their app ever touching a doc, and that routes imperative
- * library calls correctly when several realms share one module (the
+ * library calls correctly when several mounts share one module (the
  * in-process test layout).
  *
- * Resolution (docForCurrentContext): the active realm's doc inside tasks;
- * the single registered doc when only one realm exists — every real island
+ * Resolution (docForCurrentContext): the active instance's doc inside tasks;
+ * the single registered doc when only one instance exists — every real island
  * worker, so timer/promise callbacks from libraries still hit their own
- * document; the most recent realm's doc as a final multi-realm fallback;
+ * document; the most recent instance's doc as a final multi-instance fallback;
  * the pre-install global otherwise (a real document in happy-dom tests —
- * transparent to shell-side code, which never runs inside a realm task).
+ * transparent to shell-side code, which never runs inside a instance task).
  */
 /**
  * Stand-ins for bare-global feature probes framework code runs inside a
- * realm — a real worker has no `HTMLMediaElement` constructor or
+ * instance — a real worker has no `HTMLMediaElement` constructor or
  * `customElements` registry, so `x instanceof HTMLMediaElement` /
  * `customElements.get(...)` would ReferenceError. The class never matches
  * an instanceof; the registry reports nothing defined. A host-provided
@@ -344,9 +344,9 @@ const CUSTOM_ELEMENTS_STUB = {
   whenDefined: () => new Promise<never>(() => {}),
 };
 
-export function installRealmDispatcher(): void {
-  if (realmDispatcherInstalled) return;
-  realmDispatcherInstalled = true;
+export function installInstanceDispatcher(): void {
+  if (instanceDispatcherInstalled) return;
+  instanceDispatcherInstalled = true;
   const g = globalThis as Record<string, unknown>;
   const prevDocument = g.document;
   const prevWindow = g.window;
@@ -356,8 +356,8 @@ export function installRealmDispatcher(): void {
   const prevComment = g.Comment;
   const prevMedia = g.HTMLMediaElement;
   const prevCustomElements = g.customElements;
-  // Explicit assignments override the fallback (never the in-realm doc) —
-  // keeps pre-dispatcher semantics for out-of-realm code, and lets test
+  // Explicit assignments override the fallback (never the in-instance doc) —
+  // keeps pre-dispatcher semantics for out-of-instance code, and lets test
   // harnesses/suites restore globals by plain assignment.
   let docOverride: unknown;
   let winOverride: unknown;
@@ -366,7 +366,7 @@ export function installRealmDispatcher(): void {
   Object.defineProperty(g, 'document', {
     configurable: true,
     enumerable: true,
-    get: () => activeRealmDoc() ?? docOverride ?? ambientDoc() ?? prevDocument,
+    get: () => activeInstanceDoc() ?? docOverride ?? ambientDoc() ?? prevDocument,
     set: (v) => {
       docOverride = v;
     },
@@ -375,7 +375,7 @@ export function installRealmDispatcher(): void {
     configurable: true,
     enumerable: true,
     get: () => {
-      const doc = activeRealmDoc();
+      const doc = activeInstanceDoc();
       if (doc !== undefined) return windowFacadeFor(doc).facade;
       if (winOverride !== undefined) return winOverride;
       const ambient = ambientDoc();
@@ -386,13 +386,13 @@ export function installRealmDispatcher(): void {
     },
   });
   // Workers lack the Element constructor — `x instanceof Element` inside a
-  // library would ReferenceError. Point it at ProxyElement while a realm
+  // library would ReferenceError. Point it at ProxyElement while a instance
   // doc is resolvable; real HTMLElement checks never run worker-side.
   Object.defineProperty(g, 'Element', {
     configurable: true,
     enumerable: true,
     get: () => {
-      if (activeRealmDoc() !== undefined) return ProxyElement;
+      if (activeInstanceDoc() !== undefined) return ProxyElement;
       if (elOverride !== undefined) return elOverride;
       return ambientDoc() !== undefined ? ProxyElement : prevElement;
     },
@@ -402,22 +402,22 @@ export function installRealmDispatcher(): void {
   });
 
   /**
-   * Class globals — same resolution shape as `Element` above (in-realm →
+   * Class globals — same resolution shape as `Element` above (in-instance →
    *   proxy class/stub; else explicit override; else ambient → proxy/stub;
    *   else the captured pre-dispatcher value). Frameworks cache prototype
    *   getters (`Node.prototype.firstChild`) and do `x instanceof Comment`
    *   before touching the document, so these must BE the proxy classes —
-   *   not dispatchers that return different objects per realm.
+   *   not dispatchers that return different objects per instance.
    */
-  const installClassGlobal = (name: string, realmValue: unknown, prev: unknown): void => {
+  const installClassGlobal = (name: string, instanceValue: unknown, prev: unknown): void => {
     let override: unknown;
     Object.defineProperty(g, name, {
       configurable: true,
       enumerable: true,
       get: () => {
-        if (activeRealmDoc() !== undefined) return realmValue;
+        if (activeInstanceDoc() !== undefined) return instanceValue;
         if (override !== undefined) return override;
-        return ambientDoc() !== undefined ? realmValue : prev;
+        return ambientDoc() !== undefined ? instanceValue : prev;
       },
       set: (v) => {
         override = v;
@@ -441,16 +441,16 @@ export function installRealmDispatcher(): void {
 }
 
 /**
- * Install this document as the realm's DOM surface — the entry point for
- * running real DOM-dependent libraries unmodified inside an island realm:
+ * Install this document as the instance's DOM surface — the entry point for
+ * running real DOM-dependent libraries unmodified inside an island instance:
  *
- *   const doc = createProxyDocument(realm);
+ *   const doc = createProxyDocument(instance);
  *   installDomShim(doc);
  *   SomeVendorLib.mount(doc.body);  // uses document./window./innerHTML…
  *
- * Under the realm dispatcher (installed here automatically, and by
- * defineIslandWorker for every island worker) `globalThis.document` and
- * `globalThis.window` already resolve to this document while its realm is
+ * Under the instance dispatcher (installed here automatically, and by
+ * definePolyWorker for every island worker) `globalThis.document` and
+ * `globalThis.window` already resolve to this document while its instance is
  * active — so this call's real work is building the window facade
  * (navigator/location stubs, timers + rAF passthrough, innerWidth/Height
  * from the pushed container size, empty getComputedStyle, never-matching
@@ -459,7 +459,7 @@ export function installRealmDispatcher(): void {
  *
  * It also pins the CLASS globals (`Node`/`Text`/`Comment` → the proxy
  * classes; `HTMLMediaElement`/`customElements` → never-match stubs) for
- * framework feature probes — the realm dispatcher resolves them
+ * framework feature probes — the instance dispatcher resolves them
  * ambiently anyway, so the assignment makes this document's install
  * explicit and restores the previous values on uninstall.
  *
@@ -476,14 +476,14 @@ export function installRealmDispatcher(): void {
  */
 export function installDomShim(doc: ProxyDocument): () => void {
   const internal = doc as InternalDocument;
-  installRealmDispatcher();
+  installInstanceDispatcher();
   const g = globalThis as Record<string, unknown>;
   activeShimUninstall?.();
   activeShimUninstall = null;
 
   // Capture the ambient state BEFORE this doc claims it — uninstall puts
   // it all back, so chained installs restore true originals.
-  const prevRealm = getLastActiveRealm();
+  const prevInstance = getLastActiveInstance();
   const prevDocument = g.document;
   const prevWindow = g.window;
   const prevElement = g.Element;
@@ -493,10 +493,10 @@ export function installDomShim(doc: ProxyDocument): () => void {
   const prevMedia = g.HTMLMediaElement;
   const prevCustomElements = g.customElements;
 
-  // The installed document becomes the ambient one for out-of-realm
+  // The installed document becomes the ambient one for out-of-instance
   // readers: the explicit assignment wins the dispatcher's resolution,
-  // and the realm is marked for implicit resolution paths.
-  markRealmActive(internal.realm);
+  // and the instance is marked for implicit resolution paths.
+  markInstanceActive(internal.instance);
   const bundle = windowFacadeFor(internal);
   g.document = doc;
   g.window = bundle.facade;
@@ -518,7 +518,7 @@ export function installDomShim(doc: ProxyDocument): () => void {
     g.Comment = prevComment;
     g.HTMLMediaElement = prevMedia;
     g.customElements = prevCustomElements;
-    markRealmActive(prevRealm);
+    markInstanceActive(prevInstance);
     if (activeShimUninstall === uninstall) activeShimUninstall = null;
   };
 

@@ -12,13 +12,13 @@ import { echoApp } from './fixtures/echo.worker';
 
 vi.stubGlobal('Worker', InProcessWorker);
 // In-process workers share one module graph — importing the worker entry
-// performs its defineRealmWorker/APP_REGISTRY side effects at INIT_MEMORY.
+// performs its defineMonoWorker/APP_REGISTRY side effects at INIT_MEMORY.
 InProcessWorker.handlerModules = [() => import('./fixtures/echo.worker')];
 
 let createIsland: typeof import('../src/index').createIsland;
 let Island: typeof import('../src/index').Island;
-// In-process artifact: once a worker island installs the realm dispatcher,
-// ambient `document` can resolve to a realm's PROXY document — capture the
+// In-process artifact: once a worker island installs the instance dispatcher,
+// ambient `document` can resolve to a instance's PROXY document — capture the
 // real one before any mounts. Real browsers never share globals across threads.
 let realDoc: Document;
 beforeAll(async () => {
@@ -91,8 +91,8 @@ describe('createIsland', () => {
     expect(island.handle()).toBeUndefined();
   });
 
-  it('a shared client mounts two realms into one worker — teardown is ref-counted', async () => {
-    const { connectIslandWorker } = await import('@jwhenry123/mesh-worker-dom');
+  it('a shared client mounts two mounts into one worker — teardown is ref-counted', async () => {
+    const { connectIslandWorker } = await import('@jwhenry123/mesh-islands');
     const client = connectIslandWorker({ worker: renderWorker });
     const before = InProcessWorker.created.length;
 
@@ -107,25 +107,25 @@ describe('createIsland', () => {
     let islandA!: CreateIslandResult;
     let islandB!: CreateIslandResult;
     const disposeA = createRoot((dispose) => {
-      islandA = createIsland({ client, props: { text: 'realm A' } });
+      islandA = createIsland({ client, props: { text: 'instance A' } });
       return dispose;
     });
     const disposeB = createRoot((dispose) => {
-      islandB = createIsland({ client, props: { text: 'realm B' } });
+      islandB = createIsland({ client, props: { text: 'instance B' } });
       return dispose;
     });
     islandA.ref(elA);
     islandB.ref(elB);
 
-    // ONE worker spawned for both islands — two realms in the same thread.
+    // ONE worker spawned for both islands — two mounts in the same thread.
     await vi.waitFor(() => {
-      expect(elA.querySelector('.echo')?.textContent).toBe('realm A');
-      expect(elB.querySelector('.echo')?.textContent).toBe('realm B');
+      expect(elA.querySelector('.echo')?.textContent).toBe('instance A');
+      expect(elB.querySelector('.echo')?.textContent).toBe('instance B');
     });
     const workers = InProcessWorker.created.slice(before);
     expect(workers).toHaveLength(1);
 
-    // First dispose: realm A hands back to the shared worker, which LIVES.
+    // First dispose: instance A hands back to the shared worker, which LIVES.
     disposeA();
     expect(workers[0].terminated).toBe(false);
 
@@ -143,7 +143,7 @@ describe('createIsland', () => {
     const dispose = createRoot((dispose) => {
       el = Island({
         worker: renderWorker,
-        // `document` escape hatch — ambient `document` may be a realm's
+        // `document` escape hatch — ambient `document` may be a instance's
         // proxy doc after earlier mounts in this in-process suite.
         document: realDoc,
         props: { text: 'component mount' },

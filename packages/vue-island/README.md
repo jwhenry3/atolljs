@@ -1,14 +1,14 @@
 # @jwhenry123/mesh-vue-island
 
-The Vue shell surface for `@jwhenry123/mesh-worker-dom` — mount a
+The Vue shell surface for `@jwhenry123/mesh-islands` — mount a
 worker-hosted tree as an ordinary element in a main-thread Vue app — plus
 the Vue **worker renderer**: `vueIslandApp` runs a plain Vue component
-through Vue's own `createRenderer` with host ops bound to the realm's
+through Vue's own `createRenderer` with host ops bound to the instance's
 proxy document, so every mutation serializes to the op stream the shell
 replays as real DOM.
 
 ```bash
-npm install @jwhenry123/mesh @jwhenry123/mesh-worker-dom @jwhenry123/mesh-vue-island vue
+npm install @jwhenry123/mesh @jwhenry123/mesh-islands @jwhenry123/mesh-vue-island vue
 ```
 
 ## `useIsland` / `MeshIsland`
@@ -31,15 +31,15 @@ const { host, handle, status } = useIsland({
 
 `<MeshIsland>` is the component form — same options as props plus
 `@ready`/`@error` emits. All the
-[worker-dom island rules](../worker-dom/README.md#island-rules) apply
+[islands island rules](../islands/README.md#island-rules) apply
 unchanged.
 
-## The worker renderer: `vueIslandApp` / `defineVueIslandWorker`
+## The worker renderer: `vueIslandApp` / `defineVuePolyWorker`
 
 ```ts
 // counter.worker.ts — the whole worker entry
 import { defineComponent, h, ref } from 'vue';
-import { defineVueIslandWorker, emit } from '@jwhenry123/mesh-vue-island/worker';
+import { defineVuePolyWorker, emit } from '@jwhenry123/mesh-vue-island/worker';
 
 const Counter = defineComponent({
   props: { label: { type: String, default: 'count' } },
@@ -51,14 +51,14 @@ const Counter = defineComponent({
   },
 });
 
-export const worker = defineVueIslandWorker({ apps: { counter: Counter } });
-// or a 1:1 realm worker: defineVueIslandWorker(Counter)
+export const worker = defineVuePolyWorker({ apps: { counter: Counter } });
+// or a 1:1 instance worker: defineVueMonoWorker(Counter)
 ```
 
 Semantics: `mount` renders through a module-level `createRenderer` whose
-host ops map onto the realm's proxy document; `island.updateProps` clones
+host ops map onto the instance's proxy document; `island.updateProps` clones
 the mounted root vnode and re-renders, so Vue patches in place (same DOM
-elements survive). `emit`/`runInRealm` are re-exported for the
+elements survive). `emit`/`runInInstance` are re-exported for the
 island→shell channel.
 
 Notes:

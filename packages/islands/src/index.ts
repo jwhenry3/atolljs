@@ -1,5 +1,5 @@
 /**
- * The main-thread surface of @jwhenry123/mesh-worker-dom — React trees (or
+ * The main-thread surface of @jwhenry123/mesh-islands — React trees (or
  * imperative proxy-DOM apps) rendered inside Web Workers, replayed onto
  * real DOM here as a serialized op stream. There is no React on this side.
  *

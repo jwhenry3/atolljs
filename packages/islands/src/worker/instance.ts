@@ -1,7 +1,7 @@
 /**
- * Realm-scoped state shared by every renderer backend running inside a worker.
+ * Instance-scoped state shared by every renderer backend running inside a worker.
  *
- * - Per-realm op queues: each island/app owns a queue of {@link Op}s that the
+ * - Per-instance op queues: each island/app owns a queue of {@link Op}s that the
  *   main-thread driver replays as real DOM mutations.
  * - A shared id counter for element/text instances, used by both the React
  *   reconciler and the proxy DOM.
@@ -23,7 +23,7 @@ export interface ElementInstance {
   id: number;
   type: string;
   /** Which mounted app this node belongs to — routes its ops. */
-  realm: string;
+  instance: string;
   /** Namespace URI for non-HTML elements (svg/mathml) — rides the `create`
    *  op so the driver uses `createElementNS`. Tracked via host context. */
   ns?: string;
@@ -37,29 +37,29 @@ export interface TextInstance {
   kind: 'text';
   id: number;
   text: string;
-  realm: string;
+  instance: string;
 }
 
 export type HostInstance = ElementInstance | TextInstance;
 
 /** The root container is a sentinel — op `parent: 0` means "the root".
- *  defineIslandWorker stamps `realm` on the container it hands
- *  createContainer, so createInstance can bind every element to the realm
- *  that rendered it — deterministic even when a commit runs outside a realm
- *  task (passive-effect renders, scheduler flushes), where activeRealm is
+ *  definePolyWorker stamps `instance` on the container it hands
+ *  createContainer, so createInstance can bind every element to the instance
+ *  that rendered it — deterministic even when a commit runs outside a instance
+ *  task (passive-effect renders, scheduler flushes), where activeInstance is
  *  ''. Instance-bound ops then always reach their island's queue. */
 export interface RootContainer {
   id: 0;
-  realm?: string;
+  instance?: string;
 }
 export const ROOT_CONTAINER = Object.freeze({ id: 0 }) as RootContainer;
 
-/* ── Per-realm op queues + instance/handler tables ──────────────────────── */
+/* ── Per-instance op queues + instance/handler tables ──────────────────────── */
 
-/** realm (app name) → queued ops. Each island flushes only its own queue. */
-const opsByRealm = new Map<string, Op[]>();
-/** The realm a task is currently executing under — see setActiveRealm. */
-let activeRealm = '';
+/** instance (app name) → queued ops. Each island flushes only its own queue. */
+const opsByInstance = new Map<string, Op[]>();
+/** The instance a task is currently executing under — see setActiveInstance. */
+let activeInstance = '';
 /**
  * instance id → host record. Exported so the proxy DOM (worker/proxyDom.ts)
  * shares the SAME instance space as the reconciler: a proxy-created element
@@ -69,11 +69,11 @@ let activeRealm = '';
 export const instances = new Map<number, HostInstance>();
 interface HandlerEntry {
   fn: (payload: unknown) => void;
-  realm: string;
+  instance: string;
   /** The element this handler was attached to — the event's currentTarget. */
   instanceId?: number;
 }
-/** handler id → prop function + owning realm. Lives worker-side; never serialized. */
+/** handler id → prop function + owning instance. Lives worker-side; never serialized. */
 const handlers = new Map<number, HandlerEntry>();
 let nextId = 1;
 let nextHandlerId = 1;
@@ -82,72 +82,72 @@ let nextHandlerId = 1;
 export const allocId = (): number => nextId++;
 
 /**
- * Marks which realm the currently-running task belongs to; returns the
+ * Marks which instance the currently-running task belongs to; returns the
  * previous value for restore. Structural ops don't need it — they route by
- * their instance's realm — but instance-less ops (`clear`, `emit`) and
+ * their instance's instance — but instance-less ops (`clear`, `emit`) and
  * handler dispatch do. Worker tasks run synchronously, so a single pointer
- * is safe even when several realms coexist in one module.
+ * is safe even when several mounts coexist in one module.
  */
-let lastRealm = '';
-export const setActiveRealm = (realm: string): string => {
-  const prev = activeRealm;
-  activeRealm = realm;
-  if (realm !== '') lastRealm = realm;
+let lastInstance = '';
+export const setActiveInstance = (instance: string): string => {
+  const prev = activeInstance;
+  activeInstance = instance;
+  if (instance !== '') lastInstance = instance;
   return prev;
 };
 
-/** The realm the current task is running under — '' outside a realm task. */
-export const getActiveRealm = (): string => activeRealm;
+/** The instance the current task is running under — '' outside a instance task. */
+export const getActiveInstance = (): string => activeInstance;
 
 /**
- * The most recent realm a task ran under — used by the realm dispatcher to
+ * The most recent instance a task ran under — used by the instance dispatcher to
  * route deferred library work (timers, promise continuations) to the right
- * document when several realms share one module (in-process tests).
+ * document when several mounts share one module (in-process tests).
  */
-export const getLastActiveRealm = (): string => lastRealm;
+export const getLastActiveInstance = (): string => lastInstance;
 
 /**
- * The most recent realm an op was pushed for — stamped in `pushOp`, so
+ * The most recent instance an op was pushed for — stamped in `pushOp`, so
  * every proxy-DOM mutation records it. This is the last rung of the
  * ambient-resolution chain (active → lastActive → lastTouched): a renderer
- * whose scheduler flushes outside any task still lands on the realm whose
+ * whose scheduler flushes outside any task still lands on the instance whose
  * tree it just mutated.
  */
-let touchedRealm = '';
-export const getLastTouchedRealm = (): string => touchedRealm;
+let touchedInstance = '';
+export const getLastTouchedInstance = (): string => touchedInstance;
 
 /**
- * Marks `realm` as the ambient realm for out-of-task readers (timers,
- * continuations, shim consumers outside realm work). Called by
+ * Marks `instance` as the ambient instance for out-of-task readers (timers,
+ * continuations, shim consumers outside instance work). Called by
  * installDomShim so its document becomes the ambient document.
  */
-export const markRealmActive = (realm: string): void => {
-  if (realm) lastRealm = realm;
+export const markInstanceActive = (instance: string): void => {
+  if (instance) lastInstance = instance;
 };
 
 /**
- * Run `fn` while `realm` is the active realm — the imperative-code twin of
+ * Run `fn` while `instance` is the active instance — the imperative-code twin of
  * the reconciler's syncCommit wrapper. Imperative DOM writes (`emit`, the
- * proxy DOM's `emit` calls, `clear`) only route correctly while a realm
- * task holds the active realm: mount, updateProps, and dispatch all wrap
+ * proxy DOM's `emit` calls, `clear`) only route correctly while a instance
+ * task holds the active instance: mount, updateProps, and dispatch all wrap
  * their work in this, and imperative apps should do the same for any
  * worker-initiated work (timers, promise continuations).
  */
-export const runInRealm = <T>(realm: string, fn: () => T): T => {
-  const prev = setActiveRealm(realm);
+export const runInInstance = <T>(instance: string, fn: () => T): T => {
+  const prev = setActiveInstance(instance);
   try {
     return fn();
   } finally {
-    setActiveRealm(prev);
+    setActiveInstance(prev);
   }
 };
 
-/** Queue an op onto a realm's queue — instance-bound ops pass their
- *  instance's realm, instance-less ops (`clear`, `emit`) the active one. */
-export const pushOp = (realm: string, op: Op): void => {
-  if (realm !== '') touchedRealm = realm;
-  let queue = opsByRealm.get(realm);
-  if (!queue) opsByRealm.set(realm, (queue = []));
+/** Queue an op onto a instance's queue — instance-bound ops pass their
+ *  instance's instance, instance-less ops (`clear`, `emit`) the active one. */
+export const pushOp = (instance: string, op: Op): void => {
+  if (instance !== '') touchedInstance = instance;
+  let queue = opsByInstance.get(instance);
+  if (!queue) opsByInstance.set(instance, (queue = []));
   queue.push(op);
 };
 
@@ -159,7 +159,7 @@ interface DoorbellContract {
 
 /**
  * The contract `bumpOpsVersion` writes to — `renderMemory` by default, or
- * whatever doorbell-shaped contract `defineIslandWorker({ sharedMemory })`
+ * whatever doorbell-shaped contract `definePolyWorker({ sharedMemory })`
  * was handed. Overriding requires the SAME spec as the main-side
  * `makeDoorbell()` (the pool sizes the buffer for it), so this is a rarely
  * needed escape hatch, not a general field contract.
@@ -183,11 +183,11 @@ export const bumpOpsVersion = (): void => {
   bell.write(Number(bell.read() ?? 0) + 1);
 };
 
-/** Drain one realm's queued ops — called by the worker's task methods. */
-export const takeOps = (realm: string): Op[] => {
-  const queue = opsByRealm.get(realm);
+/** Drain one instance's queued ops — called by the worker's task methods. */
+export const takeOps = (instance: string): Op[] => {
+  const queue = opsByInstance.get(instance);
   if (!queue || queue.length === 0) return [];
-  opsByRealm.set(realm, []);
+  opsByInstance.set(instance, []);
   return queue;
 };
 
@@ -196,7 +196,7 @@ export const getHandler = (id: number): HandlerEntry | undefined => handlers.get
 /* ── Pushed container size (setSize channel) ────────────────────────────── */
 
 /**
- * realm key → the island container's last measured {w,h}, pushed by the
+ * instance key → the island container's last measured {w,h}, pushed by the
  * driver's `setSize` task. This is the ONLY geometry channel: the main
  * thread can only measure the island's root box, so the proxy DOM serves
  * this value to `doc.body`/`documentElement` and to elements explicitly
@@ -204,31 +204,31 @@ export const getHandler = (id: number): HandlerEntry | undefined => handlers.get
  * Module-level (not per-document) so it survives imperative rebuilds that
  * swap in a fresh proxy document.
  */
-const realmSizes = new Map<string, { w: number; h: number }>();
+const instanceSizes = new Map<string, { w: number; h: number }>();
 
-/** The realm's last pushed container size, or undefined if none arrived. */
-export const getRealmSize = (realm: string): { w: number; h: number } | undefined =>
-  realmSizes.get(realm);
+/** The instance's last pushed container size, or undefined if none arrived. */
+export const getInstanceSize = (instance: string): { w: number; h: number } | undefined =>
+  instanceSizes.get(instance);
 
 /** Store the container size a `setSize` task pushed. */
-export const setRealmSize = (realm: string, w: number, h: number): void => {
-  realmSizes.set(realm, { w, h });
+export const setInstanceSize = (instance: string, w: number, h: number): void => {
+  instanceSizes.set(instance, { w, h });
 };
 
 /**
  * Register a function in the handler table outside prop serialization —
- * the proxy DOM's addEventListener uses this. The realm is stamped on the
+ * the proxy DOM's addEventListener uses this. The instance is stamped on the
  * entry so a dispatched event routes its re-render ops to the right queue.
  * `listen`/`unlisten` ops carry the returned id so the main thread can wire
  * and later detach the matching DOM listener.
  */
 export const registerHandler = (
   fn: (payload: unknown) => void,
-  realm: string,
+  instance: string,
   instanceId?: number,
 ): number => {
   const id = nextHandlerId++;
-  handlers.set(id, { fn, realm, instanceId });
+  handlers.set(id, { fn, instance, instanceId });
   return id;
 };
 
@@ -240,12 +240,12 @@ export const unregisterHandler = (id: number): void => {
  * The island→shell channel. Apps call `emit(name, payload)` inside event
  * handlers or commit-phase effects — it just queues an `emit` op, which the
  * main-thread driver routes to the island's `onEvent` callback instead of
- * the DOM. Call it while a task holds the realm (handlers, layout effects);
- * a bare emit from a passive effect has no realm to route to in the
- * many-realms-per-module case and would be dropped.
+ * the DOM. Call it while a task holds the instance (handlers, layout effects);
+ * a bare emit from a passive effect has no instance to route to in the
+ * many-mounts-per-module case and would be dropped.
  */
 export const emit = (name: string, payload?: unknown): void => {
-  pushOp(activeRealm, { t: 'emit', name, payload });
+  pushOp(activeInstance, { t: 'emit', name, payload });
 };
 
 /* ── Prop serialization ─────────────────────────────────────────────────── */
@@ -275,7 +275,7 @@ export function serializeProps(instance: ElementInstance, props: Record<string, 
         }
         handlers.set(slot, {
           fn: value as (payload: unknown) => void,
-          realm: instance.realm,
+          instance: instance.instance,
           instanceId: instance.id,
         });
         out[name] = { __evt: slot };
@@ -294,24 +294,24 @@ export function newElement(
   type: string,
   props: Record<string, unknown>,
   ns: string | undefined,
-  realm: string,
+  instance: string,
 ): ElementInstance {
-  const instance: ElementInstance = {
+  const record: ElementInstance = {
     kind: 'element',
     id: allocId(),
     type,
     ns,
-    realm,
+    instance,
     props: {},
     listenerSlots: {},
   };
-  instance.props = serializeProps(instance, props);
-  instances.set(instance.id, instance);
-  return instance;
+  record.props = serializeProps(record, props);
+  instances.set(record.id, record);
+  return record;
 }
 
-export function newText(text: string, realm: string): TextInstance {
-  const instance: TextInstance = { kind: 'text', id: allocId(), text, realm };
-  instances.set(instance.id, instance);
-  return instance;
+export function newText(text: string, instance: string): TextInstance {
+  const record: TextInstance = { kind: 'text', id: allocId(), text, instance };
+  instances.set(record.id, record);
+  return record;
 }

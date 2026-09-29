@@ -1,7 +1,7 @@
 /**
  * Island worker entry for the Angular-renderer tests — a standalone
- * `CounterComponent` rendered into the realm's proxy document by
- * `angularIslandApp`, registered as a realm worker (single app → 'main').
+ * `CounterComponent` rendered into the instance's proxy document by
+ * `angularIslandApp`, registered as a instance worker (single app → 'main').
  *
  * `import '@angular/compiler'` installs the JIT facade the @Component
  * decorator's lazy `ɵcmp` resolves against — required because vitest compiles
@@ -9,7 +9,7 @@
  */
 import '@angular/compiler';
 import { Component, input, signal } from '@angular/core';
-import { defineRealmWorker, emit } from '@jwhenry123/mesh-worker-dom/worker';
+import { defineMonoWorker, emit } from '@jwhenry123/mesh-islands/worker';
 import { angularIslandApp } from '../../src/worker';
 
 @Component({
@@ -30,4 +30,4 @@ class CounterComponent {
   }
 }
 
-export const counterWorker = defineRealmWorker(angularIslandApp(CounterComponent));
+export const counterWorker = defineMonoWorker(angularIslandApp(CounterComponent));

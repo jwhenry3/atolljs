@@ -1,12 +1,12 @@
 /**
  * `@jwhenry123/mesh-vue-island` — the Vue shell surface for
- * `@jwhenry123/mesh-worker-dom` islands: a worker-hosted React (or
+ * `@jwhenry123/mesh-islands` islands: a worker-hosted React (or
  * imperative proxy-DOM) tree mounted as an ordinary element in a
  * main-thread Vue app. Plain `.ts` — no SFC compiler needed.
  *
  * ```ts
  * import { MeshIsland, useIsland } from '@jwhenry123/mesh-vue-island';
- * import { connectIslandWorker } from '@jwhenry123/mesh-worker-dom';
+ * import { connectIslandWorker } from '@jwhenry123/mesh-islands';
  *
  * const client = connectIslandWorker({
  *   worker: () => new Worker(new URL('./render.worker.ts', import.meta.url), { type: 'module' }),
@@ -35,7 +35,7 @@
  * - If `host` returns to null (v-if, unmount) the island is destroyed; a
  *   later non-null host remounts it. Scope disposal (component unmount or
  *   `effectScope.stop()`) destroys the island too — the worker terminates
- *   unless the client is shared (the realm unmounts and the worker dies
+ *   unless the client is shared (the instance unmounts and the worker dies
  *   with the last island to leave).
  */
 import {
@@ -53,13 +53,13 @@ import {
   connectIslandWorker,
   islandAppNameOf,
   mountIsland,
-} from '@jwhenry123/mesh-worker-dom';
+} from '@jwhenry123/mesh-islands';
 import type {
   IslandAppLike,
   IslandClient,
   IslandHandle,
   IslandWorkerOptions,
-} from '@jwhenry123/mesh-worker-dom';
+} from '@jwhenry123/mesh-islands';
 
 // Re-export the handle type consumers need to name.
 export type { IslandHandle };
@@ -70,7 +70,7 @@ export type IslandStatus = 'mounting' | 'ready' | 'error';
 export interface UseIslandOptions {
   /**
    * How to reach the worker — a pre-connected `IslandClient` (shared
-   * clients mount several realms into one worker) or a bundler-detectable
+   * clients mount several mounts into one worker) or a bundler-detectable
    * factory `() => new Worker(new URL('./x.worker.ts', import.meta.url),
    * { type: 'module' })`. Exactly one is required. Mount-stable.
    */
@@ -80,7 +80,7 @@ export interface UseIslandOptions {
   workerOptions?: IslandWorkerOptions;
   /**
    * Which app to mount — the `apps` registry key ('charts') or an
-   * `islandApp`-stamped reference. Optional against a `defineRealmWorker`
+   * `islandApp`-stamped reference. Optional against a `defineMonoWorker`
    * (1:1) worker — its single app mounts regardless. Mount-stable.
    */
   app?: string | IslandAppLike;
@@ -250,7 +250,7 @@ export function useIsland(options: UseIslandOptions): UseIslandReturn {
 /* ── <MeshIsland/> ───────────────────────────────────────────────────────── */
 
 export interface MeshIslandProps {
-  /** Pre-connected client (shared across islands mounts realms into one worker). */
+  /** Pre-connected client (shared across islands mounts mounts into one worker). */
   client?: IslandClient;
   /** Worker factory — alternative to `client` for the 1:1 case. */
   worker?: (() => Worker) | URL;
@@ -262,7 +262,7 @@ export interface MeshIslandProps {
   props?: Record<string, unknown>;
   /**
    * Worker-DOM transclusion slots — `Record<name, (el | null) => void>`.
-   * (These are worker-dom slot anchors, NOT Vue slots: the callback receives
+   * (These are islands slot anchors, NOT Vue slots: the callback receives
    * the real element the worker anchored so shell code can mount content
    * inside it. Vue's own `slots` render API is untouched.)
    */

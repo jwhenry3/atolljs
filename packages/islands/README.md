@@ -1,20 +1,36 @@
-# @jwhenry123/mesh-worker-dom
+# @jwhenry123/mesh-islands
 
-Worker-side React reconciler + proxy-DOM islands for `@jwhenry123/mesh` — opt-in
-DOM rendering inside workers. A real `react-reconciler@0.34` runs in the worker
-against a DOM-free host config; every commit serializes to an op stream that the
-main thread replays as DOM mutations. Imperative (non-React) apps get a proxy
-`document` whose mutations emit the same ops — plus `installDomShim(doc)`, which
-sets `globalThis.document`/`window` so real DOM-dependent libraries run
-unmodified inside a realm.
+Framework islands inside Mesh workers — opt-in DOM rendering off the main
+thread. The vocabulary:
+
+- **Mesh** — the fabric: worker pools, contracts, shared memory, task dispatch
+  (`@jwhenry123/mesh`).
+- **PolyWorker** — one worker hosting a REGISTRY of islands
+  (`definePolyWorker({ apps })`). The bundle-optimization shape: several
+  islands share one module graph, one framework runtime, one op pump.
+- **MonoWorker** — one worker pinned to a single island app
+  (`defineMonoWorker(app)`). The isolation shape: own bundle, own failure
+  domain, nothing reachable outside it.
+- **Island** — the framework pillar and the mounted unit: `*-island` packages
+  are the per-framework worker renderers; `mountIsland()` mounts one instance
+  of a registered app. Each mounted instance gets a `app@N` **instance key**
+  that scopes its op queue, document, and events.
+
+Inside the worker, a real `react-reconciler@0.34` (React islands) or the
+per-framework renderer (Vue/Svelte/Solid/Angular islands) commits against a
+DOM-free host surface; every commit serializes to an op stream the main
+thread replays as DOM mutations. Imperative (non-framework) apps get a proxy
+`document` whose mutations emit the same ops — plus `installDomShim(doc)`,
+which sets `globalThis.document`/`window` so real DOM-dependent libraries
+run unmodified inside an instance.
 
 ## Quickstart
 
 ```ts
 // render.worker.ts — the whole worker entry
-import { defineIslandWorker } from '@jwhenry123/mesh-worker-dom/worker';
+import { definePolyWorker } from '@jwhenry123/mesh-islands/worker';
 
-export const renderWorker = defineIslandWorker({
+export const renderWorker = definePolyWorker({
   apps: {
     dashboard: DashboardApp,                        // a React component
     vanilla: { imperative: (doc, props) => { ... } } // or pure proxy-DOM code
@@ -24,7 +40,7 @@ export const renderWorker = defineIslandWorker({
 
 ```ts
 // main thread — one call: `worker` builds an island-owned client internally
-import { mountIsland } from '@jwhenry123/mesh-worker-dom';
+import { mountIsland } from '@jwhenry123/mesh-islands';
 
 const island = await mountIsland({
   worker: () => new Worker(new URL('./render.worker.ts', import.meta.url), { type: 'module' }),
@@ -67,31 +83,31 @@ component layer lives there.
 App contracts still live here: `islandApp(name, app)` stamps an app with its
 registry name (a data property — minification-proof, unlike `fn.name`) so a
 shell-side component reference resolves to the wire key, and
-`defineIslandWorker` warns if a stamp and its registry key drift apart.
+`definePolyWorker` warns if a stamp and its registry key drift apart.
 `IslandAppProps<A>` infers a reference's props type from its signature.
 
 ## Framework worker renderers
 
-The third app kind: `RenderedIslandApp` — `{ mount({realm, doc, props}) →
-{ update?, dispose? } }`. The app renders into the realm's proxy document
+The third app kind: `RenderedIslandApp` — `{ mount({instance, doc, props}) →
+{ update?, dispose? } }`. The app renders into the instance's proxy document
 with its own native renderer; every mutation emits the same op stream, and
 `update`/`dispose` give the framework fine-grained `updateProps` and clean
 teardown instead of the imperative clear-and-rebuild. Framework bindings
-ship as `*-island` packages — each re-exports `defineIslandWorker`/`emit`
-so the worker entry needs no direct worker-dom import:
+ship as `*-island` packages — each re-exports `definePolyWorker`/`emit`
+so the worker entry needs no direct islands import:
 
 ```ts
-// vue:  import { defineVueIslandWorker }  from '@jwhenry123/mesh-vue-island/worker'
-// svelte: import { defineSvelteIslandWorker } from '@jwhenry123/mesh-svelte-island/worker'
-// solid: import { defineSolidIslandWorker }  from '@jwhenry123/mesh-solid-island/worker'
-// angular: import { defineAngularIslandWorker } from '@jwhenry123/mesh-angular-island/worker'
-export const worker = defineVueIslandWorker({ counter: Counter });
+// vue:  import { defineVuePolyWorker }  from '@jwhenry123/mesh-vue-island/worker'
+// svelte: import { defineSveltePolyWorker } from '@jwhenry123/mesh-svelte-island/worker'
+// solid: import { defineSolidPolyWorker }  from '@jwhenry123/mesh-solid-island/worker'
+// angular: import { defineAngularPolyWorker } from '@jwhenry123/mesh-angular-island/worker'
+export const worker = defineVuePolyWorker({ apps: { counter: Counter } });
 ```
 
 | Package | Worker renderer | updateProps | Notes |
 |---|---|---|---|
 | `mesh-vue-island` | Vue `createRenderer` → proxy DOM | fine-grained (`cloneVNode` + `render`) | `.once`/`.passive`/`.capture` modifiers ride the wire; out-of-task commits arrive on `flush()`/doorbell |
-| `mesh-svelte-island` | Svelte 5 `mount()` into `doc.body`, `$state` props box | fine-grained | Compiled components only (vite-plugin-svelte); `emit`/`runInRealm` re-exported |
+| `mesh-svelte-island` | Svelte 5 `mount()` into `doc.body`, `$state` props box | fine-grained | Compiled components only (vite-plugin-svelte); `emit`/`runInInstance` re-exported |
 | `mesh-solid-island` | `solid-js/universal` `createRenderer` | fine-grained (per-key signal props) | **Pin the client build** — `worker`/`node` resolve conditions pick the SSR build; the adapter probes and throws if it happens anyway. JSX needs `babel-preset-solid` `{generate:'universal'}` (see its README) |
 | `mesh-angular-island` | `RendererFactory2`/`Renderer2` → proxy DOM + `createComponent`, zoneless | `setInput` + manual CD | JIT components need `import '@angular/compiler'` in the worker entry (missing it throws a named error); AOT/`ɵcmp` components need nothing |
 
@@ -100,25 +116,25 @@ Vue, Svelte, Solid, Angular, and imperative apps freely.
 
 ## Bundle composition — what's in a worker bundle
 
-The `/worker` entry is framework-neutral: `defineIslandWorker`, the proxy
-DOM, the op protocol, event dispatch, `emit`/`callbackProp`, and realm
+The `/worker` entry is framework-neutral: `definePolyWorker`, the proxy
+DOM, the op protocol, event dispatch, `emit`/`callbackProp`, and instance
 lifecycle. Framework runtimes arrive only through the binding you import:
 
 - **React islands** — `react` + `react-reconciler` + the host config live in
-  `worker/reactRealm.ts`, reached via `await import()` the first time a
+  `worker/reactInstance.ts`, reached via `await import()` the first time a
   registered app resolves to a React component. A worker whose registry
   holds only Vue/Svelte/Solid/Angular/imperative apps never loads it —
   bundlers put it in a lazily-fetched chunk (or drop it entirely when the
   worker entry can't reach it statically).
 - **Vue/Svelte/Solid/Angular islands** — each `-island` package statically
-  imports only its own framework. A `defineVueIslandWorker` entry bundles
-  worker-dom core + Vue, and no other framework.
-- **Imperative-only** — worker-dom core alone (plus `htmlparser2`, which
+  imports only its own framework. A `defineVuePolyWorker` entry bundles
+  islands core + Vue, and no other framework.
+- **Imperative-only** — islands core alone (plus `htmlparser2`, which
   the proxy DOM's `innerHTML`/`insertStaticContent` need).
 
 Two caveats: the `Slot` helper is a React component (its JSX pulls in
 `react/jsx-runtime` — a few KB, tree-shaken when unused), and
-`defineIslandWorker`'s mount task is `async` because a React first-mount
+`definePolyWorker`'s mount task is `async` because a React first-mount
 awaits the runtime chunk — callers already `await` it, so this is only a
 typing-level detail.
 
@@ -128,12 +144,12 @@ A renderer adapter is a `RenderedIslandApp` — one method:
 
 ```ts
 interface RenderedIslandApp {
-  mount(ctx: { realm: string; doc: ProxyDocument; props: Record<string, unknown> }):
+  mount(ctx: { instance: string; doc: ProxyDocument; props: Record<string, unknown> }):
     { update?(props): void; dispose?(): void } | void;
 }
 ```
 
-`mount` runs inside the realm's scope; everything the framework writes into
+`mount` runs inside the instance's scope; everything the framework writes into
 `ctx.doc` serializes to the op stream. The proxy-DOM surface a renderer can
 rely on: `createElement`/`createElementNS`/`createTextNode`/`createComment`,
 `insertBefore`/`appendChild`/`removeChild` (fragments splice their children
@@ -143,24 +159,24 @@ capture}` options cross the wire). Comments are real anchors — frameworks
 placing branch markers (Vue `v-if`, Svelte `{#if}`) should use
 `doc.createComment`, not empty text nodes.
 
-Realm discipline: `mount` itself is realm-scoped, but framework schedulers
+Instance discipline: `mount` itself is instance-scoped, but framework schedulers
 that flush *after* the task (Vue's microtask queue, Svelte's tick) have no
-active realm — resolve via `getActiveRealm() || getLastActiveRealm()` and
-prefer the captured `ctx.realm`/`ctx.doc` over ambient lookup. Work the
+active instance — resolve via `getActiveInstance() || getLastActiveInstance()` and
+prefer the captured `ctx.instance`/`ctx.doc` over ambient lookup. Work the
 renderer kicks off from timers or promise continuations must re-enter with
-`runInRealm(realm, fn)` — with several islands on one shared client the
-last-active fallback can resolve the *sibling* realm, so treat ambient
+`runInInstance(instance, fn)` — with several islands on one shared client the
+last-active fallback can resolve the *sibling* instance, so treat ambient
 resolution as a convenience, not a contract. After mutations made outside a
 dispatch task, `bumpOpsVersion()` rings the push-mode doorbell so the
 driver flushes the queued ops.
 
 `update(props)` receives the newly serialized props — patch fine-grained.
 Omit it and `updateProps` degrades to imperative semantics (dispose +
-fresh document + remount). `dispose()` runs inside the realm before its
+fresh document + remount). `dispose()` runs inside the instance before its
 proxy document is torn down — unmount framework roots, stop effects.
 
 Events: worker-side `addEventListener` becomes a `listen` op; a dispatch
-round-trips back as a realm-scoped task whose payload carries `target`/
+round-trips back as a instance-scoped task whose payload carries `target`/
 `currentTarget` as proxy nodes and stamps `e.target.value`/`checked`.
 `preventDefault` can never work — the real event already dispatched on the
 main thread — so renderers should not promise it.
@@ -190,18 +206,18 @@ observer loop.
 
 - **poolSize is pinned to 1.** One tree lives in one worker's memory —
   scale out with more islands (`connectIslandWorker` per island), not wider pools.
-- **Two worker entries.** `defineIslandWorker({ apps })` is a registry —
-  one script serves many named apps. `defineRealmWorker(app)` is the 1:1
+- **Two worker entries.** `definePolyWorker({ apps })` is a registry —
+  one script serves many named apps. `defineMonoWorker(app)` is the 1:1
   form — one script, one app, bundled with only that app's dependencies and
   mounted namelessly (`mountIsland({ client, el })`, no `app`). A
   single-registered-app worker resolves its sole app regardless of the
   requested name.
-- **Realm keys** are `app` or `app@N`; `mountIsland` mints them, the same app
+- **Instance keys** are `app` or `app@N`; `mountIsland` mints them, the same app
   can mount in many islands at once, and `mount`/`updateProps`/`dispatch`/
-  `flush`/`unmount`/`whoami` all take the realm first.
+  `flush`/`unmount`/`whoami` all take the instance first.
 - **Clients can be shared.** Several `mountIsland`s into ONE
-  `connectIslandWorker` co-locate their realms in one worker (multi-island-
-  per-worker). `destroy()` unmounts just that realm via `unmount`; the
+  `connectIslandWorker` co-locate their instances in one worker (multi-island-
+  per-worker). `destroy()` unmounts just that instance via `unmount`; the
   worker terminates when its last island leaves.
 - **Async commits flush themselves.** Push mode (the default) subscribes the
   shared-memory doorbell when the mount handshake lands — `useEffect` commits,
@@ -214,15 +230,15 @@ observer loop.
 - **`mountTimeout`** (default 15s, `0` disables) bounds the mount handshake —
   a worker entry that loads but never answers rejects with a named error
   instead of pending forever; hard failures (module-load errors, crashes)
-  reject immediately regardless. A failed mount releases the realm and
+  reject immediately regardless. A failed mount releases the instance and
   terminates an island-owned client.
 - **`e.target.value` / `e.target.checked` work in handlers** — the dispatched
   form state is stamped onto the proxy event target, so uncontrolled-input
   handlers read the DOM idiom naturally.
 - **`emit(name, payload)`** is the island→shell channel — call inside handlers
-  or commit-phase effects while a task holds the realm. From a library
-  callback that fires on a timer or promise (no realm active), wrap it:
-  `runInRealm(realm, () => { emit(...); bumpOpsVersion(); })` — Leaflet's
+  or commit-phase effects while a task holds the instance. From a library
+  callback that fires on a timer or promise (no instance active), wrap it:
+  `runInInstance(instance, () => { emit(...); bumpOpsVersion(); })` — Leaflet's
   `zoomend` in the demo does exactly this.
 - **`callbackProp(fn)`** is the shell→worker half: pass it in props
   (`props: { onSave: callbackProp(fn) }`) and the worker receives a callable
@@ -234,7 +250,7 @@ observer loop.
   contents the shell fills with real main-thread DOM.
 - **The proxy DOM is write-path-plus-container-geometry.** Shadow-tree reads
   work (children, querySelector, innerHTML); so does ONE measured box — the
-  driver's `ResizeObserver` pushes the island container's size into the realm
+  driver's `ResizeObserver` pushes the island container's size into the instance
   (`setSize`), and `doc.body`/`documentElement`/elements marked
   `doc.markContainer(el)` report it from `clientWidth`/`offsetWidth`/
   `getBoundingClientRect`. Everything else returns honest 0/empty and warns
@@ -246,7 +262,7 @@ observer loop.
   cross. Pointer-family events always carry *numeric* coords — absent fields
   normalize to 0 rather than leaking `undefined` into library math. At dispatch
   time `target`/`currentTarget` materialize as proxy nodes (`currentTarget` =
-  the node the handler was attached to, the realm root for id-0 listeners) so
+  the node the handler was attached to, the instance root for id-0 listeners) so
   library middleware can read them — geometry still returns honest zeros.
 - **`installDomShim(doc)`** puts the proxy doc on `globalThis.document` plus a
   `window` facade — `innerHTML` parses via htmlparser2, `document`/`window`
@@ -256,18 +272,18 @@ observer loop.
   `globalThis.addEventListener` and `self` are never touched — the pool's
   message channel lives there. `uninstall()` (or `doc.dispose()`) restores the
   globals.
-- **Realm-aware globals.** `defineIslandWorker` installs a dispatcher so
+- **Instance-aware globals.** `definePolyWorker` installs a dispatcher so
   `document`/`window`/`Element` are *accessors*, not fixed globals: inside a
-  realm task they resolve that realm's document (its facade, `ProxyElement`),
-  outside tasks they resolve the sole or last-active realm's, and explicit
+  instance task they resolve that instance's document (its facade, `ProxyElement`),
+  outside tasks they resolve the sole or last-active instance's, and explicit
   assignments (`installDomShim`, test harnesses) take precedence over implicit
-  resolution. React realms get a working `document`/`window` for free —
+  resolution. React instances get a working `document`/`window` for free —
   libraries that read them during render or in deferred callbacks just work.
   On the main-thread driver, element checks are structural (`nodeType`), never
   `instanceof Element` — the same global may be a proxy in in-process setups.
   Last-active resolution is a heuristic: on a shared client whose islands run
-  interleaved async work it can resolve the *sibling* realm — the contract
-  for worker-initiated work is `runInRealm` (see "Writing a worker
+  interleaved async work it can resolve the *sibling* instance — the contract
+  for worker-initiated work is `runInInstance` (see "Writing a worker
   renderer").
 - **SVG + portals + library refs.** Ops carry a namespace (`create` gets `ns`)
   and host context tracks `<svg>`/`<foreignObject>` boundaries — the driver
@@ -291,7 +307,7 @@ an ordinary React tree in the worker: `ComposedChart` with grid/axes/tooltip/
 legend/bar/line, `onClick` handlers, and `emit` — verified end-to-end with a
 bar-click round-trip. It exercises the general machinery above: namespaced
 SVG ops, `ProxyElement` refs as portal targets (tooltip/legend render via
-react-dom `createPortal`), realm-resolved `document`/`window` for its
+react-dom `createPortal`), instance-resolved `document`/`window` for its
 selector/`getComputedStyle` calls, and `currentTarget` synthesis for its
 mouse middleware. Use fixed chart dimensions — `ResponsiveContainer` has no
 layout to observe — and prefer `isAnimationActive={false}` to skip
@@ -306,8 +322,8 @@ Known limits for DOM-heavy libraries:
 - **`preventDefault`/`stopPropagation` are no-ops** — the real event already
   dispatched on the main thread; the worker can't cancel it.
 - **Async-library callbacks that mutate DOM or emit outside a task** must
-  re-enter via `runInRealm(realm, fn)` — timers and promise continuations
-  have no active realm.
+  re-enter via `runInInstance(instance, fn)` — timers and promise continuations
+  have no active instance.
 - **`getContext('2d'/'webgl')` is out of scope** for the op protocol —
   canvas-based libraries belong on `OffscreenCanvas`, which is a different
   transport.
@@ -327,4 +343,4 @@ committing it to an island.
 
 Peer deps `react`/`react-reconciler` are required even for imperative-only
 consumers — the package *is* the React-rendering pattern; tree-shaking drops
-the reconciler if you never call `defineIslandWorker` with React apps.
+the reconciler if you never call `definePolyWorker` with React apps.

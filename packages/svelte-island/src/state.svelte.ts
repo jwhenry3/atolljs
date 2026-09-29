@@ -26,7 +26,7 @@
  * vite-plugin-svelte (or svelte-package), the same mechanism the sibling
  * `@jwhenry123/mesh-svelte` package uses.
  */
-import type { IslandHandle } from '@jwhenry123/mesh-worker-dom';
+import type { IslandHandle } from '@jwhenry123/mesh-islands';
 import type { IslandActionOptions } from './index';
 
 /** The island lifecycle, coarse-grained: idle → mounting → ready | error → destroyed. */

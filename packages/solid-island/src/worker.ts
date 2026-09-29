@@ -2,8 +2,8 @@
  * `@jwhenry123/mesh-solid-island/worker` — the Solid worker renderer.
  *
  * `solidIslandApp(Component)` wraps a plain Solid function component into a
- * `RenderedIslandApp` that `defineIslandWorker`/`defineRealmWorker` can
- * mount into a realm's PROXY document. Rendering goes through `createRenderer`
+ * `RenderedIslandApp` that `definePolyWorker`/`defineMonoWorker` can
+ * mount into a instance's PROXY document. Rendering goes through `createRenderer`
  * (the same non-DOM render target `solid-three` uses), whose host options map
  * onto the proxy DOM one-to-one — every node mutation it performs already
  * emits the op stream the main-thread driver replays.
@@ -27,12 +27,12 @@
  *   return h('div', { class: 'counter' }, label, bump);
  * }
  * export const counterApp = islandApp('counter', solidIslandApp(Counter));
- * export const counterWorker = defineRealmWorker(counterApp);
+ * export const counterWorker = defineMonoWorker(counterApp);
  * ```
  *
  * SEMANTICS:
  * - `mount(ctx)` renders `createComponent(Component, reactiveProps)` into
- *   `ctx.doc.body` inside the mount task's realm scope — the initial tree
+ *   `ctx.doc.body` inside the mount task's instance scope — the initial tree
  *   arrives as ordinary create/append/attr/listen ops.
  * - `update(props)` mutates the per-key signals backing `reactiveProps`, so
  *   `island.updateProps` produces ONLY the ops the changed reads touch
@@ -41,7 +41,7 @@
  *   computation created under the mount is torn down before the proxy
  *   document dies.
  * - Ops committed outside tasks (timers, continuations) route by instance
- *   realm and ring the doorbell — the proxy DOM already handles that.
+ *   instance and ring the doorbell — the proxy DOM already handles that.
  *
  * BUILD CAVEAT: `solid-js/universal` internally does `import 'solid-js'`,
  * which toolchains that apply the `worker`/`node`/`deno` exports condition
@@ -65,35 +65,39 @@ import {
   type RendererOptions,
 } from 'solid-js/universal';
 import {
-  defineIslandWorker,
-  getActiveRealm,
-  getLastActiveRealm,
-  getLastTouchedRealm,
+  defineMonoWorker,
+  definePolyWorker,
+  getActiveInstance,
+  getLastActiveInstance,
+  getLastTouchedInstance,
   islandApp,
-  realmDocFor,
+  docForInstance,
   ProxyElement,
   ProxyNode,
   ProxyText,
+  type DoorbellSpec,
+  type IslandWorkerMethods,
   type ProxyDocument,
   type ProxyEventHandler,
   type RenderContext,
   type RenderedHandle,
   type RenderedIslandApp,
-} from '@jwhenry123/mesh-worker-dom/worker';
+} from '@jwhenry123/mesh-islands/worker';
+import type { SharedMemory, WorkerDefinition } from '@jwhenry123/mesh/sdk';
 
 /** A Solid component the worker renderer can mount — props arrive as the
  *  reactive record the wire serialized. */
 export type SolidComponent<P = Record<string, unknown>> = (props: P) => unknown;
 
 // Apps emit over the island→shell channel often enough to re-export.
-export { emit, runInRealm } from '@jwhenry123/mesh-worker-dom/worker';
+export { emit, runInInstance } from '@jwhenry123/mesh-islands/worker';
 
 /* ── Per-document renderer instances ────────────────────────────────────── */
 
 type AnyRenderer = Renderer<ProxyNode>;
 const renderers = new WeakMap<ProxyDocument, AnyRenderer>();
 /** Every mount gets ONE renderer bound to its proxy document — a shared
- *  client can host several rendered realms, and node-less factories
+ *  client can host several rendered mounts, and node-less factories
  *  (createElement/createTextNode) must mint ids under the right one. */
 const rendererFor = (doc: ProxyDocument): AnyRenderer => {
   let r = renderers.get(doc);
@@ -104,16 +108,16 @@ const rendererFor = (doc: ProxyDocument): AnyRenderer => {
 };
 
 /**
- * The doc a doc-less call belongs to: the active realm's proxy document
- * inside a realm task (mount/update/dispatch always run under one), else
- * the shared ambient fallbacks — the last realm a task ran under, then the
- * realm the most recent pushed op targeted.
+ * The doc a doc-less call belongs to: the active instance's proxy document
+ * inside a instance task (mount/update/dispatch always run under one), else
+ * the shared ambient fallbacks — the last instance a task ran under, then the
+ * instance the most recent pushed op targeted.
  */
 const currentDoc = (): ProxyDocument => {
-  const realm = getActiveRealm() || getLastActiveRealm() || getLastTouchedRealm();
-  if (realm !== '') return realmDocFor(realm);
+  const instance = getActiveInstance() || getLastActiveInstance() || getLastTouchedInstance();
+  if (instance !== '') return docForInstance(instance);
   throw new Error(
-    '@jwhenry123/mesh-solid-island: no mounted realm — createElement/createTextNode ' +
+    '@jwhenry123/mesh-solid-island: no mounted instance — createElement/createTextNode ' +
       'was called before any solidIslandApp mounted',
   );
 };
@@ -351,7 +355,7 @@ const assertClientBuild = (): void => {
 
 /**
  * Wrap a plain Solid component into a `RenderedIslandApp` for
- * `defineIslandWorker`/`defineRealmWorker` — usually stamped with
+ * `definePolyWorker`/`defineMonoWorker` — usually stamped with
  * `islandApp(name, solidIslandApp(Component))` so the shell can mount by
  * component reference.
  */
@@ -389,27 +393,49 @@ export const solidIsland = <P extends Record<string, unknown>>(
 ): RenderedIslandApp & { readonly islandAppName: string } =>
   islandApp(name, solidIslandApp(Component));
 
+export interface SolidPolyWorkerRegistry {
+  /** Name → Solid component registry, mirroring `definePolyWorker({ apps })`. */
+  apps: Record<string, SolidComponent>;
+  /** Doorbell contract override — forwarded to `definePolyWorker`. */
+  sharedMemory?: SharedMemory<DoorbellSpec>;
+}
+
 /**
- * Registry sugar — `defineSolidIslandWorker({ counter: Counter })` is
- * `defineIslandWorker({ apps: { counter: solidIslandApp(Counter) } })`;
- * a bare component gives the 1:1 realm-worker form.
+ * `definePolyWorker` for Solid apps — maps each component in the registry
+ * through `solidIslandApp` and delegates. One worker, many Solid islands.
  */
-export function defineSolidIslandWorker(
-  input: Record<string, SolidComponent> | SolidComponent,
-): ReturnType<typeof defineIslandWorker> {
-  if (typeof input === 'function') return defineIslandWorker(solidIslandApp(input));
+export function defineSolidPolyWorker(
+  registry: SolidPolyWorkerRegistry,
+  options?: { sharedMemory?: SharedMemory<DoorbellSpec> },
+): WorkerDefinition<DoorbellSpec, IslandWorkerMethods> {
   const apps: Record<string, RenderedIslandApp> = {};
-  for (const [name, component] of Object.entries(input)) apps[name] = solidIslandApp(component);
-  return defineIslandWorker({ apps });
+  for (const [name, component] of Object.entries(registry.apps)) {
+    apps[name] = solidIslandApp(component);
+  }
+  return definePolyWorker({
+    apps,
+    sharedMemory: registry.sharedMemory ?? options?.sharedMemory,
+  });
+}
+
+/**
+ * `defineMonoWorker` for Solid apps — one worker pinned to a single
+ * component, the isolated-bundle host shape.
+ */
+export function defineSolidMonoWorker(
+  component: SolidComponent,
+  options?: { sharedMemory?: SharedMemory<DoorbellSpec> },
+): WorkerDefinition<DoorbellSpec, IslandWorkerMethods> {
+  return defineMonoWorker(solidIslandApp(component), options);
 }
 
 /* ── Compiled-JSX / hand-authoring primitives ─────────────────────────────
  *
  * These are the surface `babel-preset-solid` emits calls into for
  * `{ generate: 'universal', moduleName: '@jwhenry123/mesh-solid-island/worker' }`.
- * Node-bound calls dispatch by `node.doc` (always the right realm, even
+ * Node-bound calls dispatch by `node.doc` (always the right instance, even
  * outside a task scope); the doc-less factories fall back to the active
- * realm / last-mounted document. */
+ * instance / last-mounted document. */
 
 export const createElement = (tag: string): ProxyElement => currentDoc().createElement(tag);
 
