@@ -99,6 +99,40 @@ each entry file stays single-purpose:
   socket↔socket. On the cluster listener nothing is needed: a ws server
   attached to the worker's `serveHttp` server handles upgrades in-worker.
 
+## Shared-memory persistence — Redis adapter
+
+`@atolljs/node/redis` is the shared-memory analog of NestJS's Redis
+WebSocket adapter: field regions mirror to a Redis hash, restore into the
+buffer at boot, and optionally replicate across processes over pub/sub. The
+buffer stays the synchronous source of truth — Redis sits behind it.
+
+```ts
+// static client — works in registerPool too if the client is in scope
+AtollModule.registerPool({
+  name: 'incidents',
+  worker: () => new Worker(new URL('./incidents.worker.ts', import.meta.url)),
+  sharedMemory: incidentsMemory,
+  persistence: redisMemoryAdapter(redis, { name: 'incidents' }),
+});
+
+// injected client — registerPoolAsync
+AtollModule.registerPoolAsync({
+  name: 'incidents',
+  useFactory: (redis: Redis) => ({
+    worker: () => new Worker(new URL('./incidents.worker.ts', import.meta.url)),
+    sharedMemory: incidentsMemory,
+    persistence: redisMemoryAdapter(redis, {
+      name: 'incidents',
+      subscriber: ioRedisSubscriber(redis.duplicate()), // cross-instance replication
+    }),
+  }),
+  inject: ['REDIS'],
+});
+```
+
+Details (key layout, `ready`/`flush`/`stop` lifecycle, version-counter diff,
+list `commit()` caveat): `docs/shared-memory.md` → Persistence adapters.
+
 ## Build — plain `nest build`
 
 No custom build script: `nest-cli.json` sets `"webpack": true` and webpack

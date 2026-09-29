@@ -68,7 +68,8 @@ export interface HttpClusterOptions {
   /**
    * Connection → worker selection. Defaults to round-robin. Receives the
    * fresh `pool.workers` snapshot each call, so respawns participate.
-   * Returning undefined destroys the socket.
+   * Returning undefined destroys the socket. {@link stickyByAddress} is a
+   * ready-made sticky implementation for multi-connection session flows.
    */
   route?: (socket: Socket, workers: readonly Worker[]) => Worker | undefined;
   /** Called once the server is listening. */
@@ -141,6 +142,54 @@ export function createHttpCluster(options: HttpClusterOptions): HttpCluster | nu
       new Promise<void>((resolve, reject) =>
         server.close((err) => (err ? reject(err) : resolve())),
       ),
+  };
+}
+
+/**
+ * FNV-1a — tiny string hash for rendezvous routing. Only hashes connection
+ * metadata (client IPs), never user data, so a non-crypto hash is fine.
+ */
+const fnv1a = (s: string): number => {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return h >>> 0;
+};
+
+/**
+ * Sticky connection routing for {@link createHttpCluster}: every connection
+ * from the same client address lands on the same worker — rendezvous
+ * (highest-random-weight) hashing over `key + slot`, so removing a worker
+ * only remaps ITS clients instead of reshuffling the whole pool.
+ *
+ * A transferred socket pins its whole life to one worker, so a bare
+ * WebSocket connection never needs this — stickiness matters for
+ * multi-connection session flows: socket.io's polling→upgrade sequence,
+ * or an HTTP request that must precede/follow a WS connection on the same
+ * worker. The acceptor can't read headers or cookies, so client address
+ * (nginx ip_hash style) is the strongest key available — supply `key` to
+ * mix in more (e.g. localPort for multi-listener setups).
+ *
+ *   createHttpCluster({ pool, port: 8080, route: stickyByAddress() });
+ */
+export function stickyByAddress(
+  key: (socket: Socket) => string = (s) => s.remoteAddress ?? '',
+): (socket: Socket, workers: readonly Worker[]) => Worker | undefined {
+  return (socket, workers) => {
+    if (workers.length === 0) return undefined;
+    const k = key(socket);
+    let best: Worker | undefined;
+    let bestScore = -1;
+    workers.forEach((w, i) => {
+      const score = fnv1a(`${k}#${i}`);
+      if (score > bestScore) {
+        bestScore = score;
+        best = w;
+      }
+    });
+    return best;
   };
 }
 

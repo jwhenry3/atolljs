@@ -107,7 +107,7 @@ export function Overview() {
         is separate: it moves the whole render tree into a worker — see{' '}
         <a href="#/islands">Islands</a> for when that's the right trade.
         On the server, <code>@atolljs/node/http</code> moves HTTP itself into
-        workers — see <a href="#/node-servers">Node worker servers</a>.
+        workers — see <a href="#/fw-node/clustering">Node.js → Clustering</a>.
       </p>
     </article>
   );

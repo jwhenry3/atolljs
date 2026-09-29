@@ -8,20 +8,34 @@ export const islandPerfStats = {
       "label": "Imperative (no framework)",
       "scenarios": {
         "mount": {
-          "workerMs": 1.6,
-          "mainMs": 5.9,
-          "ops": 2608
+          "workerMs": 2.5,
+          "proxyMs": 1.7,
+          "appMs": 0.9,
+          "mainMs": 5.4,
+          "ops": 2608,
+          "opBytes": 120630
         },
         "update": {
-          "workerMs": 7.8,
-          "mainMs": 8.6,
-          "ops": 2609
+          "workerMs": 9.1,
+          "proxyMs": 1,
+          "appMs": 8.1,
+          "mainMs": 9.6,
+          "ops": 2609,
+          "opBytes": 123264
         },
         "click": {
-          "workerMs": 1.1,
+          "workerMs": 0.9,
+          "proxyMs": 0.1,
+          "appMs": 0.9,
           "mainMs": 0.1,
-          "ops": 1
+          "ops": 1,
+          "opBytes": 40
         }
+      },
+      "mem": {
+        "liveNodes": 1204,
+        "handlers": 201,
+        "queuedOps": 0
       }
     },
     {
@@ -29,20 +43,34 @@ export const islandPerfStats = {
       "label": "React",
       "scenarios": {
         "mount": {
-          "workerMs": 6.5,
-          "mainMs": 4,
-          "ops": 2007
+          "workerMs": 8.1,
+          "proxyMs": 1.3,
+          "appMs": 6.8,
+          "mainMs": 8.8,
+          "ops": 2007,
+          "opBytes": 101116
         },
         "update": {
-          "workerMs": 8.5,
-          "mainMs": 0.7,
-          "ops": 802
+          "workerMs": 8.7,
+          "proxyMs": 0.3,
+          "appMs": 8.4,
+          "mainMs": 0.8,
+          "ops": 802,
+          "opBytes": 44516
         },
         "click": {
-          "workerMs": 6.5,
-          "mainMs": 0.1,
-          "ops": 603
+          "workerMs": 6,
+          "proxyMs": 0.3,
+          "appMs": 5.7,
+          "mainMs": 0.2,
+          "ops": 603,
+          "opBytes": 35663
         }
+      },
+      "mem": {
+        "liveNodes": 1003,
+        "handlers": 1,
+        "queuedOps": 0
       }
     },
     {
@@ -50,20 +78,34 @@ export const islandPerfStats = {
       "label": "Vue",
       "scenarios": {
         "mount": {
-          "workerMs": 2.2,
-          "mainMs": 3.4,
-          "ops": 2408
+          "workerMs": 2.5,
+          "proxyMs": 0.7,
+          "appMs": 1.8,
+          "mainMs": 4.3,
+          "ops": 2408,
+          "opBytes": 113761
         },
         "update": {
-          "workerMs": 3.6,
-          "mainMs": 0.6,
-          "ops": 200
+          "workerMs": 5.4,
+          "proxyMs": 0.2,
+          "appMs": 5.1,
+          "mainMs": 0.8,
+          "ops": 200,
+          "opBytes": 8895
         },
         "click": {
-          "workerMs": 0.8,
+          "workerMs": 1.1,
+          "proxyMs": 0,
+          "appMs": 1.1,
           "mainMs": 0,
-          "ops": 1
+          "ops": 1,
+          "opBytes": 42
         }
+      },
+      "mem": {
+        "liveNodes": 602,
+        "handlers": 1,
+        "queuedOps": 0
       }
     },
     {
@@ -71,20 +113,34 @@ export const islandPerfStats = {
       "label": "Svelte",
       "scenarios": {
         "mount": {
-          "workerMs": 9.2,
-          "mainMs": 7.2,
-          "ops": 3445
+          "workerMs": 8.9,
+          "proxyMs": 3.3,
+          "appMs": 5.6,
+          "mainMs": 4.8,
+          "ops": 3445,
+          "opBytes": 156759
         },
         "update": {
-          "workerMs": 4.7,
-          "mainMs": 0.1,
-          "ops": 200
+          "workerMs": 5.1,
+          "proxyMs": 0.1,
+          "appMs": 5,
+          "mainMs": 0.2,
+          "ops": 200,
+          "opBytes": 8895
         },
         "click": {
           "workerMs": 0.4,
+          "proxyMs": 0,
+          "appMs": 0.4,
           "mainMs": 0,
-          "ops": 1
+          "ops": 1,
+          "opBytes": 40
         }
+      },
+      "mem": {
+        "liveNodes": 1219,
+        "handlers": 1,
+        "queuedOps": 0
       }
     },
     {
@@ -93,19 +149,33 @@ export const islandPerfStats = {
       "scenarios": {
         "mount": {
           "workerMs": 2,
-          "mainMs": 5.5,
-          "ops": 2809
+          "proxyMs": 1,
+          "appMs": 0.9,
+          "mainMs": 7.3,
+          "ops": 2809,
+          "opBytes": 130202
         },
         "update": {
-          "workerMs": 3.7,
+          "workerMs": 2.7,
+          "proxyMs": 0.1,
+          "appMs": 2.6,
           "mainMs": 0.1,
-          "ops": 200
+          "ops": 200,
+          "opBytes": 8895
         },
         "click": {
           "workerMs": 0.3,
+          "proxyMs": 0,
+          "appMs": 0.3,
           "mainMs": 0,
-          "ops": 1
+          "ops": 1,
+          "opBytes": 40
         }
+      },
+      "mem": {
+        "liveNodes": 1003,
+        "handlers": 1,
+        "queuedOps": 0
       }
     },
     {
@@ -113,20 +183,34 @@ export const islandPerfStats = {
       "label": "Angular",
       "scenarios": {
         "mount": {
-          "workerMs": 4.2,
-          "mainMs": 6.1,
-          "ops": 3015
+          "workerMs": 5.2,
+          "proxyMs": 1.4,
+          "appMs": 3.9,
+          "mainMs": 9.9,
+          "ops": 3015,
+          "opBytes": 140073
         },
         "update": {
-          "workerMs": 4.3,
+          "workerMs": 4.5,
+          "proxyMs": 0.1,
+          "appMs": 4.4,
           "mainMs": 0.1,
-          "ops": 200
+          "ops": 200,
+          "opBytes": 8895
         },
         "click": {
-          "workerMs": 0.7,
+          "workerMs": 0.8,
+          "proxyMs": 0,
+          "appMs": 0.8,
           "mainMs": 0,
-          "ops": 1
+          "ops": 1,
+          "opBytes": 42
         }
+      },
+      "mem": {
+        "liveNodes": 1005,
+        "handlers": 1,
+        "queuedOps": 0
       }
     }
   ]

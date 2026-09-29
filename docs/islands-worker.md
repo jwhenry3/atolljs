@@ -83,6 +83,21 @@ What a renderer or imperative app can rely on:
 
 Coverage tests: `packages/islands/test/proxyDomSurface.test.ts`.
 
+#### Measuring the engine
+
+`src/metrics.ts` separates engine cost from app cost behind a flag: the
+`instance.ts` chokepoints (`pushOp`, `newElement`/`newText`,
+`serializeProps`, `registerHandler`, `takeOps`, `emit`) wrap their bodies in
+a re-entrancy-guarded timer — a shared depth counter means only the
+outermost instrumented frame records, so a `dom/*` method calling `pushOp`
+never double-counts. `instrumentPrototype` (applied by the bench to the
+`dom/*` classes) extends the same accounting to imperative-app shadow-tree
+work; the residual `workerMs − recordMs` is renderer/adapter time.
+`proxyInstanceStats()` snapshots the retained state (`instances` are never
+pruned — event dispatch may still resolve detached target ids — so
+`liveNodes` is nodes-ever-allocated; the bench diffs before/after per
+island). `proxyMetrics.enabled` defaults off and stays off in production.
+
 ### Geometry — one honest box
 
 The proxy DOM is write-path plus container geometry: a `ResizeObserver` on the

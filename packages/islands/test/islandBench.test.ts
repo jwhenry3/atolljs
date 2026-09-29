@@ -4,9 +4,15 @@
  * through every island adapter (bench.worker.ts fixture) and measures the
  * JS time on each side:
  *
- *   worker = the awaited client task call (render/diff/proxy bookkeeping/op
- *            serialization — transport ≈ 0 under InProcessWorker)
+ *   worker = the awaited client task call — decomposed into
+ *            proxyMs (time inside the island engine's op machinery, measured
+ *            via proxyMetrics) and appMs (the residual: framework render/diff
+ *            + adapter glue — plus ~0 in-process transport)
  *   main   = the onOps callback's elapsed (op replay = real DOM calls)
+ *
+ * Memory inflation is reported as structure counts, not heap bytes: proxy
+ * nodes retained, handler-table entries, ops flushed, and the wire payload
+ * size of each op batch (JSON length ≈ structuredClone bytes).
  *
  * Three scenarios per framework: mount, prop-driven update (label rename),
  * and one click dispatch → local-state commit.
@@ -20,6 +26,16 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { InProcessWorker } from '@atolljs/core/testing/inProcessWorker';
 import type { IslandClient } from '../src/index';
 import type { Op } from '../src/ops';
+import { instrumentPrototype, proxyMetrics } from '../src/metrics';
+import { proxyInstanceStats } from '../src/worker/instance';
+import { InternalDocument } from '../src/worker/dom/document';
+import { ProxyElement } from '../src/worker/dom/element';
+import {
+  ProxyComment,
+  ProxyFragment,
+  ProxyNode,
+  ProxyText,
+} from '../src/worker/dom/node';
 
 vi.stubGlobal('Worker', InProcessWorker);
 InProcessWorker.handlerModules = [() => import('./fixtures/bench.worker')];
@@ -30,6 +46,21 @@ let realDoc: Document;
 beforeAll(async () => {
   realDoc = document;
   ({ connectIslandWorker, mountIsland } = await import('../src/index'));
+  // Time the shared op engine (instance.ts chokepoints are flag-gated in
+  // source) plus the dom/* classes — the outermost-frame depth guard keeps
+  // nested calls from double-counting. InProcessWorker shares this module
+  // graph, so the same class objects the fixture uses are wrapped here.
+  proxyMetrics.enabled = true;
+  for (const cls of [
+    InternalDocument,
+    ProxyElement,
+    ProxyNode,
+    ProxyText,
+    ProxyComment,
+    ProxyFragment,
+  ]) {
+    instrumentPrototype(cls.prototype);
+  }
 });
 
 const renderWorker = () =>
@@ -63,8 +94,14 @@ interface BatchTiming {
 }
 interface Scenario {
   workerMs: number;
+  /** Of workerMs, time inside the island engine's op machinery. */
+  proxyMs: number;
+  /** workerMs − proxyMs — framework render/diff + adapter glue. */
+  appMs: number;
   mainMs: number;
   ops: number;
+  /** Serialized size of the op batches — approximates structuredClone bytes. */
+  opBytes: number;
 }
 
 const FRAMEWORKS = [
@@ -101,11 +138,18 @@ const instrument = (
 
 const sum = (xs: number[]): number => xs.reduce((a, b) => a + b, 0);
 
-const measure = (calls: CallTiming[], batches: BatchTiming[]): Scenario => ({
-  workerMs: sum(calls.map((c) => c.ms)),
-  mainMs: sum(batches.map((b) => b.ms)),
-  ops: sum(batches.map((b) => b.ops.length)),
-});
+const measure = (calls: CallTiming[], batches: BatchTiming[]): Scenario => {
+  const workerMs = sum(calls.map((c) => c.ms));
+  const proxyMs = proxyMetrics.recordMs;
+  return {
+    workerMs,
+    proxyMs,
+    appMs: Math.max(0, workerMs - proxyMs),
+    mainMs: sum(batches.map((b) => b.ms)),
+    ops: sum(batches.map((b) => b.ops.length)),
+    opBytes: sum(batches.map((b) => JSON.stringify(b.ops).length)),
+  };
+};
 
 describe('island bench — per-framework worker/main split', () => {
   it('measures mount / updateProps / click for every island adapter', async () => {
@@ -113,6 +157,7 @@ describe('island bench — per-framework worker/main split', () => {
       id: string;
       label: string;
       scenarios: Record<(typeof SCENARIO_NAMES)[number], Scenario>;
+      mem: { liveNodes: number; handlers: number; queuedOps: number };
     }[] = [];
 
     for (const fw of FRAMEWORKS) {
@@ -140,6 +185,11 @@ describe('island bench — per-framework worker/main split', () => {
       const host = realDoc.createElement('div');
       realDoc.body.appendChild(host);
 
+      // `instances`/`handlers` are module-level and shared by every mounted
+      // island — the before/after delta attributes this framework's retained
+      // proxy-layer state (warm islands already sit in the baseline).
+      const memBefore = proxyInstanceStats();
+      proxyMetrics.reset();
       const island = await mountIsland({
         client,
         el: host,
@@ -154,12 +204,14 @@ describe('island bench — per-framework worker/main split', () => {
       );
       scenarios.mount = measure(calls.splice(0), batches.splice(0));
 
+      proxyMetrics.reset();
       await island.updateProps({ rows: 200, label: 'renamed' });
       await vi.waitFor(() =>
         expect(host.querySelector('.cell')?.textContent).toBe('renamed 0'),
       );
       scenarios.update = measure(calls.splice(0), batches.splice(0));
 
+      proxyMetrics.reset();
       host.querySelector<HTMLElement>('.inc')!.dispatchEvent(
         new MouseEvent('click', { bubbles: true }),
       );
@@ -168,16 +220,27 @@ describe('island bench — per-framework worker/main split', () => {
       );
       scenarios.click = measure(calls.splice(0), batches.splice(0));
 
+      // Retained proxy-layer state for THIS island — instances are never
+      // pruned on remove, so the delta is nodes allocated during these
+      // three scenarios.
+      const memAfter = proxyInstanceStats();
+      const mem = {
+        liveNodes: memAfter.liveNodes - memBefore.liveNodes,
+        handlers: memAfter.handlers - memBefore.handlers,
+        queuedOps: memAfter.queuedOps,
+      };
+
       for (const name of SCENARIO_NAMES) {
         const s = scenarios[name];
         const total = s.workerMs + s.mainMs || 1;
         console.log(
           `[bench] ${fw.id}/${name}: worker=${s.workerMs.toFixed(1)}ms ` +
+            `(proxy=${s.proxyMs.toFixed(1)}ms app=${s.appMs.toFixed(1)}ms) ` +
             `main=${s.mainMs.toFixed(1)}ms ops=${s.ops} ` +
             `→ worker share ${((100 * s.workerMs) / total).toFixed(0)}%`,
         );
       }
-      results.push({ id: fw.id, label: fw.label, scenarios });
+      results.push({ id: fw.id, label: fw.label, scenarios, mem });
       // Same async-teardown reasoning as the warm islands — destroy at the
       // end so a leaking dispose can't surface inside the next framework's
       // measured tasks.

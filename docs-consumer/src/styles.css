@@ -180,6 +180,10 @@ figure.code pre.hljs {
 /* Near-white solid — lightness separates the segments even for color-blind
    viewers (blue vs lavender at similar lightness collapsed to one fill). */
 .loadbar-worker { background: #e6edf3; }
+/* Three-way worker-side split: the app/renderer share keeps the light worker
+   tone, the engine's share is a darker mid-tone, replay stays accent. */
+.loadbar-app { background: #e6edf3; }
+.loadbar-proxy { background: #94a3b8; }
 .loadbar-legend {
   display: flex;
   gap: 18px;
@@ -198,3 +202,5 @@ figure.code pre.hljs {
 }
 .swatch-main { background: var(--accent); }
 .swatch-worker { background: #e6edf3; }
+.swatch-app { background: #e6edf3; }
+.swatch-proxy { background: #94a3b8; }

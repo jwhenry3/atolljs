@@ -149,8 +149,23 @@ export function Nestjs() {
         proxies a URL prefix into it, with optional clustered and WebSocket
         entry points to the same routes.{' '}
         <a href="#/fw-nestjs/housed">Housed APIs</a> walks through the whole
-        setup; <a href="#/node-servers">HTTP offload</a> covers the
-        underlying <code>@atolljs/node/http</code> machinery.
+        setup; <a href="#/fw-nestjs/clustering">Clustering</a> and{' '}
+        <a href="#/fw-nestjs/websockets">WebSockets</a> cover the other two
+        entry points, and <a href="#/fw-node/gateway">Node.js → Gateway
+        routing</a> documents the underlying{' '}
+        <code>@atolljs/node/http</code> machinery.
+      </p>
+
+      <h2>Shared-memory persistence</h2>
+      <p>
+        The analog of NestJS&apos;s Redis WebSocket adapter:{' '}
+        <code>@atolljs/node/redis</code> mirrors a pool&apos;s shared-memory
+        contract to a Redis hash via the config&apos;s{' '}
+        <code>persistence</code> option — restart durability plus optional
+        cross-process replication over pub/sub, while reads/writes stay
+        synchronous memory ops.{' '}
+        <a href="#/fw-nestjs/persistence">Persistence</a> covers wiring,
+        replication, and caveats.
       </p>
 
       <h2>Build</h2>

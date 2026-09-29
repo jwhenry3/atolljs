@@ -26,6 +26,21 @@ export interface MemoryConfig {
   growthFactor?: number;
 }
 
+/**
+ * Runtime handle for a memory-persistence adapter — e.g. the Redis adapter
+ * in '@atolljs/node/redis'. The adapter mirrors the bound contract's field
+ * regions to external storage; the buffer stays the synchronous source of
+ * truth.
+ */
+export interface MemoryPersistence {
+  /** Resolves when initial state has been restored into the local buffer. */
+  readonly ready?: Promise<unknown>;
+  /** Push dirty fields now — most adapters also flush on an interval. */
+  flush?(): Promise<unknown>;
+  /** Final flush + release external resources. Invoked by pool.terminate(). */
+  stop(): void | Promise<void>;
+}
+
 export interface WorkerPoolConfig<S extends SharedSpec = SharedSpec, T extends TaskMap = TaskMap> {
   /** Worker entry as a URL — e.g. `new URL('./worker.ts', import.meta.url)`. */
   workerUrl?: URL;
@@ -42,6 +57,12 @@ export interface WorkerPoolConfig<S extends SharedSpec = SharedSpec, T extends T
    * skipped and workers receive a plain `{ type: 'INIT' }` handshake.
    */
   sharedMemory?: SharedMemory<S> & Prettify<SharedAccess<S>>;
+  /**
+   * Persistence adapter for `sharedMemory` — invoked with the contract right
+   * after the pool binds it, and its `stop()` runs on `terminate()`.
+   * `redisMemoryAdapter(client)` from '@atolljs/node/redis' produces one.
+   */
+  persistence?: (memory: SharedMemory<S>) => MemoryPersistence | undefined;
   /** Worker count — a number, or 'auto' (the default) for navigator.hardwareConcurrency ?? 4. */
   poolSize?: number | 'auto';
   memory?: MemoryConfig;

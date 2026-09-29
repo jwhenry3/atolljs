@@ -38,6 +38,20 @@ const handlers = {
     return { hash: digest.slice(0, 16), rounds, ms: performance.now() - t0, jobsDone: numbers[0] };
   },
 
+  /**
+   * Mirrors the Next.js jobs contract ('jobs.process' task). Jobs memory is
+   * flat numbers: queued=0, completed=1, failed=2, lastMs=3 — the worker
+   * writes completed/lastMs after a bounded busy loop.
+   */
+  'jobs.process': ([id = 0, workMs = 50]) => {
+    const t0 = performance.now();
+    let acc = 0;
+    while (performance.now() - t0 < workMs) acc += Math.sqrt(acc);
+    numbers[1] += 1;
+    numbers[3] = performance.now() - t0;
+    return { id, ms: numbers[3], completed: numbers[1] };
+  },
+
   't-fail': () => {
     throw new Error('fixture worker exploded');
   },

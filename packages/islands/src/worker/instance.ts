@@ -14,7 +14,24 @@
  */
 
 import { renderMemory } from '../memory';
+import { enterProxyFrame, exitProxyFrame, proxyMetrics } from '../metrics';
 import type { Op, WireProps } from '../ops';
+
+/**
+ * Run `body` as one instrumented proxy-engine frame while metrics are
+ * enabled — a direct call otherwise (one predictable branch per chokepoint).
+ * `enter`/`exit` share a depth guard so nested frames (a dom/* method
+ * calling pushOp, serializeProps inside newElement) never double-count.
+ */
+const timed = <T>(body: () => T): T => {
+  if (!proxyMetrics.enabled) return body();
+  const t0 = enterProxyFrame();
+  try {
+    return body();
+  } finally {
+    exitProxyFrame(t0);
+  }
+};
 
 /* ── Host instances ─────────────────────────────────────────────────────── */
 
@@ -144,12 +161,14 @@ export const runInInstance = <T>(instance: string, fn: () => T): T => {
 
 /** Queue an op onto a instance's queue — instance-bound ops pass their
  *  instance's instance, instance-less ops (`clear`, `emit`) the active one. */
-export const pushOp = (instance: string, op: Op): void => {
-  if (instance !== '') touchedInstance = instance;
-  let queue = opsByInstance.get(instance);
-  if (!queue) opsByInstance.set(instance, (queue = []));
-  queue.push(op);
-};
+export const pushOp = (instance: string, op: Op): void =>
+  timed(() => {
+    if (instance !== '') touchedInstance = instance;
+    let queue = opsByInstance.get(instance);
+    if (!queue) opsByInstance.set(instance, (queue = []));
+    queue.push(op);
+    proxyMetrics.opsPushed++;
+  });
 
 /** The minimum surface `bumpOpsVersion` needs off the doorbell contract. */
 interface DoorbellContract {
@@ -184,12 +203,29 @@ export const bumpOpsVersion = (): void => {
 };
 
 /** Drain one instance's queued ops — called by the worker's task methods. */
-export const takeOps = (instance: string): Op[] => {
-  const queue = opsByInstance.get(instance);
-  if (!queue || queue.length === 0) return [];
-  opsByInstance.set(instance, []);
-  return queue;
-};
+export const takeOps = (instance: string): Op[] =>
+  timed(() => {
+    const queue = opsByInstance.get(instance);
+    if (!queue || queue.length === 0) return [];
+    opsByInstance.set(instance, []);
+    return queue;
+  });
+
+/**
+ * Structural memory snapshot of the proxy layer — how much shadow state the
+ * engine retains for live + previously-allocated nodes, handlers, and ops
+ * still queued. `instances` is not pruned on removeChild (event dispatch may
+ * still resolve detached target ids), so liveNodes is nodes-ever-allocated.
+ */
+export const proxyInstanceStats = (): {
+  liveNodes: number;
+  handlers: number;
+  queuedOps: number;
+} => ({
+  liveNodes: instances.size,
+  handlers: handlers.size,
+  queuedOps: [...opsByInstance.values()].reduce((a, q) => a + q.length, 0),
+});
 
 export const getHandler = (id: number): HandlerEntry | undefined => handlers.get(id);
 
@@ -226,14 +262,17 @@ export const registerHandler = (
   fn: (payload: unknown) => void,
   instance: string,
   instanceId?: number,
-): number => {
-  const id = nextHandlerId++;
-  handlers.set(id, { fn, instance, instanceId });
-  return id;
-};
+): number =>
+  timed(() => {
+    const id = nextHandlerId++;
+    handlers.set(id, { fn, instance, instanceId });
+    return id;
+  });
 
 export const unregisterHandler = (id: number): void => {
-  handlers.delete(id);
+  timed(() => {
+    handlers.delete(id);
+  });
 };
 
 /**
@@ -245,7 +284,9 @@ export const unregisterHandler = (id: number): void => {
  * many-mounts-per-module case and would be dropped.
  */
 export const emit = (name: string, payload?: unknown): void => {
-  pushOp(activeInstance, { t: 'emit', name, payload });
+  timed(() => {
+    pushOp(activeInstance, { t: 'emit', name, payload });
+  });
 };
 
 /* ── Prop serialization ─────────────────────────────────────────────────── */
@@ -260,32 +301,34 @@ export const emit = (name: string, payload?: unknown): void => {
  * closure.
  */
 export function serializeProps(instance: ElementInstance, props: Record<string, unknown>): WireProps {
-  const out: WireProps = {};
-  for (const [name, value] of Object.entries(props)) {
-    if (value === undefined || value === null) continue;
-    if (name === 'children' || name === 'key' || name === 'ref' || name === 'dangerouslySetInnerHTML') {
-      continue;
-    }
-    if (typeof value === 'function') {
-      if (name.length > 2 && name.startsWith('on')) {
-        let slot = instance.listenerSlots[name];
-        if (slot === undefined) {
-          slot = nextHandlerId++;
-          instance.listenerSlots[name] = slot;
-        }
-        handlers.set(slot, {
-          fn: value as (payload: unknown) => void,
-          instance: instance.instance,
-          instanceId: instance.id,
-        });
-        out[name] = { __evt: slot };
+  return timed(() => {
+    const out: WireProps = {};
+    for (const [name, value] of Object.entries(props)) {
+      if (value === undefined || value === null) continue;
+      if (name === 'children' || name === 'key' || name === 'ref' || name === 'dangerouslySetInnerHTML') {
+        continue;
       }
-      // Non-event functions (render props, callbacks) can't cross the wire — dropped.
-      continue;
+      if (typeof value === 'function') {
+        if (name.length > 2 && name.startsWith('on')) {
+          let slot = instance.listenerSlots[name];
+          if (slot === undefined) {
+            slot = nextHandlerId++;
+            instance.listenerSlots[name] = slot;
+          }
+          handlers.set(slot, {
+            fn: value as (payload: unknown) => void,
+            instance: instance.instance,
+            instanceId: instance.id,
+          });
+          out[name] = { __evt: slot };
+        }
+        // Non-event functions (render props, callbacks) can't cross the wire — dropped.
+        continue;
+      }
+      out[name] = value; // style objects, numbers, strings, booleans all clone fine
     }
-    out[name] = value; // style objects, numbers, strings, booleans all clone fine
-  }
-  return out;
+    return out;
+  });
 }
 
 /* ── Small factories ────────────────────────────────────────────────────── */
@@ -296,22 +339,26 @@ export function newElement(
   ns: string | undefined,
   instance: string,
 ): ElementInstance {
-  const record: ElementInstance = {
-    kind: 'element',
-    id: allocId(),
-    type,
-    ns,
-    instance,
-    props: {},
-    listenerSlots: {},
-  };
-  record.props = serializeProps(record, props);
-  instances.set(record.id, record);
-  return record;
+  return timed(() => {
+    const record: ElementInstance = {
+      kind: 'element',
+      id: allocId(),
+      type,
+      ns,
+      instance,
+      props: {},
+      listenerSlots: {},
+    };
+    record.props = serializeProps(record, props);
+    instances.set(record.id, record);
+    return record;
+  });
 }
 
 export function newText(text: string, instance: string): TextInstance {
-  const record: TextInstance = { kind: 'text', id: allocId(), text, instance };
-  instances.set(record.id, record);
-  return record;
+  return timed(() => {
+    const record: TextInstance = { kind: 'text', id: allocId(), text, instance };
+    instances.set(record.id, record);
+    return record;
+  });
 }

@@ -12,6 +12,12 @@ scans/sorts/aggregates, and only the visible page crosses postMessage.
 - `src/app/` — App Router shell; `page.tsx` mounts the client component
 - `src/app/api/atoll/` — **server-side atoll**: a route handler backed by a
   `node:worker_threads` pool (`createNodePool`)
+- `src/app/api/jobs/` — **job queue**: fire-and-forget dispatch, progress
+  counters read straight from shared memory
+- `src/app/api/incidents/` — **read-model API**: stats and records read
+  directly off the 1M-record shared buffer; workers own all writes
+- `src/instrumentation.ts` — `register()` warms every pool at server boot
+  and kicks the incidents seed
 
 ## Server-side workers — `/api/atoll`
 
@@ -39,7 +45,35 @@ const getPool = (): DigestPool => {
 - `GET /api/atoll` — reads `jobsDone` from shared memory, zero dispatch
 
 The `globalThis` singleton survives dev-mode HMR re-evaluation — without it
-every hot reload would leak worker threads.
+every hot reload would leak worker threads. The pool getter now lives in
+`pool.ts` so `instrumentation.ts` can warm it at boot.
+
+## Job queue — `/api/jobs`
+
+`POST /api/jobs {"count":N,"workMs":50}` writes `queued` on the API thread
+and dispatches fire-and-forget; the pool drains jobs on workers which write
+`completed`/`lastMs` into shared memory. `GET /api/jobs` reads the counters
+directly — progress reporting with zero dispatch and no external queue.
+
+## Read-model API — `/api/incidents`
+
+A 2-worker pool bound to the same `incidentsMemory` contract the browser
+demo uses. All writes stay on workers (`seedIncidents` dispatched at boot by
+`instrumentation.ts`); every read endpoint is a pure memory read:
+
+- `GET /api/incidents` — `seedProgress` + aggregate `metrics`
+- `GET /api/incidents/:id` — `lists.incidents.readAt(id)` — an indexed
+  memory read; no worker round-trip, no serialization
+- `POST /api/incidents` — dispatch the seed (idempotent; instrumentation
+  usually gets there first)
+
+## Boot warmup — `src/instrumentation.ts`
+
+Next.js calls `register()` once when the Node runtime boots. It warms all
+three pools and starts the incidents seed so workers spawn during startup
+instead of inside the first request. Dynamic imports + the
+`NEXT_RUNTIME === 'nodejs'` guard keep `node:worker_threads` out of the
+edge/browser bundle graphs.
 
 ## Run
 

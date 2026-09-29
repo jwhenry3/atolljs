@@ -41,7 +41,7 @@ Framework bindings — **backend**:
 | If you're working on… | Read |
 |---|---|
 | `packages/nestjs` | [frameworks/nestjs.md](frameworks/nestjs.md) |
-| `packages/node` — adapter, HTTP offload (clustering, gateway, housed APIs), cross-pool buffer sharing | [frameworks/node.md](frameworks/node.md) |
+| `packages/node` — adapter, HTTP offload (clustering, gateway, housed APIs), cross-pool buffer sharing, Redis memory persistence | [frameworks/node.md](frameworks/node.md) |
 | `examples/express`, `examples/fastify`, `examples/hono`, `examples/koa` | [frameworks/node-backends.md](frameworks/node-backends.md) |
 | `examples/nextjs/src/app/api/` — server-side pools in route handlers | [frameworks/nextjs.md](frameworks/nextjs.md) (server section) |
 

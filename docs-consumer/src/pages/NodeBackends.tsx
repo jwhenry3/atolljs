@@ -15,6 +15,7 @@ const APIS = [
   { name: 'createNodeWorker', signature: 'createNodeWorker(file | url | nodeWorker, options?)', desc: 'Wrap a Node Worker (or worker file) in the DOM Worker surface — for connectWorker or a hand-built WorkerPool.' },
   { name: 'NodeWorkerAdapter', signature: 'class NodeWorkerAdapter', desc: 'The EventEmitter → EventTarget adapter underneath createNodeWorker.' },
   { name: '@atolljs/node/shim', signature: "import '@atolljs/node/shim'", desc: 'Worker-side entry shim — binds globalThis.self = parentPort before workerBootstrap wires INIT_MEMORY / EXECUTE_TASK. Must be the first import.' },
+  { name: '@atolljs/node/redis', signature: 'persistSharedMemory(memory, { client, name?, syncIntervalMs?, fields?, subscriber? }) · redisMemoryAdapter(client, opts?)', desc: 'Shared-memory persistence/replication — mirrors field bytes to a Redis hash, restores at boot, optionally replicates across processes via pub/sub. Pass redisMemoryAdapter(redis) as the pool config\'s persistence option — see Persistence below; the buffer stays the synchronous source of truth.' },
 ];
 
 const USAGE_POOL = `// src/incidents.ts — the atoll on the server: a WorkerPool of
@@ -193,8 +194,9 @@ export function NodeBackends() {
         The same pool drives any HTTP framework — see{' '}
         <a href="#/fw-node/adapters">Framework adapters</a> for
         Express/Fastify/Hono/Koa, and{' '}
-        <a href="#/node-servers">HTTP offload</a> to move request handling
-        itself into workers.
+        <a href="#/fw-node/clustering">Clustering</a> /{' '}
+        <a href="#/fw-node/gateway">Gateway routing</a> to move request
+        handling itself into workers.
       </p>
 
       <h2>Bundling the worker — required on plain Node</h2>

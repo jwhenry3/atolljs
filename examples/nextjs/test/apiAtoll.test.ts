@@ -12,11 +12,11 @@ process.env.ATOLL_DIGEST_WORKER = fileURLToPath(
 );
 
 const { GET, POST } = await import('../src/app/api/atoll/route');
-const poolHolder = globalThis as { __atollDigestPool?: { terminate(): void } };
+const poolHolder = globalThis as { __atollDigest?: { pool: { terminate(): void } } };
 
 afterAll(() => {
-  poolHolder.__atollDigestPool?.terminate();
-  delete poolHolder.__atollDigestPool;
+  poolHolder.__atollDigest?.pool.terminate();
+  delete poolHolder.__atollDigest;
 });
 
 const post = (body: unknown) =>

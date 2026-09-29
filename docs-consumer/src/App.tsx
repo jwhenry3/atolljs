@@ -10,11 +10,22 @@ import { Hosting } from './pages/Hosting';
 import { IslandApps } from './pages/IslandApps';
 import { Islands } from './pages/Islands';
 import { Nestjs } from './pages/Nestjs';
+import { NestjsClustering } from './pages/NestjsClustering';
 import { NestjsHoused } from './pages/NestjsHoused';
+import { NestjsPersistence } from './pages/NestjsPersistence';
+import { NestjsWebsockets } from './pages/NestjsWebsockets';
 import { NextjsServer } from './pages/Nextjs';
+import { NextjsCustomServer } from './pages/NextjsCustomServer';
+import { NextjsJobs } from './pages/NextjsJobs';
+import { NextjsReadModel } from './pages/NextjsReadModel';
+import { NextjsWarmup } from './pages/NextjsWarmup';
 import { NodeAdapters, NodeBackends } from './pages/NodeBackends';
-import { NodeServers } from './pages/NodeServers';
+import { NodeClustering } from './pages/NodeClustering';
+import { NodeGateway } from './pages/NodeGateway';
+import { NodePersistence } from './pages/NodePersistence';
+import { NodeWebsockets } from './pages/NodeWebsockets';
 import { Overview } from './pages/Overview';
+import { ProxyDocument } from './pages/ProxyDocument';
 import { Quickstart } from './pages/Quickstart';
 import { Reactivity } from './pages/Reactivity';
 import { SharedMemoryApi } from './pages/SharedMemoryApi';
@@ -48,8 +59,9 @@ const SECTIONS: { label: string; routes: Route[] }[] = [
   {
     label: 'Islands',
     routes: [
-      { id: 'islands', label: 'Islands', page: () => <Islands /> },
-      { id: 'island-apps', label: 'Writing island apps', page: () => <IslandApps /> },
+      { id: 'islands', label: 'Overview', page: () => <Islands /> },
+      { id: 'island-apps', label: 'Quickstart', page: () => <IslandApps /> },
+      { id: 'island-proxy', label: 'Proxy document', page: () => <ProxyDocument /> },
     ],
   },
   {
@@ -61,7 +73,10 @@ const SECTIONS: { label: string; routes: Route[] }[] = [
         page: () => <NodeBackends />,
         children: [
           { id: 'fw-node/adapters', label: 'Framework adapters', page: () => <NodeAdapters /> },
-          { id: 'node-servers', label: 'HTTP offload', page: () => <NodeServers /> },
+          { id: 'fw-node/clustering', label: 'Clustering', page: () => <NodeClustering /> },
+          { id: 'fw-node/gateway', label: 'Gateway routing', page: () => <NodeGateway /> },
+          { id: 'fw-node/websockets', label: 'WebSockets', page: () => <NodeWebsockets /> },
+          { id: 'fw-node/persistence', label: 'Persistence', page: () => <NodePersistence /> },
         ],
       },
       {
@@ -70,9 +85,22 @@ const SECTIONS: { label: string; routes: Route[] }[] = [
         page: () => <Nestjs />,
         children: [
           { id: 'fw-nestjs/housed', label: 'Housed APIs', page: () => <NestjsHoused /> },
+          { id: 'fw-nestjs/clustering', label: 'Clustering', page: () => <NestjsClustering /> },
+          { id: 'fw-nestjs/websockets', label: 'WebSockets', page: () => <NestjsWebsockets /> },
+          { id: 'fw-nestjs/persistence', label: 'Persistence', page: () => <NestjsPersistence /> },
         ],
       },
-      { id: 'fw-nextjs-server', label: 'Next.js', page: () => <NextjsServer /> },
+      {
+        id: 'fw-nextjs-server',
+        label: 'Next.js',
+        page: () => <NextjsServer />,
+        children: [
+          { id: 'fw-nextjs-server/jobs', label: 'Job queue', page: () => <NextjsJobs /> },
+          { id: 'fw-nextjs-server/read-model', label: 'Read-model API', page: () => <NextjsReadModel /> },
+          { id: 'fw-nextjs-server/warmup', label: 'Boot warmup', page: () => <NextjsWarmup /> },
+          { id: 'fw-nextjs-server/custom-server', label: 'Custom server', page: () => <NextjsCustomServer /> },
+        ],
+      },
     ],
   },
   {

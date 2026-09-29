@@ -33,6 +33,9 @@
       "@atolljs/incidents": [
         "../../packages/incidents/src/index.ts"
       ],
+      "@atolljs/incidents/*": [
+        "../../packages/incidents/src/*"
+      ],
       "@atolljs/node": [
         "../../packages/node/src/index.ts"
       ],

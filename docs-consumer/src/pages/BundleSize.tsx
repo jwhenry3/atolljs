@@ -1,5 +1,6 @@
 import { bundleStats } from '../bundleStats';
 import { islandPerfStats } from '../islandPerfStats';
+import { SplitBar, workerShare } from '../components/SplitBar';
 
 const kb = (bytes: number) => (bytes / 1024).toFixed(1);
 
@@ -57,28 +58,6 @@ const STACKS: { label: string; main: string[]; worker: string[] }[] = [
     worker: ['@atolljs/core', '@atolljs/nestjs', '@atolljs/node'],
   },
 ];
-
-/** Worker's gzip share of the combined two-thread surface (0 when none). */
-const workerShare = (main: number, worker: number): number =>
-  worker ? Math.round((worker / (main + worker)) * 100) : 0;
-
-function SplitBar({ main, worker, label }: { main: number; worker: number; label: string }) {
-  const workerPct = workerShare(main, worker);
-  return (
-    <div className="loadbar">
-      <div
-        className="loadbar-main"
-        style={{ width: `${100 - workerPct}%` }}
-        title={`main thread — ${100 - workerPct}% of ${label}`}
-      />
-      <div
-        className="loadbar-worker"
-        style={{ width: `${workerPct}%` }}
-        title={`worker thread — ${workerPct}% of ${label}`}
-      />
-    </div>
-  );
-}
 
 export function BundleSize() {
   return (
@@ -219,7 +198,8 @@ export function BundleSize() {
         prop-driven update and a click→state-commit. <strong>Worker</strong>{' '}
         time is the task call itself (framework render/diff, proxy-DOM
         bookkeeping, op serialization); <strong>main</strong> time is the op
-        replay into real DOM.
+        replay into real DOM. The protocol these numbers measure is detailed
+        on <a href="#/island-proxy">Islands → Proxy document</a>.
       </p>
       <table className="doc-table">
         <thead>

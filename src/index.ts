@@ -44,6 +44,7 @@ export type {
   TaskMap,
   TaskMessage,
   TaskResult,
+  MemoryPersistence,
   SharedWorkerConfig,
   ViewType,
   WorkerPoolConfig,

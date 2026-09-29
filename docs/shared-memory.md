@@ -99,3 +99,41 @@ managing buffers yourself.
 `memory.bind(buffer)` installs connectors. Reading a field before binding
 throws — use `memory.bound` and `memory.onBound(cb)` to sequence code that
 must wait (this is what makes SSR and lazy pool construction safe).
+
+## Persistence adapters
+
+The buffer stays the synchronous source of truth — the contract's
+`read()`/`write()` surface can't be async — but an adapter can mirror field
+regions to external storage behind it. `WorkerPoolConfig.persistence` is the
+attach point: the pool calls the factory with the contract right after
+`bind`, and calls the handle's `stop()` on `terminate()`.
+
+`@atolljs/node/redis` ships the reference implementation — the
+shared-memory analog of NestJS's Redis WebSocket adapter:
+
+```ts
+import { redisMemoryAdapter } from '@atolljs/node/redis';
+
+createNodePool({
+  worker, sharedMemory: incidentsMemory,
+  persistence: redisMemoryAdapter(redis, { name: 'incidents' }),
+});
+```
+
+- **Persistence**: each field's byte region mirrors to a Redis hash
+  (`{key}:{name}` members = field paths, base64 values). A `syncIntervalMs`
+  loop diffs the per-field version counters (the same Atomics block
+  `observe()` uses — no hot-path instrumentation) and `hset`s dirty fields.
+  `ready` resolves after the initial `hgetall` restore; `stop()` (or
+  `pool.terminate()`) performs a final flush.
+- **Replication** (optional `subscriber`): dirty fields also publish
+  `{src, path, b64}` to `{key}:{name}:ops`; subscribers write the bytes into
+  their own buffer and bump the local version counter so observers fire.
+  Last-write-wins per field; an instance id prevents echo.
+- Adapter-facing accessors on the contract: `memory.buffer` (the bound
+  SharedArrayBuffer) and `memory.fields()` (`{path, byteOffset, byteLength}`
+  per field) — these exist so other stores can implement the same pattern.
+- Caveat: list `writeAt` only flushes after `commit()` — writes are detected
+  via the version counter, same as observers.
+
+See `packages/node/src/redis.ts` and `test/redisMemory.test.ts`.

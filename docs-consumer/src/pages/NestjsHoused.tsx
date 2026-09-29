@@ -114,8 +114,65 @@ export function NestjsHoused() {
         listener hands each connection to a worker unparsed, but
         per-connection routing can&apos;t share the app port by URL path, so
         it lives on <code>PORT + 1</code>. See{' '}
-        <a href="#/node-servers">HTTP offload</a> for both topologies.
+        <a href="#/fw-nestjs/clustering">Clustering</a> and{' '}
+        <a href="#/fw-nestjs/websockets">WebSockets</a> for the other two
+        entry points.
       </p>
+
+      <h2>What executes where</h2>
+      <p>
+        Trace <code>GET :{port}/api/housed/incidents/whoami</code> through
+        the proxy path — the stages split across two threads:
+      </p>
+      <ol>
+        <li>
+          <strong>API thread</strong> — accepts the connection, Express parses
+          the request, <code>app.use(&apos;/api/housed&apos;, ...)</code>{' '}
+          matches, and <code>proxyToWorker</code> picks a housed worker
+          (round-robin <code>cursor</code>) and rewrites the mount-stripped
+          path back to <code>/api/housed/...</code>.
+        </li>
+        <li>
+          <strong>API thread → worker</strong> — the request is re-serialized
+          onto that worker&apos;s internal <code>127.0.0.1</code> port (the
+          one <code>serveHttp({'{'} listen: 0 {'}'})</code> announced via{' '}
+          <code>workerHttpPorts</code>). Method, path, headers, and body all
+          cross — this hop is the proxy&apos;s cost.
+        </li>
+        <li>
+          <strong>Housed worker thread</strong> — the request lands on the
+          worker&apos;s own HTTP server, so a complete Nest pipeline executes
+          off-thread: guards, interceptors, DI resolution, the controller
+          body — which reads the incidents buffer directly (the same
+          SharedArrayBuffer <code>bindSharedBuffer()</code> attached, so the
+          row read is a memory read, not a message).
+        </li>
+        <li>
+          <strong>Worker → API thread → client</strong> — the response streams
+          back over the internal port and the gateway pipes it to the client
+          untouched — status, headers, the stamped <code>threadId</code> in
+          the body.
+        </li>
+      </ol>
+      <p>
+        The clustered path on <code>:{port + 1}</code> removes steps 2 and
+        4&apos;s application-level hop: the API thread hands the whole TCP
+        socket to a worker unparsed, and that worker parses HTTP, runs the
+        same Nest pipeline, and answers the client directly. The API thread
+        only ever saw an opaque connection. Same controllers either way —
+        the difference is purely how bytes reach the worker:
+      </p>
+      <table className="doc-table">
+        <thead>
+          <tr><th>Stage</th><th>App routes (<code>/api/*</code>)</th><th>Proxied (<code>/api/housed/*</code>)</th><th>Clustered (<code>:3101</code>)</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Accept + parse</td><td>API thread</td><td>API thread</td><td>API thread accepts, worker parses</td></tr>
+          <tr><td>Nest pipeline (guards, DI, controller)</td><td>API thread</td><td>housed worker</td><td>housed worker</td></tr>
+          <tr><td>Incidents data access</td><td>memory read / task dispatch</td><td>direct memory read in worker</td><td>direct memory read in worker</td></tr>
+          <tr><td>Response path</td><td>direct to client</td><td>worker → internal port → API thread → client</td><td>worker → client</td></tr>
+        </tbody>
+      </table>
 
       <h2>DI inside housed controllers</h2>
       <p>

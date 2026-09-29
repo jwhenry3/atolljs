@@ -77,6 +77,12 @@ export const counterWorker = defineWorker({
     on the server's `upgrade` event) expose the same machinery as mountable
     middleware (see `examples/nestjs` housed API).
   See `examples/http-offload` and `docs/frameworks/node.md`.
+- `@atolljs/node/redis` — shared-memory persistence via Redis
+  (`persistSharedMemory` / `redisMemoryAdapter`): field regions mirror to a
+  Redis hash on a version-diff flush, restore into the buffer at boot, and
+  optionally replicate across processes over a pub/sub channel. Pass it as
+  `persistence` on `createNodePool` (or `AtollModule.registerPool`) — the
+  pool attaches it after bind and calls `stop()` on `terminate()`.
 
 ## Notes
 
@@ -89,6 +95,6 @@ export const counterWorker = defineWorker({
 
 - [Atoll — package documentation](https://jwhenry3.github.io/atolljs/consumer/#/quickstart)
 - [Node backends — Express, Fastify, Hono, Koa](https://jwhenry3.github.io/atolljs/consumer/#/fw-node)
-- [HTTP offload — worker servers](https://jwhenry3.github.io/atolljs/consumer/#/node-servers)
+- [Worker HTTP servers — clustering & gateway](https://jwhenry3.github.io/atolljs/consumer/#/fw-node/clustering)
 - [Worker pool & tasks](https://jwhenry3.github.io/atolljs/consumer/#/tasks)
 - [NestJS guide](https://jwhenry3.github.io/atolljs/consumer/#/fw-nestjs)

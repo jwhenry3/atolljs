@@ -11,6 +11,7 @@ import { FrameworkExamples } from './pages/FrameworkExamples';
 import { FrameworkQuickstart } from './pages/FrameworkQuickstart';
 import { FrameworkIslands } from './pages/FrameworkIslands';
 import { Nextjs } from './pages/Nextjs';
+import { NextjsIslands } from './pages/NextjsIslands';
 import { ReactWorkerIslands } from './pages/ReactWorkerIslands';
 
 export interface FrameworkSubPage {
@@ -100,5 +101,14 @@ export const FRAMEWORK_PAGES: Record<string, FrameworkSubPage[]> = {
       page: () => <FrameworkIslands id="angular" />,
     },
   ],
-  nextjs: [quickstart('nextjs'), examples('nextjs'), advanced('nextjs')],
+  nextjs: [
+    quickstart('nextjs'),
+    examples('nextjs'),
+    advanced('nextjs'),
+    {
+      id: 'worker-islands',
+      label: 'Islands',
+      page: () => <NextjsIslands />,
+    },
+  ],
 };

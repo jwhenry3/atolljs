@@ -34,6 +34,32 @@ stays bundler-detectable where a bundler is involved.
   bundle, or keep worker-side imports resolvable by plain Node.
 - Node needs no COOP/COEP headers — `SharedArrayBuffer` is always available.
 
+## Shared-memory persistence (`@atolljs/node/redis`)
+
+`persistSharedMemory` mirrors a bound contract's field regions to a Redis
+hash — the shared-memory analog of NestJS's Redis WebSocket adapter. The
+buffer stays the synchronous source of truth; Redis sits behind it for
+restart durability and, optionally, cross-process replication:
+
+```ts
+const pool = createNodePool({
+  worker: () => new Worker(new URL('./incidents.worker.ts', import.meta.url)),
+  sharedMemory: incidentsMemory,
+  persistence: redisMemoryAdapter(redis, { name: 'incidents' }),
+});
+await pool.persistence?.ready; // restored — workers see persisted state
+```
+
+A `syncIntervalMs` poll diffs the per-field version counters and `hset`s
+dirty fields as base64; `stop()` (called by `pool.terminate()`) does a final
+flush. Pass `subscriber` (`ioRedisSubscriber(redis.duplicate())`, or
+node-redis's `subscribe(ch, cb)` shape directly) to also publish each dirty
+field to `{key}:{name}:ops` — other processes apply the bytes into their own
+buffer and bump the local version counter, so `observe()` fires the same as
+a local write. Last-write-wins per field. `fields: [...]` restricts the
+persisted subset. See `docs/shared-memory.md` → Persistence adapters and
+`packages/node/test/redisMemory.test.ts` for the fake-client test pattern.
+
 ## HTTP clustering (`@atolljs/node/http`, Node ≥ 26)
 
 The pool can own the whole HTTP lifecycle, not just dispatched tasks — the
@@ -65,6 +91,13 @@ serveHttp(expressApp);            // or koa.callback(), fastify().server,
 - **Routing** — default round-robin; `route(socket, workers)` in options
   overrides (e.g. hash on remote address). Returning `undefined` destroys
   the socket.
+- **Stickiness** — a transferred socket pins its whole life to one worker,
+  so a bare WebSocket connection needs nothing. Multi-connection session
+  flows do (socket.io's polling→upgrade, HTTP↔WS pairs): the acceptor can't
+  read cookies/headers, so `route: stickyByAddress()` does rendezvous
+  hashing on the client address (nginx `ip_hash` style) — every connection
+  from a client lands on one worker, and a removed worker only remaps its
+  own clients.
 - **Protocol** — sockets carry `{ type: 'HTTP_CONNECTION', socket }`, a wire
   id distinct from the task protocol; `serveHttp` filters for it, so it
   coexists with `defineWorker` in one entry.

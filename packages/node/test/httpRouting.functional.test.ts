@@ -8,6 +8,7 @@ import {
   createHttpCluster,
   proxyUpgradeToWorker,
   routeHttpGateway,
+  stickyByAddress,
   workerHttpPorts,
   SOCKET_TRANSFER_SUPPORTED,
 } from '../src/http';
@@ -200,6 +201,45 @@ const startRouter = async (poolSize: number) => {
   return { pool, routed, port };
 };
 
+describe('stickyByAddress', () => {
+  // Stand-ins — the route hook only needs identity + array position.
+  const fakeWorkers = [{ id: 0 }, { id: 1 }, { id: 2 }, { id: 3 }] as any;
+  const sock = (ip: string) => ({ remoteAddress: ip }) as Socket;
+
+  it('pins one client address to one worker, deterministically', () => {
+    const route = stickyByAddress();
+    const first = route(sock('10.0.0.7'), fakeWorkers);
+    for (let i = 0; i < 8; i++) {
+      expect(route(sock('10.0.0.7'), fakeWorkers)).toBe(first);
+    }
+    expect(route(sock('10.0.0.7'), [])).toBeUndefined();
+  });
+
+  it('spreads distinct clients across the pool', () => {
+    const route = stickyByAddress();
+    const picks = new Set(
+      Array.from({ length: 50 }, (_, i) => route(sock(`10.0.1.${i}`), fakeWorkers)),
+    );
+    expect(picks.size).toBeGreaterThan(1);
+  });
+
+  it('rendezvous hashing — removing a worker only remaps its own clients', () => {
+    const route = stickyByAddress();
+    const ips = Array.from({ length: 60 }, (_, i) => `192.168.0.${i}`);
+    const before = new Map(ips.map((ip) => [ip, route(sock(ip), fakeWorkers)]));
+    // Drop whichever worker owns the first ip:
+    const evicted = before.get(ips[0])!;
+    const rest = fakeWorkers.filter((w: unknown) => w !== evicted);
+    let moved = 0;
+    for (const ip of ips) {
+      const now = route(sock(ip), rest);
+      if (before.get(ip) !== evicted && now !== before.get(ip)) moved++;
+    }
+    // Non-evicted clients keep their worker (the rendezvous property).
+    expect(moved).toBe(0);
+  });
+});
+
 describe.runIf(SOCKET_TRANSFER_SUPPORTED)('createHttpCluster', () => {
   it('serves transferred sockets inside workers — parsing and replies off-thread', async () => {
     const { pool, routed, port } = await startRouter(2);
@@ -245,6 +285,35 @@ describe.runIf(SOCKET_TRANSFER_SUPPORTED)('createHttpCluster', () => {
       ]);
       expect(taskThread).toBeGreaterThan(0);
       expect(body.threadId).toBeGreaterThan(0);
+    } finally {
+      await routed.close();
+      pool.terminate();
+    }
+  });
+
+  it('stickyByAddress pins all of a client\'s connections to one worker', async () => {
+    const pool = createNodePool({ workerFile: fixture, poolSize: 4 });
+    const routed = createHttpCluster({ pool, port: 0, route: stickyByAddress() })!;
+    const port = await new Promise<number>((resolve) => {
+      routed.server.once('listening', () =>
+        resolve((routed.server.address() as AddressInfo).port),
+      );
+    });
+    try {
+      // 6 sequential connections from 127.0.0.1 — same address, same worker,
+      // unlike the round-robin default which spread them. 'connection: close'
+      // forces a fresh socket each time (keep-alive would reuse one).
+      const bodies = [] as { threadId: number }[];
+      for (let i = 0; i < 6; i++) {
+        bodies.push(
+          await fetch(`http://localhost:${port}/s${i}`, {
+            headers: { connection: 'close' },
+          }).then((r) => r.json()),
+        );
+      }
+      const threads = new Set(bodies.map((b) => b.threadId));
+      expect(threads.size).toBe(1);
+      expect([...threads][0]).toBeGreaterThan(0);
     } finally {
       await routed.close();
       pool.terminate();

@@ -169,6 +169,20 @@ export function NextjsServer() {
         embedded demo here because a static docs host has no Node runtime.
       </p>
 
+      <h2>Going further</h2>
+      <p>
+        The example builds three more use cases on this pattern, each with a
+        dedicated page: a{' '}
+        <a href="#/fw-nextjs-server/jobs">job queue</a> whose progress
+        counters live in shared memory, a{' '}
+        <a href="#/fw-nextjs-server/read-model">read-model API</a> serving a
+        1M-record buffer with zero dispatch,{' '}
+        <a href="#/fw-nextjs-server/warmup">boot warmup</a> via Next&apos;s
+        instrumentation hook, and the{' '}
+        <a href="#/fw-nextjs-server/custom-server">custom-server</a> topology
+        for clustering and WebSockets.
+      </p>
+
       <h2>Notes</h2>
       <ul>
         <li>Requires the <code>nodejs</code> runtime (the default for route handlers) — <code>output: 'export'</code> drops handlers entirely, so the pool needs a Node host or <code>next start</code>.</li>

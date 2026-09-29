@@ -16,6 +16,13 @@ The Next.js story is two-sided:
   a CPU-bound hash task; `GET` reads `jobsDone` from shared memory with zero
   dispatch. The `globalThis` singleton survives dev-mode HMR re-evaluation.
 
+  The example carries the pattern further — `api/jobs/` is a fire-and-forget
+  job queue whose progress counters live in shared memory, `api/incidents/`
+  is a read-model API serving the 1M-record buffer directly off the API
+  thread, and `src/instrumentation.ts` warms every pool (plus the incidents
+  seed) in Next's `register()` boot hook. The consumer docs cover each as a
+  sub-page under Backend → Next.js.
+
 | Export | Signature | What it does |
 |---|---|---|
 | `useObservable` | `useObservable(source: ObservableValue<T>): T` | Subscribe to any observable snapshot (task or field). |

@@ -1,7 +1,7 @@
 import { MemoryManager } from './memory';
 import { PoolQueueFullError, TaskAbortedError, TaskTimeoutError, WorkerCrashedError } from './errors';
 import { SharedAccess, SharedMemory, SharedSpec } from '../contract/sharedMemory';
-import { PoolTasks, TaskContract, TaskMap, TaskResult, WorkerPoolConfig } from '../contract/types';
+import { MemoryPersistence, PoolTasks, TaskContract, TaskMap, TaskResult, WorkerPoolConfig } from '../contract/types';
 import { fmtBytes, scoped } from '../log';
 
 const poolLog = scoped('pool');
@@ -101,6 +101,8 @@ class WorkerPoolImpl<S extends SharedSpec = SharedSpec> {
     runMs: agg(),
   };
   public readonly sharedMemory: (SharedMemory<S> & SharedAccess<S>) | undefined;
+  /** The attached memory-persistence adapter, if the config supplied one. */
+  public readonly persistence: MemoryPersistence | undefined;
 
   constructor(config: WorkerPoolConfig<S, TaskMap>) {
     if (config.sharedMemory) {
@@ -125,6 +127,7 @@ class WorkerPoolImpl<S extends SharedSpec = SharedSpec> {
       this.memoryManager = new MemoryManager(config.memory);
       this.memoryManager.ensureCapacity(this.sharedMemory.totalBytes);
       this.sharedMemory.bind(this.memoryManager.getBuffer());
+      this.persistence = config.persistence?.(config.sharedMemory);
     }
 
     const requestedSize = config.poolSize ?? 'auto';
@@ -417,6 +420,10 @@ class WorkerPoolImpl<S extends SharedSpec = SharedSpec> {
 
   public terminate(): void {
     this.closed = true;
+    // Final flush + release — fire-and-forget; terminate() stays synchronous.
+    void this.persistence?.stop()?.catch?.((e: unknown) =>
+      poolLog.warn('memory persistence stop failed', e),
+    );
     poolLog.info(`terminating ${this.slots.length} worker(s)`);
     const crashed = new WorkerCrashedError('pool terminated');
     for (const [, entry] of this.pending) {

@@ -768,6 +768,7 @@ export class SharedMemory<S extends SharedSpec = SharedSpec> {
   private readonly connectors = new Map<string, Connector<any>>();
   private readonly boundListeners = new Set<() => void>();
   private isBound = false;
+  private boundBuffer?: SharedArrayBuffer;
 
   constructor(spec: S, options: SharedMemoryOptions = {}) {
     this.spec = spec;
@@ -818,12 +819,38 @@ export class SharedMemory<S extends SharedSpec = SharedSpec> {
       });
     });
     this.isBound = true;
+    this.boundBuffer = buffer;
     for (const cb of [...this.boundListeners]) cb();
   }
 
   /** True once the contract has been bound to a buffer on this thread. */
   public get bound(): boolean {
     return this.isBound;
+  }
+
+  /**
+   * The buffer this contract is bound to on this thread — the raw backing
+   * store persistence adapters and snapshot tooling read/write through.
+   * Throws while unbound.
+   */
+  public get buffer(): SharedArrayBuffer {
+    if (!this.boundBuffer) {
+      throw new Error('Shared memory contract is not bound to a buffer on this thread.');
+    }
+    return this.boundBuffer;
+  }
+
+  /**
+   * Every field's address in the layout — `{ path, byteOffset, byteLength }`.
+   * Persistence adapters use this to read/write field regions directly and
+   * to pair each region with its `connector(path)._version` slot.
+   */
+  public fields(): { path: string; byteOffset: number; byteLength: number }[] {
+    return this.entries.map(({ path, descriptor }) => ({
+      path,
+      byteOffset: this.offsets.get(path)!,
+      byteLength: descriptor.byteLength,
+    }));
   }
 
   /**
