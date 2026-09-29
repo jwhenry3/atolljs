@@ -37,21 +37,19 @@ jobs:
             examples/nestjs/package-lock.json
             examples/nextjs/package-lock.json
             examples/react-dom-worker/package-lock.json
+            examples/express/package-lock.json
+            examples/fastify/package-lock.json
+            examples/hono/package-lock.json
+            examples/koa/package-lock.json
+            examples/http-offload/package-lock.json
 
       - name: Upgrade npm (stage requires CLI >= 11.15.0)
         run: npm install -g "npm@^11"
 
+      # Example toolchains are installed by scripts/ci-install.mjs — the
+      # list lives there so this workflow and ci.yml can't drift.
       - name: Install dependencies
-        run: |
-          set -e
-          npm ci
-          # e2e suites exercise the real example toolchains
-          (cd examples/nestjs && npm ci)
-          (cd examples/nextjs && npm ci)
-          # The islands suites load the real worker modules in-process —
-          # leaflet/recharts live in the example's lockfile, and without
-          # them worker-module imports never resolve.
-          (cd examples/react-dom-worker && npm ci)
+        run: node scripts/ci-install.mjs
 
       - name: Test — all suites (don't publish a red tree)
         run: npx vitest run

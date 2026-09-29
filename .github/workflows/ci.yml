@@ -36,25 +36,10 @@ jobs:
             examples/koa/package-lock.json
             examples/http-offload/package-lock.json
 
+      # Example toolchains are installed by scripts/ci-install.mjs — the
+      # list lives there so this workflow and publish.yml can't drift.
       - name: Install dependencies
-        run: |
-          set -e
-          npm ci
-          # e2e suites exercise the real example toolchains — they resolve
-          # `nest` (build step) and `next/server` from the example installs.
-          (cd examples/nestjs && npm ci)
-          (cd examples/nextjs && npm ci)
-          # The islands suites load the real worker modules in-process —
-          # leaflet/recharts/htmlparser2 live in the example's lockfile, and
-          # without them worker-module imports never resolve and every mount
-          # await hangs into the 30s test timeout.
-          (cd examples/react-dom-worker && npm ci)
-          # The backend example e2e suites run `npm run bundle` (esbuild)
-          # inside each example — its devDeps must be installed for the
-          # binary to resolve.
-          for ex in express fastify hono koa http-offload; do
-            (cd "examples/$ex" && npm ci)
-          done
+        run: node scripts/ci-install.mjs
 
       - name: Typecheck — core SDK + app sources
         run: npx tsc --noEmit

@@ -3,8 +3,9 @@ import net from 'node:net';
 
 const windows = process.platform === 'win32';
 export const npmCmd = windows ? (process.env.ComSpec ?? 'cmd.exe') : 'npm';
-export const npmScript = (script) =>
-  windows ? ['/d', '/s', '/c', `npm run ${script}`] : ['run', script];
+export const npmScript = (script) => npmArgs('run', script);
+export const npmArgs = (...args) =>
+  windows ? ['/d', '/s', '/c', `npm ${args.join(' ')}`] : args;
 
 let stopping = false;
 const children = new Set();
