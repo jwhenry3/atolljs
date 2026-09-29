@@ -1,13 +1,17 @@
 # @atolljs/react-island
 
-The React shell surface for `@atolljs/islands` — mount a
-worker-hosted React (or imperative proxy-DOM) tree as an ordinary element
-in a main-thread React app. The worker's render loop produces a serialized
-op stream; this package's components own the mount lifecycle and replay it
-onto a real `div`.
+The React shell surface for `@atolljs/islands` — mount a worker-hosted React
+(or imperative proxy-DOM) tree as an ordinary element in a main-thread React
+app. The worker's render loop produces a serialized op stream; this package's
+components own the mount lifecycle and replay it onto a real `div`.
+
+**[Atoll — package documentation](https://jwhenry3.github.io/atolljs/consumer/#/quickstart)**
+
+## Install
 
 ```bash
-npm install @atolljs/core @atolljs/islands @atolljs/react-island react
+npm install @atolljs/core @atolljs/islands @atolljs/react-island react react-dom
+npm install react-reconciler   # worker islands only — the /worker entry's renderer
 ```
 
 ## `<Island/>`
@@ -37,50 +41,31 @@ app itself — stamp it once with `islandApp` and both sides share one handle:
 // worker/apps.tsx — the stamp is a data property, minification-proof
 export const ChartsApp = islandApp('charts', function ChartsApp(props: ChartsProps) { ... });
 export const mapApp = islandApp('map', { imperative: buildMap });
-// worker entry: apps: { charts: ChartsApp, map: mapApp }   (definePolyWorker
-// warns if a stamp and its registry key drift apart)
+// worker entry: apps: { charts: ChartsApp, map: mapApp }
 ```
 
-`IslandAppProps` infers `props` from the reference's signature — a React
-component's own props or an imperative def's props parameter — so
-`props={{missing: 1}}` fails to compile. Bare (unstamped) components fall
-back to `displayName`/function name for the wire key — dev convenience;
-bundlers mangle `fn.name`, which is what the stamp exists for.
-
-The rendered `div` is the island's container — `className`/`style`/`data-*`
-spread onto it. Mounting is async (worker spawn + first op batch in an
-effect, cancellation-safe); `props` changes call `updateProps`, deduped by
-serialized identity so equal props don't cost a round-trip. `onEvent`/
-`slots`/`onActivity` are read through refs — fresh closures never remount.
-`app` remounts on change; `worker`/`client` are mount-stable (use `key` to
-swap). Unmount destroys the island and terminates its worker. All the
-[islands island rules](../islands/README.md#island-rules) apply
-unchanged.
-
-`examples/react-dom-worker/react-shell.html` mounts all seven demo islands
-this way — worth a look for the mediation pattern (`onEvent → setState →
-<Island props>` replaces hand-wired `updateProps`).
+`IslandAppProps` infers `props` from the reference's signature, so
+`props={{missing: 1}}` fails to compile. The rendered `div` is the island's
+container — `className`/`style`/`data-*` spread onto it. Mounting is async and
+cancellation-safe; `props` changes call `updateProps` (deduped by serialized
+identity); unmount destroys the island and terminates its worker.
 
 ## Worker-loaded component proxies
 
-`islandComponent` and `lazyIsland` go one step further: they return a
-component that takes the **worker app's props inline** — the island looks
-and types like a local component. Every prop that isn't a shell concern
-(`worker`/`client`/`onEvent`/`onReady`/`onError`/`onActivity`/`slots`/
-`fallback`/`containerProps`) forwards as the island's props.
+`islandComponent` and `lazyIsland` return a component that takes the **worker
+app's props inline** — the island looks and types like a local component:
 
 ```tsx
 import { islandComponent, lazyIsland } from '@atolljs/react-island';
-import type { TableProps } from './worker/apps'; // type-only: erased, zero bundle cost
+import type { TableProps } from './worker/apps'; // type-only: zero bundle cost
 
-// The pure-contract proxy — the shell NEVER imports the implementation.
-// Registry key + props type IS the contract; the worker owns the code.
+// Pure-contract proxy — the shell NEVER imports the implementation.
 const TableIsland = islandComponent<TableProps>('data-table');
 <TableIsland worker={renderWorker} filter={filter} desc onEvent={…} />
 
-// The React.lazy mirror — suspends while the module loads, then mounts by
-// stamped component reference. The dynamic import is a real split point:
-// the worker component's deps only load when the island mounts.
+// React.lazy mirror — suspends on the module load (a real split point:
+// the worker component's deps only load when the island mounts), then
+// mounts by stamped reference.
 const ChartsIsland = lazyIsland(() =>
   import('./worker/apps').then((m) => ({ default: m.ChartsApp })),
 );
@@ -89,38 +74,46 @@ const ChartsIsland = lazyIsland(() =>
 </Suspense>
 ```
 
-One asymmetry vs `React.lazy`, by construction: the *loader* suspends but
-the *mount* can't — suspended trees never commit, and mounting needs the
-container div in the DOM. The mount window is covered by the `fallback`
-prop instead of Suspense. `lazyIsland` also fixes the bundle caveat from
-`<Island app={Comp}>`: a static import pulls the worker component's deps
-(recharts in the demo: +~500 kB) into the shell chunk eagerly; the lazy
-path splits them out, and `islandComponent` never imports them at all.
+The mount window is covered by the `fallback` prop (suspended trees never
+commit, so mounting can't suspend). `islandComponent` also takes a stamped
+reference (`islandComponent(StampedApp)`) to infer `P` instead of a key +
+type parameter.
 
-`islandComponent` overloads: `islandComponent<P>('name')` for the
-type-contract form above, or `islandComponent(StampedApp)` to infer `P`
-from a stamped reference the shell already has.
+## Worker topologies
 
-## Worker topologies — registry, instance, shared client
-
-Two worker entry points, mixable in one app:
+The worker side lives in `@atolljs/react-island/worker` — the entry that
+pulls `react` + `react-reconciler` into the worker bundle:
 
 ```ts
 // render.worker.ts — REGISTRY worker: one script, many named apps
-export const renderWorker = definePolyWorker({ apps: { charts: ChartsApp, table: TableApp } });
+import { defineReactPolyWorker } from '@atolljs/react-island/worker';
+export const renderWorker = defineReactPolyWorker({ apps: { charts: ChartsApp, table: TableApp } });
 
-// map.worker.ts — REALM worker: one script, ONE app (1:1)
-export const mapWorker = defineMonoWorker(mapApp);
+// map.worker.ts — MONO worker: one script, ONE app (1:1), mounted namelessly
+import { defineReactMonoWorker } from '@atolljs/react-island/worker';
+export const mapWorker = defineReactMonoWorker(mapApp);
 ```
 
-A instance worker's app resolves regardless of the requested registry name, so
-the shell mounts it **namelessly** — `<Island worker={mapWorker}/>` or
-`islandComponent<P>()` with no key — and its bundle carries only that app's
-dependencies. `lazyIsland` accepts the worker module itself as the contract:
-`lazyIsland(() => import('./worker/map.worker'))` resolves `{ app, worker }`
-so the island carries its own worker.
+For a mixed-framework registry, use `@atolljs/islands/worker`'s
+`definePolyWorker` and wrap each React app in `reactIslandApp(App)` —
+non-React registries never see this entry, so they ship zero React.
+`<Slot/>`, `emit`, and `runInInstance` re-export from `/worker` too, so an
+app's worker imports need no second specifier.
 
-For multi-island-per-worker, share a client: `client={connectIslandWorker({ worker })}`
-mounts each island's instance into the SAME worker (separate reconcilers, op
-queues, and pids — one OS thread). `destroy()` on one island unmounts just
-its instance; the worker dies with the last island to leave.
+A mono worker's app resolves regardless of the requested registry name — mount
+it with `<Island worker={mapWorker}/>` or `islandComponent<P>()` with no key.
+`lazyIsland` accepts the worker module itself as the contract:
+`lazyIsland(() => import('./worker/map.worker'))` resolves `{ app, worker }`.
+
+For multi-island-per-worker, share a client:
+`client={connectIslandWorker({ worker })}` mounts each island's instance into
+the SAME worker (separate reconcilers, op queues, and pids — one OS thread).
+
+## Documentation
+
+- [Atoll — package documentation](https://jwhenry3.github.io/atolljs/consumer/#/quickstart)
+- [Worker islands for React](https://jwhenry3.github.io/atolljs/consumer/#/fw-react/worker-islands)
+- [Worker islands](https://jwhenry3.github.io/atolljs/consumer/#/islands) —
+  `mountIsland` options, `IslandHandle`, island rules
+- In-repo internals: [`docs/islands.md`](../../docs/islands.md),
+  [`docs/islands-worker.md`](../../docs/islands-worker.md)

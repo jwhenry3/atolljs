@@ -1,4 +1,5 @@
 import { CodeBlock } from '../components/CodeBlock';
+import { SHARED_CONNECT, SHARED_MEMORY, SHARED_WORKER } from '../snippets';
 
 export function Quickstart() {
   return (
@@ -13,53 +14,13 @@ export function Quickstart() {
       <CodeBlock code="npm install @atolljs/core @atolljs/react" language="bash" />
 
       <h2>2 · Declare shared memory — imported by both threads</h2>
-      <CodeBlock
-        file="counter.memory.ts"
-        code={`import { defineSharedMemory, field } from '@atolljs/core';
-
-export const counterMemory = defineSharedMemory({
-  count: field.number(),
-});`}
-      />
+      <CodeBlock file="counter.memory.ts" code={SHARED_MEMORY} />
 
       <h2>3 · Define the worker — methods live here</h2>
-      <CodeBlock
-        file="counter.worker.ts"
-        code={`import { defineWorker } from '@atolljs/core';
-import { counterMemory } from './counter.memory';
-
-// defineWorker wires the message loop and registers every method.
-// Plain functions type the client from their signature.
-export const counterWorker = defineWorker({
-  sharedMemory: counterMemory,
-  methods: {
-    increment(delta: number) {
-      const next = counterMemory.count.read() + delta;
-      counterMemory.count.write(next);  // write in place — no postMessage
-      return next;
-    },
-  },
-});
-export type CounterWorker = typeof counterWorker;`}
-      />
+      <CodeBlock file="counter.worker.ts" code={SHARED_WORKER} />
 
       <h2>4 · Connect from the main thread — type only</h2>
-      <CodeBlock
-        file="counter.ts"
-        code={`import { connectWorker } from '@atolljs/core';
-import { counterMemory } from './counter.memory';
-import type { CounterWorker } from './counter.worker';  // no worker code in this bundle
-
-export const counter = connectWorker<CounterWorker>({
-  sharedMemory: counterMemory,
-  // Inline new Worker(new URL(..., import.meta.url)) — every bundler's
-  // worker transform can see the entry point this way.
-  worker: () => new Worker(new URL('./counter.worker.ts', import.meta.url), { type: 'module' }),
-  poolSize: 'auto',   // navigator.hardwareConcurrency, or pass a number
-});
-// counter.increment(1) → Promise<number>. The pool spawns on first call
-// (SSR-safe to import); counter.terminate() tears it down.`}
-      />
+      <CodeBlock file="counter.ts" code={SHARED_CONNECT} />
 
       <h2>5 · Bind it in your framework</h2>
       <CodeBlock

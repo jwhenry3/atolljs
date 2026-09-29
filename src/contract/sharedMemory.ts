@@ -2,7 +2,7 @@ import type { Prettify, Schema } from './types';
 import { msgpackrCodec } from './msgpackrCodec';
 import { memberToSpec, zodArrayInfo, zodObjectShape, zodStringBytes } from './listSchema';
 import { fmtBytes, scoped } from '../log';
-import { z } from 'zod';
+import { z } from './zod';
 
 const memLog = scoped('memory');
 

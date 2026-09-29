@@ -2,6 +2,7 @@
   "name": "@atolljs/islands",
   "version": "0.1.0",
   "description": "Atoll islands — MonoWorker/PolyWorker hosts rendering framework islands (React/Vue/Svelte/Solid/Angular) over a proxy-DOM op protocol",
+  "homepage": "https://jwhenry3.github.io/atolljs/consumer/#/quickstart",
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
@@ -17,9 +18,7 @@
     "htmlparser2": "^12.0.0"
   },
   "peerDependencies": {
-    "@atolljs/core": "0.1.0",
-    "react": "^19.3.0",
-    "react-reconciler": "^0.34.0"
+    "@atolljs/core": "0.1.0"
   },
   "repository": {
     "type": "git",

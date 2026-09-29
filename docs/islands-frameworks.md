@@ -13,7 +13,7 @@ worker can mix them freely.
 
 | Package | Shell surface | Worker renderer | updateProps |
 |---|---|---|---|
-| `@atolljs/react-island` | `<Island/>`, `islandComponent`, `lazyIsland` | `react-reconciler@0.34` — lives in islands core, lazy-imported | reconciler re-render |
+| `@atolljs/react-island` | `<Island/>`, `islandComponent`, `lazyIsland` | `defineReactPolyWorker` — `react-reconciler@0.34` host config → instance records | reconciler re-render |
 | `@atolljs/vue-island` | `useIsland`, `<AtollIsland>` | `defineVuePolyWorker` — Vue `createRenderer` → proxy DOM | fine-grained (`cloneVNode` + `render`) |
 | `@atolljs/svelte-island` | `use:island` action, `createIslandState` | `defineSveltePolyWorker` — Svelte 5 `mount()` into `doc.body`, `$state` props box | fine-grained (props box mutation) |
 | `@atolljs/solid-island` | `createIsland`, `Island` | `defineSolidPolyWorker` — `solid-js/universal` `createRenderer` | fine-grained (per-key signal props) |
@@ -27,21 +27,24 @@ no direct `@atolljs/islands` import.
 
 ## Mixed registries
 
-A `definePolyWorker({ apps })` registry accepts React components,
-`{ imperative }` defs, and any framework's adapter output side by side — wrap
-manually with `vueIslandApp`/`svelteIslandApp`/`solidIslandApp`/
-`angularIslandApp` when the app should sit in a shared `definePolyWorker`
+A `definePolyWorker({ apps })` registry accepts `{ imperative }` defs and
+any framework's adapter output side by side — wrap each component with
+`reactIslandApp`/`vueIslandApp`/`svelteIslandApp`/`solidIslandApp`/
+`angularIslandApp` when it should sit in a shared `definePolyWorker`
 rather than that framework's own `define*PolyWorker` (which wraps plain
-components automatically):
+components automatically). Bare components are not registry values —
+the registry is framework-agnostic, so the adapter is the stamp that says
+which renderer owns the app:
 
 ```ts
 import { definePolyWorker } from '@atolljs/islands/worker';
+import { reactIslandApp } from '@atolljs/react-island/worker';
 import { vueIslandApp } from '@atolljs/vue-island/worker';
 import { svelteIslandApp } from '@atolljs/svelte-island/worker';
 
 export const worker = definePolyWorker({
   apps: {
-    dashboard: DashboardApp,                  // React component
+    dashboard: reactIslandApp(DashboardApp),  // React
     notes:     vueIslandApp(VueNotes),        // Vue
     editor:    svelteIslandApp(Editor),       // Svelte
     map:       { imperative: buildMap },      // proxy DOM, no framework
@@ -60,22 +63,17 @@ the op protocol, event dispatch, `emit`/`callbackProp`, instance lifecycle.
 Framework runtimes arrive only through the binding you import:
 
 - **React islands** — `react` + `react-reconciler` + the host config live in
-  `worker/reactInstance.ts`, reached via `await import()` the first time a
-  registered app resolves to a React component. A worker whose registry holds
-  only Vue/Svelte/Solid/Angular/imperative apps never loads it — bundlers put
-  it in a lazily-fetched chunk (or drop it entirely when the worker entry
-  can't reach it statically).
+  `@atolljs/react-island/worker` (`src/reactInstance.ts` + `hostConfig.ts`),
+  imported the moment a worker entry uses `reactIslandApp` or
+  `defineReactPolyWorker`. A worker whose registry holds only
+  Vue/Svelte/Solid/Angular/imperative apps never loads it — the package
+  boundary IS the lazy boundary: no dynamic import, no runtime chunk, the
+  adapter simply isn't in the bundle.
 - **Vue/Svelte/Solid/Angular islands** — each `-island` package statically
   imports only its own framework. A `defineVuePolyWorker` entry bundles
   islands core + Vue, and no other framework.
 - **Imperative-only** — islands core alone (plus `htmlparser2`, which the
   proxy DOM's `innerHTML`/`insertStaticContent` need).
-
-Two caveats: the `Slot` helper is a React component (its JSX pulls in
-`react/jsx-runtime` — a few KB, tree-shaken when unused), and
-`definePolyWorker`'s mount task is `async` because a React first-mount awaits
-the runtime chunk — callers already `await` it, so this is only a
-typing-level detail.
 
 ## Real libraries — what works
 
@@ -128,6 +126,6 @@ magnitude more per frame. `mountIsland`'s `onOps` hook reports the
 worker/main split if you want to measure a workload before committing it to
 an island.
 
-Peer deps `react`/`react-reconciler` are required on `@atolljs/islands` even for
-imperative-only consumers — the package *is* the React-rendering pattern;
-tree-shaking drops the reconciler if you never register React apps.
+`react`/`react-dom`/`react-reconciler` are peer deps of `@atolljs/react-island`
+only — `@atolljs/islands` itself is framework-free, so imperative-only and
+non-React consumers install zero React.

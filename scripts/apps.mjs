@@ -9,5 +9,9 @@ export const apps = [
   ['angular', 'examples/angular', 4201],
   ['nextjs', 'examples/nextjs', 3001],
   ['nestjs', 'examples/nestjs', 3100],
+  ['express', 'examples/express', 3200],
+  ['fastify', 'examples/fastify', 3201],
+  ['hono', 'examples/hono', 3202],
+  ['koa', 'examples/koa', 3203],
   ['react-dom-worker', 'examples/react-dom-worker', 5177],
 ];

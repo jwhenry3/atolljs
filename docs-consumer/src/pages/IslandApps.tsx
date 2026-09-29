@@ -32,7 +32,8 @@ export function IslandApps() {
       <CodeBlock
         code={`// worker side — from your *-island package's /worker entry
 // (or '@atolljs/islands/worker' directly):
-import { emit, runInInstance, bumpOpsVersion, Slot } from '…/worker';
+import { emit, runInInstance, bumpOpsVersion } from '…/worker';
+import { Slot } from '@atolljs/react-island/worker'; // React islands
 
 // island → shell: lands in mountIsland's onEvent.
 emit('rowSelected', { id: row.id });

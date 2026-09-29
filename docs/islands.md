@@ -55,14 +55,21 @@ islands still work on the 50ms poll — that's the message-only mode, no
 ```ts
 // render.worker.ts — the whole worker entry
 import { definePolyWorker } from '@atolljs/islands/worker';
+import { reactIslandApp } from '@atolljs/react-island/worker';
 
 export const renderWorker = definePolyWorker({
   apps: {
-    dashboard: DashboardApp,                          // a React component
+    dashboard: reactIslandApp(DashboardApp),          // a React component
     vanilla: { imperative: (doc, props) => { ... } }, // or pure proxy-DOM code
   },
 });
 ```
+
+Framework apps enter the registry wrapped — `reactIslandApp`,
+`vueIslandApp`, … adapt a component to the worker's `RenderedIslandApp`
+contract. Single-framework registries skip the wrap: each `*-island` package
+ships `define*PolyWorker`/`define*MonoWorker` helpers that take plain
+components (`defineReactPolyWorker({ apps: { dashboard: DashboardApp } })`).
 
 ```ts
 // main thread — one call; `worker` builds an island-owned client internally

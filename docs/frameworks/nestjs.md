@@ -48,14 +48,17 @@ names), `examples/nestjs/src/digest.worker.ts` (worker entry: two imports —
 
 ## Build — plain `nest build`
 
-No custom build script: `nest-cli.json` enables webpack. The pool config's
-`worker:` factory returns `new Worker(new URL('./x.worker.ts', import.meta.url))`
-— webpack detects the pattern, compiles each worker entry as its own chunk,
-and rewrites the URL to the emitted file, so the config references the TS
-source directly. The factory only needs `TsconfigPathsPlugin` for the atoll
-aliases; the `node:worker_threads` shim and bootstrap are self-contained in
-`atoll-nestjs/worker` — no bundler banner needed. Config references:
-`examples/nestjs/nest-cli.json`, `examples/nestjs/webpack.config.js`.
+No custom build script: `nest-cli.json` sets `"webpack": true` and webpack
+does the rest — the pool config's `worker:` factory returns
+`new Worker(new URL('./x.worker.ts', import.meta.url))`, which webpack
+detects, compiling each worker entry as its own chunk and rewriting the URL
+to the emitted file, so the config references the TS source directly. The
+`node:worker_threads` shim and bootstrap are self-contained in
+`atoll-nestjs/worker` — no bundler banner needed.
+
+`examples/nestjs/webpack.config.js` exists only to add `TsconfigPathsPlugin`
+for the repo's `@atolljs/*` source aliases — a consumer installing the
+published package needs no config factory, just `"webpack": true`.
 
 ## Notes
 

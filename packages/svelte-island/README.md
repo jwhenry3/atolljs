@@ -1,11 +1,15 @@
 # @atolljs/svelte-island
 
-The Svelte shell surface for `@atolljs/islands` — mount a
-worker-hosted tree as an ordinary element in a main-thread Svelte app —
-plus the Svelte 5 **worker renderer**: `svelteIslandApp` runs a compiled
-component with the real `mount()`/`unmount()` against the instance's proxy
-document, so every DOM call the Svelte runtime makes serializes to the op
-stream the shell replays as real DOM.
+The Svelte shell surface for `@atolljs/islands` — mount a worker-hosted tree
+as an ordinary element in a main-thread Svelte app — plus the Svelte 5
+**worker renderer**: a compiled component runs with the real
+`mount()`/`unmount()` against the instance's proxy document, so every DOM call
+the Svelte runtime makes serializes to the op stream the shell replays as real
+DOM.
+
+**[Atoll — package documentation](https://jwhenry3.github.io/atolljs/consumer/#/quickstart)**
+
+## Install
 
 ```bash
 npm install @atolljs/core @atolljs/islands @atolljs/svelte-island svelte
@@ -27,13 +31,11 @@ npm install @atolljs/core @atolljs/islands @atolljs/svelte-island svelte
 }} class="island-box" />
 ```
 
-`createIslandState(options)` is the headless form — mount/attach yourself
-and read `status`/`error`/`handle` as reactive `$state`. `worker`/`client`/
-`app` are mount-stable — swap them through `{#key}`. All the
-[islands island rules](../islands/README.md#island-rules) apply
-unchanged.
+`createIslandState(options)` is the headless form — mount/attach yourself and
+read `status`/`error`/`handle` as reactive `$state`. `worker`/`client`/`app`
+are mount-stable — swap them through `{#key}`.
 
-## The worker renderer: `svelteIslandApp` / `defineSveltePolyWorker`
+## The worker renderer
 
 ```ts
 // counter.worker.ts — the whole worker entry
@@ -54,18 +56,27 @@ export const worker = defineSveltePolyWorker({ apps: { counter: Counter } });
 <button onclick={() => { count++; emit('bumped', count); }}>{label}: {count}</button>
 ```
 
-Semantics: `mount` runs the component's real `mount()` into `doc.body`
-with a `$state`-backed props box — `island.updateProps` mutates the box,
-Svelte patches in place (same DOM elements survive). Event dispatches end
-with a `flushSync()` so state updates land in the dispatch's own op batch.
-`emit`/`runInInstance` are re-exported for the island→shell channel.
+`mount` runs the component's real `mount()` into `doc.body` with a
+`$state`-backed props box — `island.updateProps` mutates the box and Svelte
+patches in place. Event dispatches end with a `flushSync()` so state updates
+land in the dispatch's own op batch. `emit`/`runInInstance` are re-exported
+for the island→shell channel.
 
 ## Requirements
 
-- **Svelte 5 with runes compiled components** — components must be compiled
-  by vite-plugin-svelte / the svelte compiler for the client target. There
-  is no legacy/SSR fallback: this renderer needs the DOM runes runtime.
+- **Svelte 5 with runes-compiled components** — components must be compiled
+  by vite-plugin-svelte / the Svelte compiler for the client target; there is
+  no legacy/SSR fallback.
 - `{#if}`/`{#each}`/`{@html}` anchors rely on the proxy DOM's comment nodes
   and template handling — bundled, no setup needed.
-- `structuredClone`-able props (they cross `postMessage`; `mountIsland`
-  rejects uncloneable values naming the offending key).
+- Props must be `structuredClone`-able — `mountIsland` rejects uncloneable
+  values naming the offending key.
+
+## Documentation
+
+- [Atoll — package documentation](https://jwhenry3.github.io/atolljs/consumer/#/quickstart)
+- [Worker islands for Svelte](https://jwhenry3.github.io/atolljs/consumer/#/fw-svelte/worker-islands)
+- [Worker islands](https://jwhenry3.github.io/atolljs/consumer/#/islands) —
+  `mountIsland` options, `IslandHandle`, island rules
+- In-repo internals: [`docs/islands.md`](../../docs/islands.md),
+  [`docs/islands-worker.md`](../../docs/islands-worker.md)

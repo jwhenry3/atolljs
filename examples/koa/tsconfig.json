@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    "target": "ES2023",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ESNext", "DOM", "WebWorker"],
+    "types": ["node"],
+    "strict": true,
+    "noEmit": true,
+    "isolatedModules": true,
+    "skipLibCheck": true,
+    "paths": {
+      "@atolljs/core": ["../../src/index.ts"],
+      "@atolljs/core/*": ["../../src/*"],
+      "@atolljs/incidents": ["../../packages/incidents/src/index.ts"],
+      "@atolljs/incidents/*": ["../../packages/incidents/src/*"],
+      "@atolljs/node": ["../../packages/node/src/index.ts"],
+      "@atolljs/node/*": ["../../packages/node/src/*"]
+    }
+  },
+  "include": ["src", "test"]
+}

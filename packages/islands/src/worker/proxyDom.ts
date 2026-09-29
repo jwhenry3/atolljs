@@ -13,6 +13,8 @@ export type { ProxyClassList } from './dom/css';
 export {
   createProxyDocument,
   docForInstance,
+  peekInstanceDoc,
+  disposeInstanceDoc,
 } from './dom/document';
 export type {
   ProxyDocument,

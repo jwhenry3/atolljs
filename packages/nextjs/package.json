@@ -2,6 +2,7 @@
   "name": "@atolljs/nextjs",
   "version": "0.1.0",
   "description": "Next.js bindings — React hooks for client components",
+  "homepage": "https://jwhenry3.github.io/atolljs/consumer/#/quickstart",
   "type": "module",
   "exports": {
     ".": "./src/index.ts"

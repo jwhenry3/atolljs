@@ -1,12 +1,17 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { SiteSwitch } from './components/SiteSwitch';
 import { FRAMEWORKS } from './frameworks';
-import { FRAMEWORK_PAGES } from './frameworkPages';
+import { FRAMEWORK_PAGE_COMPONENTS, FRAMEWORK_PAGES } from './frameworkPages';
+import { BundleSize } from './pages/BundleSize';
+import { CustomBindings } from './pages/CustomBindings';
+import { CustomIslandRenderer } from './pages/CustomIslandRenderer';
 import { FrameworkPage } from './pages/FrameworkPage';
 import { Hosting } from './pages/Hosting';
 import { IslandApps } from './pages/IslandApps';
 import { Islands } from './pages/Islands';
 import { Nestjs } from './pages/Nestjs';
+import { NextjsServer } from './pages/Nextjs';
+import { NodeBackends } from './pages/NodeBackends';
 import { Overview } from './pages/Overview';
 import { Quickstart } from './pages/Quickstart';
 import { Reactivity } from './pages/Reactivity';
@@ -25,43 +30,55 @@ interface Route {
 const SECTIONS: { label: string; routes: Route[] }[] = [
   {
     label: 'Getting started',
-    routes: [
-      { id: 'overview', label: 'Overview', page: () => <Overview /> },
-      { id: 'quickstart', label: 'Quickstart', page: () => <Quickstart /> },
-    ],
+    routes: [{ id: 'quickstart', label: 'Quickstart', page: () => <Quickstart /> }],
   },
   {
-    label: 'API',
+    label: 'Core concepts',
     routes: [
+      { id: 'overview', label: 'Overview', page: () => <Overview /> },
       { id: 'shared-memory', label: 'Shared memory', page: () => <SharedMemoryApi /> },
       { id: 'tasks', label: 'Worker pool & tasks', page: () => <TasksAndPool /> },
       { id: 'reactivity', label: 'Reactivity', page: () => <Reactivity /> },
       { id: 'shared-worker', label: 'Shared worker', page: () => <SharedWorker /> },
+      { id: 'bundle-size', label: 'Bundle size & load', page: () => <BundleSize /> },
     ],
   },
   {
     label: 'Islands',
     routes: [
-      { id: 'islands', label: 'Worker islands', page: () => <Islands /> },
+      { id: 'islands', label: 'Islands', page: () => <Islands /> },
       { id: 'island-apps', label: 'Writing island apps', page: () => <IslandApps /> },
     ],
   },
   {
-    label: 'Frameworks',
+    label: 'Backend',
     routes: [
-      ...FRAMEWORKS.map((fw) => ({
-        id: `fw-${fw.id}`,
-        label: fw.name,
-        page: () => <FrameworkPage key={fw.id} fw={fw} />,
-        // Framework-specific sub-pages opt in via FRAMEWORK_PAGES — see
-        // frameworkPages.tsx (React gets the worker-islands page).
-        children: FRAMEWORK_PAGES[fw.id]?.map((sub) => ({
-          id: `fw-${fw.id}/${sub.id}`,
-          label: sub.label,
-          page: sub.page,
-        })),
-      })),
       { id: 'fw-nestjs', label: 'NestJS', page: () => <Nestjs /> },
+      { id: 'fw-nextjs-server', label: 'Next.js', page: () => <NextjsServer /> },
+      { id: 'fw-node', label: 'Node.js', page: () => <NodeBackends /> },
+    ],
+  },
+  {
+    label: 'Frontend',
+    routes: FRAMEWORKS.map((fw) => ({
+      id: `fw-${fw.id}`,
+      label: fw.name,
+      // Bespoke pages (e.g. Next.js) opt in via FRAMEWORK_PAGE_COMPONENTS.
+      page: FRAMEWORK_PAGE_COMPONENTS[fw.id] ?? (() => <FrameworkPage key={fw.id} fw={fw} />),
+      // Framework-specific sub-pages opt in via FRAMEWORK_PAGES — see
+      // frameworkPages.tsx (React gets the worker-islands page).
+      children: FRAMEWORK_PAGES[fw.id]?.map((sub) => ({
+        id: `fw-${fw.id}/${sub.id}`,
+        label: sub.label,
+        page: sub.page,
+      })),
+    })),
+  },
+  {
+    label: 'Extending',
+    routes: [
+      { id: 'custom-bindings', label: 'Custom bindings', page: () => <CustomBindings /> },
+      { id: 'custom-islands', label: 'Custom island renderers', page: () => <CustomIslandRenderer /> },
     ],
   },
   {
@@ -84,7 +101,9 @@ function useHashRoute() {
 
 export function App() {
   const route = useHashRoute();
-  const active = allRoutes.find((r) => r.id === route) ?? allRoutes[0];
+  const active =
+    allRoutes.find((r) => r.id === route) ??
+    allRoutes.find((r) => r.id === 'overview')!;
 
   return (
     <div className="shell">

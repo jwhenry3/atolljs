@@ -129,10 +129,11 @@ the worker only ever sees plain method arguments.
   `runAtollWorker(IncidentsAtollModule)`
 - `src/digest/` — second pool: contract + service + module + controller
 - `src/digest.worker.ts` — digest worker entry: `runAtollWorker(DigestAtollModule)`
-- `nest-cli.json` + `webpack.config.js` — plain `nest build` in webpack mode.
-  The factory only adds `TsconfigPathsPlugin` for the `@atolljs/core/*`
-  aliases; worker chunks are detected from `new Worker(new URL('./x.worker.ts',
-  import.meta.url))` in the pool configs. Each worker entry's first import is
+- `nest-cli.json` — `"webpack": true`, plain `nest build`. Worker chunks are
+  detected from `new Worker(new URL('./x.worker.ts', import.meta.url))` in
+  the pool configs — no webpack configuration needed. (`webpack.config.js`
+  here only adds `TsconfigPathsPlugin` to resolve this repo's `@atolljs/*`
+  source aliases; it isn't part of the pattern.) Each worker entry's first import is
   `@atolljs/node/shim`, which binds `globalThis.self = parentPort`
   before `workerBootstrap` wires the MessagePort — no bundler banner needed.
   `@Inject…` tokens are used throughout — ts-loader honors

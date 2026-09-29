@@ -2,6 +2,7 @@
   "name": "@atolljs/solid-island",
   "version": "0.1.0",
   "description": "SolidJS shell bindings for atoll-islands islands — createIsland, Island",
+  "homepage": "https://jwhenry3.github.io/atolljs/consumer/#/quickstart",
   "type": "module",
   "exports": {
     ".": "./src/index.ts",

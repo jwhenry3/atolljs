@@ -84,7 +84,7 @@ export function Overview() {
           </tr>
           <tr>
             <td><code>@atolljs/islands</code></td>
-            <td><code>mountIsland</code>, <code>connectIslandWorker</code>, <code>callbackProp</code>, <code>islandApp</code> — main-thread mounting; <code>/worker</code> exports <code>definePolyWorker</code>/<code>defineMonoWorker</code>, the proxy DOM, <code>emit</code>, <code>Slot</code></td>
+            <td><code>mountIsland</code>, <code>connectIslandWorker</code>, <code>callbackProp</code>, <code>islandApp</code> — main-thread mounting; <code>/worker</code> exports <code>definePolyWorker</code>/<code>defineMonoWorker</code>, the proxy DOM, <code>emit</code> — framework-neutral, no renderer built in</td>
           </tr>
           <tr>
             <td><code>@atolljs/*-island</code></td>
@@ -97,7 +97,7 @@ export function Overview() {
         primitives to each framework's reactivity model. Your app owns the
         domain: contracts, worker handlers, and composition. The islands layer
         is separate: it moves the whole render tree into a worker — see{' '}
-        <a href="#/islands">Worker islands</a> for when that's the right trade.
+        <a href="#/islands">Islands</a> for when that's the right trade.
       </p>
     </article>
   );

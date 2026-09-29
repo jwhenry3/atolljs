@@ -23,13 +23,26 @@ repository — internals, contracts, and conventions.
 | `packages/islands/` — `mountIsland`, driver, op protocol | [islands.md](islands.md) |
 | `packages/islands/src/worker/` — proxy DOM, instances, worker entries | [islands-worker.md](islands-worker.md) |
 | `packages/*-island/` — Vue/Svelte/Solid/Angular worker renderers | [islands-frameworks.md](islands-frameworks.md) |
+| Writing a new `packages/<fw>` binding or `<fw>-island` renderer | [porting.md](porting.md) |
+
+Framework bindings — **frontend**:
+
+| If you're working on… | Read |
+|---|---|
 | `packages/react`, `packages/react-island` | [frameworks/react.md](frameworks/react.md) |
 | `packages/vue`, `packages/vue-island` | [frameworks/vue.md](frameworks/vue.md) |
 | `packages/solidjs`, `packages/solid-island` | [frameworks/solid.md](frameworks/solid.md) |
 | `packages/svelte`, `packages/svelte-island` | [frameworks/svelte.md](frameworks/svelte.md) |
 | `packages/angular`, `packages/angular-island` | [frameworks/angular.md](frameworks/angular.md) |
 | `packages/nextjs` | [frameworks/nextjs.md](frameworks/nextjs.md) |
+
+Framework bindings — **backend**:
+
+| If you're working on… | Read |
+|---|---|
 | `packages/nestjs`, `packages/node` | [frameworks/nestjs.md](frameworks/nestjs.md) |
+| `examples/express`, `examples/fastify`, `examples/hono`, `examples/koa` | [frameworks/node-backends.md](frameworks/node-backends.md) |
+| `examples/nextjs/src/app/api/` — server-side pools in route handlers | [frameworks/nextjs.md](frameworks/nextjs.md) (server section) |
 
 ## Core concepts (read in order)
 

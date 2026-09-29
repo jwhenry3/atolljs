@@ -48,6 +48,12 @@ npm install
 npm run dev   # http://localhost:3001
 ```
 
+This app needs a Node runtime — `next dev` / `next start`, a Node host, or a
+platform like Vercel. It is intentionally absent from the GitHub Pages deploy
+(`scripts/assemble-pages.mjs` mounts only static `dist/` builds): a static
+host can't render the pages or answer `/api/atoll`, so the docs site's
+embedded demo frame is blank there by design.
+
 SharedArrayBuffer needs cross-origin isolation — `next.config.ts` sets COOP/COEP
 headers and aliases `@atolljs/core` to the sdk source (webpack + turbopack).
 the shared package's `pool.ts` uses the bundler-detectable

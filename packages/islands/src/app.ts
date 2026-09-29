@@ -71,11 +71,13 @@ export type IslandAppProps<A> = A extends {
     : Record<string, unknown>;
 
 /**
- * The structural shape of a mountable app — `never` params so ANY component
- * or imperative def is assignable. Kept worker-free: importing the real
- * `IslandApp` union from `worker/definePolyWorker` would drag worker code
- * into shell bundles.
+ * The structural shape of a mountable app — `never` params so ANY component,
+ * imperative def, or framework-adapter output (`{ mount }` — what
+ * `reactIslandApp`/`vueIslandApp`/`reactIsland` produce) is assignable.
+ * Kept worker-free: importing the real `IslandApp` union from
+ * `worker/defineWorkers` would drag worker code into shell bundles.
  */
 export type IslandAppLike =
   | ((props: never) => unknown)
-  | { imperative: (doc: never, props: never) => void };
+  | { imperative: (doc: never, props: never) => void }
+  | { mount: (ctx: never) => unknown };

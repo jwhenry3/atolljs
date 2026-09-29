@@ -20,6 +20,7 @@ import {
   type ProxyDocument,
   type RenderContext,
 } from '@atolljs/islands/worker';
+import { reactIslandApp } from '@atolljs/react-island/worker';
 import { pushOp } from '../../src/worker/instance';
 import type { InternalDocument } from '../../src/worker/dom/document';
 
@@ -337,16 +338,16 @@ function RPortal(props: Record<string, unknown>) {
 export const perfWorker = definePolyWorker({
   apps: {
     tree: treeApp,
-    rtree: RTree,
-    rcounter: RCounter,
+    rtree: reactIslandApp(RTree),
+    rcounter: reactIslandApp(RCounter),
     ticker: tickerApp,
     tpl: templateApp,
     cb: callbackApp,
     drive: driverApp,
-    rprops: RProps,
+    rprops: reactIslandApp(RProps),
     rendered: renderedApp,
     renderednu: renderedNoUpdateApp,
-    rsuspend: RSuspend,
-    rportal: RPortal,
+    rsuspend: reactIslandApp(RSuspend),
+    rportal: reactIslandApp(RPortal),
   },
 });

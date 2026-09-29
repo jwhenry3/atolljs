@@ -40,6 +40,29 @@ wires the incident tasks and shared fields through the framework bindings.
 | Angular  | `examples/angular` | `npm run dev`   | 4201 |
 | Next.js  | `examples/nextjs`  | `npm run dev`   | 3001 |
 
+## Backend examples
+
+The same incidents contract served as a JSON REST API — a `WorkerPool` of
+`node:worker_threads` threads (`@atolljs/node`), no browser involved. Heavy
+scans dispatch to pool workers; record reads hit shared memory directly on
+the API thread.
+
+| Example  | Dir                | Command         | Port |
+|----------|--------------------|-----------------|------|
+| NestJS   | `examples/nestjs`  | `npm run dev`   | 3100 |
+| Express  | `examples/express` | `npm run dev`   | 3200 |
+| Fastify  | `examples/fastify` | `npm run dev`   | 3201 |
+| Hono     | `examples/hono`    | `npm run dev`   | 3202 |
+| Koa      | `examples/koa`     | `npm run dev`   | 3203 |
+
+The four non-Nest backends share one shape: `src/incidents.ts` wires
+`createNodePool` + `workerClient<IncidentsWorker>`, `src/incidents.worker.ts`
+is the worker entry (`@atolljs/node/shim` first), and `src/main.ts` is the
+framework's thin HTTP adapter. Because `worker_threads` spawns plain Node
+processes (tsx/loader hooks don't propagate), each example bundles its worker
+entry with esbuild (`npm run bundle` → `dist/incidents.worker.js`) — `dev`,
+`build`, and `start` run it automatically.
+
 ## SharedArrayBuffer requirements
 
 Workers share memory through `SharedArrayBuffer`, which browsers only expose in

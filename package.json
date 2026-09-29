@@ -1,6 +1,8 @@
 {
   "name": "@atolljs/core",
   "version": "0.1.0",
+  "description": "Typed shared-memory worker pools — defineWorker/connectWorker, SharedArrayBuffer contracts, cross-thread reactivity",
+  "homepage": "https://jwhenry3.github.io/atolljs/consumer/#/quickstart",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -28,8 +30,11 @@
     "serve:all": "node scripts/serve-all.mjs",
     "build": "tsc --noEmit && vite build",
     "test": "vitest run",
+    "stats": "node scripts/bundle-stats.mjs",
+    "stats:islands": "node scripts/island-perf.mjs",
     "build:pages": "node scripts/build-pages.mjs",
-    "assemble:pages": "node scripts/assemble-pages.mjs"
+    "assemble:pages": "node scripts/assemble-pages.mjs",
+    "serve:pages": "node scripts/serve-pages.mjs"
   },
   "devDependencies": {
     "@angular/core": "^22.2.0",

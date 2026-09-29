@@ -1,12 +1,15 @@
 # @atolljs/solid-island
 
-The Solid shell surface for `@atolljs/islands` — mount a
-worker-hosted Solid (or imperative proxy-DOM) tree as an ordinary element
-in a main-thread Solid app — plus the Solid **worker renderer** for the
-worker side: `solidIslandApp` runs a plain Solid component against
-`solid-js/universal`'s `createRenderer` bound to the instance's proxy document,
-so every node mutation serializes to the op stream the shell replays as
-real DOM.
+The Solid shell surface for `@atolljs/islands` — mount a worker-hosted Solid
+(or imperative proxy-DOM) tree as an ordinary element in a main-thread Solid
+app — plus the Solid **worker renderer**: a plain Solid component runs against
+`solid-js/universal`'s `createRenderer` bound to the instance's proxy
+document, so every node mutation serializes to the op stream the shell replays
+as real DOM.
+
+**[Atoll — package documentation](https://jwhenry3.github.io/atolljs/consumer/#/quickstart)**
+
+## Install
 
 ```bash
 npm install @atolljs/core @atolljs/islands @atolljs/solid-island solid-js
@@ -23,7 +26,7 @@ const renderWorker = () =>
 
 function Shell() {
   const island = createIsland({
-    worker: renderWorker,                 // or client={connectIslandWorker({...})}
+    worker: renderWorker,                 // or client: connectIslandWorker({...})
     app: ChartsApp,                       // or the registry name 'charts'
     props: () => ({ width: width() }),    // accessor — tracked, pushes updateProps
     onEvent: (name, payload) => ...,
@@ -33,24 +36,18 @@ function Shell() {
 }
 ```
 
-`props` may be a plain value, an accessor, or a reactive getter — changes
-call `updateProps`, deduped by serialized identity. Callbacks are read at
-call time (fresh closures never remount); `app`/`worker`/`client` are
-mount-stable — swap via keyed remount. `Island(options)` is the no-JSX
-component form: it returns the mounted `div` itself. All the
-[islands island rules](../islands/README.md#island-rules) apply
-unchanged.
+`props` may be a plain value, an accessor, or a reactive getter — changes call
+`updateProps` (deduped by serialized identity). Callbacks are read at call
+time; `app`/`worker`/`client` are mount-stable — swap via keyed remount.
+`Island(options)` is the no-JSX component form: it returns the mounted `div`
+itself.
 
-## The worker renderer: `solidIslandApp` / `defineSolidPolyWorker`
+## The worker renderer
 
 ```ts
 // counter.worker.ts — the whole worker entry
 import { createSignal } from 'solid-js';
-import {
-  defineSolidPolyWorker,
-  h,
-  insert,
-} from '@atolljs/solid-island/worker';
+import { defineSolidPolyWorker, h, insert } from '@atolljs/solid-island/worker';
 
 function Counter(props: { label: string }) {
   const [count, setCount] = createSignal(0);
@@ -67,106 +64,61 @@ export const worker = defineSolidPolyWorker({ apps: { counter: Counter } });
 // or a 1:1 instance worker: defineSolidMonoWorker(Counter)
 ```
 
-Mount it namelessly (instance worker) or by registry key —
-`createIsland({ app: 'counter', ... })` / `mountIsland({ app: 'counter' })`.
-
-Semantics: `mount` renders the component into the instance's proxy `body` under
-a Solid root (so `dispose()` tears down every signal/effect with the
-island). Wire props arrive as getter-driven per-key signals, so
-`island.updateProps` bumps only the changed keys — the DOM patch that falls
-out is exactly as fine-grained as the reads (one `utext`/`attr` op per
-changed dependent, never a rebuild). `emit`/`runInInstance` are re-exported for
-the island→shell channel.
+`mount` renders the component into the instance's proxy `body` under a Solid
+root (so `dispose()` tears down every signal/effect with the island). Wire
+props arrive as getter-driven per-key signals, so `island.updateProps` bumps
+only the changed keys — one `utext`/`attr` op per changed dependent, never a
+rebuild. `emit`/`runInInstance` are re-exported for the island→shell channel.
 
 ## Writing JSX (optional)
 
-Components are **plain functions** — nothing in this package requires a JSX
-transform (the fixtures above use `h()`/`insert()` by hand). If you want JSX
-in worker components, point Solid's compiler at the *universal* render
-target with this package's worker entry as the runtime module, **scoped to
-worker code only** — your shell components still need the normal DOM
-transform:
+Components are **plain functions** — nothing here requires a JSX transform
+(`h()`/`insert()` by hand works). For JSX in worker components, point Solid's
+compiler at the *universal* render target with this package's worker entry as
+the runtime module, **scoped to worker code only** — shell components still
+need the normal DOM transform:
 
 ```ts
 // vite.config.ts
-import solidPlugin from 'vite-plugin-solid';
-
 export default {
   plugins: [
     // Worker entries: compile JSX to universal-renderer calls.
     solidPlugin({
       include: [/\.worker\.[tj]sx?$/, /worker\/.*\.[tj]sx?$/],
-      solid: {
-        generate: 'universal',
-        moduleName: '@atolljs/solid-island/worker',
-      },
+      solid: { generate: 'universal', moduleName: '@atolljs/solid-island/worker' },
     }),
-    // Shell (main thread): the regular DOM transform — no options needed.
+    // Shell (main thread): the regular DOM transform.
     solidPlugin({ exclude: [/\.worker\.[tj]sx?$/, /worker\/.*\.[tj]sx?$/] }),
   ],
 };
 ```
 
 Or with babel directly — `["babel-preset-solid", { "generate": "universal",
-"moduleName": "@atolljs/solid-island/worker" }]` on the worker
-entries' compile scope.
+"moduleName": "@atolljs/solid-island/worker" }]` on the worker entries'
+compile scope. Core reactive primitives (`createSignal`, `createEffect`,
+`mapArray`, `createContext`…) come straight from `solid-js` as usual.
 
-The preset's universal output calls into the runtime surface the worker
-entry re-exports — `createElement`, `createTextNode`, `insert`,
-`insertNode`, `spread`, `setProp`, `effect`, `memo`, `use`,
-`createComponent`, `mergeProps`, `render` (plus `h` for hand-authoring).
-Core reactive primitives (`createSignal`, `createEffect`, `mapArray`,
-`createContext`…) come straight from `solid-js` as usual.
+## Caveats
 
-```tsx
-// counter.worker.tsx — same component, JSX form
-function Counter(props: { label: string }) {
-  const [count, setCount] = createSignal(0);
-  return (
-    <div class="counter">
-      <span class="count">{props.label}: {count()}</span>
-      <button class="bump" onClick={() => setCount((c) => c + 1)}>bump</button>
-    </div>
-  );
-}
-```
+- **Pin the client build.** `solid-js`'s exports map resolves to the SSR
+  build (`dist/server.js` — effects never re-run) under the `worker`, `node`,
+  and `deno` conditions, including the `import 'solid-js'` inside
+  `solid-js/universal` itself. If your bundler compiles worker entries with a
+  `worker` condition, pin the client build in the worker build config:
+  `resolve: { alias: { 'solid-js': 'solid-js/dist/solid.js' } }` or omit
+  `worker`/`node` from `resolve.conditions`. The adapter probes and throws if
+  the SSR build slips in anyway.
+- **`el.textContent` vs `insert()` children.** Setting `el.textContent` emits
+  one `utext` op ("replace all children") and records a *phantom* text child
+  with no wire identity — an element that also holds `insert()`-managed
+  children will drift. Dynamic text goes through `insert()` as a real text
+  node; compiled universal JSX already does this.
 
-## Caveat: the `worker`/`node` exports condition
+## Documentation
 
-`solid-js`'s exports map resolves `solid-js` (and `solid-js/web`,
-`solid-js/store`) to `dist/server.js` under the `worker`, `node`, and `deno`
-conditions — the SSR build, where effects **never re-run**. That includes
-the `import 'solid-js'` inside `solid-js/universal` itself. A renderer built
-on the server build mounts fine and then never updates.
-
-Bundlers that compile worker entries with a `worker` condition (custom
-esbuild/Vite `resolve.conditions`, some CF/Deno pipelines) hit this — pin
-the client build explicitly in the worker build config:
-
-```ts
-resolve: { alias: { 'solid-js': 'solid-js/dist/solid.js' } }
-// or: omit 'worker'/'node' from resolve.conditions for the worker bundle
-```
-
-In this repo, `vitest.config.ts` does the equivalent: an exact-match alias
-`/^solid-js$/ → dist/solid.js` plus `server.deps.inline: [/solid-js/]` (so
-externalized `node_modules` files — `solid-js/universal` included — resolve
-`solid-js` through the same alias instead of Node's exports map, keeping one
-reactive module instance everywhere).
-
-## Caveat: `el.textContent` vs `insert()` children
-
-Setting `el.textContent` on the proxy DOM emits one `utext` op — "replace
-all children with a text node" driver-side — and records a *phantom* text
-child (no instance id) in the worker's shadow tree. That's correct for a
-leaf-text element. The trap is an element that *also* holds `insert()`-
-managed children: the phantom has no wire identity, so a later
-`insert(el, node, phantomText)` resolves its anchor to nothing on the
-driver and the two trees drift (and the next `utext` wipes the inserted
-children anyway — `node.textContent` replaces all children).
-
-The convention: dynamic text goes through `insert()` as a real text node —
-`insert(el, () => doc.createTextNode(label()))`. Compiled universal JSX
-already does this (`{expr}` compiles to an `insert` call); this only bites
-hand-rolled universal code that mixes `textContent` with child management
-on one element.
+- [Atoll — package documentation](https://jwhenry3.github.io/atolljs/consumer/#/quickstart)
+- [Worker islands for Solid](https://jwhenry3.github.io/atolljs/consumer/#/fw-solid/worker-islands)
+- [Worker islands](https://jwhenry3.github.io/atolljs/consumer/#/islands) —
+  `mountIsland` options, `IslandHandle`, island rules
+- In-repo internals: [`docs/islands.md`](../../docs/islands.md),
+  [`docs/islands-worker.md`](../../docs/islands-worker.md)

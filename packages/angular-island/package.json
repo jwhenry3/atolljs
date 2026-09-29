@@ -2,6 +2,7 @@
   "name": "@atolljs/angular-island",
   "version": "0.1.0",
   "description": "Angular shell bindings for atoll-islands islands — <atoll-island> and [atollIsland]",
+  "homepage": "https://jwhenry3.github.io/atolljs/consumer/#/quickstart",
   "type": "module",
   "exports": {
     ".": "./src/index.ts",

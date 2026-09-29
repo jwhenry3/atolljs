@@ -1,12 +1,15 @@
 # @atolljs/angular-island
 
-The Angular shell surface for `@atolljs/islands` — mount a
-worker-hosted tree as an ordinary element in a main-thread Angular app —
-plus the Angular **worker renderer**: `angularIslandApp` bootstraps a
-standalone component via `createComponent` against a `Renderer2`/
-`RendererFactory2` bound to the instance's proxy document (the same
-abstraction platform-server uses), so every render call serializes to the
-op stream the shell replays as real DOM.
+The Angular shell surface for `@atolljs/islands` — mount a worker-hosted tree
+as an ordinary element in a main-thread Angular app — plus the Angular
+**worker renderer**: a standalone component bootstraps via `createComponent`
+against a `Renderer2`/`RendererFactory2` bound to the instance's proxy
+document (the same abstraction platform-server uses), so every render call
+serializes to the op stream the shell replays as real DOM.
+
+**[Atoll — package documentation](https://jwhenry3.github.io/atolljs/consumer/#/quickstart)**
+
+## Install
 
 ```bash
 npm install @atolljs/core @atolljs/islands @atolljs/angular-island @angular/core @angular/common
@@ -45,17 +48,15 @@ export class ShellComponent {
 }
 ```
 
-`[atollIsland]` is the directive form for existing elements; `client` can
-be shared across several islands in one worker. All the
-[islands island rules](../islands/README.md#island-rules) apply
-unchanged.
+`[atollIsland]` is the directive form for existing elements; `client` can be
+shared across several islands in one worker.
 
-## The worker renderer: `angularIslandApp` / `defineAngularPolyWorker`
+## The worker renderer
 
 ```ts
 // counter.worker.ts — the whole worker entry
 import '@angular/compiler';                     // JIT decorator components only
-import { Component, signal } from '@angular/core';
+import { Component, input, signal } from '@angular/core';
 import { defineAngularPolyWorker, emit } from '@atolljs/angular-island/worker';
 
 @Component({
@@ -76,27 +77,34 @@ export const worker = defineAngularPolyWorker({
 // or a 1:1 instance worker: defineAngularMonoWorker(CounterComponent)
 ```
 
-Semantics: `mount` creates the component in a bare environment injector
-(`providedIn: 'root'` services and `options.providers` resolve); change
+`mount` creates the component in a bare environment injector
+(`providedIn: 'root'` services and `options.providers` resolve). Change
 detection is zoneless — every dispatched listener and `setInput` ends in a
 synchronous `detectChanges` plus the `AfterRenderManager` pass, so
 `afterRenderEffect`/`effect()` run, and signal writes from timers/promise
-continuations queue a microtask tick inside the instance. `emit`/`runInInstance`
-are re-exported for the island→shell channel.
+continuations queue a microtask tick inside the instance.
+`emit`/`runInInstance` are re-exported for the island→shell channel.
 
 ## Requirements & limits
 
 - **`import '@angular/compiler'` in the worker entry for JIT (decorator)
   components** — missing it throws a named error at mount. AOT/`ɵcmp`
-  components (real `ngc` output, or hand-written defs) need nothing — the
-  worker bundle stays compiler-free.
+  components need nothing; the worker bundle stays compiler-free.
 - `input()`/`model()`/`output()` fields on JIT components work through the
-  adapter's signal-member interop (bindings, transforms, `ngOnChanges`),
-  but **`input({alias})` aliases aren't discoverable** — bind by field
-  name, or use AOT.
+  adapter's signal-member interop, but **`input({alias})` aliases aren't
+  discoverable** — bind by field name, or use AOT.
 - The Sanitizer is **passthrough** — worker output is not sanitized.
-- `@defer` with `on immediate` works; interaction/viewport/idle triggers
-  are untested (no real viewport/hover events exist worker-side).
-- Forms (`ngModel`) and animations (no driver) are unexplored.
-- `structuredClone`-able props (they cross `postMessage`; `mountIsland`
-  rejects uncloneable values naming the offending key).
+- `@defer` with `on immediate` works; interaction/viewport/idle triggers are
+  untested (no real viewport/hover events exist worker-side). Forms and
+  animations are unexplored.
+- Props must be `structuredClone`-able — `mountIsland` rejects uncloneable
+  values naming the offending key.
+
+## Documentation
+
+- [Atoll — package documentation](https://jwhenry3.github.io/atolljs/consumer/#/quickstart)
+- [Worker islands for Angular](https://jwhenry3.github.io/atolljs/consumer/#/fw-angular/worker-islands)
+- [Worker islands](https://jwhenry3.github.io/atolljs/consumer/#/islands) —
+  `mountIsland` options, `IslandHandle`, island rules
+- In-repo internals: [`docs/islands.md`](../../docs/islands.md),
+  [`docs/islands-worker.md`](../../docs/islands-worker.md)

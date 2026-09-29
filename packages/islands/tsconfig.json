@@ -4,16 +4,39 @@
     "module": "ESNext",
     "moduleResolution": "bundler",
     "lib": ["ESNext", "DOM", "WebWorker"],
-    "types": ["vite/client"],
+    "types": ["vite/client", "svelte"],
     "strict": true,
     "noEmit": true,
     "isolatedModules": true,
+    // The perf/bench fixtures wrap framework components through the *-island
+    // worker entries — their sources (incl. the .tsx Slot) join this program,
+    // and the bench fixture's Angular component is decorator-authored.
     "jsx": "react-jsx",
+    "experimentalDecorators": true,
     "skipLibCheck": true,
     "paths": {
       "@atolljs/core": ["../../src/index.ts"],
-      "@atolljs/core/*": ["../../src/*"]
+      "@atolljs/core/*": ["../../src/*"],
+      "@atolljs/islands": ["./src/index.ts"],
+      "@atolljs/islands/*": ["./src/*"],
+      // Test fixtures wrap components through the real adapter entries.
+      "@atolljs/react-island": ["../react-island/src/index.tsx"],
+      "@atolljs/react-island/*": ["../react-island/src/*"],
+      "@atolljs/vue-island": ["../vue-island/src/index.ts"],
+      "@atolljs/vue-island/*": ["../vue-island/src/*"],
+      "@atolljs/svelte-island": ["../svelte-island/src/index.ts"],
+      "@atolljs/svelte-island/*": ["../svelte-island/src/*"],
+      "@atolljs/solid-island": ["../solid-island/src/index.ts"],
+      "@atolljs/solid-island/*": ["../solid-island/src/*"],
+      "@atolljs/angular-island": ["../angular-island/src/index.ts"],
+      "@atolljs/angular-island/*": ["../angular-island/src/*"]
     }
   },
-  "include": ["src", "test"]
+  "include": [
+    "src",
+    "test",
+    // react-island's ambient react-reconciler declaration — pulled in when
+    // the perf fixture imports '@atolljs/react-island/worker'.
+    "../react-island/src/react-reconciler.d.ts"
+  ]
 }

@@ -13,7 +13,7 @@ export interface IslandFramework {
 export const ISLAND_FRAMEWORKS: Record<string, IslandFramework> = {
   vue: {
     id: 'vue',
-    name: 'Vue worker islands',
+    name: 'Vue islands',
     pkg: '@atolljs/vue-island',
     intro:
       'A Vue 3 renderer running in the worker — a real RuntimeRenderer backed by the proxy DOM, with v-model emit equivalence, Teleport, transition stubs, and Vue\'s own scheduler (microtask queue + post queue). Shell side: a <AtollIsland> component or a useIsland() composable.',
@@ -77,7 +77,7 @@ const worker = () =>
   },
   svelte: {
     id: 'svelte',
-    name: 'Svelte worker islands',
+    name: 'Svelte islands',
     pkg: '@atolljs/svelte-island',
     intro:
       'Svelte 5 components mounting inside the worker through real mount()/unmount() against a proxy-DOM target — rune-compiled components only. Shell side: an island action or createIslandState() for rune-friendly wiring.',
@@ -106,7 +106,7 @@ export const svelteWorker = defineSveltePolyWorker({
   },
   solid: {
     id: 'solid',
-    name: 'Solid worker islands',
+    name: 'Solid islands',
     pkg: '@atolljs/solid-island',
     intro:
       'Solid JSX rendering through the official solid-js/universal renderer — the same API surface frameworks like Three.js renderers use — so the worker keeps Solid\'s fine-grained reactivity: each signal update produces a minimal op batch. Shell side: a <Island> component or a createIsland() primitive.',
@@ -144,7 +144,7 @@ const worker = () =>
   },
   angular: {
     id: 'angular',
-    name: 'Angular worker islands',
+    name: 'Angular islands',
     pkg: '@atolljs/angular-island',
     intro:
       'Angular\'s official Renderer2/RendererFactory2 extension point, implemented against the proxy DOM — worker components bootstrap through createApplication with a custom platform. Zoneless change detection keeps the tree updated; shell side is a <atoll-island> standalone directive. Works with JIT or AOT-compiled components.',
