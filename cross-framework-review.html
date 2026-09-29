@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mesh islands — cross-framework complexity review</title>
+  <style>
+    :root {
+      --bg: #0b0d10;
+      --panel: #11131a;
+      --text: #e3e6ec;
+      --muted: #8a919e;
+      --accent: #4c8eff;
+      --warning: #f5a623;
+      --danger: #ff5c5c;
+      --info: #4c8eff;
+      --success: #6ccf7f;
+      --border: #232632;
+      --row-alt: #151924;
+      --font: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 40px 24px;
+      font-family: var(--font);
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.55;
+    }
+    .container { max-width: 1100px; margin: 0 auto; }
+    h1 { font-size: 28px; margin: 0 0 8px; letter-spacing: -0.01em; }
+    h2 { font-size: 20px; margin: 36px 0 16px; color: var(--text); border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+    h3 { font-size: 16px; margin: 24px 0 8px; color: var(--text); }
+    p { color: var(--muted); margin: 0 0 16px; }
+    .callout {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-left: 4px solid var(--success);
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 24px;
+    }
+    .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 32px; }
+    .stat { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 16px; }
+    .stat-value { font-size: 26px; font-weight: 600; color: var(--text); }
+    .stat-value.success { color: var(--success); }
+    .stat-value.warn { color: var(--warning); }
+    .stat-value.danger { color: var(--danger); }
+    .stat-label { font-size: 12px; color: var(--muted); margin-top: 4px; }
+    .chart { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 16px; margin-bottom: 8px; }
+    .chart svg { width: 100%; height: 280px; }
+    .caption { font-size: 12px; color: var(--muted); margin: 4px 0 24px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+    th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border); vertical-align: top; }
+    th { color: var(--muted); font-weight: 500; background: var(--bg); text-transform: uppercase; font-size: 11px; letter-spacing: 0.04em; }
+    tr:nth-child(even) td { background: var(--row-alt); }
+    code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 0.92em; background: rgba(255,255,255,0.06); padding: 2px 5px; border-radius: 4px; color: var(--text); }
+    .risk-low { color: #6ccf7f; }
+    .risk-medium { color: var(--warning); }
+    .risk-high { color: var(--danger); }
+    .eff-low { color: #6ccf7f; }
+    .eff-medium { color: var(--warning); }
+    .eff-high { color: var(--danger); }
+    .eff-vhigh { color: #ff5c5c; font-weight: 600; }
+    .done { color: var(--success); font-weight: 600; }
+    .needed { color: var(--warning); }
+    ol { padding-left: 20px; color: var(--muted); }
+    ol li { margin-bottom: 10px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Mesh islands — cross-framework complexity review</h1>
+    <p>Post-renderer update: the React DOM worker pattern has been replicated in Vue, Svelte, Solid, and Angular via the <code>RenderedIslandApp</code> contract — what remains is refinement, not feasibility.</p>
+
+    <div class="callout">
+      <strong>Worker renderers now exist for all four frameworks.</strong> A new <code>RenderedIslandApp</code> contract in <code>defineIslandWorker</code> — <code>mount(ctx) → { update?, dispose? }</code> against a realm-scoped proxy document — lets each framework's real renderer emit ops through the facade instead of touching the protocol. Vue uses <code>createRenderer</code>, Svelte uses the real <code>mount()</code>/<code>flushSync()</code> runtime, Solid uses <code>solid-js/universal</code>'s <code>createRenderer</code>, and Angular runs <code>createComponent</code> over a proxy-backed <code>RendererFactory2</code> with manual change detection. <strong>All four deliver fine-grained updateProps</strong> — in-place patches, not rebuilds.
+    </div>
+
+    <div class="stats">
+      <div class="stat"><div class="stat-value">9</div><div class="stat-label">core worker-dom modules</div></div>
+      <div class="stat"><div class="stat-value success">5</div><div class="stat-label">framework shell bindings</div></div>
+      <div class="stat"><div class="stat-value success">5</div><div class="stat-label">worker renderers</div></div>
+      <div class="stat"><div class="stat-value success">432</div><div class="stat-label">tests passing</div></div>
+    </div>
+
+    <h2>Current architecture layers</h2>
+    <table>
+      <thead><tr><th>Layer</th><th>Responsibility</th></tr></thead>
+      <tbody>
+        <tr><td>Shell bindings</td><td>React (<code>react-island</code>), Vue (<code>vue-island</code>), Svelte (<code>svelte-island</code>), Solid (<code>solid-island</code>), Angular (<code>angular-island</code>). All delegate to <code>mountIsland</code>.</td></tr>
+        <tr><td><code>mountIsland</code> driver</td><td>Framework-agnostic. Replays ops, attaches listeners, ResizeObserver, doorbell/poll transport.</td></tr>
+        <tr><td>Op protocol</td><td>Framework-agnostic. <code>create/append/update/remove/attr/style/listen/emit</code> ops cross the worker boundary.</td></tr>
+        <tr><td>Worker renderer</td><td>React reconciler → ops, plus four <code>RenderedIslandApp</code> adapters (<code>*-island/worker</code>) that drive the proxy DOM with Vue/Svelte/Solid/Angular's real runtimes. Imperative proxy-DOM apps still bypass a renderer.</td></tr>
+        <tr><td>Proxy DOM + realm state</td><td>Framework-agnostic. Worker-side DOM facade, id space, handler registry, doorbell.</td></tr>
+      </tbody>
+    </table>
+
+    <h2>Source-size heatmap after simplifications</h2>
+    <div class="chart">
+      <svg viewBox="0 0 960 280" preserveAspectRatio="xMidYMid meet">
+        <defs>
+          <linearGradient id="barGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#4c8eff" stop-opacity="0.9"/>
+            <stop offset="100%" stop-color="#4c8eff" stop-opacity="0.55"/>
+          </linearGradient>
+        </defs>
+        <text x="20" y="24" fill="#8a919e" font-size="12">Lines of source code</text>
+        <rect x="70" y="96" width="80" height="164" fill="url(#barGrad)" rx="3"/>
+        <rect x="160" y="157" width="80" height="103" fill="url(#barGrad)" rx="3"/>
+        <rect x="250" y="180" width="80" height="80" fill="url(#barGrad)" rx="3"/>
+        <rect x="340" y="213" width="80" height="47" fill="url(#barGrad)" rx="3"/>
+        <rect x="430" y="213" width="80" height="47" fill="url(#barGrad)" rx="3"/>
+        <rect x="520" y="245" width="80" height="15" fill="url(#barGrad)" rx="3"/>
+        <rect x="610" y="248" width="80" height="12" fill="url(#barGrad)" rx="3"/>
+        <rect x="700" y="258" width="80" height="2" fill="url(#barGrad)" rx="3"/>
+
+        <text x="110" y="275" fill="#8a919e" font-size="11" text-anchor="end" transform="rotate(-40 110 275)">island.ts driver</text>
+        <text x="200" y="275" fill="#8a919e" font-size="11" text-anchor="end" transform="rotate(-40 200 275)">defineIslandWorker</text>
+        <text x="290" y="275" fill="#8a919e" font-size="11" text-anchor="end" transform="rotate(-40 290 275)">react-island shell</text>
+        <text x="380" y="275" fill="#8a919e" font-size="11" text-anchor="end" transform="rotate(-40 380 275)">hostConfig.ts</text>
+        <text x="470" y="275" fill="#8a919e" font-size="11" text-anchor="end" transform="rotate(-40 470 275)">document.ts</text>
+        <text x="560" y="275" fill="#8a919e" font-size="11" text-anchor="end" transform="rotate(-40 560 275)">realm.ts</text>
+        <text x="650" y="275" fill="#8a919e" font-size="11" text-anchor="end" transform="rotate(-40 650 275)">node.ts</text>
+        <text x="740" y="275" fill="#8a919e" font-size="11" text-anchor="end" transform="rotate(-40 740 275)">element.ts</text>
+
+        <text x="110" y="88" fill="#e3e6ec" font-size="12" font-weight="600" text-anchor="middle">701</text>
+        <text x="200" y="149" fill="#e3e6ec" font-size="12" font-weight="600" text-anchor="middle">537</text>
+        <text x="290" y="172" fill="#e3e6ec" font-size="12" font-weight="600" text-anchor="middle">477</text>
+        <text x="380" y="205" fill="#e3e6ec" font-size="12" font-weight="600" text-anchor="middle">441</text>
+      </svg>
+    </div>
+    <div class="caption">Core worker-dom modules only. The framework-specific weight moved into the <code>*-island/worker</code> adapters below — the React reconciler hostConfig (441) remains the reference point.</div>
+
+    <h2>Worker renderer footprint</h2>
+    <table>
+      <thead><tr><th>Adapter</th><th>Lines</th><th>Mechanism</th><th>Per-framework weight</th></tr></thead>
+      <tbody>
+        <tr><td><code>svelte-island/worker</code></td><td>340 + 29</td><td>Real <code>mount()</code>/<code>unmount()</code>/<code>flushSync()</code> against the proxy DOM + <code>$state</code> props box</td><td>Halved after the shim-layer promotion — what remains is genuinely Svelte-specific: post-dispatch <code>flushSync()</code> and the delegated-listener double-registration dedupe.</td></tr>
+        <tr><td><code>solid-island/worker</code></td><td>438</td><td><code>solid-js/universal</code> <code>createRenderer</code> → proxy DOM; per-key lazy-signal props</td><td>The vitest prefix-alias + <code>server.deps.inline</code> fix let the vendored <code>universal.js</code> go — it's the real import now.</td></tr>
+        <tr><td><code>angular-island/worker</code></td><td>805</td><td><code>Renderer2</code>/<code>RendererFactory2</code> → proxy DOM; <code>createComponent</code> + bare <code>EnvironmentInjector</code>; zoneless manual CD</td><td>Grew with the JIT signal-member interop — factory wrapping registers <code>input()</code>/<code>model()</code>/<code>output()</code> fields the JIT facade can't see, restoring <code>ngOnChanges</code>/transforms/two-way binding on nested children.</td></tr>
+        <tr><td><code>vue-island/worker</code></td><td>363</td><td><code>createRenderer</code> host ops → proxy DOM; per-element invoker cache for stable listener ids</td><td>Thinnest — the documented custom-renderer API maps almost 1:1 onto the facade. Real <code>ProxyComment</code> anchors and <code>.once</code>/<code>.passive</code>/<code>.capture</code> wire options now ride the promoted listener-ops channel.</td></tr>
+      </tbody>
+    </table>
+
+    <h2>Cross-framework status</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Framework</th><th>Implementation status</th><th>Shell binding</th><th>Worker renderer</th><th>Slots</th><th>Effort</th><th>Risk</th><th>Notes</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>React</td>
+          <td><span class="done">Shipped</span></td>
+          <td><span class="done">react-island</span></td><td><span class="done">React reconciler</span></td><td>createPortal</td>
+          <td class="eff-low">Baseline</td><td class="risk-low">Low</td>
+          <td>Full component islands already work. API surface could still shrink.</td>
+        </tr>
+        <tr>
+          <td>Vue</td>
+          <td><span class="done">Component islands work</span></td>
+          <td><span class="done">vue-island</span> (useIsland + MeshIsland)</td><td><span class="done">vue-island/worker</span> — vueIslandApp via createRenderer</td><td>Teleport</td>
+          <td class="eff-low">Landed (Medium)</td><td class="risk-low">Low-Med</td>
+          <td>Fine-grained updateProps via cloneVNode+render — same-node patching verified. Event-driven re-renders commit on Vue's microtask → doorbell/flush, not the dispatch batch. No v-once static content; event-modifier options dropped.</td>
+        </tr>
+        <tr>
+          <td>Svelte</td>
+          <td><span class="done">Component islands work</span></td>
+          <td><span class="done">svelte-island</span> (island action + createIslandState)</td><td><span class="done">svelte-island/worker</span> — svelteIslandApp via real mount()</td><td>Slots / svelte-portal</td>
+          <td class="eff-low">Landed (Med-High)</td><td class="risk-low">Low-Med</td>
+          <td>Compiled Svelte 5 components mount into the proxy doc; listener wrapper flushSync()s after dispatch so patches ride the task batch. Needed the most compat surface — comment anchors, template.content, delegation this-binding.</td>
+        </tr>
+        <tr>
+          <td>Solid</td>
+          <td><span class="done">Component islands work</span></td>
+          <td><span class="done">solid-island</span> (createIsland + Island)</td><td><span class="done">solid-island/worker</span> — solidIslandApp via universal createRenderer</td><td>Portals</td>
+          <td class="eff-low">Landed (Medium)</td><td class="risk-low">Low-Med</td>
+          <td>Fine-grained signal-driven patches — prop keys are lazy signals, components never re-run. No JSX transform in-repo: components are plain fns using h()/insert() (what babel-preset-solid universal output calls into).</td>
+        </tr>
+        <tr>
+          <td>Angular</td>
+          <td><span class="done">Component islands work</span> (scoped)</td>
+          <td><span class="done">angular-island</span> (Component/Directive/Module)</td><td><span class="done">angular-island/worker</span> — angularIslandApp via RendererFactory2</td><td>CDK portals</td>
+          <td class="eff-low">Landed (High)</td><td class="risk-medium">Medium</td>
+          <td>Zoneless createComponent + proxy-backed Renderer2 — the platform-server pattern without the platform. JIT needs <code>@angular/compiler</code>; signal inputs patched via ɵSIGNAL writes. Proven on a small component; deeper DI/projection/lifecycle untested.</td>
+        </tr>
+        <tr>
+          <td>Vanilla / any shell</td>
+          <td><span class="done">Shipped</span></td>
+          <td>mountIsland directly</td><td>Imperative proxy DOM</td><td>Manual callback</td>
+          <td class="eff-low">Low</td><td class="risk-low">Low</td>
+          <td>Works today. The worker builds the tree with proxy DOM; the shell just provides a container and handles emits.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>Performance: the worker/main split</h2>
+    <p>Measured with the driver's <code>onOps</code> replay-timing hook and instrumented client calls (in-process worker — transport cost excluded; real workers add structuredClone+postMessage per batch). Fixture: a 200-row tree, each row = element + class + dataset attr + text + button + listener.</p>
+    <table>
+      <thead><tr><th>Scenario</th><th>Worker ms</th><th>Main ms</th><th>Ops</th><th>Main share</th><th>Takeaway</th></tr></thead>
+      <tbody>
+        <tr><td>Imperative mount — 200 rows</td><td>118</td><td>11.6</td><td>2603</td><td class="risk-low">9%</td><td>First mount includes module init; replay is a one-time DOM-construction burst.</td></tr>
+        <tr><td>Imperative updateProps — full rebuild</td><td>4.4</td><td>6.4</td><td>2604</td><td class="risk-high">59%</td><td>The worker rebuild is cheap so replay dominates — the strongest argument for renderer-backed fine-grained updates over rebuild semantics.</td></tr>
+        <tr><td>Imperative click dispatch</td><td>1.4</td><td>0.1</td><td>2</td><td class="risk-low">6%</td><td>Steady-state interactions are nearly free main-side.</td></tr>
+        <tr><td>React mount — 200 rows</td><td>13.6</td><td>5.4</td><td>2003</td><td class="risk-low">28%</td><td>Warm mount: reconciliation + serialization ≈ 2.5× the replay cost.</td></tr>
+        <tr><td>React updateProps — diffed patch</td><td>13.4</td><td>0.7</td><td>801</td><td class="risk-low">5%</td><td>Diffing cost stays in the worker; 200 changed cells cost the main thread under a millisecond.</td></tr>
+        <tr><td>React click → setState commit</td><td>1.4</td><td>~0</td><td>2</td><td class="risk-low">3%</td><td>Dispatch round-trip adds ~1–4ms latency per interaction vs a main-thread handler.</td></tr>
+      </tbody>
+    </table>
+    <div class="caption">Overall measured JS split: <strong>~86% worker / ~14% main</strong>. Main-thread JS scales with op COUNT, not tree size — a 5000-vnode diff that produces 12 mutations costs the main thread ~nothing while the worker does the whole diff. The browser's layout/style/paint cost is unchanged and inherent to any UI; what the architecture removes from the main thread is the framework compute (reconciliation, reactivity bookkeeping, app logic) plus it makes forced synchronous layout reads impossible by construction. Costs that remain: one postMessage round-trip per event (~1–4ms), no preventDefault (the real event dispatched already), duplicated node bookkeeping in memory (proxy nodes + real DOM), and structuredClone of each op batch (scales with batch size, not tree size).</div>
+
+    <h2>Dev-experience friction points</h2>
+    <ol>
+      <li><strong>Two entry points still confuse:</strong> <code>defineIslandWorker</code> (registry) vs <code>defineRealmWorker</code> (1:1) is powerful but forces an early architectural decision — and now each framework adds its own <code>define*IslandWorker</code> sugar on top. Consider making the registry the default and deriving 1:1 helpers automatically.</li>
+      <li><strong>React shell API is still wide:</strong> <code>Island</code>, <code>islandComponent</code>, <code>lazyIsland</code>, <code>IslandShellProps</code>, <code>containerProps</code>. Each new framework binding replicates a similar surface unless abstracted further.</li>
+      <li><strong>Slot semantics differ:</strong> React portals, Vue teleport, Svelte slots, Solid portals, Angular CDK portals. The worker only knows <code>data-mesh-slot</code>; the shell binding must bridge to the host framework.</li>
+      <li><strong>Ambient realm resolution is heuristic:</strong> out-of-task renders (Vue's microtask flush, Svelte <code>$effect</code>s, timers) resolve their document via last-touched/last-active realm. Correct for the one-realm-per-worker norm and inside tasks, ambiguous if multiple realms' async work interleaves in one module.</li>
+      <li><strong>Geometry is a constant caveat:</strong> <code>ResponsiveContainer</code>-style measurement does not work in the worker. Every framework binding must document passing measured dims as props.</li>
+    </ol>
+
+    <h2>Refinement round 1 — landed</h2>
+    <ol>
+      <li><strong class="done">Proxy-DOM primitives promoted.</strong> <code>ProxyComment</code>/<code>createComment</code>, comment-preserving <code>innerHTML</code>, kind-aware <code>cloneNode</code>, <code>before</code>/<code>after</code>/<code>replaceWith</code>/<code>append</code>/<code>prepend</code>/<code>replaceChildren</code>, <code>nodeName</code>, <code>namespaceURI</code>/<code>*AttributeNS</code>, <code>template.content</code>, <code>importNode</code>/<code>baseURI</code>, global <code>Node</code>/<code>Text</code>/<code>Comment</code>/<code>HTMLMediaElement</code>/<code>customElements</code> shims, and this-bound handlers with synthesized <code>composedPath()</code> all live upstream now — svelte-island/worker shrank 634→340 lines.</li>
+      <li><strong class="done">Protocol gaps closed.</strong> <code>mergeStyle</code> routes <code>--*</code> and kebab keys to <code>setProperty</code>, <code>!important</code> crosses as a value suffix; <code>listen</code>/<code>unlisten</code> carry <code>{once,passive,capture}</code> with worker-side once auto-detach; the <code>attr</code> op clears reflected boolean properties on removal.</li>
+      <li><strong class="done">vitest solid-js alias fixed</strong> (exact-match + <code>server.deps.inline</code>) — vendored universal.js deleted for the real import; JSX authoring path documented in the solid-island README.</li>
+      <li><strong class="done">Angular deepened</strong> — 14 tests across projection, DI, lifecycle, control flow, pipes, host bindings, <code>model()</code>, <code>@defer (immediate)</code>, and a hand-written static <code>ɵcmp</code> proving the no-compiler AOT path. Core fix: factory wrapping registers JIT-invisible signal inputs so nested components get real bindings, transforms, and ngOnChanges.</li>
+      <li><strong class="done">Ambient realm + listener options</strong> — <code>getLastActiveRealm</code> exported; Vue prefers it. Once/passive/capture land on real listeners; Vue modifiers and Angular's ListenerOptions both flow through.</li>
+      <li><strong class="done">Perf instrumentation</strong> — <code>mountIsland({onOps})</code> reports per-batch replay ms; <code>packages/worker-dom/test/islandPerf.test.ts</code> measures the split (~86% worker / ~14% main JS) and stays in the suite as a regression backstop for op counts.</li>
+    </ol>
+
+    <h2>Next steps of refinement</h2>
+    <ol>
+      <li><strong><code>template.content</code> direct appends emit no ops</strong> — the fragment view shares the element's shadow children under a phantom id, so <code>content.appendChild</code> never reaches the wire. The documented innerHTML→cloneNode flow is unaffected; fix only if a library appends to <code>.content</code> directly (would need driver-side routing of template-children into <code>.content</code>).</li>
+      <li><strong>Angular remaining surface</strong> — <code>input({alias})</code> is undiscoverable under JIT (bind by field name); <code>@defer</code> non-immediate triggers, plain <code>effect()</code> assertions, forms/ngModel, animations (no driver), content queries unexplored. Sanitizer is passthrough — worker output is unsanitized.</li>
+      <li><strong>Ambient-realm determinism</strong> — out-of-task renders resolve via last-active/last-touched realm; fine for one-realm-per-worker, ambiguous under interleaved async flushes across shared-client realms. Options: require <code>runInRealm</code> around worker-initiated work (documented), or a proper async-context channel.</li>
+      <li><strong>Solid phantom-node caveat</strong> — <code>el.textContent=</code> creates shadow-only children; mixing raw textContent writes with <code>insert()</code>-managed children can drift the two trees. Compiled JSX only uses <code>insert()</code>; document the authoring convention.</li>
+      <li><strong>Vue remaining surface</strong> — <code>v-once</code>/static content (<code>insertStaticContent</code> host op unimplemented), <code>onUpdate:*</code> model listeners skipped, Teleport-into-island slots untested.</li>
+      <li><strong>Event latency / capability limits are structural</strong> — every interaction is one postMessage round-trip (~1–4ms); <code>preventDefault</code> can never work (event already dispatched). High-frequency input (mousemove/wheel/scroll-driven work) is the workload to avoid putting behind islands; document guidance.</li>
+      <li><strong>Dogfood + docs</strong> — add a non-React component island to the examples app; document <code>RenderedIslandApp</code> as the public extension point; keep <code>mountIsland</code> canonical. Geometry caveat (measured dims as props) applies to every renderer equally.</li>
+    </ol>
+  </div>
+</body>
+</html>

@@ -23,7 +23,14 @@ import {
   type ProxyDocument,
 } from './document';
 import { ProxyElement } from './element';
-import type { ProxyEventHandler } from './node';
+import {
+  ProxyNode,
+  ProxyText,
+  ProxyComment,
+  listenerOptsForWire,
+  normalizeListenerOptions,
+  type ProxyEventHandler,
+} from './node';
 
 /* ── The global shim ───────────────────────────────────────────────────── */
 
@@ -53,8 +60,16 @@ export interface WindowShim {
   getComputedStyle(el: unknown): Record<string, never>;
   /** Media queries can't be answered worker-side — always `matches: false`. */
   matchMedia(query: string): MediaQueryList;
-  addEventListener(type: string, fn: ProxyEventHandler): void;
-  removeEventListener(type: string, fn: ProxyEventHandler): void;
+  addEventListener(
+    type: string,
+    fn: ProxyEventHandler,
+    options?: boolean | AddEventListenerOptions,
+  ): void;
+  removeEventListener(
+    type: string,
+    fn: ProxyEventHandler,
+    options?: boolean | EventListenerOptions,
+  ): void;
   /** Scrolling is main-thread business — no-ops so window.scrollTo(x,y)
    *  calls in libraries don't throw. */
   scrollTo(x?: number | ScrollToOptions, y?: number): void;
@@ -85,40 +100,66 @@ export interface WindowFacadeBundle {
 const buildWindowFacade = (internal: InternalDocument): WindowFacadeBundle => {
   const g = globalThis as Record<string, unknown>;
 
-  /** type → fn → handler id. Window listeners get their own table (a lib
-   *  removing a document listener must not detach its window twin), but
-   *  land on the same id-0 container as document listeners. */
-  const windowListeners = new Map<string, Map<ProxyEventHandler, number>>();
+  /** type → registered listener entries. Window listeners get their own
+   *  table (a lib removing a document listener must not detach its window
+   *  twin), but land on the same id-0 container as document listeners. */
+  const windowListeners = new Map<
+    string,
+    Array<{ fn: ProxyEventHandler; hid: number; capture: boolean }>
+  >();
 
   const pushDocOp = (op: Op): void => {
     pushOp(internal.realm, op);
     if (getActiveRealm() !== internal.realm) bumpOpsVersion();
   };
 
-  const windowAddEventListener = (type: string, fn: ProxyEventHandler): void => {
+  const windowRemoveEventListener = (
+    type: string,
+    fn: ProxyEventHandler,
+    options?: boolean | EventListenerOptions,
+  ): void => {
     internal._assertAlive();
-    let table = windowListeners.get(type);
-    if (table === undefined) windowListeners.set(type, (table = new Map()));
-    if (table.has(fn)) return; // real DOM dedupes identical pairs
-    const hid = registerHandler(
-      (p) => fn(internal._enrichEvent(p as EventPayload)),
-      internal.realm,
-      0, // window-level listener → currentTarget is the island root
-    );
-    table.set(fn, hid);
-    internal._handlerIds.add(hid);
-    pushDocOp({ t: 'listen', id: 0, type, handler: hid });
+    const capture = normalizeListenerOptions(options).capture;
+    const table = windowListeners.get(type);
+    const index = table?.findIndex((l) => l.fn === fn && l.capture === capture) ?? -1;
+    if (index === -1 || table === undefined) return;
+    const [entry] = table.splice(index, 1);
+    unregisterHandler(entry.hid);
+    internal._handlerIds.delete(entry.hid);
+    pushDocOp({
+      t: 'unlisten',
+      id: 0,
+      type,
+      handler: entry.hid,
+      opts: entry.capture ? { capture: true } : undefined,
+    });
   };
 
-  const windowRemoveEventListener = (type: string, fn: ProxyEventHandler): void => {
+  const windowAddEventListener = (
+    type: string,
+    fn: ProxyEventHandler,
+    options?: boolean | AddEventListenerOptions,
+  ): void => {
     internal._assertAlive();
-    const table = windowListeners.get(type);
-    const hid = table?.get(fn);
-    if (hid === undefined) return;
-    table!.delete(fn);
-    unregisterHandler(hid);
-    internal._handlerIds.delete(hid);
-    pushDocOp({ t: 'unlisten', id: 0, type, handler: hid });
+    const opts = normalizeListenerOptions(options);
+    let table = windowListeners.get(type);
+    if (table === undefined) windowListeners.set(type, (table = []));
+    // real DOM dedupes identical (type, listener, capture) triples
+    if (table.some((l) => l.fn === fn && l.capture === opts.capture)) return;
+    const hid = registerHandler(
+      (p) => {
+        try {
+          fn.call(facade, internal._enrichEvent(p as EventPayload, facade));
+        } finally {
+          if (opts.once) windowRemoveEventListener(type, fn, { capture: opts.capture });
+        }
+      },
+      internal.realm,
+      0, // window-level listener → target id 0 is the island root
+    );
+    table.push({ fn, hid, capture: opts.capture });
+    internal._handlerIds.add(hid);
+    pushDocOp({ t: 'listen', id: 0, type, handler: hid, opts: listenerOptsForWire(options) });
   };
 
   const raf = g.requestAnimationFrame as ((cb: (time: number) => void) => number) | undefined;
@@ -247,12 +288,14 @@ const buildWindowFacade = (internal: InternalDocument): WindowFacadeBundle => {
     for (const id of intervals) globalClearInterval(id);
     intervals.clear();
     for (const [type, table] of windowListeners) {
-      for (const hid of table.values()) {
-        unregisterHandler(hid);
-        internal._handlerIds.delete(hid);
-        if (!internal._disposed) pushOp(internal.realm, { t: 'unlisten', id: 0, type, handler: hid });
+      for (const entry of table) {
+        unregisterHandler(entry.hid);
+        internal._handlerIds.delete(entry.hid);
+        if (!internal._disposed) {
+          pushOp(internal.realm, { t: 'unlisten', id: 0, type, handler: entry.hid });
+        }
       }
-      table.clear();
+      table.length = 0;
     }
   };
 
@@ -284,6 +327,23 @@ let realmDispatcherInstalled = false;
  * the pre-install global otherwise (a real document in happy-dom tests —
  * transparent to shell-side code, which never runs inside a realm task).
  */
+/**
+ * Stand-ins for bare-global feature probes framework code runs inside a
+ * realm — a real worker has no `HTMLMediaElement` constructor or
+ * `customElements` registry, so `x instanceof HTMLMediaElement` /
+ * `customElements.get(...)` would ReferenceError. The class never matches
+ * an instanceof; the registry reports nothing defined. A host-provided
+ * global (happy-dom) wins over the stub whenever one exists.
+ */
+const HTML_MEDIA_STUB = class HTMLMediaElement {};
+const CUSTOM_ELEMENTS_STUB = {
+  get: () => undefined,
+  define: () => {},
+  upgrade: () => {},
+  // Honest answer for "will this element ever upgrade" — it won't.
+  whenDefined: () => new Promise<never>(() => {}),
+};
+
 export function installRealmDispatcher(): void {
   if (realmDispatcherInstalled) return;
   realmDispatcherInstalled = true;
@@ -291,6 +351,11 @@ export function installRealmDispatcher(): void {
   const prevDocument = g.document;
   const prevWindow = g.window;
   const prevElement = g.Element;
+  const prevNode = g.Node;
+  const prevText = g.Text;
+  const prevComment = g.Comment;
+  const prevMedia = g.HTMLMediaElement;
+  const prevCustomElements = g.customElements;
   // Explicit assignments override the fallback (never the in-realm doc) —
   // keeps pre-dispatcher semantics for out-of-realm code, and lets test
   // harnesses/suites restore globals by plain assignment.
@@ -335,6 +400,44 @@ export function installRealmDispatcher(): void {
       elOverride = v;
     },
   });
+
+  /**
+   * Class globals — same resolution shape as `Element` above (in-realm →
+   *   proxy class/stub; else explicit override; else ambient → proxy/stub;
+   *   else the captured pre-dispatcher value). Frameworks cache prototype
+   *   getters (`Node.prototype.firstChild`) and do `x instanceof Comment`
+   *   before touching the document, so these must BE the proxy classes —
+   *   not dispatchers that return different objects per realm.
+   */
+  const installClassGlobal = (name: string, realmValue: unknown, prev: unknown): void => {
+    let override: unknown;
+    Object.defineProperty(g, name, {
+      configurable: true,
+      enumerable: true,
+      get: () => {
+        if (activeRealmDoc() !== undefined) return realmValue;
+        if (override !== undefined) return override;
+        return ambientDoc() !== undefined ? realmValue : prev;
+      },
+      set: (v) => {
+        override = v;
+      },
+    });
+  };
+
+  installClassGlobal('Node', ProxyNode, prevNode);
+  installClassGlobal('Text', ProxyText, prevText);
+  installClassGlobal('Comment', ProxyComment, prevComment);
+  installClassGlobal(
+    'HTMLMediaElement',
+    typeof prevMedia === 'function' ? prevMedia : HTML_MEDIA_STUB,
+    prevMedia,
+  );
+  installClassGlobal(
+    'customElements',
+    prevCustomElements !== undefined ? prevCustomElements : CUSTOM_ELEMENTS_STUB,
+    prevCustomElements,
+  );
 }
 
 /**
@@ -353,6 +456,12 @@ export function installRealmDispatcher(): void {
  * from the pushed container size, empty getComputedStyle, never-matching
  * matchMedia, addEventListener wired to `listen` ops on id 0) and exposing
  * it as `document.defaultView`.
+ *
+ * It also pins the CLASS globals (`Node`/`Text`/`Comment` → the proxy
+ * classes; `HTMLMediaElement`/`customElements` → never-match stubs) for
+ * framework feature probes — the realm dispatcher resolves them
+ * ambiently anyway, so the assignment makes this document's install
+ * explicit and restores the previous values on uninstall.
  *
  * What does NOT get touched — deliberately:
  *  - `globalThis.addEventListener`/`removeEventListener` and `self` — the
@@ -378,6 +487,11 @@ export function installDomShim(doc: ProxyDocument): () => void {
   const prevDocument = g.document;
   const prevWindow = g.window;
   const prevElement = g.Element;
+  const prevNode = g.Node;
+  const prevText = g.Text;
+  const prevComment = g.Comment;
+  const prevMedia = g.HTMLMediaElement;
+  const prevCustomElements = g.customElements;
 
   // The installed document becomes the ambient one for out-of-realm
   // readers: the explicit assignment wins the dispatcher's resolution,
@@ -387,6 +501,11 @@ export function installDomShim(doc: ProxyDocument): () => void {
   g.document = doc;
   g.window = bundle.facade;
   g.Element = ProxyElement;
+  g.Node = ProxyNode;
+  g.Text = ProxyText;
+  g.Comment = ProxyComment;
+  if (typeof g.HTMLMediaElement !== 'function') g.HTMLMediaElement = HTML_MEDIA_STUB;
+  if (g.customElements === undefined) g.customElements = CUSTOM_ELEMENTS_STUB;
 
   const uninstall = (): void => {
     bundle.teardown();
@@ -394,6 +513,11 @@ export function installDomShim(doc: ProxyDocument): () => void {
     g.document = prevDocument;
     g.window = prevWindow;
     g.Element = prevElement;
+    g.Node = prevNode;
+    g.Text = prevText;
+    g.Comment = prevComment;
+    g.HTMLMediaElement = prevMedia;
+    g.customElements = prevCustomElements;
     markRealmActive(prevRealm);
     if (activeShimUninstall === uninstall) activeShimUninstall = null;
   };

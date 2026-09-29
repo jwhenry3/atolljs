@@ -39,6 +39,12 @@
  * directly (updateProps = clear + rebuild, dispatch = runInRealm + drain,
  * flush = drain only). See worker/proxyDom.ts.
  *
+ * RENDERED REALMS: `{ mount: (ctx) => handle | void }` is the same shape
+ * for non-React framework renderers — mount(ctx) renders into the realm's
+ * proxy document and returns a handle whose `update(props)` takes over
+ * updateProps (fine-grained patching instead of rebuild) and whose
+ * `dispose()` runs before the document dies.
+ *
  * Ops still ride back through the pool's ordinary postMessage channel — the
  * sharedMemory contract here is only the doorbell (see memory.ts): a commit
  * counter the main thread observe()s to trigger flush() as a push. Drop it
@@ -93,8 +99,44 @@ export interface ImperativeIslandApp {
    */
   dispose?: (doc: ProxyDocument) => void;
 }
+
+/**
+ * What a non-React framework renderer receives at mount: the realm's wire
+ * key (scopes emit() and instance-less ops), a fresh proxy document whose
+ * mutations emit ops, and the serialized props the shell mounted with.
+ */
+export interface RenderContext {
+  realm: string;
+  doc: ProxyDocument;
+  props: Record<string, unknown>;
+}
+export interface RenderedHandle {
+  /**
+   * Fine-grained prop update — the renderer patches its live tree. When
+   * omitted, updateProps falls back to imperative semantics: dispose +
+   * clear + re-mount on a fresh document.
+   */
+  update?(props: Record<string, unknown>): void;
+  /**
+   * App teardown — runs inside the realm's scope BEFORE its proxy document
+   * is disposed (unmount, remount, updateProps rebuild). Same rules as
+   * ImperativeIslandApp.dispose: cancel framework roots/effects here.
+   */
+  dispose?(): void;
+}
+/**
+ * A renderer-backed app: a non-React framework renderer (Vue, Svelte,
+ * Solid, Angular) whose `mount` renders component output into the realm's
+ * proxy document — every proxy mutation already serializes to ops. Package
+ * adapters (e.g. @jwhenry123/mesh-vue-island/worker) wrap a component into
+ * this shape so it can sit beside React and imperative apps in the same
+ * `apps` registry.
+ */
+export interface RenderedIslandApp {
+  mount(ctx: RenderContext): RenderedHandle | void;
+}
 /** The apps an island can mount — keyed by the name the shell passes to mount(). */
-export type IslandApp = ReactIslandApp | ImperativeIslandApp;
+export type IslandApp = ReactIslandApp | ImperativeIslandApp | RenderedIslandApp;
 
 export interface DefineIslandWorkerRegistry {
   /** Name → app registry. The shell's `mountIsland({ app: name })` picks one. */
@@ -116,6 +158,9 @@ export type DefineIslandWorkerOptions = DefineIslandWorkerRegistry;
 const isImperative = (app: IslandApp | undefined): app is ImperativeIslandApp =>
   typeof app === 'object' && app !== null && 'imperative' in app;
 
+const isRendered = (app: IslandApp | undefined): app is RenderedIslandApp =>
+  typeof app === 'object' && app !== null && 'mount' in app;
+
 interface RealmBase {
   /** The wire key — 'app' or 'app@instance'; op queues route by this. */
   key: string;
@@ -129,11 +174,13 @@ interface RealmBase {
 
 interface ReactRealm extends RealmBase {
   imperative?: undefined;
+  rendered?: undefined;
   reconciler: ReturnType<typeof Reconciler>;
   container: unknown;
 }
 
 interface ImperativeRealm extends RealmBase {
+  rendered?: undefined;
   imperative: {
     build: ImperativeIslandApp['imperative'];
     /** Optional app teardown — run before the realm's doc is disposed. */
@@ -144,10 +191,23 @@ interface ImperativeRealm extends RealmBase {
   };
 }
 
+interface RenderedRealm extends RealmBase {
+  imperative?: undefined;
+  rendered: {
+    app: RenderedIslandApp;
+    /** The mount-returned handle — drives fine-grained updates/teardown. */
+    handle: RenderedHandle | void;
+    /** The realm's proxy document — replaced on each rebuild. */
+    doc: ProxyDocument;
+    props: Record<string, unknown>;
+  };
+}
+
 /** A mounted realm — one per island worker in production. */
-export type Realm = ReactRealm | ImperativeRealm;
+export type Realm = ReactRealm | ImperativeRealm | RenderedRealm;
 
 const isImperativeRealm = (r: Realm): r is ImperativeRealm => r.imperative !== undefined;
+const isRenderedRealm = (r: Realm): r is RenderedRealm => r.rendered !== undefined;
 
 /** realm key → mounted realm. Production workers hold one entry per island
  *  mounted into them — more than one only when islands share a client. */
@@ -210,6 +270,14 @@ function createIslandRuntime(
   // their "host environment" is the proxy DOM, and build() emits ops itself.
   function createRealm(key: string, pid: string): Realm {
     const app = resolveApp(appNameOf(key));
+    if (isRendered(app)) {
+      return {
+        key,
+        app: appNameOf(key),
+        pid,
+        rendered: { app, handle: undefined, doc: createProxyDocument(key), props: {} },
+      };
+    }
     if (isImperative(app)) {
       return {
         key,
@@ -285,6 +353,24 @@ function createIslandRuntime(
     });
   }
 
+  /**
+   * Rebuild a rendered realm — dispose the framework's mount handle, drop
+   * the proxy document, `clear`, then re-mount on a fresh document. Used
+   * for remounts and for updateProps when the handle exposes no `update`.
+   */
+  function rebuildRendered(realm: RenderedRealm, props: Record<string, unknown>): Op[] {
+    return runInRealm(realm.key, () => {
+      const r = realm.rendered;
+      r.handle?.dispose?.();
+      r.doc.dispose();
+      pushOp(realm.key, { t: 'clear' });
+      r.doc = createProxyDocument(realm.key);
+      r.props = props;
+      r.handle = r.app.mount({ realm: realm.key, doc: r.doc, props });
+      return takeOps(realm.key);
+    });
+  }
+
   return defineWorker({
     sharedMemory,
     methods: {
@@ -307,10 +393,13 @@ function createIslandRuntime(
         }
 
         let mounted = realms.get(realm);
-        // Imperative remount — same clear+rebuild semantics as updateProps;
-        // the realm (and pid) survives.
+        // Imperative/rendered remount — same clear+rebuild semantics as
+        // updateProps; the realm (and pid) survives.
         if (mounted !== undefined && isImperativeRealm(mounted)) {
           return rebuildImperative(mounted, props);
+        }
+        if (mounted !== undefined && isRenderedRealm(mounted)) {
+          return rebuildRendered(mounted, props);
         }
 
         let ops: Op[] = [];
@@ -335,6 +424,19 @@ function createIslandRuntime(
           return ops.concat(
             runInRealm(realm, () => {
               imp.build(imp.doc, props);
+              return takeOps(realm);
+            }),
+          );
+        }
+
+        if (isRenderedRealm(mounted)) {
+          // First mount of a rendered realm — mount() in the realm's scope;
+          // the framework's proxy-DOM mutations emit the initial op batch.
+          const r = mounted.rendered;
+          r.props = props;
+          return ops.concat(
+            runInRealm(realm, () => {
+              r.handle = r.app.mount({ realm, doc: r.doc, props });
               return takeOps(realm);
             }),
           );
@@ -367,6 +469,17 @@ function createIslandRuntime(
         // root and re-run build(props) on a fresh proxy document. Documented
         // as the honest semantics; fine for widgets, not for huge trees.
         if (isImperativeRealm(mounted)) return rebuildImperative(mounted, props);
+        // Rendered realms prefer their own fine-grained update; absent a
+        // handle.update they fall back to the same rebuild.
+        if (isRenderedRealm(mounted)) {
+          const r = mounted.rendered;
+          if (r.handle?.update === undefined) return rebuildRendered(mounted, props);
+          return runInRealm(realm, () => {
+            r.handle!.update!(props);
+            r.props = props;
+            return takeOps(realm);
+          });
+        }
         const App = resolveApp(mounted.app) as (props: Record<string, unknown>) => ReactElement;
         return syncCommit(mounted, () => {
           mounted.reconciler.updateContainer(createElement(App, props), mounted.container, null, null);
@@ -406,7 +519,7 @@ function createIslandRuntime(
                     : undefined);
           }
         }
-        if (isImperativeRealm(realm)) {
+        if (isImperativeRealm(realm) || isRenderedRealm(realm)) {
           // No reconciler to flush — the handler's proxy-DOM mutations emit
           // ops directly; runInRealm gives emit() and instance-less ops a
           // queue to route to.
@@ -431,9 +544,15 @@ function createIslandRuntime(
       setSize(realm: string, width: number, height: number): Op[] {
         setRealmSize(realm, width, height);
         const mounted = realms.get(realm);
-        if (mounted !== undefined && isImperativeRealm(mounted)) {
+        if (
+          mounted !== undefined &&
+          (isImperativeRealm(mounted) || isRenderedRealm(mounted))
+        ) {
           return runInRealm(mounted.key, () => {
-            (mounted.imperative.doc as InternalDocument)._notifySize(width, height);
+            const doc = isImperativeRealm(mounted)
+              ? mounted.imperative.doc
+              : mounted.rendered.doc;
+            (doc as InternalDocument)._notifySize(width, height);
             return takeOps(realm);
           });
         }
@@ -462,6 +581,14 @@ function createIslandRuntime(
           });
           return [{ t: 'clear' }];
         }
+        if (isRenderedRealm(mounted)) {
+          runInRealm(realm, () => {
+            const r = mounted.rendered;
+            r.handle?.dispose?.();
+            r.doc.dispose();
+          });
+          return [{ t: 'clear' }];
+        }
         return syncCommit(mounted, () => {
           mounted.reconciler.updateContainer(null, mounted.container, null, null);
         });
@@ -475,9 +602,10 @@ function createIslandRuntime(
       flush(realm: string): Op[] {
         const mounted = realms.get(realm);
         if (mounted === undefined) return [];
-        // Imperative realms have no passive effects — ops committed outside a
-        // task (timers, continuations mutating the proxy DOM) just drain.
-        if (isImperativeRealm(mounted)) return takeOps(realm);
+        // Imperative and rendered realms have no passive effects — ops
+        // committed outside a task (timers, continuations mutating the proxy
+        // DOM) just drain.
+        if (isImperativeRealm(mounted) || isRenderedRealm(mounted)) return takeOps(realm);
         const prev = setActiveRealm(realm);
         try {
           mounted.reconciler.flushPassiveEffects();

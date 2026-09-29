@@ -4,7 +4,8 @@
   "description": "Svelte shell bindings for mesh-worker-dom islands — use:island action, createIslandState",
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./worker": "./src/worker.ts"
   },
   "files": [
     "src"

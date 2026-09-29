@@ -14,7 +14,7 @@ import type { ElementInstance, HostInstance, TextInstance } from '../realm';
 import type { EventPayload, Op } from '../../ops';
 import { parseDocument, ElementType } from 'htmlparser2';
 
-import { ProxyNode, ProxyText, hyphenate } from './node';
+import { ProxyNode, ProxyText, ProxyComment, hyphenate } from './node';
 import { ProxyElement } from './element';
 import type { InternalDocument } from './document';
 
@@ -49,13 +49,21 @@ export function parseChildren(doc: InternalDocument, html: string): ProxyNode[] 
           if (node.data !== '') out.push(doc.createTextNode(node.data));
           break;
         }
+        case ElementType.Comment: {
+          // Comments materialize as ProxyComment — framework anchors baked
+          // into template HTML (Svelte's `<!>`/`<!--x-->` block boundaries,
+          // Vue's v-if anchors) survive the parse. Directives and doctype
+          // stay skipped.
+          out.push(doc.createComment(node.data));
+          break;
+        }
         case ElementType.CDATA: {
           // CDATA carries its text as children — flatten like the DOM does.
           for (const child of build(node.children)) out.push(child);
           break;
         }
         default:
-          break; // comments/directives/doctype: skipped.
+          break; // directives/doctype: skipped.
       }
     }
     return out;
@@ -75,9 +83,12 @@ const escapeAttr = (s: string): string =>
   s.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
 
 /** Serialize a shadow node — elements with attrs (+ inline style from the
- *  style proxy), text escaped. Reads the shadow tree only; nothing the
- *  proxy didn't write appears here. */
+ *  style proxy), text escaped, comments round-tripping as `<!--data-->`.
+ *  Reads the shadow tree only; nothing the proxy didn't write appears here. */
 export function serializeNode(node: ProxyNode): string {
+  // ProxyComment extends ProxyText — check it FIRST so comment data doesn't
+  // serialize as literal text.
+  if (node instanceof ProxyComment) return `<!--${node.data}-->`;
   if (node instanceof ProxyText) return escapeText(node.textContent);
   if (!(node instanceof ProxyElement)) return '';
   const tag = node.instance.type;

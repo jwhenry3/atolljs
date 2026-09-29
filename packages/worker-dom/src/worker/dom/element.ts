@@ -15,11 +15,9 @@ import type { EventPayload, Op } from '../../ops';
 
 import {
   ProxyNode,
-  ProxyText,
   ProxyFragment,
-  allocPhantomId,
-  rejectForeignChild,
-  detachFromParent,
+  listenerOptsForWire,
+  normalizeListenerOptions,
   type ProxyEventHandler,
 } from './node';
 import { parseChildren, serializeNode } from './html';
@@ -32,18 +30,32 @@ import type { InternalDocument } from './document';
 /** Positions `insertAdjacentHTML`/`insertAdjacentElement` accept. */
 export type AdjacentPosition = 'beforebegin' | 'afterbegin' | 'beforeend' | 'afterend';
 
+/** `<template>` element → its cached `.content` fragment view (shares the
+ *  element's shadow child array). */
+const templateContents = new WeakMap<ProxyElement, ProxyFragment>();
+
 export class ProxyElement extends ProxyNode {
   declare readonly instance: ElementInstance;
   readonly _attrs = new Map<string, string>();
   _classes = new Set<string>();
   readonly _styleProps: Record<string, string> = {};
-  private readonly _listeners: Array<{ type: string; fn: ProxyEventHandler; hid: number }> = [];
+  private readonly _listeners: Array<{
+    type: string;
+    fn: ProxyEventHandler;
+    hid: number;
+    capture: boolean;
+  }> = [];
 
   override get nodeType(): number {
     return 1;
   }
   get tagName(): string {
     return this.instance.type.toUpperCase();
+  }
+  /** The element's namespace URI — HTML for ordinary elements, the `create`
+   *  op's `ns` for namespaced (svg/mathml) ones. */
+  get namespaceURI(): string {
+    return this.instance.ns ?? 'http://www.w3.org/1999/xhtml';
   }
   /** Element children only — the shadow tree's HTMLCollection equivalent. */
   get children(): ProxyElement[] {
@@ -78,6 +90,34 @@ export class ProxyElement extends ProxyNode {
     this._attrs.delete(name);
     this._afterAttrChange(name);
     this._op({ t: 'attr', id: this.instance.id, name, value: null });
+  }
+
+  /* Namespaced attribute surface — the wire `attr` op has no namespace
+   *  field, so the qualified name ('xlink:href') is the whole shadow key
+   *  and the driver's setAttribute covers prefixed names. Limitation: two
+   *  same-local-name attributes in different namespaces can't be told
+   *  apart. get/remove follow the DOM convention of receiving the LOCAL
+   *  name — resolve it to the stored qualified key (or accept a qualified
+   *  name directly, since some callers pass both ways). */
+  setAttributeNS(_ns: string | null, qualifiedName: string, value: string): void {
+    this.setAttribute(qualifiedName, value);
+  }
+  getAttributeNS(_ns: string | null, name: string): string | null {
+    const direct = this.getAttribute(name);
+    if (direct !== null) return direct;
+    for (const key of this._attrs.keys()) {
+      if (key.endsWith(`:${name}`)) return this.getAttribute(key);
+    }
+    return null;
+  }
+  removeAttributeNS(_ns: string | null, name: string): void {
+    if (this.getAttribute(name) !== null) {
+      this.removeAttribute(name);
+      return;
+    }
+    for (const key of [...this._attrs.keys()]) {
+      if (key.endsWith(`:${name}`)) this.removeAttribute(key);
+    }
   }
 
   /* classList — a live view over _classes synced to the `class` attr. */
@@ -115,28 +155,66 @@ export class ProxyElement extends ProxyNode {
 
   /* Events — registers a worker handler-table entry and emits listen.
    * The driver's listenerFor dispatches EventPayloads back into the worker;
-   * the payload is enriched with a synthesized `target` proxy node first. */
-  addEventListener(type: string, fn: ProxyEventHandler): void {
+   * the payload is enriched with a synthesized `target`/`composedPath` and
+   * the handler runs with `this` = this element, like the real DOM's
+   * currentTarget. `{once, passive, capture}` ride the op's `opts` field;
+   * `once` additionally auto-detaches worker-side after the first dispatch
+   * (matching the real listener's own auto-removal driver-side). */
+  addEventListener(
+    type: string,
+    fn: ProxyEventHandler,
+    options?: boolean | AddEventListenerOptions,
+  ): void {
     this.doc._assertAlive();
-    // The real DOM dedupes identical (type, listener) pairs — so do we.
-    if (this._listeners.some((l) => l.type === type && l.fn === fn)) return;
+    const opts = normalizeListenerOptions(options);
+    // The real DOM dedupes identical (type, listener, capture) triples.
+    if (
+      this._listeners.some((l) => l.type === type && l.fn === fn && l.capture === opts.capture)
+    ) {
+      return;
+    }
     const hid = registerHandler(
-      (p) => fn(this.doc._enrichEvent(p as EventPayload)),
+      (p) => {
+        try {
+          fn.call(this, this.doc._enrichEvent(p as EventPayload, this));
+        } finally {
+          if (opts.once) this.removeEventListener(type, fn, { capture: opts.capture });
+        }
+      },
       this.instance.realm,
       this.instance.id,
     );
-    this._listeners.push({ type, fn, hid });
+    this._listeners.push({ type, fn, hid, capture: opts.capture });
     this.doc._handlerIds.add(hid);
-    this._op({ t: 'listen', id: this.instance.id, type, handler: hid });
+    this._op({
+      t: 'listen',
+      id: this.instance.id,
+      type,
+      handler: hid,
+      opts: listenerOptsForWire(options),
+    });
   }
-  removeEventListener(type: string, fn: ProxyEventHandler): void {
+  removeEventListener(
+    type: string,
+    fn: ProxyEventHandler,
+    options?: boolean | EventListenerOptions,
+  ): void {
     this.doc._assertAlive();
-    const index = this._listeners.findIndex((l) => l.type === type && l.fn === fn);
+    const capture = normalizeListenerOptions(options).capture;
+    const index = this._listeners.findIndex(
+      (l) => l.type === type && l.fn === fn && l.capture === capture,
+    );
     if (index === -1) return;
     const [entry] = this._listeners.splice(index, 1);
     unregisterHandler(entry.hid);
     this.doc._handlerIds.delete(entry.hid);
-    this._op({ t: 'unlisten', id: this.instance.id, type, handler: entry.hid });
+    this._op({
+      t: 'unlisten',
+      id: this.instance.id,
+      type,
+      handler: entry.hid,
+      opts: entry.capture ? { capture: true } : undefined,
+    });
   }
 
   /** Live-descendant search over the shadow tree. Nodes mounted by the
@@ -315,48 +393,42 @@ export class ProxyElement extends ProxyNode {
   }
 
   /**
+   * `<template>.content` — a fragment VIEW sharing the element's shadow
+   * child array (same backing store), so `tpl.innerHTML = html` then
+   * `tpl.content` hands the parsed children to cloneNode/firstChild like
+   * the DOM. Non-template elements read undefined.
+   */
+  get content(): ProxyFragment | undefined {
+    if (this.instance.type !== 'template') return undefined;
+    let frag = templateContents.get(this);
+    if (frag === undefined) {
+      frag = this.doc.createDocumentFragment();
+      frag._children = this._children;
+      templateContents.set(this, frag);
+    }
+    return frag;
+  }
+
+  /**
    * Clone as new ops — the copy gets its own instance id (it's a real new
-   * element on the main thread, not a shared record). Attributes and the
-   * style-proxy properties are copied; listeners are NOT (matches the DOM).
-   * `deep` clones element children recursively and text children as fresh
-   * text nodes.
+   * element on the main thread, not a shared record). Attributes, the
+   * namespace and the style-proxy properties are copied; listeners are NOT
+   * (matches the DOM). `deep` clones children polymorphically — comment
+   * children keep nodeType 8, texts and nested elements/fragments their
+   * own kind.
    */
   cloneNode(deep?: boolean): ProxyElement {
     this.doc._assertAlive();
-    const copy = this.doc.createElement(this.instance.type);
+    const copy =
+      this.instance.ns === undefined
+        ? this.doc.createElement(this.instance.type)
+        : this.doc.createElementNS(this.instance.ns, this.instance.type);
     for (const [name, value] of this._attrs) copy.setAttribute(name, value);
     for (const [k, v] of Object.entries(this._styleProps)) copy._writeStyle(k, v);
     if (deep === true) {
-      for (const child of this._children) {
-        if (child instanceof ProxyElement) copy.appendChild(child.cloneNode(true));
-        else if (child instanceof ProxyText) copy.appendChild(this.doc.createTextNode(child.textContent));
-      }
+      for (const child of this._children) copy.appendChild(child.cloneNode(true));
     }
     return copy;
-  }
-
-  /** append(...nodes) — strings become text nodes, like the DOM. */
-  append(...nodes: Array<ProxyNode | string>): void {
-    this.doc._assertAlive();
-    for (const n of nodes) {
-      this.appendChild(typeof n === 'string' ? this.doc.createTextNode(n) : n);
-    }
-  }
-
-  /** prepend(...nodes) — inserts at the front, in argument order. */
-  prepend(...nodes: Array<ProxyNode | string>): void {
-    this.doc._assertAlive();
-    const ref = this.firstChild;
-    for (const n of nodes) {
-      this.insertBefore(typeof n === 'string' ? this.doc.createTextNode(n) : n, ref);
-    }
-  }
-
-  /** replaceChildren(...nodes) — remove every child, then append the set. */
-  replaceChildren(...nodes: Array<ProxyNode | string>): void {
-    this.doc._assertAlive();
-    for (const child of this._children.slice()) this.removeChild(child);
-    this.append(...nodes);
   }
 
   /* ── Pushed-size geometry. The ONLY measured box is the island container:

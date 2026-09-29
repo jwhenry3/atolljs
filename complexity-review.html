@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mesh islands — complexity review</title>
+  <style>
+    :root {
+      --bg: #0b0d10;
+      --panel: #11131a;
+      --text: #e3e6ec;
+      --muted: #8a919e;
+      --accent: #4c8eff;
+      --warning: #f5a623;
+      --danger: #ff5c5c;
+      --info: #4c8eff;
+      --success: #6ccf7f;
+      --border: #232632;
+      --row-alt: #151924;
+      --font: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 40px 24px;
+      font-family: var(--font);
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.55;
+    }
+    .container {
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+    h1 { font-size: 28px; margin: 0 0 8px; letter-spacing: -0.01em; }
+    h2 { font-size: 20px; margin: 36px 0 16px; color: var(--text); border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+    h3 { font-size: 16px; margin: 24px 0 8px; color: var(--text); }
+    p { color: var(--muted); margin: 0 0 16px; }
+    .callout {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-left: 4px solid var(--warning);
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 24px;
+    }
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 12px;
+      margin-bottom: 32px;
+    }
+    .stat {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+    }
+    .stat-value {
+      font-size: 26px;
+      font-weight: 600;
+      color: var(--text);
+    }
+    .stat-value.warn { color: var(--warning); }
+    .stat-value.danger { color: var(--danger); }
+    .stat-value.success { color: var(--success); }
+    .stat-label {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+    .chart {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 8px;
+    }
+    .chart svg { width: 100%; height: 280px; }
+    .caption {
+      font-size: 12px;
+      color: var(--muted);
+      margin: 4px 0 24px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    th, td {
+      padding: 10px 12px;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+    th {
+      color: var(--muted);
+      font-weight: 500;
+      background: var(--bg);
+      text-transform: uppercase;
+      font-size: 11px;
+      letter-spacing: 0.04em;
+    }
+    tr:nth-child(even) td { background: var(--row-alt); }
+    code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 0.92em;
+      background: rgba(255,255,255,0.06);
+      padding: 2px 5px;
+      border-radius: 4px;
+      color: var(--text);
+    }
+    .done {
+      color: var(--success);
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .pending {
+      color: var(--muted);
+      white-space: nowrap;
+    }
+    .deferred {
+      color: var(--warning);
+      white-space: nowrap;
+    }
+    .effort { font-weight: 600; }
+    .risk-low { color: #6ccf7f; }
+    .risk-medium { color: var(--warning); }
+    .risk-high { color: var(--danger); }
+    .payoff-high { color: #6ccf7f; font-weight: 600; }
+    .payoff-medium { color: var(--info); }
+    .payoff-low { color: var(--muted); }
+    ol.steps { padding-left: 20px; color: var(--muted); }
+    ol.steps li { margin-bottom: 12px; }
+    ol.steps strong { color: var(--text); }
+    .progress { color: var(--muted); font-size: 13px; margin-bottom: 8px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Mesh islands — complexity review</h1>
+    <p>Focused on the worker DOM / react-island surface that produced the recent CI failure. Numbers are source-only LOC from the current tree.</p>
+
+    <div class="callout">
+      All high-payoff simplifications are done. The worker DOM monolith is split,
+      transclusion uses React portals, the realm backend is renderer-agnostic, and
+      the React shell APIs share one internal proxy implementation. Only documentation
+      sharing remains open, and it is blocked on data-model alignment rather than code.
+    </div>
+
+    <div class="stats">
+      <div class="stat">
+        <div class="stat-value">8</div>
+        <div class="stat-label">worker-dom source modules (was 1 monolith)</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value success">8</div>
+        <div class="stat-label">simplifications completed</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value">386</div>
+        <div class="stat-label">tests passing</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value danger">1</div>
+        <div class="stat-label">item pending / deferred</div>
+      </div>
+    </div>
+
+    <h2>File-size heatmap</h2>
+    <div class="chart">
+      <svg viewBox="0 0 960 280" preserveAspectRatio="xMidYMid meet">
+        <defs>
+          <linearGradient id="barGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#4c8eff" stop-opacity="0.9"/>
+            <stop offset="100%" stop-color="#4c8eff" stop-opacity="0.55"/>
+          </linearGradient>
+        </defs>
+        <text x="20" y="24" fill="#8a919e" font-size="12">Lines of source code</text>
+        <!-- bars -->
+        <rect x="70" y="128" width="80" height="132" fill="url(#barGrad)" rx="3"/>
+        <rect x="160" y="196" width="80" height="64" fill="url(#barGrad)" rx="3"/>
+        <rect x="250" y="215" width="80" height="45" fill="url(#barGrad)" rx="3"/>
+        <rect x="340" y="228" width="80" height="32" fill="url(#barGrad)" rx="3"/>
+        <rect x="430" y="241" width="80" height="19" fill="url(#barGrad)" rx="3"/>
+        <rect x="520" y="252" width="80" height="8" fill="url(#barGrad)" rx="3"/>
+        <rect x="610" y="256" width="80" height="4" fill="url(#barGrad)" rx="3"/>
+        <rect x="700" y="258" width="80" height="2" fill="url(#barGrad)" rx="3"/>
+        <rect x="790" y="259" width="80" height="1" fill="url(#barGrad)" rx="3"/>
+
+        <!-- labels -->
+        <text x="110" y="275" fill="#8a919e" font-size="11" text-anchor="end" transform="rotate(-40 110 275)">react-island/index.ts</text>
+        <text x="200" y="275" fill="#8a919e" font-size="11" text-anchor="end" transform="rotate(-40 200 275)">dom/element.ts</text>
+        <text x="290" y="275" fill="#8a919e" font-size="11" text-anchor="end" transform="rotate(-40 290 275)">worker/hostConfig.ts</text>
+        <text x="380" y="275" fill="#8a919e" font-size="11" text-anchor="end" transform="rotate(-40 380 275)">dom/document.ts</text>
+        <text x="470" y="275" fill="#8a919e" font-size="11" text-anchor="end" transform="rotate(-40 470 275)">dom/window.ts</text>
+        <text x="560" y="275" fill="#8a919e" font-size="11" text-anchor="end" transform="rotate(-40 560 275)">worker/realm.ts</text>
+        <text x="650" y="275" fill="#8a919e" font-size="11" text-anchor="end" transform="rotate(-40 650 275)">dom/node.ts</text>
+        <text x="740" y="275" fill="#8a919e" font-size="11" text-anchor="end" transform="rotate(-40 740 275)">dom/css.ts</text>
+        <text x="830" y="275" fill="#8a919e" font-size="11" text-anchor="end" transform="rotate(-40 830 275)">dom/selectors.ts</text>
+
+        <!-- values -->
+        <text x="110" y="120" fill="#e3e6ec" font-size="12" font-weight="600" text-anchor="middle">460</text>
+        <text x="200" y="188" fill="#e3e6ec" font-size="12" font-weight="600" text-anchor="middle">578</text>
+        <text x="290" y="207" fill="#e3e6ec" font-size="12" font-weight="600" text-anchor="middle">441</text>
+        <text x="380" y="220" fill="#e3e6ec" font-size="12" font-weight="600" text-anchor="middle">446</text>
+      </svg>
+    </div>
+    <div class="caption">Source: packages/worker-dom/src/worker/dom/*.ts, packages/worker-dom/src/worker/*.ts, and packages/react-island/src/index.tsx after the realm split.</div>
+
+    <h2>Completed simplifications</h2>
+    <table>
+      <thead>
+        <tr><th>Target</th><th>Result</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Split proxyDom.ts into modules</td>
+          <td><span class="done">Done</span> — initial split into <code>worker/dom/{tree,document,window}.ts</code>.</td>
+        </tr>
+        <tr>
+          <td>Split dom/tree.ts further</td>
+          <td><span class="done">Done</span> — <code>node.ts</code>, <code>element.ts</code>, <code>html.ts</code>, <code>selectors.ts</code>.</td>
+        </tr>
+        <tr>
+          <td>Extract CSS/style/classList helpers</td>
+          <td><span class="done">Done</span> — new <code>worker/dom/css.ts</code> owns classList/style/dataset proxies.</td>
+        </tr>
+        <tr>
+          <td>Unify <code>defineIslandWorker</code> / <code>defineRealmWorker</code></td>
+          <td><span class="done">Done</span> — single entry point accepts registry or single app; realm worker is an alias.</td>
+        </tr>
+        <tr>
+          <td>Normalize event payload builder in <code>island.ts</code></td>
+          <td><span class="done">Done</span> — extracted <code>buildEventPayload</code>, shrinking <code>listenerFor</code>.</td>
+        </tr>
+        <tr>
+          <td>Replace custom slots with React portals</td>
+          <td><span class="done">Done</span> — <code>&lt;Island slots/&gt;</code> takes <code>Record&lt;string, ReactNode&gt;</code> and renders with <code>createPortal</code>.</td>
+        </tr>
+        <tr>
+          <td>Split renderer-agnostic realm state from React host config</td>
+          <td><span class="done">Done</span> — new <code>worker/realm.ts</code>; <code>hostConfig.ts</code> is only the React reconciler adapter.</td>
+        </tr>
+        <tr>
+          <td>Collapse <code>Island</code> / <code>islandComponent</code> / <code>lazyIsland</code> internals</td>
+          <td><span class="done">Done</span> — both factory APIs now share one <code>ProxyIsland</code> component and one lazy-loader cache.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>Remaining item</h2>
+    <div class="progress">8 / 9 completed; 1 deferred</div>
+    <table>
+      <thead>
+        <tr><th>Target</th><th>Why it is complex</th><th>Proposed simplification</th><th>Status</th><th>Risk</th><th>Payoff</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Share docs site boilerplate</td>
+          <td><code>docs/</code> and <code>docs-consumer/</code> duplicate components, but their framework data models diverge and <code>highlight.js</code> is installed per-app, making shared modules awkward. The previous shared-source approach caused module-resolution errors and was reverted.</td>
+          <td>Defer until the docs data models are unified; the duplication is cosmetic, not structural. A shared package would require npm-workspace setup or a separate package install step.</td>
+          <td><span class="deferred">Deferred</span></td>
+          <td class="risk-medium">Medium</td>
+          <td class="payoff-high">High</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>Where to go next</h2>
+    <ol class="steps">
+      <li><strong>Docs sharing</strong> — if you want both sites maintained long-term, unify the framework data models first, then extract a shared UI package with its own <code>package.json</code>.</li>
+      <li><strong>LinkeDOM spike</strong> — now that the proxy DOM is modular, swapping one module for a LinkeDOM-backed adapter is a contained experiment; not a simplification but a potential maintenance win.</li>
+      <li><strong>Push and run CI</strong> — all changes are local on <code>map-island</code>; CI needs the example-directory <code>npm ci</code> fix from earlier to avoid in-process worker import timeouts.</li>
+    </ol>
+  </div>
+</body>
+</html>

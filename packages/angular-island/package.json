@@ -4,7 +4,8 @@
   "description": "Angular shell bindings for mesh-worker-dom islands — <mesh-island> and [meshIsland]",
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./worker": "./src/worker.ts"
   },
   "files": [
     "src"
@@ -16,7 +17,13 @@
     "@jwhenry123/mesh": "0.1.0",
     "@jwhenry123/mesh-worker-dom": "0.1.0",
     "@angular/core": "^22.2.0",
-    "@angular/common": "^22.2.0"
+    "@angular/common": "^22.2.0",
+    "@angular/compiler": "^22.2.0"
+  },
+  "peerDependenciesMeta": {
+    "@angular/compiler": {
+      "optional": true
+    }
   },
   "repository": {
     "type": "git",

@@ -47,7 +47,11 @@ export type Op =
   | { t: 'attr'; id: number; name: string; value: string | null }
   /**
    * Merge inline-style changes — the proxy DOM's `style` proxy re-sends only
-   * the changed keys; `''` clears a key (deleteProperty).
+   * the changed keys; `''` clears a key (deleteProperty). Two conventions:
+   * keys starting `--` are CSS custom properties (driver routes them to
+   * `style.setProperty`), and a value ending in `!important` applies with
+   * priority (the proxy's `style.setProperty(k, v, 'important')` encodes it
+   * this way — there is no separate priority field).
    */
   | { t: 'style'; id: number; props: Record<string, string> }
   /**
@@ -55,11 +59,25 @@ export type Op =
    * a worker handler-table id (same currency as `__evt` refs); the driver
    * wires it to `client.dispatch(handler, payload)`. `id: 0` targets the
    * island's root container — that's where `document`/`window` listeners
-   * land, which makes delegated handlers work.
+   * land, which makes delegated handlers work. `opts` carries the
+   * once/passive/capture flags through to the real addEventListener.
    */
-  | { t: 'listen'; id: number; type: string; handler: number }
-  /** Detach the listener a `listen` op attached (type + handler identify it). */
-  | { t: 'unlisten'; id: number; type: string; handler: number }
+  | {
+      t: 'listen';
+      id: number;
+      type: string;
+      handler: number;
+      opts?: { once?: boolean; passive?: boolean; capture?: boolean };
+    }
+  /** Detach the listener a `listen` op attached (type + handler identify it).
+   *  `opts.capture` must match the listen's flag for the detach to apply. */
+  | {
+      t: 'unlisten';
+      id: number;
+      type: string;
+      handler: number;
+      opts?: { once?: boolean; passive?: boolean; capture?: boolean };
+    }
   /**
    * Island → shell event — worker code calls `emit(name, payload)` inside a
    * handler (or a commit-phase effect); the driver invokes the island's

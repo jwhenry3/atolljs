@@ -98,6 +98,12 @@ export interface MountIslandOptions {
   slots?: Record<string, (el: HTMLElement | null) => void>;
   /** Fired after each applied op batch — the shell uses it for stats. */
   onActivity?: () => void;
+  /**
+   * Perf hook — fired after each op batch is replayed with the batch and the
+   * main-thread replay time in ms (performance.now). Pair with client call
+   * timing to split worker-vs-main cost for a sub-application.
+   */
+  onOps?: (ops: readonly Op[], elapsedMs: number) => void;
 }
 
 export interface IslandHandle {
@@ -208,7 +214,7 @@ let islandSeq = 0;
 const clientMounts = new WeakMap<object, number>();
 
 export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandle> {
-  const { client, el, onEvent, onActivity, slots } = opts;
+  const { client, el, onEvent, onActivity, onOps, slots } = opts;
   const props = opts.props ?? {};
   // 'main' is the unnamed-island name — realm workers (defineRealmWorker)
   // resolve their single app regardless of it.
@@ -413,7 +419,14 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
     if (value === null) {
       if (name === 'className') node.className = '';
       else if (name === 'style') node.removeAttribute('style');
-      else node.removeAttribute(name);
+      else {
+        // Live boolean properties (checked) don't follow attribute
+        // removal — mirror removeProp's property clear first.
+        if (name in node && typeof (node as unknown as Record<string, unknown>)[name] === 'boolean') {
+          (node as unknown as Record<string, unknown>)[name] = false;
+        }
+        node.removeAttribute(name);
+      }
       return;
     }
     if (name === 'class' || name === 'className') {
@@ -443,11 +456,23 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
    * sees these keys as "prev" and still diffs correctly.
    */
   function mergeStyle(node: Element, id: number, changes: Record<string, string>): void {
-    const elStyle = (node as HTMLElement).style as unknown as Record<string, string>;
+    const elStyle = (node as HTMLElement).style;
+    const elStyleMap = elStyle as unknown as Record<string, string>;
     const prev = prevProps.get(id) ?? {};
     const merged = { ...((prev.style ?? {}) as Record<string, string>) };
     for (const [k, v] of Object.entries(changes)) {
-      elStyle[k] = v;
+      if (k.startsWith('--') || k.includes('-')) {
+        // Custom properties and kebab-case keys live outside the camelCase
+        // property surface — el.style['font-size'] is a silent no-op on real
+        // DOM; setProperty accepts kebab-case, and '' clears either kind.
+        elStyle.setProperty(k, v);
+      } else if (v.endsWith('!important')) {
+        // `style.setProperty(k, v, 'important')` crosses as a suffix — the
+        // style op has no separate priority channel.
+        elStyle.setProperty(k, v.replace(/\s*!important$/, ''), 'important');
+      } else {
+        elStyleMap[k] = v;
+      }
       merged[k] = v;
     }
     prev.style = merged;
@@ -536,7 +561,7 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
         if (!table.has(key)) {
           const listener = listenerFor(op.handler);
           table.set(key, listener);
-          node.addEventListener(op.type, listener);
+          node.addEventListener(op.type, listener, op.opts);
         }
         break;
       }
@@ -546,7 +571,7 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
         const key = `${op.type}#${op.handler}`;
         const listener = nodeListeners.get(op.id)?.get(key);
         if (listener) {
-          node.removeEventListener(op.type, listener);
+          node.removeEventListener(op.type, listener, op.opts?.capture);
           nodeListeners.get(op.id)?.delete(key);
         }
         break;
@@ -571,7 +596,9 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
   function applyOps(ops: Op[]): void {
     opsApplied += ops.length;
     onActivity?.();
+    const t0 = onOps !== undefined ? performance.now() : 0;
     for (const op of ops) applyOp(op);
+    onOps?.(ops, performance.now() - t0);
   }
 
   const doFlush = (): void => {

@@ -16,6 +16,9 @@ export type {
   IslandApp,
   ReactIslandApp,
   Realm,
+  RenderContext,
+  RenderedHandle,
+  RenderedIslandApp,
 } from './defineIslandWorker';
 
 export { islandApp, islandAppNameOf } from '../app';
@@ -28,6 +31,7 @@ export {
   emit,
   getActiveRealm,
   getHandler,
+  getLastActiveRealm,
   getRealmSize,
   instances,
   pushOp,
@@ -46,6 +50,7 @@ export {
   createProxyDocument,
   installDomShim,
   installRealmDispatcher,
+  ProxyComment,
   ProxyElement,
   ProxyFragment,
   ProxyNode,
@@ -59,6 +64,7 @@ export type {
   ProxyDocument,
   ProxyEventHandler,
   WindowShim,
+  WireListenerOpts,
 } from './proxyDom';
 
 export { Slot } from './slot';

@@ -1,9 +1,10 @@
 export {
   ProxyNode,
   ProxyText,
+  ProxyComment,
   ProxyFragment,
 } from './dom/node';
-export type { ProxyEventHandler } from './dom/node';
+export type { ProxyEventHandler, WireListenerOpts } from './dom/node';
 export {
   ProxyElement,
 } from './dom/element';

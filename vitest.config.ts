@@ -41,7 +41,11 @@ export default mergeConfig(
         },
         // Tests need the client build — the server build resolved under Node
         // has intentionally non-reactive primitives (effects never run).
-        { find: 'solid-js', replacement: r('node_modules/solid-js/dist/solid.js') },
+        // EXACT match only: deep specifiers (solid-js/universal, solid-js/store,
+        // solid-js/web) must resolve through the package's own exports map —
+        // a bare-string alias is a prefix match and would rewrite them onto
+        // the nonexistent `dist/solid.js/<subpath>`.
+        { find: /^solid-js$/, replacement: r('node_modules/solid-js/dist/solid.js') },
         { find: /^svelte$/, replacement: r('node_modules/svelte/src/index-client.js') },
         // Examples carry their own framework installs; pin every test to the
         // root copy so a component and its binding share one reactive runtime
@@ -61,6 +65,17 @@ export default mergeConfig(
       ],
     },
     test: {
+      server: {
+        deps: {
+          // `solid-js/universal` (and any deep import) must be INLINED so its
+          // internal `import 'solid-js'` flows through the alias above to the
+          // client build — an externalized copy resolves 'solid-js' via Node's
+          // exports map to the non-reactive server build (mounts, never
+          // updates). Inlining all of solid-js also keeps ONE module instance
+          // for every importer, inlined or not.
+          inline: [/solid-js/],
+        },
+      },
       // Browser examples run their seed/scan pipeline in-process — larger
       // buffers and e2e app builds need headroom beyond the 5s default.
       testTimeout: 30_000,

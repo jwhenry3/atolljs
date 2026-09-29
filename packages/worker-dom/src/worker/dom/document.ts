@@ -17,8 +17,12 @@ import type { EventPayload, Op } from '../../ops';
 import {
   ProxyNode,
   ProxyText,
+  ProxyComment,
   ProxyFragment,
   allocPhantomId,
+  rejectForeignChild,
+  listenerOptsForWire,
+  normalizeListenerOptions,
   type ProxyEventHandler,
 } from './node';
 import { ProxyElement } from './element';
@@ -47,19 +51,39 @@ export interface ProxyDocument {
   createElementNS(ns: string, tag: string): ProxyElement;
   createTextNode(text: string): ProxyText;
   /**
+   * A comment node — nodeType 8 backed by a REAL empty text node
+   * driver-side (the wire has no comment op) so it anchors `before:`
+   * positions like a real comment. `data` writes stay shadow-only.
+   */
+  createComment(data?: string): ProxyComment;
+  /**
    * A phantom container for batching — appending the fragment splices its
    * children into the target like the DOM does (each child emits its own
    * append op). Fragments never exist driver-side.
    */
   createDocumentFragment(): ProxyFragment;
+  /** DOM `importNode` semantics — a deep/shallow clone through this
+   *  document (proxy nodes are single-realm, so cloning IS importing). */
+  importNode(node: ProxyNode, deep?: boolean): ProxyNode;
+  /** 'about:blank' — no real document URL exists worker-side. */
+  readonly baseURI: string;
   /**
    * Document-level listeners: emitted as `listen` ops on id 0 — the driver
    * attaches them to the island's real container element, so delegated
    * handlers see every event that bubbles inside the island. This is what
    * library-style `document.addEventListener('click', delegate)` needs.
+   * `options` carries `{once, passive, capture}` onto the wire.
    */
-  addEventListener(type: string, fn: ProxyEventHandler): void;
-  removeEventListener(type: string, fn: ProxyEventHandler): void;
+  addEventListener(
+    type: string,
+    fn: ProxyEventHandler,
+    options?: boolean | AddEventListenerOptions,
+  ): void;
+  removeEventListener(
+    type: string,
+    fn: ProxyEventHandler,
+    options?: boolean | EventListenerOptions,
+  ): void;
   /** id-map lookup over the CONNECTED shadow tree (disconnected nodes with
    *  an id set are remembered but not returned, matching real-DOM scoping). */
   getElementById(id: string): ProxyElement | null;
@@ -126,7 +150,12 @@ export class InternalDocument implements ProxyDocument {
   /** Document-level listeners — separate table from the root element's, so
    *  doc.addEventListener and body.addEventListener don't wrongly dedupe
    *  against each other. Both emit `listen` on id 0. */
-  private readonly _docListeners: Array<{ type: string; fn: ProxyEventHandler; hid: number }> = [];
+  private readonly _docListeners: Array<{
+    type: string;
+    fn: ProxyEventHandler;
+    hid: number;
+    capture: boolean;
+  }> = [];
   private readonly _warned = new Set<string>();
   _disposed = false;
   /** Set by installDomShim — restore globals when this document dies. */
@@ -232,23 +261,45 @@ export class InternalDocument implements ProxyDocument {
    *    instance space and wrapped in THIS document's wrapper map (so
    *    `e.target.closest`/`.dataset`/`.contains` behave like the real DOM
    *    for proxy-created nodes).
+   *  - `currentTarget` = `self` — the node/document/facade the listener was
+   *    attached to (the handler is also invoked with `this` = self). For
+   *    document/window listeners this is the document/facade OBJECT, not
+   *    the id-0 root element dispatch() would otherwise stamp.
+   *  - `composedPath()` = synthesized from the enriched target's parent
+   *    chain, with `self` appended when the chain doesn't already reach it
+   *    (delegated handlers iterate the path until they hit their own
+   *    element — Svelte's handle_event_propagation terminates there).
    *  - `preventDefault`/`stopPropagation`/`stopImmediatePropagation` =
    *    synthesized NO-OPS. They cannot cancel anything — the real event
    *    already dispatched on the main thread before this payload crossed
    *    postMessage — but library code written against real DOM events calls
    *    them unconditionally, so the wrapper supplies them.
    */
-  _enrichEvent(payload: EventPayload): EventPayload {
-    const out: EventPayload = {
+  _enrichEvent(payload: EventPayload, self?: unknown): EventPayload {
+    const out: EventPayload & {
+      currentTarget?: unknown;
+      composedPath?: () => unknown[];
+    } = {
       ...payload,
       preventDefault: () => {},
       stopPropagation: () => {},
       stopImmediatePropagation: () => {},
     };
+    if (self !== undefined) out.currentTarget = self;
     const id = payload.targetId;
     if (typeof id === 'number') {
       const instance = instances.get(id);
       if (instance !== undefined) out.target = this._wrap(instance);
+    }
+    if (out.composedPath === undefined) {
+      const path: unknown[] = [];
+      let n = out.target as ProxyNode | undefined;
+      while (n instanceof ProxyNode) {
+        path.push(n);
+        n = n._parent ?? undefined;
+      }
+      if (self !== undefined && !path.includes(self)) path.push(self);
+      out.composedPath = () => path;
     }
     return out;
   }
@@ -309,6 +360,39 @@ export class InternalDocument implements ProxyDocument {
     });
   }
 
+  /**
+   * A comment — nodeType 8 over a real EMPTY text instance. The wire has no
+   * comment op: the `text` op with '' gives it a driver-side node that can
+   * anchor `before:` positions, while `data` stays shadow-only (emitting it
+   * would render comment text on the page).
+   */
+  createComment(data = ''): ProxyComment {
+    const backing = this.createTextNode('');
+    const comment = new ProxyComment(this, backing.instance);
+    comment.instance.text = String(data);
+    // createTextNode cached a ProxyText wrapper for this id in _wrappers —
+    // replace it so later adopt()/_wrap() calls hand back the comment view.
+    this._wrappers.set(backing.instance.id, comment);
+    return comment;
+  }
+
+  /**
+   * DOM `importNode` — a clone through this document. Foreign (non-proxy)
+   * nodes have no shadow shape to copy; they're rejected like any other
+   * foreign child.
+   */
+  importNode(node: ProxyNode, deep = false): ProxyNode {
+    this._assertAlive();
+    if (!(node instanceof ProxyNode)) rejectForeignChild(node);
+    return node.cloneNode(deep);
+  }
+
+  /**
+   * 'about:blank' — no real document URL exists worker-side. A plain field
+   * (not a getter) so adapters may assign it like a normal document prop.
+   */
+  readonly baseURI: string = 'about:blank';
+
   /** Wrap (or return the existing wrapper for) a shared instance record. */
   _wrap(instance: HostInstance): ProxyNode {
     let node = this._wrappers.get(instance.id);
@@ -329,28 +413,59 @@ export class InternalDocument implements ProxyDocument {
    * from any island child dispatch back here. Used by library code doing
    * delegated `document.addEventListener(...)`.
    */
-  addEventListener(type: string, fn: ProxyEventHandler): void {
+  addEventListener(
+    type: string,
+    fn: ProxyEventHandler,
+    options?: boolean | AddEventListenerOptions,
+  ): void {
     this._assertAlive();
-    if (this._docListeners.some((l) => l.type === type && l.fn === fn)) return;
+    const opts = normalizeListenerOptions(options);
+    // Same (type, listener, capture) dedupe as the DOM.
+    if (
+      this._docListeners.some(
+        (l) => l.type === type && l.fn === fn && l.capture === opts.capture,
+      )
+    ) {
+      return;
+    }
     const hid = registerHandler(
-      (p) => fn(this._enrichEvent(p as EventPayload)),
+      (p) => {
+        try {
+          fn.call(this, this._enrichEvent(p as EventPayload, this));
+        } finally {
+          if (opts.once) this.removeEventListener(type, fn, { capture: opts.capture });
+        }
+      },
       this.realm,
-      0, // document-level listener → currentTarget is the island root
+      0, // document-level listener → target id 0 is the island root
     );
-    this._docListeners.push({ type, fn, hid });
+    this._docListeners.push({ type, fn, hid, capture: opts.capture });
     this._handlerIds.add(hid);
-    pushOp(this.realm, { t: 'listen', id: 0, type, handler: hid });
+    pushOp(this.realm, { t: 'listen', id: 0, type, handler: hid, opts: listenerOptsForWire(options) });
     if (getActiveRealm() !== this.realm) bumpOpsVersion();
   }
 
-  removeEventListener(type: string, fn: ProxyEventHandler): void {
+  removeEventListener(
+    type: string,
+    fn: ProxyEventHandler,
+    options?: boolean | EventListenerOptions,
+  ): void {
     this._assertAlive();
-    const index = this._docListeners.findIndex((l) => l.type === type && l.fn === fn);
+    const capture = normalizeListenerOptions(options).capture;
+    const index = this._docListeners.findIndex(
+      (l) => l.type === type && l.fn === fn && l.capture === capture,
+    );
     if (index === -1) return;
     const [entry] = this._docListeners.splice(index, 1);
     unregisterHandler(entry.hid);
     this._handlerIds.delete(entry.hid);
-    pushOp(this.realm, { t: 'unlisten', id: 0, type, handler: entry.hid });
+    pushOp(this.realm, {
+      t: 'unlisten',
+      id: 0,
+      type,
+      handler: entry.hid,
+      opts: entry.capture ? { capture: true } : undefined,
+    });
     if (getActiveRealm() !== this.realm) bumpOpsVersion();
   }
 

@@ -72,10 +72,21 @@ export function styleProxyFor(el: ProxyElement): CSSStyleDeclaration {
     style = new Proxy(el._styleProps as Record<string, unknown>, {
       get: (t, prop) => {
         if (prop === 'setProperty') {
-          return (k: string, v: string) => el._writeStyle(camelize(k), v);
+          // Custom-property keys are verbatim (camelize would corrupt '--x'
+          // to '-X'); 'important' priority encodes as a value suffix — the
+          // style op has no priority field, the driver decodes it.
+          return (k: string, v: string, priority?: string) => {
+            const key = k.startsWith('--') ? k : camelize(k);
+            el._writeStyle(key, priority === 'important' && v !== '' ? `${v} !important` : v);
+          };
         }
-        if (prop === 'removeProperty') return (k: string) => el._writeStyle(camelize(k), '');
-        if (prop === 'getPropertyValue') return (k: string) => t[camelize(k)] ?? '';
+        if (prop === 'removeProperty')
+          return (k: string) => el._writeStyle(k.startsWith('--') ? k : camelize(k), '');
+        if (prop === 'getPropertyValue')
+          return (k: string) => {
+            const key = k.startsWith('--') ? k : camelize(k);
+            return String(t[key] ?? '').replace(/\s*!important$/, '');
+          };
         if (prop === 'cssText') {
           return Object.entries(t)
             .map(([k, v]) => `${hyphenate(k)}: ${v};`)

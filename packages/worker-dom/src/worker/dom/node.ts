@@ -16,8 +16,36 @@ import type { EventPayload, Op } from '../../ops';
 import type { InternalDocument, ProxyDocument } from './document';
 
 /** Handler signature for proxy addEventListener — the wire payload plus a
- *  synthesized `target` (the proxy node for `targetId`, when known). */
-export type ProxyEventHandler = (payload: EventPayload) => void;
+ *  synthesized `target` (the proxy node for `targetId`, when known).
+ *  `this` is bound to the node/document/facade the listener was attached
+ *  to, like the real DOM's currentTarget. */
+export type ProxyEventHandler = (this: unknown, payload: EventPayload) => void;
+
+/** The subset of AddEventListenerOptions the `listen`/`unlisten` ops carry. */
+export interface WireListenerOpts {
+  once?: boolean;
+  passive?: boolean;
+  capture?: boolean;
+}
+
+/** Normalize the DOM's `options | captureFlag` argument into concrete flags. */
+export const normalizeListenerOptions = (
+  options?: boolean | AddEventListenerOptions | EventListenerOptions | null,
+): { once: boolean; passive: boolean; capture: boolean } => {
+  const o = (typeof options === 'boolean' ? { capture: options } : (options ?? {})) as AddEventListenerOptions;
+  return { once: o.once === true, passive: o.passive === true, capture: o.capture === true };
+};
+
+/** The `opts` field for a listen/unlisten op — undefined when every flag is
+ *  off so plain listeners emit the same op shape as before. */
+export const listenerOptsForWire = (
+  options?: boolean | AddEventListenerOptions | EventListenerOptions | null,
+): WireListenerOpts | undefined => {
+  const o = normalizeListenerOptions(options);
+  return o.once || o.passive || o.capture
+    ? { once: o.once, passive: o.passive, capture: o.capture }
+    : undefined;
+};
 
 export const hyphenate = (k: string): string => k.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`);
 export const camelize = (k: string): string => k.replace(/-([a-z])/g, (_m, c: string) => c.toUpperCase());
@@ -58,6 +86,10 @@ export const detachFromParent = (child: ProxyNode): void => {
   else child._parent = null;
 };
 
+/** Strings become text nodes — the ChildNode/ParentNode convenience arg. */
+const asChild = (doc: InternalDocument, n: ProxyNode | string): ProxyNode =>
+  typeof n === 'string' ? doc.createTextNode(n) : n;
+
 /* ── ProxyNode ─────────────────────────────────────────────────────────── */
 
 export class ProxyNode {
@@ -75,6 +107,29 @@ export class ProxyNode {
 
   get nodeType(): number {
     return 0;
+  }
+
+  /**
+   * '#text'/'#comment'/'#document-fragment' for character/fragment nodes;
+   * the tag name for elements — uppercase in the HTML namespace, verbatim
+   * for namespaced elements (svg 'foreignObject' keeps its case, matching
+   * the real DOM).
+   */
+  get nodeName(): string {
+    switch (this.nodeType) {
+      case 1: {
+        const inst = this.instance as ElementInstance;
+        return inst.ns === undefined ? inst.type.toUpperCase() : inst.type;
+      }
+      case 3:
+        return '#text';
+      case 8:
+        return '#comment';
+      case 11:
+        return '#document-fragment';
+      default:
+        return '#node';
+    }
   }
 
   /** The proxy document that owns this node — what real DOM code reads as
@@ -134,10 +189,13 @@ export class ProxyNode {
     return n;
   }
 
-  /** Concatenated descendant text — walked from the shadow tree. */
+  /** Concatenated descendant text — walked from the shadow tree. Comments
+   *  are excluded: the DOM's descendant text content is Text-node data only. */
   get textContent(): string {
     let out = '';
-    for (const child of this._children) out += child.textContent;
+    for (const child of this._children) {
+      if (child.nodeType !== 8) out += child.textContent;
+    }
     return out;
   }
   set textContent(value: string) {
@@ -163,6 +221,14 @@ export class ProxyNode {
 
   insertBefore<T extends ProxyNode>(child: T, ref: ProxyNode | null): T {
     this.doc._assertAlive();
+    // Character-data nodes can't hold children — the driver replays every
+    // emitted append as a real insertBefore, which would throw
+    // HierarchyRequestError on the page; fail here first, like the DOM.
+    if (this.nodeType === 3 || this.nodeType === 8) {
+      throw new Error(
+        `proxyDom.insertBefore: ${this.nodeName} nodes cannot have children`,
+      );
+    }
     if (!(child instanceof ProxyNode)) rejectForeignChild(child);
     // A fragment is a phantom PARENT — the real DOM splices its children
     // in at the insertion point and empties it; do the same (per-child ops).
@@ -211,6 +277,61 @@ export class ProxyNode {
   /** Detach from the parent — no-op when already orphaned (like the DOM). */
   remove(): void {
     this._parent?.removeChild(this);
+  }
+
+  /* ── ChildNode / ParentNode conveniences ───────────────────────────────
+   * Strings become text nodes like the DOM. before/after/replaceWith on a
+   * parentless node are no-ops (per spec). append/prepend/replaceChildren
+   * live on the base so elements AND fragments share them — real DOM also
+   * exposes them on DocumentFragment. */
+
+  before(...nodes: Array<ProxyNode | string>): void {
+    const p = this._parent;
+    if (p === null) return;
+    for (const n of nodes) p.insertBefore(asChild(this.doc, n), this);
+  }
+
+  after(...nodes: Array<ProxyNode | string>): void {
+    const p = this._parent;
+    if (p === null) return;
+    const ref = this.nextSibling;
+    for (const n of nodes) p.insertBefore(asChild(this.doc, n), ref);
+  }
+
+  replaceWith(...nodes: Array<ProxyNode | string>): void {
+    const p = this._parent;
+    if (p === null) return;
+    for (const n of nodes) p.insertBefore(asChild(this.doc, n), this);
+    p.removeChild(this);
+  }
+
+  /** append(...nodes) — strings become text nodes, like the DOM. */
+  append(...nodes: Array<ProxyNode | string>): void {
+    this.doc._assertAlive();
+    for (const n of nodes) this.appendChild(asChild(this.doc, n));
+  }
+
+  /** prepend(...nodes) — inserts at the front, in argument order. */
+  prepend(...nodes: Array<ProxyNode | string>): void {
+    this.doc._assertAlive();
+    const ref = this.firstChild;
+    for (const n of nodes) this.insertBefore(asChild(this.doc, n), ref);
+  }
+
+  /** replaceChildren(...nodes) — remove every child, then append the set. */
+  replaceChildren(...nodes: Array<ProxyNode | string>): void {
+    this.doc._assertAlive();
+    for (const child of this._children.slice()) this.removeChild(child);
+    this.append(...nodes);
+  }
+
+  /**
+   * Structural clone — each concrete kind implements it. The copy is a
+   * FRESH instance (own id, own create op), not a shared record; listeners
+   * never cross, matching the DOM.
+   */
+  cloneNode(_deep?: boolean): ProxyNode {
+    throw new Error('proxyDom.cloneNode: unsupported node kind');
   }
 
   /**
@@ -282,6 +403,56 @@ export class ProxyText extends ProxyNode {
     this.instance.text = text;
     this._op({ t: 'utext', id: this._utextTarget, text });
   }
+
+  /** Fresh text node — the clone is a new `text` op, not a shared record. */
+  override cloneNode(_deep?: boolean): ProxyText {
+    return this.doc.createTextNode(this.instance.text);
+  }
+}
+
+/* ── ProxyComment ────────────────────────────────────────────────────── */
+
+/**
+ * Comment — nodeType 8, backed by a REAL empty text node driver-side: the
+ * wire has no comment op, so `createComment` emits a `text` op with ''
+ * giving the node a `before:`-addressable position for anchors (Svelte's
+ * `<!>` block boundaries, Vue/Angular comment anchors).
+ *
+ * `data`/`nodeValue`/`textContent` writes update the shadow record ONLY —
+ * emitting `utext` would render the comment's data as visible page text.
+ */
+export class ProxyComment extends ProxyText {
+  override get nodeType(): number {
+    return 8;
+  }
+
+  override get data(): string {
+    return this.instance.text;
+  }
+  override set data(v: string) {
+    this._shadowWrite(v);
+  }
+  override get nodeValue(): string {
+    return this.instance.text;
+  }
+  override set nodeValue(v: string) {
+    this._shadowWrite(v);
+  }
+  override get textContent(): string {
+    return this.instance.text;
+  }
+  override set textContent(v: string) {
+    this._shadowWrite(v);
+  }
+
+  private _shadowWrite(v: string): void {
+    this.doc._assertAlive();
+    this.instance.text = String(v);
+  }
+
+  override cloneNode(_deep?: boolean): ProxyComment {
+    return this.doc.createComment(this.data);
+  }
 }
 
 /* ── ProxyFragment ─────────────────────────────────────────────────────── */
@@ -295,6 +466,16 @@ export class ProxyText extends ProxyNode {
 export class ProxyFragment extends ProxyNode {
   override get nodeType(): number {
     return 11;
+  }
+
+  /** Fresh fragment; `deep` clones children polymorphically so comment
+   *  anchors keep nodeType 8. */
+  cloneNode(deep?: boolean): ProxyFragment {
+    const copy = this.doc.createDocumentFragment();
+    if (deep === true) {
+      for (const child of this._children) copy.appendChild(child.cloneNode(true));
+    }
+    return copy;
   }
 }
 
