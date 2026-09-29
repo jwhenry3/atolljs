@@ -20,32 +20,32 @@ let child: ChildProcess | undefined;
 const get = (path: string) => fetch(`${base}${path}`);
 const post = (path: string) => fetch(`${base}${path}`, { method: 'POST' });
 
-describe('http-offload gateway (mixed route ownership)', () => {
-  beforeAll(async () => {
-    execFileSync('npm', ['run', 'bundle'], { cwd: exampleDir, stdio: 'pipe', shell: true });
-    child = spawn('node', ['--import', 'tsx', 'src/main.ts'], {
-      cwd: exampleDir,
-      env: { ...process.env, PORT: String(PORT), TRANSFER_PORT: '3925' },
-      stdio: 'pipe',
-    });
-    const deadline = Date.now() + 60_000;
-    for (;;) {
-      try {
-        // Ready when main answers AND both workers have announced their
-        // internal ports (proxied routes 503 until their announce lands).
-        const [m, a, b] = await Promise.all([get('/whoami'), get('/a/whoami'), get('/b/whoami')]);
-        if (m.ok && a.ok && b.ok) return;
-      } catch { /* not up yet */ }
-      if (Date.now() > deadline) throw new Error('http-offload example did not start');
-      await new Promise((r) => setTimeout(r, 300));
-    }
-  }, 90_000);
-
-  afterAll(() => {
-    child?.kill();
-    child = undefined;
+beforeAll(async () => {
+  execFileSync('npm', ['run', 'bundle'], { cwd: exampleDir, stdio: 'pipe', shell: true });
+  child = spawn('node', ['--import', 'tsx', 'src/main.ts'], {
+    cwd: exampleDir,
+    env: { ...process.env, PORT: String(PORT), TRANSFER_PORT: '3925' },
+    stdio: 'pipe',
   });
+  const deadline = Date.now() + 60_000;
+  for (;;) {
+    try {
+      // Ready when main answers AND both workers have announced their
+      // internal ports (proxied routes 503 until their announce lands).
+      const [m, a, b] = await Promise.all([get('/whoami'), get('/a/whoami'), get('/b/whoami')]);
+      if (m.ok && a.ok && b.ok) return;
+    } catch { /* not up yet */ }
+    if (Date.now() > deadline) throw new Error('http-offload example did not start');
+    await new Promise((r) => setTimeout(r, 300));
+  }
+}, 90_000);
 
+afterAll(() => {
+  child?.kill();
+  child = undefined;
+});
+
+describe('http-offload gateway (mixed route ownership)', () => {
   it('serves the same route shape on three different threads', async () => {
     const [main, a, b] = await Promise.all([
       get('/whoami').then((r) => r.json()),
