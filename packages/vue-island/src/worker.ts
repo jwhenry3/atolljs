@@ -30,6 +30,7 @@ import {
   defineIslandWorker,
   getActiveRealm,
   getLastActiveRealm,
+  getLastTouchedRealm,
   islandApp,
   realmDocFor,
 } from '@jwhenry123/mesh-worker-dom/worker';
@@ -53,25 +54,13 @@ export { emit, runInRealm } from '@jwhenry123/mesh-worker-dom/worker';
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const MATH_NS = 'http://www.w3.org/1998/Math/MathML';
 
-/**
- * The realm create* ops should bind to when no task is running — the last
- * realm whose nodes the renderer touched. Worker-initiated renders (Vue's
- * microtask flush after a dispatched handler mutates state) run with no
- * active realm; in the one-realm-per-worker norm — and in every task —
- * this resolves identically to ambient realm state.
- */
-let ambientRealm = '';
-const touchRealm = (node: ProxyNode): void => {
-  ambientRealm = node.doc.realm;
-};
-
 /** The document create* ops write into — the active realm's when a task
  *  holds one; otherwise the last realm a task ran under (worker-dom's own
- *  `getLastActiveRealm` tracking, stamped by every realm task and
- *  markRealmActive), with the renderer's last-touched realm as the final
- *  fallback for nodes reached without any prior task. */
+ *  `getLastActiveRealm` tracking), with `getLastTouchedRealm` — the realm
+ *  the most recent pushed op targeted — as the final fallback for out-of-
+ *  task flushes. */
 const docForRender = (): InternalDocument =>
-  realmDocFor(getActiveRealm() || getLastActiveRealm() || ambientRealm);
+  realmDocFor(getActiveRealm() || getLastActiveRealm() || getLastTouchedRealm());
 
 /* ── patchProp helpers ─────────────────────────────────────────────────── */
 
@@ -205,7 +194,6 @@ const FORM_PROPS = /^(value|checked|selected|disabled)$/;
 
 const { render, createApp } = createRenderer<ProxyNode, ProxyElement>({
   patchProp(el, key, prevValue, nextValue, _namespace, _parentComponent) {
-    touchRealm(el);
     if (key === 'class' || key === 'className') {
       el.className = normalizeClass(nextValue);
       return;
@@ -241,11 +229,9 @@ const { render, createApp } = createRenderer<ProxyNode, ProxyElement>({
     }
   },
   insert(el, parent, anchor) {
-    touchRealm(el);
     parent.insertBefore(el, anchor ?? null);
   },
   remove(el) {
-    touchRealm(el);
     el.remove();
   },
   createElement(type, namespace?: ElementNamespace) {
@@ -264,21 +250,17 @@ const { render, createApp } = createRenderer<ProxyNode, ProxyElement>({
     return docForRender().createComment(text);
   },
   setText(node, text) {
-    touchRealm(node);
     node.textContent = text;
   },
   setElementText(el, text) {
-    touchRealm(el);
     el.textContent = text;
   },
   parentNode(node) {
-    touchRealm(node);
     // Children of a fragment are spliced into the real parent, so a node's
     // recorded parent is always an element (or the id-0 root ProxyElement).
     return node.parentNode as ProxyElement | null;
   },
   nextSibling(node) {
-    touchRealm(node);
     return node.nextSibling;
   },
   setScopeId(el, id) {
@@ -298,7 +280,6 @@ const { render, createApp } = createRenderer<ProxyNode, ProxyElement>({
    * sibling range first since insertion mutates the links being walked.
    */
   insertStaticContent(content, parent, anchor, _namespace, start, end) {
-    touchRealm(parent);
     if (start !== null && start !== undefined && end !== null && end !== undefined) {
       const moving: ProxyNode[] = [];
       let n: ProxyNode | null = start;
@@ -331,7 +312,7 @@ const { render, createApp } = createRenderer<ProxyNode, ProxyElement>({
 export function vueIslandApp(Component: Component): RenderedIslandApp {
   return {
     mount({ realm, doc, props }: RenderContext): RenderedHandle {
-      ambientRealm = realm;
+
       const container = doc.body;
       const app: App = createApp(Component, props);
       app.mount(container);

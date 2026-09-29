@@ -23,7 +23,9 @@ export type {
 
 export { islandApp, islandAppNameOf } from '../app';
 
-export { hostConfig } from './hostConfig';
+// hostConfig is deliberately NOT exported — a static re-export would pull
+// react + react-reconciler into every /worker bundle. The reconciler is
+// reachable only through defineIslandWorker's lazy import of reactRealm.
 
 export {
   allocId,
@@ -32,6 +34,7 @@ export {
   getActiveRealm,
   getHandler,
   getLastActiveRealm,
+  getLastTouchedRealm,
   getRealmSize,
   instances,
   pushOp,

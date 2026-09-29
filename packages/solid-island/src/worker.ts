@@ -67,6 +67,8 @@ import {
 import {
   defineIslandWorker,
   getActiveRealm,
+  getLastActiveRealm,
+  getLastTouchedRealm,
   islandApp,
   realmDocFor,
   ProxyElement,
@@ -104,14 +106,12 @@ const rendererFor = (doc: ProxyDocument): AnyRenderer => {
 /**
  * The doc a doc-less call belongs to: the active realm's proxy document
  * inside a realm task (mount/update/dispatch always run under one), else
- * the most recently mounted one — matching the ambient-document fallback
- * the realm dispatcher gives out-of-task readers in single-realm workers.
+ * the shared ambient fallbacks — the last realm a task ran under, then the
+ * realm the most recent pushed op targeted.
  */
-let lastMountedDoc: ProxyDocument | undefined;
 const currentDoc = (): ProxyDocument => {
-  const realm = getActiveRealm();
+  const realm = getActiveRealm() || getLastActiveRealm() || getLastTouchedRealm();
   if (realm !== '') return realmDocFor(realm);
-  if (lastMountedDoc !== undefined) return lastMountedDoc;
   throw new Error(
     '@jwhenry123/mesh-solid-island: no mounted realm — createElement/createTextNode ' +
       'was called before any solidIslandApp mounted',
@@ -361,7 +361,6 @@ export function solidIslandApp<P extends Record<string, unknown>>(
   return {
     mount({ doc, props }: RenderContext): RenderedHandle {
       assertClientBuild();
-      lastMountedDoc = doc;
       const renderer = rendererFor(doc);
       const wire = wireProps(props);
       // render() owns a createRoot — its disposer tears down the component,
@@ -376,10 +375,7 @@ export function solidIslandApp<P extends Record<string, unknown>>(
       );
       return {
         update: (next) => wire.update(next),
-        dispose: () => {
-          dispose();
-          if (lastMountedDoc === doc) lastMountedDoc = undefined;
-        },
+        dispose,
       };
     },
   };

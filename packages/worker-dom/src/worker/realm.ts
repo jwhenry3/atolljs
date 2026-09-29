@@ -107,6 +107,16 @@ export const getActiveRealm = (): string => activeRealm;
 export const getLastActiveRealm = (): string => lastRealm;
 
 /**
+ * The most recent realm an op was pushed for — stamped in `pushOp`, so
+ * every proxy-DOM mutation records it. This is the last rung of the
+ * ambient-resolution chain (active → lastActive → lastTouched): a renderer
+ * whose scheduler flushes outside any task still lands on the realm whose
+ * tree it just mutated.
+ */
+let touchedRealm = '';
+export const getLastTouchedRealm = (): string => touchedRealm;
+
+/**
  * Marks `realm` as the ambient realm for out-of-task readers (timers,
  * continuations, shim consumers outside realm work). Called by
  * installDomShim so its document becomes the ambient document.
@@ -135,6 +145,7 @@ export const runInRealm = <T>(realm: string, fn: () => T): T => {
 /** Queue an op onto a realm's queue — instance-bound ops pass their
  *  instance's realm, instance-less ops (`clear`, `emit`) the active one. */
 export const pushOp = (realm: string, op: Op): void => {
+  if (realm !== '') touchedRealm = realm;
   let queue = opsByRealm.get(realm);
   if (!queue) opsByRealm.set(realm, (queue = []));
   queue.push(op);

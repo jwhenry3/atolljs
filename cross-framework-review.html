@@ -274,6 +274,15 @@
       <li><strong class="done">Bundler worker-entry docs.</strong> worker-dom README documents the per-bundler entry patterns (Vite/webpack <code>new URL</code> idiom, Vite's <code>?worker</code>, esbuild's separate-entry caveat) and the <code>mountTimeout</code> error as the symptom of an unresolved path.</li>
     </ol>
 
+    <h2>Refinement round 6 — bundle composition</h2>
+    <p>The shared runtime's biggest bloat item: <code>defineIslandWorker</code> statically imported <code>react</code> + <code>react-reconciler</code> + <code>hostConfig</code>, so <em>every</em> worker bundle — a pure Vue one included — carried the entire React reconciler. Now:</p>
+    <ol>
+      <li><strong class="done">React runtime is lazy.</strong> <code>worker/reactRealm.ts</code> owns the reconciler, host config, container creation, and the render/unmount/flush verbs; <code>defineIslandWorker</code> reaches it only via <code>await import('./reactRealm')</code> when a mounted app resolves to a React component. Bundlers emit it as a lazily-fetched chunk — non-React workers never download it. <code>mount</code> is now async (one microtask on first React mount; callers already awaited it). The <code>/worker</code> entry also no longer re-exports <code>hostConfig</code> — the last static path into React.</li>
+      <li><strong class="done">Ambient-realm resolution upstreamed.</strong> Vue carried <code>ambientRealm</code>/<code>touchRealm</code>, Solid <code>lastMountedDoc</code> — same heuristic, three copies. <code>realm.ts</code> now stamps a last-touched realm on every pushed op (<code>pushOp</code> is the single funnel) and exports <code>getLastTouchedRealm</code> as the third rung after active/last-active. The adapters' copies are deleted.</li>
+      <li><strong>What remains shared vs. per-framework:</strong> the proxy DOM, op protocol, event dispatch, emit/callback channel, doorbell/poll transport, and realm lifecycle live once in worker-dom; each <code>-island</code> package statically imports only its own framework. Residual leak: <code>Slot</code>'s JSX pulls <code>react/jsx-runtime</code> (~few KB, tree-shaken when unused) — a worker that never references <code>Slot</code> drops it in production builds.</li>
+      <li><strong>Bundler caveat.</strong> The lazy boundary is <code>import()</code> — Vite/webpack/Rollup/esbuild all code-split it. A bundler that flattens dynamic imports would still include the chunk in the file (present but never executed, since the React path only runs when a registered app resolves to a component function).</li>
+    </ol>
+
     <h2>Next steps of refinement</h2>
     <ol>
       <li><strong>Angular remaining surface</strong> — <code>input({alias})</code> is undiscoverable under JIT (bind by field name; the alias isn't stored anywhere reachable — documented limitation); <code>@defer</code> non-immediate triggers, plain <code>effect()</code> assertions, forms/ngModel, animations (no driver), content queries unexplored. Sanitizer is passthrough — worker output is unsanitized.</li>

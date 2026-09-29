@@ -52,8 +52,8 @@
  * message-only mode.
  */
 
-import { createElement, type ReactElement } from 'react';
-import Reconciler from 'react-reconciler';
+import type { ReactElement } from 'react';
+import type { ReactRealm } from './reactRealm';
 import { defineWorker } from '@jwhenry123/mesh/sdk';
 import type { SharedMemory, WorkerDefinition } from '@jwhenry123/mesh/sdk';
 import { islandAppNameOf } from '../app';
@@ -66,13 +66,11 @@ import {
   type InternalDocument,
   type ProxyDocument,
 } from './proxyDom';
-import { hostConfig } from './hostConfig';
 import {
   bumpOpsVersion,
   getHandler,
   instances,
   pushOp,
-  ROOT_CONTAINER,
   runInRealm,
   setActiveRealm,
   setDoorbellContract,
@@ -189,13 +187,6 @@ interface RealmBase {
   pid: string;
 }
 
-interface ReactRealm extends RealmBase {
-  imperative?: undefined;
-  rendered?: undefined;
-  reconciler: ReturnType<typeof Reconciler>;
-  container: unknown;
-}
-
 interface ImperativeRealm extends RealmBase {
   rendered?: undefined;
   imperative: {
@@ -256,6 +247,15 @@ const resolveApp = (name: string): IslandApp | undefined =>
 
 const newPid = (): string => `w-${Math.random().toString(36).slice(2, 8)}`;
 
+/**
+ * react/react-reconciler arrive here — dynamically, so a worker bundle whose
+ * registry holds only Vue/Svelte/Solid/Angular/imperative apps never pays
+ * for the reconciler. Cached after the first React mount.
+ */
+let reactRuntime: Promise<typeof import('./reactRealm')> | undefined;
+const loadReactRuntime = (): Promise<typeof import('./reactRealm')> =>
+  (reactRuntime ??= import('./reactRealm'));
+
 /** 'controls' or 'data-table@7' → 'data-table' — registry name part of a realm key. */
 const appNameOf = (realm: string): string => {
   const at = realm.lastIndexOf('@');
@@ -308,22 +308,9 @@ function createIslandRuntime(
         },
       };
     }
-    const reconciler = Reconciler(hostConfig);
-    const container = reconciler.createContainer(
-      // Realm-stamped root container — createInstance reads `.realm` off it,
-      // binding every element to this realm even in out-of-task commits.
-      { id: 0, realm: key } as typeof ROOT_CONTAINER,
-      0,
-      null,
-      false,
-      null,
-      '',
-      console.error, // onUncaughtError
-      console.error, // onCaughtError
-      console.error, // onRecoverableError
-      null, // onDefaultTransitionIndicator
+    throw new Error(
+      `createRealm: "${appNameOf(key)}" resolved to a React app — React realms are created by reactRealm (lazy import), this path is unreachable`,
     );
-    return { key, app: appNameOf(key), pid, reconciler, container };
   }
 
   /**
@@ -401,7 +388,7 @@ function createIslandRuntime(
        * then a fresh container renders the new tree — the returned batch
        * replays cleanly onto an emptied root. The pid is kept across remounts.
        */
-      mount(realm: string, props: Record<string, unknown> = {}): Op[] {
+      async mount(realm: string, props: Record<string, unknown> = {}): Promise<Op[]> {
         // {__cb:id} handles become callables scoped to THIS realm — invoking
         // one emits a callback-prop op the driver routes to the shell's
         // marshalled function (fire-and-forget, doorbell-rung for out-of-
@@ -425,13 +412,31 @@ function createIslandRuntime(
         }
 
         let ops: Op[] = [];
+        if (!isRendered(App) && !isImperative(App)) {
+          // React app — the reconciler arrives via a lazy import so
+          // non-React worker bundles never pay for it.
+          const rt = await loadReactRuntime();
+          let reactRealm: ReactRealm;
+          if (mounted !== undefined) {
+            // Remount — unmount the existing tree so React detaches its
+            // instances, then rebuild on a fresh container. The pid is kept.
+            const old = mounted as ReactRealm;
+            ops = syncCommit(old, () => old.unmountTree());
+            reactRealm = rt.createReactRealm(realm, appNameOf(realm), old.pid);
+          } else {
+            reactRealm = rt.createReactRealm(realm, appNameOf(realm), newPid());
+          }
+          realms.set(realm, reactRealm);
+          return ops.concat(
+            syncCommit(reactRealm, () => reactRealm.render(App, props)),
+          );
+        }
+
+        // Imperative/rendered first mount. (A mounted React realm being
+        // replaced by a non-React app unmounts through syncCommit first.)
         if (mounted !== undefined) {
-          // Remount — unmount the existing tree so React detaches its
-          // instances, then rebuild on a fresh container.
-          const old = mounted;
-          ops = syncCommit(old, () => {
-            old.reconciler.updateContainer(null, old.container, null, null);
-          });
+          const old = mounted as ReactRealm;
+          ops = syncCommit(old, () => old.unmountTree());
           mounted = createRealm(realm, old.pid);
         } else {
           mounted = createRealm(realm, newPid());
@@ -451,28 +456,14 @@ function createIslandRuntime(
           );
         }
 
-        if (isRenderedRealm(mounted)) {
-          // First mount of a rendered realm — mount() in the realm's scope;
-          // the framework's proxy-DOM mutations emit the initial op batch.
-          const r = mounted.rendered;
-          r.props = props;
-          return ops.concat(
-            runInRealm(realm, () => {
-              r.handle = r.app.mount({ realm, doc: r.doc, props });
-              return takeOps(realm);
-            }),
-          );
-        }
-
-        const reactRealm = mounted as ReactRealm;
+        // First mount of a rendered realm — mount() in the realm's scope;
+        // the framework's proxy-DOM mutations emit the initial op batch.
+        const r = (mounted as RenderedRealm).rendered;
+        r.props = props;
         return ops.concat(
-          syncCommit(reactRealm, () => {
-            reactRealm.reconciler.updateContainer(
-              createElement(App as (props: Record<string, unknown>) => ReactElement, props),
-              reactRealm.container,
-              null,
-              null,
-            );
+          runInRealm(realm, () => {
+            r.handle = r.app.mount({ realm, doc: r.doc, props });
+            return takeOps(realm);
           }),
         );
       },
@@ -504,9 +495,7 @@ function createIslandRuntime(
           });
         }
         const App = resolveApp(mounted.app) as (props: Record<string, unknown>) => ReactElement;
-        return syncCommit(mounted, () => {
-          mounted.reconciler.updateContainer(createElement(App, props), mounted.container, null, null);
-        });
+        return syncCommit(mounted, () => mounted.render(App, props));
       },
 
       /**
@@ -612,9 +601,7 @@ function createIslandRuntime(
           });
           return [{ t: 'clear' }];
         }
-        return syncCommit(mounted, () => {
-          mounted.reconciler.updateContainer(null, mounted.container, null, null);
-        });
+        return syncCommit(mounted, () => mounted.unmountTree());
       },
 
       /**
@@ -631,8 +618,7 @@ function createIslandRuntime(
         if (isImperativeRealm(mounted) || isRenderedRealm(mounted)) return takeOps(realm);
         const prev = setActiveRealm(realm);
         try {
-          mounted.reconciler.flushPassiveEffects();
-          mounted.reconciler.flushSyncWork();
+          mounted.flush();
           return takeOps(realm);
         } finally {
           setActiveRealm(prev);

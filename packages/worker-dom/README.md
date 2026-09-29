@@ -98,6 +98,30 @@ export const worker = defineVueIslandWorker({ counter: Counter });
 All four speak the same protocol — a registry worker can mix React,
 Vue, Svelte, Solid, Angular, and imperative apps freely.
 
+## Bundle composition — what's in a worker bundle
+
+The `/worker` entry is framework-neutral: `defineIslandWorker`, the proxy
+DOM, the op protocol, event dispatch, `emit`/`callbackProp`, and realm
+lifecycle. Framework runtimes arrive only through the binding you import:
+
+- **React islands** — `react` + `react-reconciler` + the host config live in
+  `worker/reactRealm.ts`, reached via `await import()` the first time a
+  registered app resolves to a React component. A worker whose registry
+  holds only Vue/Svelte/Solid/Angular/imperative apps never loads it —
+  bundlers put it in a lazily-fetched chunk (or drop it entirely when the
+  worker entry can't reach it statically).
+- **Vue/Svelte/Solid/Angular islands** — each `-island` package statically
+  imports only its own framework. A `defineVueIslandWorker` entry bundles
+  worker-dom core + Vue, and no other framework.
+- **Imperative-only** — worker-dom core alone (plus `htmlparser2`, which
+  the proxy DOM's `innerHTML`/`insertStaticContent` need).
+
+Two caveats: the `Slot` helper is a React component (its JSX pulls in
+`react/jsx-runtime` — a few KB, tree-shaken when unused), and
+`defineIslandWorker`'s mount task is `async` because a React first-mount
+awaits the runtime chunk — callers already `await` it, so this is only a
+typing-level detail.
+
 ## Writing a worker renderer
 
 A renderer adapter is a `RenderedIslandApp` — one method:

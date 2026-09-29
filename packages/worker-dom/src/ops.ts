@@ -183,8 +183,9 @@ export interface EventPayload {
  * (`'app'` or `'app@instance'`) — `mountIsland` binds it per island.
  */
 export type IslandWorkerMethods = {
-  /** Mount the realm's registry app; returns the initial op batch. */
-  mount(realm: string, props?: Record<string, unknown>): Op[];
+  /** Mount the realm's registry app; returns the initial op batch. Async
+   *  because a React app lazily imports the reconciler on first mount. */
+  mount(realm: string, props?: Record<string, unknown>): Op[] | Promise<Op[]>;
   /** Re-render the realm's root with new serializable props. */
   updateProps(realm: string, props: Record<string, unknown>): Op[];
   /** Invoke the worker handler a `__evt` ref or `listen` op points at. */
