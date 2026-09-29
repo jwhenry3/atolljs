@@ -28,6 +28,8 @@ export type { DoorbellSpec } from './memory';
 export { islandApp, islandAppNameOf } from './app';
 export type { IslandAppLike, IslandAppProps } from './app';
 
+export { callbackProp } from './callbackProps';
+
 export { isEventRef } from './ops';
 export type {
   EventPayload,

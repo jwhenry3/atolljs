@@ -495,7 +495,21 @@ export class InternalDocument implements ProxyDocument {
   }
 
   querySelectorAll(selector: string): ProxyElement[] {
-    const chain = parseSelector(selector);
+    let chain = parseSelector(selector);
+    // body/documentElement/html all alias the id-0 root. A leading bare
+    // `body`/`html` compound is satisfied BY the root — Vue's Teleport
+    // resolves `to="body"` through this path — so pin it there and match
+    // the rest of the chain against descendants.
+    const first = chain[0];
+    if (
+      (first.tag === 'body' || first.tag === 'html') &&
+      first.id === undefined &&
+      first.classes.length === 0 &&
+      first.attrs.length === 0
+    ) {
+      chain = chain.slice(1);
+    }
+    if (chain.length === 0) return [this._root];
     const out: ProxyElement[] = [];
     const walk = (node: ProxyNode): void => {
       for (const child of node._children) {

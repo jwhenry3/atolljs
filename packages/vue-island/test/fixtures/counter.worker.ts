@@ -5,7 +5,16 @@
  * the worker-dom `emit()` inside the handler (proving the emit op reaches
  * the island's `onEvent`). Plain `h()`/`defineComponent` — no SFC compiler.
  */
-import { createStaticVNode, defineComponent, h, ref } from 'vue';
+import {
+  createStaticVNode,
+  defineComponent,
+  h,
+  ref,
+  Teleport,
+  vModelCheckbox,
+  vModelText,
+  withDirectives,
+} from 'vue';
 import { defineIslandWorker, emit } from '@jwhenry123/mesh-worker-dom/worker';
 import { vueIslandApp } from '../../src/worker';
 
@@ -82,10 +91,62 @@ const StaticApp = defineComponent({
   },
 });
 
+/**
+ * v-model, hand-compiled: `<input v-model="text">` produces exactly this
+ * shape — an `onUpdate:modelValue` vnode prop (skipped by patchProp, same
+ * as runtime-dom) + a `vModelText`/`vModelCheckbox` directive that attaches
+ * input/change listeners and assigns back through `el._assign`.
+ */
+const VModelApp = defineComponent({
+  name: 'VueVModel',
+  setup() {
+    const text = ref('initial');
+    const checked = ref(false);
+    return () =>
+      h('div', { class: 'vmodel' }, [
+        withDirectives(
+          h('input', {
+            class: 'text-in',
+            'onUpdate:modelValue': (v: string) => (text.value = v),
+          }),
+          [[vModelText, text.value]],
+        ),
+        withDirectives(
+          h('input', {
+            class: 'check-in',
+            type: 'checkbox',
+            'onUpdate:modelValue': (v: boolean) => (checked.value = v),
+          }),
+          [[vModelCheckbox, checked.value]],
+        ),
+        h('span', { class: 'echo' }, `${text.value}:${checked.value}`),
+      ]);
+  },
+});
+
+/**
+ * Teleport to the realm's body — `to` resolves through the renderer's
+ * querySelector host op against the realm's shadow tree. (Same as the real
+ * DOM: the target must exist outside the mounting subtree, so 'body' —
+ * the island root — is the in-island target.)
+ */
+const TeleportApp = defineComponent({
+  name: 'VueTeleport',
+  setup() {
+    return () =>
+      h('div', { class: 'tele-app' }, [
+        h(Teleport, { to: 'body' }, [h('b', { class: 'beamed' }, 'beamed in')]),
+        h('span', { class: 'after' }, 'anchor sibling'),
+      ]);
+  },
+});
+
 export const counterWorker = defineIslandWorker({
   apps: {
     counter: vueIslandApp(Counter),
     controls: vueIslandApp(Controls),
     static: vueIslandApp(StaticApp),
+    vmodel: vueIslandApp(VModelApp),
+    teleport: vueIslandApp(TeleportApp),
   },
 });

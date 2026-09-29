@@ -147,4 +147,52 @@ describe('vueIslandApp', () => {
 
     island.destroy();
   });
+
+  it('v-model works end-to-end: vModelText/vModelCheckbox directives round-trip input', async () => {
+    const el = realDoc.createElement('div');
+    realDoc.body.appendChild(el);
+    const client = connectIslandWorker({ worker: renderWorker });
+
+    const island = await mountIsland({ client, el, app: 'vmodel' });
+    const textIn = el.querySelector('input.text-in') as HTMLInputElement;
+    const checkIn = el.querySelector('input.check-in') as HTMLInputElement;
+    // Directive's beforeMount wrote the model value onto the element.
+    expect(textIn.value).toBe('initial');
+    expect(el.querySelector('.echo')?.textContent).toBe('initial:false');
+
+    // Type → real input event → worker directive's listener → _assign →
+    // the onUpdate:modelValue prop (skipped by patchProp, consumed by the
+    // directive in-worker) → ref → re-render.
+    textIn.value = 'typed here';
+    textIn.dispatchEvent(new (realDoc.defaultView as typeof window).Event('input', { bubbles: true }));
+    await vi.waitFor(async () => {
+      await island.flush();
+      expect(el.querySelector('.echo')?.textContent).toBe('typed here:false');
+    });
+
+    checkIn.checked = true;
+    checkIn.dispatchEvent(new (realDoc.defaultView as typeof window).Event('change', { bubbles: true }));
+    await vi.waitFor(async () => {
+      await island.flush();
+      expect(el.querySelector('.echo')?.textContent).toBe('typed here:true');
+    });
+
+    island.destroy();
+  });
+
+  it('Teleport resolves `to` inside the island via the querySelector host op', async () => {
+    const el = realDoc.createElement('div');
+    realDoc.body.appendChild(el);
+    const client = connectIslandWorker({ worker: renderWorker });
+
+    const island = await mountIsland({ client, el, app: 'teleport' });
+    // Teleported to the realm body — lands inside the island element as a
+    // sibling of the app's root, not inside .tele-app.
+    const beamed = el.querySelector('b.beamed') as HTMLElement;
+    expect(beamed?.textContent).toBe('beamed in');
+    expect(el.querySelector('.tele-app b.beamed')).toBeNull();
+    // The teleport's source position stays anchored by its comment.
+    expect(el.querySelector('.after')?.textContent).toBe('anchor sibling');
+    island.destroy();
+  });
 });

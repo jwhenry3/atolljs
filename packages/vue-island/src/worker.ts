@@ -284,6 +284,12 @@ const { render, createApp } = createRenderer<ProxyNode, ProxyElement>({
   setScopeId(el, id) {
     el.setAttribute(id, '');
   },
+  // Teleport resolves `to` through this host op — scoped to the realm's
+  // shadow tree, so `:to` selectors can only hit in-island targets (the
+  // escape hatch for main-thread DOM stays the slot system).
+  querySelector(selector) {
+    return docForRender().querySelector(selector);
+  },
   /**
    * v-once / hoisted static subtrees arrive as an HTML string — parse it
    * once through a `<template>` (its `.content` emits real ops now) and

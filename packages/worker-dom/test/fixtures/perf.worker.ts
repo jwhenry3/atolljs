@@ -115,6 +115,31 @@ export const templateApp = islandApp('tpl', {
   },
 });
 
+/**
+ * 'cb' — calls a callbackProp-marshalled function from inside an event
+ * handler (and once from a timer, exercising the out-of-task doorbell path).
+ */
+export const callbackApp = islandApp('cb', {
+  imperative: (doc: ProxyDocument, props: Record<string, unknown>): void => {
+    const btn = doc.createElement('button');
+    btn.className = 'call-me';
+    btn.textContent = 'call';
+    btn.addEventListener('click', () => {
+      (props.onAction as ((v: string) => void) | undefined)?.('from worker');
+      const nested = props.deep as { later?: (v: string) => void } | undefined;
+      nested?.later?.('nested');
+    });
+    doc.body.append(btn);
+  },
+});
+
 export const perfWorker = defineIslandWorker({
-  apps: { tree: treeApp, rtree: RTree, rcounter: RCounter, ticker: tickerApp, tpl: templateApp },
+  apps: {
+    tree: treeApp,
+    rtree: RTree,
+    rcounter: RCounter,
+    ticker: tickerApp,
+    tpl: templateApp,
+    cb: callbackApp,
+  },
 });

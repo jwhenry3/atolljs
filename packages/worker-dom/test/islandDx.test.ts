@@ -14,10 +14,11 @@ InProcessWorker.handlerModules = [() => import('./fixtures/perf.worker')];
 
 let mountIsland: typeof import('../src/index').mountIsland;
 let connectIslandWorker: typeof import('../src/index').connectIslandWorker;
+let callbackProp: typeof import('../src/index').callbackProp;
 let realDoc: Document;
 beforeAll(async () => {
   realDoc = document;
-  ({ mountIsland, connectIslandWorker } = await import('../src/index'));
+  ({ mountIsland, connectIslandWorker, callbackProp } = await import('../src/index'));
 });
 
 const renderWorker = () =>
@@ -135,6 +136,30 @@ describe('flush mode', () => {
     expect(tpl.childNodes.length).toBe(0);
     // And cloning the content instantiated it into live DOM.
     expect(el.querySelector('.instantiated span')?.textContent).toBe('inside template');
+    island.destroy();
+  });
+
+  it('callbackProp marshals a shell function into a worker-callable prop', async () => {
+    const calls: string[] = [];
+    const el = host();
+    const island = await mountIsland({
+      worker: renderWorker,
+      el,
+      app: 'cb',
+      props: {
+        onAction: callbackProp((v: string) => calls.push(v)),
+        // Marker inside a nested object — marshalling recurses containers.
+        deep: { later: callbackProp((v: string) => calls.push(v)) },
+      },
+    });
+    // The cloneable preflight must see the marshalled wire shape, not the
+    // function — mount succeeding at all proves that ordering.
+    el.querySelector('button.call-me')!.dispatchEvent(
+      new (realDoc.defaultView as typeof window).MouseEvent('click', { bubbles: true }),
+    );
+    // Worker handler invoked both callables → emit ops ride the dispatch
+    // batch back → driver dispatches to the marshalled shell functions.
+    await vi.waitFor(() => expect(calls).toEqual(['from worker', 'nested']));
     island.destroy();
   });
 });

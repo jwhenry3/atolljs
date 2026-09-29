@@ -42,6 +42,18 @@ Pass `client: connectIslandWorker({ worker })` instead of `worker` when
 several islands should share one worker (multi-island-per-worker — the
 client is released when its last island destroys).
 
+## Worker entries per bundler
+
+The `worker` option is a factory — the bundler must see the worker script as
+an entry, which is where setups diverge:
+
+- **Vite / webpack 5**: `() => new Worker(new URL('./x.worker.ts', import.meta.url), { type: 'module' })` — the `new URL` literal is what the bundler detects; don't hoist or compute it.
+- **Vite alternative**: `import XWorker from './x.worker.ts?worker'` then `worker: () => new XWorker()`.
+- **esbuild / others**: the URL pattern needs the bundler's worker handling (esbuild bundles it only in `format: 'esm'` builds); otherwise compile the worker entry separately and pass `worker: new URL('/assets/x.worker.js', import.meta.url)`-style resolved URLs.
+
+A path the bundler didn't resolve shows up as a `mountIsland` `mountTimeout`
+rejection naming the unanswered entry — not a silent hang.
+
 ## React shells: `@jwhenry123/mesh-react-island`
 
 When the *shell* itself is a React app, the companion package
@@ -188,6 +200,12 @@ observer loop.
   callback that fires on a timer or promise (no realm active), wrap it:
   `runInRealm(realm, () => { emit(...); bumpOpsVersion(); })` — Leaflet's
   `zoomend` in the demo does exactly this.
+- **`callbackProp(fn)`** is the shell→worker half: pass it in props
+  (`props: { onSave: callbackProp(fn) }`) and the worker receives a callable
+  — invoking it fires `fn(...args)` on the shell, marshalled through the
+  emit channel. Fire-and-forget: the callable returns `undefined` (there's
+  no await channel), and calls made outside a dispatch task flush via the
+  doorbell. Markers work nested inside prop objects/arrays too.
 - **Slots** — `<Slot name="x"/>` renders a leaf `data-mesh-slot` element whose
   contents the shell fills with real main-thread DOM.
 - **The proxy DOM is write-path-plus-container-geometry.** Shadow-tree reads

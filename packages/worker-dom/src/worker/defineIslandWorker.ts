@@ -58,6 +58,7 @@ import { defineWorker } from '@jwhenry123/mesh/sdk';
 import type { SharedMemory, WorkerDefinition } from '@jwhenry123/mesh/sdk';
 import { islandAppNameOf } from '../app';
 import { renderMemory, type DoorbellSpec } from '../memory';
+import { CALLBACK_EVENT, unmarshalCallbackProps } from '../callbackProps';
 import {
   createProxyDocument,
   installRealmDispatcher,
@@ -67,6 +68,7 @@ import {
 } from './proxyDom';
 import { hostConfig } from './hostConfig';
 import {
+  bumpOpsVersion,
   getHandler,
   instances,
   pushOp,
@@ -160,6 +162,21 @@ const isImperative = (app: IslandApp | undefined): app is ImperativeIslandApp =>
 
 const isRendered = (app: IslandApp | undefined): app is RenderedIslandApp =>
   typeof app === 'object' && app !== null && 'mount' in app;
+
+/**
+ * Wrap a `{__cb:id}` wire handle into the callable the app receives: pushing
+ * a reserved `emit` op onto THIS realm's queue (the driver's emit-case
+ * dispatches it to the marshalled shell function) and ringing the doorbell
+ * so out-of-task invocations — timers, continuations — still flush.
+ * Fire-and-forget: there is no channel for a shell return value.
+ */
+const callbackFactory =
+  (realm: string) =>
+  (id: number) =>
+  (...args: unknown[]): void => {
+    pushOp(realm, { t: 'emit', name: CALLBACK_EVENT, payload: { id, args } });
+    bumpOpsVersion();
+  };
 
 interface RealmBase {
   /** The wire key — 'app' or 'app@instance'; op queues route by this. */
@@ -385,6 +402,11 @@ function createIslandRuntime(
        * replays cleanly onto an emptied root. The pid is kept across remounts.
        */
       mount(realm: string, props: Record<string, unknown> = {}): Op[] {
+        // {__cb:id} handles become callables scoped to THIS realm — invoking
+        // one emits a callback-prop op the driver routes to the shell's
+        // marshalled function (fire-and-forget, doorbell-rung for out-of-
+        // task callers like timers/promise continuations).
+        props = unmarshalCallbackProps(props, callbackFactory(realm)) as Record<string, unknown>;
         const App = resolveApp(appNameOf(realm));
         if (App === undefined) {
           throw new Error(
@@ -461,6 +483,7 @@ function createIslandRuntime(
        * emits filterChanged → shell → table.updateProps({filter})).
        */
       updateProps(realm: string, props: Record<string, unknown>): Op[] {
+        props = unmarshalCallbackProps(props, callbackFactory(realm)) as Record<string, unknown>;
         const mounted = realms.get(realm);
         if (mounted === undefined) {
           throw new Error(`updateProps: "${realm}" is not mounted in this worker — mount() first`);

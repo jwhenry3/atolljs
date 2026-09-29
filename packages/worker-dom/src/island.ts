@@ -30,6 +30,8 @@ import {
   type WireProps,
 } from './ops';
 
+import { marshalCallbackProps, CALLBACK_EVENT } from './callbackProps';
+
 export type Mode = 'push' | 'poll';
 
 /** The worker definition every `defineIslandWorker` call produces. */
@@ -293,7 +295,7 @@ const assertCloneableProps = (props: Record<string, unknown>, context: string): 
   throw new Error(
     `[island] ${context}: prop '${path}' is not structured-cloneable — props cross the worker ` +
       'boundary via postMessage. Pass plain data; behavior crosses through emit/onEvent, ' +
-      'slots, or a task method on the worker.',
+      'callbackProp() for shell functions, slots, or a task method on the worker.',
   );
 };
 
@@ -303,7 +305,16 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
     client: givenClient, worker, app: givenApp, props: givenProps,
     ...workerConfig
   } = opts;
-  const props = givenProps ?? {};
+  // Shell→worker callables: callbackProp() markers marshal to {__cb:id}
+  // wire handles; the island's table keeps the real functions and the
+  // driver's emit-case routes worker-side invocations back here.
+  const cbTable = new Map<number, (...args: unknown[]) => void>();
+  let cbSeq = 0;
+  const registerCb = (fn: (...args: unknown[]) => void): number => {
+    cbTable.set(++cbSeq, fn);
+    return cbSeq;
+  };
+  const props = marshalCallbackProps(givenProps ?? {}, registerCb) as Record<string, unknown>;
   if (givenClient === undefined && worker === undefined) {
     throw new Error(
       'mountIsland: pass `worker` (a `() => new Worker(...)`/URL entry — this call builds the ' +
@@ -697,6 +708,15 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
         break;
       }
       case 'emit': {
+        // Reserved name: a worker-side callbackProp invocation — invoke the
+        // marshalled shell function instead of surfacing it to onEvent.
+        if (op.name === CALLBACK_EVENT) {
+          const p = op.payload as { id?: number; args?: unknown[] } | undefined;
+          if (p !== null && typeof p === 'object' && typeof p.id === 'number') {
+            cbTable.get(p.id)?.(...(p.args ?? []));
+          }
+          break;
+        }
         // Not a DOM mutation — the island→shell channel.
         onEvent?.(op.name, op.payload);
         break;
@@ -843,8 +863,9 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
     },
     setMode,
     updateProps: async (next: Record<string, unknown>) => {
-      assertCloneableProps(next, `updateProps(${app})`);
-      applyOps(await client.updateProps(realm, next));
+      const marshalled = marshalCallbackProps(next, registerCb) as Record<string, unknown>;
+      assertCloneableProps(marshalled, `updateProps(${app})`);
+      applyOps(await client.updateProps(realm, marshalled));
     },
     flush: async () => {
       applyOps(await client.flush(realm));
