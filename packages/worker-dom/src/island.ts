@@ -59,16 +59,24 @@ export interface ConnectIslandWorkerConfig extends IslandWorkerOptions {
    * call `defineIslandWorker({ apps })` from '@jwhenry123/mesh-worker-dom/worker'.
    */
   worker: (() => Worker) | URL;
+  /**
+   * Default true — the client carries a SharedArrayBuffer doorbell for
+   * push-mode flush (requires COOP/COEP cross-origin isolation). Pass
+   * `false` for a message-only pool: `setMode('push')` falls back to
+   * polling and the page needs no special headers.
+   */
+  doorbell?: boolean;
 }
 
 /** One island client: one pool, one worker, one doorbell buffer. */
 export const connectIslandWorker = <W extends IslandWorkerDefinition = IslandWorkerDefinition>({
   worker,
+  doorbell,
   ...options
 }: ConnectIslandWorkerConfig): WorkerClient<W, DoorbellSpec> =>
   connectWorker<W, DoorbellSpec>({
     ...options,
-    sharedMemory: makeDoorbell(),
+    sharedMemory: doorbell === false ? undefined : makeDoorbell(),
     worker,
     poolSize: 1,
   });
@@ -103,6 +111,22 @@ interface MountIslandBaseOptions {
    * timing to split worker-vs-main cost for a sub-application.
    */
   onOps?: (ops: readonly Op[], elapsedMs: number) => void;
+  /**
+   * Initial flush mode — 'push' (default) subscribes the shared-memory
+   * doorbell once the mount handshake lands; 'poll' drains committed ops on
+   * a 50ms interval. With the `worker` shorthand, 'poll' also builds the
+   * client without a doorbell — no SharedArrayBuffer, so no COOP/COEP
+   * cross-origin isolation requirement. Switch later with `handle.setMode`.
+   */
+  mode?: Mode;
+  /**
+   * Milliseconds the mount handshake (mount + whoami) may take before the
+   * returned promise rejects — default 15_000, `0` disables. A worker entry
+   * that loads but never answers (no defineIslandWorker/defineRealmWorker
+   * call, an import that hangs) otherwise leaves mount pending forever;
+   * hard failures (module error, crash) already reject immediately.
+   */
+  mountTimeout?: number;
 }
 
 /**
@@ -128,11 +152,11 @@ export interface IslandHandle {
   /** Re-render the island's root with new serializable props. */
   updateProps(props: Record<string, unknown>): Promise<void>;
   /**
-   * Switch how async commits are noticed. Call AFTER every island is
-   * mounted — in the browser each island's doorbell contract is bound to its
-   * own pool buffer, but under the in-process test harness all contracts end
-   * up bound to the last pool's buffer, so subscribing early can pin a stale
-   * doorbell.
+   * Switch how async commits are noticed. The mode given at mount ('push'
+   * by default) is started automatically once the handshake lands — call
+   * this only to switch modes afterwards. Rebinds of the doorbell contract
+   * (in-process harnesses bind every contract on each pool spawn) re-watch
+   * transparently.
    */
   setMode(mode: Mode): void;
   /** Manual flush — drains ops committed outside task calls. */
@@ -275,7 +299,7 @@ const assertCloneableProps = (props: Record<string, unknown>, context: string): 
 
 export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandle> {
   const {
-    el, onEvent, onActivity, onOps, slots,
+    el, onEvent, onActivity, onOps, slots, mode: initialMode, mountTimeout,
     client: givenClient, worker, app: givenApp, props: givenProps,
     ...workerConfig
   } = opts;
@@ -288,7 +312,13 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
   }
   const client: IslandClient =
     givenClient ??
-    connectIslandWorker({ ...workerConfig, worker } as ConnectIslandWorkerConfig);
+    connectIslandWorker({
+      ...workerConfig,
+      worker,
+      // Poll-mode shorthand islands don't need SharedArrayBuffer at all —
+      // skip the doorbell contract so the page needs no COOP/COEP headers.
+      doorbell: initialMode !== 'poll',
+    } as ConnectIslandWorkerConfig);
   assertCloneableProps(props, `mountIsland(${givenApp ?? 'main'})`);
   // 'main' is the unnamed-island name — realm workers (defineRealmWorker)
   // resolve their single app regardless of it.
@@ -352,7 +382,7 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
 
   let opsApplied = 0;
   let flushCalls = 0;
-  let mode: Mode = 'push';
+  let mode: Mode = initialMode ?? 'push';
   let unsubscribe: (() => void) | null = null;
   let pollTimer: number | null = null;
   let destroyed = false;
@@ -705,8 +735,49 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
 
   /* ── Mount ────────────────────────────────────────────────────────────── */
 
-  applyOps(await client.mount(realm, props));
-  const pid = await client.whoami(realm);
+  // Bound the handshake: a worker entry that loads but never answers (no
+  // define*Worker call, a hung import) would otherwise pend forever — hard
+  // failures already reject via the pool's 'error' handling.
+  const mountMs = mountTimeout ?? 15_000;
+  const raced = <T>(p: Promise<T>): Promise<T> => {
+    if (mountMs <= 0) return p;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    return Promise.race([
+      p,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(
+          () =>
+            reject(
+              new Error(
+                `mountIsland(${app}): the worker never answered within ${mountMs}ms — ` +
+                  'check that the entry module loads (bundler path, uncaught import errors) ' +
+                  'and calls defineIslandWorker/defineRealmWorker. Pass { mountTimeout: 0 } to disable.',
+              ),
+            ),
+          mountMs,
+        );
+      }),
+    ]).finally(() => clearTimeout(timer));
+  };
+
+  let pid: string;
+  try {
+    applyOps(await raced(client.mount(realm, props)));
+    pid = await raced(client.whoami(realm));
+  } catch (err) {
+    // The realm may exist worker-side with ops we never applied — release it.
+    // An island-owned client also terminates (stops a crash→respawn loop on
+    // a permanently-broken entry); a shared client just drops the realm.
+    clientMounts.set(client, (clientMounts.get(client) ?? 1) - 1);
+    if (givenClient === undefined) client.terminate();
+    else void client.unmount(realm).catch(() => {});
+    throw err;
+  }
+
+  // Start the transport now that the handshake landed — 'push' subscribes
+  // the doorbell, 'poll' starts the interval. This used to be a manual
+  // post-mount ritual; subscriptions now survive contract rebinds.
+  setMode(mode);
 
   /* ── Pushed-size channel ─────────────────────────────────────────────────
    *

@@ -77,6 +77,25 @@ function RCounter(props: Record<string, unknown>) {
   );
 }
 
+/**
+ * 'ticker' — commits outside any task: a setTimeout mutates the doc after
+ * mount returns. The only way those ops reach the DOM is the doorbell (or
+ * a manual flush) — the auto-subscribe test mounts it with no setMode call.
+ */
+export const tickerApp = islandApp('ticker', {
+  imperative: (doc: ProxyDocument): void => {
+    const first = doc.createElement('div');
+    first.textContent = 'tick';
+    doc.body.append(first);
+    setTimeout(() => {
+      const second = doc.createElement('div');
+      second.className = 'tocked';
+      second.textContent = 'tock';
+      doc.body.append(second);
+    }, 0);
+  },
+});
+
 export const perfWorker = defineIslandWorker({
-  apps: { tree: treeApp, rtree: RTree, rcounter: RCounter },
+  apps: { tree: treeApp, rtree: RTree, rcounter: RCounter, ticker: tickerApp },
 });

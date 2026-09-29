@@ -155,7 +155,7 @@ export function Shell({ worker = renderWorker }: { worker?: () => Worker }): Rea
 
   const ready = (key: string) => (h: IslandHandle): void => {
     handles.current.set(key, h);
-    h.setMode(modeRef.current); // doorbell binds lazily — set on ready
+    h.setMode(modeRef.current); // applies the user's pick to late-mounting islands (push auto-subscribes at mount)
     setPids((p) => ({ ...p, [key]: `worker ${h.pid}` }));
     setStatsTick((t) => t + 1);
   };

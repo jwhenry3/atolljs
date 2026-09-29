@@ -242,6 +242,14 @@
       <li><strong class="done">READMEs everywhere.</strong> worker-dom documents the RenderedIslandApp contract + per-framework table; vue/svelte/angular-island ship READMEs matching solid-island's (shell API, worker entry, caveats).</li>
     </ol>
 
+    <h2>Refinement round 3 — transport DX, landed</h2>
+    <ol>
+      <li><strong class="done">Push mode auto-subscribes at mount.</strong> The <code>setMode('push')</code>-after-mount ritual is gone — <code>mountIsland</code> starts the doorbell (or the poll timer) itself once the handshake lands. Made safe by <code>observe()</code> re-watching when the contract rebinds: in-process harnesses bind <em>every</em> defined contract on each pool spawn, which used to pin the watch to a stale buffer.</li>
+      <li><strong class="done">Islands without SharedArrayBuffer.</strong> <code>mountIsland({mode:'poll'})</code> (or <code>connectIslandWorker({doorbell:false})</code>) builds a message-only pool — no COOP/COEP cross-origin isolation needed; <code>setMode('push')</code> on a doorbell-less client falls back to polling.</li>
+      <li><strong class="done"><code>mountTimeout</code> bounds the handshake.</strong> A worker entry that loads but never answers (missing <code>define*Worker</code>, hung import) rejects with a named error at 15s instead of pending forever; failed mounts release the realm and terminate island-owned clients — which also stops a crash→respawn loop on a permanently-broken entry.</li>
+      <li><strong class="done">InProcessWorker fidelity.</strong> Module-load failure fires <code>error</code> and dead workers drop tasks — tests see the crash path instead of a hang. And a real latent bug: message-only pools (<code>INIT</code>) never loaded the handler modules at all.</li>
+    </ol>
+
     <h2>Next steps of refinement</h2>
     <ol>
       <li><strong><code>template.content</code> direct appends emit no ops</strong> — the fragment view shares the element's shadow children under a phantom id, so <code>content.appendChild</code> never reaches the wire. The documented innerHTML→cloneNode flow is unaffected; fix only if a library appends to <code>.content</code> directly (would need driver-side routing of template-children into <code>.content</code>).</li>

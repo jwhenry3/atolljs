@@ -103,6 +103,22 @@ Vue, Svelte, Solid, Angular, and imperative apps freely.
   `connectIslandWorker` co-locate their realms in one worker (multi-island-
   per-worker). `destroy()` unmounts just that realm via `unmount`; the
   worker terminates when its last island leaves.
+- **Async commits flush themselves.** Push mode (the default) subscribes the
+  shared-memory doorbell when the mount handshake lands — `useEffect` commits,
+  timers, and framework schedulers' post-task work arrive with no
+  `setMode`/`flush` ritual. `mountIsland({ mode: 'poll' })` drains on a 50ms
+  interval instead, and with the `worker` shorthand builds a doorbell-free
+  client — no SharedArrayBuffer, so no COOP/COEP cross-origin isolation
+  (`connectIslandWorker({ doorbell: false })` does the same for shared
+  clients). `handle.setMode` still switches modes after mount.
+- **`mountTimeout`** (default 15s, `0` disables) bounds the mount handshake —
+  a worker entry that loads but never answers rejects with a named error
+  instead of pending forever; hard failures (module-load errors, crashes)
+  reject immediately regardless. A failed mount releases the realm and
+  terminates an island-owned client.
+- **`e.target.value` / `e.target.checked` work in handlers** — the dispatched
+  form state is stamped onto the proxy event target, so uncontrolled-input
+  handlers read the DOM idiom naturally.
 - **`emit(name, payload)`** is the island→shell channel — call inside handlers
   or commit-phase effects while a task holds the realm. From a library
   callback that fires on a timer or promise (no realm active), wrap it:

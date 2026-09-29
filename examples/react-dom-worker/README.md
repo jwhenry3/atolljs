@@ -314,8 +314,8 @@ it, so the shell sees `island.updateProps(props)`):
   promise continuations commit on the worker's own scheduler task; their ops
   sit in the realm queue until asked for. `resetAfterCommit` bumps
   `opsVersion`, the island's `observe()` wakes on `Atomics.waitAsync`, and
-  `flush(app)` drains — the toolbar's **push/poll** toggle applies to every
-  island and is called after all mounts (see `setMode` in island.ts).
+  `flush(app)` drains — push mode (the default) subscribes automatically at
+  mount; the toolbar's **push/poll** toggle just switches modes.
 - **Every interaction is a round-trip.** A keystroke = postMessage → worker
   re-render → ops back → DOM writes. Cross-island effects add one more hop:
   emit op → shell → `updateProps` task → second worker re-render → ops back.

@@ -61,7 +61,8 @@ describe('leaflet map island', () => {
         app: 'map',
         onEvent: (name, payload) => emitted.push({ name, payload }),
       });
-      island.setMode('push');
+      // push mode auto-subscribes at mount — Leaflet's post-mount commits
+      // flush via the doorbell; the manual flushes below keep it honest.
 
       await vi.waitFor(
         async () => {

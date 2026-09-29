@@ -55,6 +55,8 @@ export function observe<S extends SharedSpec, K extends SpecPath<S>, Sel>(
   let lastVersion = -1;
   let unwatch: (() => void) | null = null;
   let pendingBind: (() => void) | null = null;
+  let rebindUn: (() => void) | null = null;
+  let watched: Connector<T> | null = null;
   const subscribers = new Set<(value: Out | undefined) => void>();
 
   const activate = () => {
@@ -83,14 +85,37 @@ export function observe<S extends SharedSpec, K extends SpecPath<S>, Sel>(
       },
       options
     );
+    watched = connector;
+    // bind() can REBIND this contract to a different buffer — in-process
+    // harnesses run every worker's bindSharedMemories in one module graph,
+    // so a later pool's spawn rebinds this contract too. The watch above
+    // pins the old connector (old buffer); re-watch when it swaps. onBound
+    // fires synchronously when already bound — the identity check makes
+    // that first call a no-op.
+    rebindUn ??= memory.onBound(() => {
+      let next: Connector<T>;
+      try {
+        next = memory.connector(String(key)) as Connector<T>;
+      } catch {
+        return;
+      }
+      if (next === watched) return;
+      unwatch?.();
+      unwatch = null;
+      watched = null;
+      activate();
+    });
     obsLog.debug(`observing "${String(key)}" (offset ${connector.byteOffset})`);
   };
 
   const deactivate = () => {
     unwatch?.();
     unwatch = null;
+    watched = null;
     pendingBind?.();
     pendingBind = null;
+    rebindUn?.();
+    rebindUn = null;
   };
 
   return {

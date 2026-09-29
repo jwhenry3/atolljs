@@ -54,7 +54,6 @@ describe('recharts island', () => {
       props: { width: 600, height: 260 },
       onEvent: (name, payload) => emitted.push({ name, payload }),
     });
-    island.setMode('push');
     // Recharts does multi-pass measurement renders after mount — the commits
     // queue from passive effects and converge after a few flushes.
     await vi.waitFor(async () => {

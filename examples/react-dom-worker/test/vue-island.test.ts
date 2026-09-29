@@ -38,10 +38,10 @@ describe('vue island in the demo shell', () => {
       onEvent: (name, payload) => emitted.push({ name, payload }),
     });
     expect(island.pid).toMatch(/^w-/);
-    // The documented call-after-mount ordering: subscribe the doorbell so
-    // Vue's microtask-scheduled commits (they land AFTER the dispatch task
-    // returns) flush without manual intervention.
-    island.setMode('push');
+    // Push mode auto-subscribes the doorbell at mount — Vue's
+    // microtask-scheduled commits (they land AFTER the dispatch task
+    // returns) flush without any manual intervention.
+    expect(island.mode).toBe('push');
 
     const heading = el.querySelector('.vanilla-heading')!;
     const input = el.querySelector('input')!;

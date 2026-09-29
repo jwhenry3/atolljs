@@ -10,8 +10,9 @@
  * One module instance plays every worker, so realms are keyed by app name —
  * exactly why mount/updateProps/flush/whoami carry the app on the wire.
  * A shared module graph also means every defined shared-memory contract ends
- * up bound to the LAST pool's buffer; doorbells therefore have to subscribe
- * after all mounts (island.ts documents the same call order for main.ts).
+ * up bound to the LAST pool's buffer — doorbell subscriptions survive those
+ * rebinds (observe() re-watches when the connector swaps), so push mode can
+ * auto-subscribe at mount.
  */
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { InProcessWorker } from '../../../test/inProcessWorker';
@@ -130,12 +131,11 @@ describe('react-dom-worker islands', () => {
     await vi.waitFor(() => expect(emitted.some((e) => e.name === 'rowSelected')).toBe(true));
 
     /* doorbell: StatsApp's useEffect commits outside a task — its opsVersion
-       bump (plus the subscription's initial-value emit) triggers flush() on
-       its own. No manual island.flush() is ever called. */
-    const flushesBefore = stats.flushCalls;
-    for (const island of [controls, table, stats]) island.setMode('push');
+       bump triggers flush() on its own. No setMode call, no manual
+       island.flush() — push mode auto-subscribed when each mount handshake
+       landed, so the text arriving at all is the proof. */
     await vi.waitFor(() => expect(statsEl.textContent).toContain('passive effects flushed'));
-    expect(stats.flushCalls).toBeGreaterThan(flushesBefore);
+    expect(stats.flushCalls).toBeGreaterThan(0);
   });
 
   it('mount() on an already-mounted app remounts — fresh batch, same pid', async () => {

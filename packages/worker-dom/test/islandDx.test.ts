@@ -13,10 +13,11 @@ vi.stubGlobal('Worker', InProcessWorker);
 InProcessWorker.handlerModules = [() => import('./fixtures/perf.worker')];
 
 let mountIsland: typeof import('../src/index').mountIsland;
+let connectIslandWorker: typeof import('../src/index').connectIslandWorker;
 let realDoc: Document;
 beforeAll(async () => {
   realDoc = document;
-  ({ mountIsland } = await import('../src/index'));
+  ({ mountIsland, connectIslandWorker } = await import('../src/index'));
 });
 
 const renderWorker = () =>
@@ -96,5 +97,63 @@ describe('prop serializability guard', () => {
       /prop 'cb' is not structured-cloneable/,
     );
     island.destroy();
+  });
+});
+
+describe('flush mode', () => {
+  it('push auto-subscribes at mount — out-of-task commits flush with no setMode call', async () => {
+    const el = host();
+    const island = await mountIsland({ worker: renderWorker, el, app: 'ticker' });
+    expect(island.mode).toBe('push');
+    expect(el.textContent).toContain('tick');
+    // 'ticker' commits its second node from a setTimeout — outside any task.
+    // Before auto-subscribe this needed an explicit setMode('push') ritual.
+    await vi.waitFor(() => expect(el.querySelector('.tocked')).not.toBeNull());
+    island.destroy();
+  });
+
+  it('mode: poll builds a doorbell-free client — no SharedArrayBuffer needed', async () => {
+    const client = connectIslandWorker({ worker: renderWorker, doorbell: false });
+    expect(client.sharedMemory).toBeUndefined();
+
+    const el = host();
+    const island = await mountIsland({ client, el, app: 'ticker', mode: 'poll' });
+    expect(island.mode).toBe('poll');
+    expect(el.textContent).toContain('tick');
+    // Poll interval drains the out-of-task commit too (50ms tick < waitFor).
+    await vi.waitFor(() => expect(el.querySelector('.tocked')).not.toBeNull());
+    island.destroy();
+  });
+});
+
+describe('mount handshake failures', () => {
+  it('rejects when the worker entry never answers — mountTimeout', async () => {
+    const hang = () => new Promise<unknown>(() => {});
+    InProcessWorker.handlerModules.push(hang);
+    try {
+      await expect(
+        mountIsland({ worker: renderWorker, el: host(), app: 'rcounter', mountTimeout: 50 }),
+      ).rejects.toThrow(/never answered within 50ms/);
+    } finally {
+      InProcessWorker.handlerModules.splice(
+        InProcessWorker.handlerModules.indexOf(hang),
+        1,
+      );
+    }
+  });
+
+  it('rejects fast when the worker entry fails to load — error event, not a hang', async () => {
+    const broken = () => Promise.reject(new Error('cannot resolve ./missing'));
+    InProcessWorker.handlerModules.push(broken);
+    try {
+      await expect(
+        mountIsland({ worker: renderWorker, el: host(), app: 'rcounter', mountTimeout: 30_000 }),
+      ).rejects.toThrow(/failed to load/);
+    } finally {
+      InProcessWorker.handlerModules.splice(
+        InProcessWorker.handlerModules.indexOf(broken),
+        1,
+      );
+    }
   });
 });

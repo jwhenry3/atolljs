@@ -85,7 +85,7 @@ function renderStats(): void {
 
 function setMode(next: Mode): void {
   mode = next;
-  // setMode after all mounts — the doorbell binds lazily (see island.ts).
+  // Push mode is already subscribed at mount — this only switches modes.
   for (const island of islands) island.setMode(next);
   renderStats();
 }
@@ -278,7 +278,6 @@ async function main(): Promise<void> {
   islands.push(charts);
   $('badge-charts').textContent = `worker ${charts.pid}`;
 
-  setMode('push');
   setStatus('eight islands mounted — two share an app, one is imperative, one is Vue, one runs real Leaflet + recharts');
 }
 
