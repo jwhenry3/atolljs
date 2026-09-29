@@ -1,71 +1,23 @@
 # Changelog
 
-## Unreleased
-
-- **New package: `@atolljs/react-island`** — the React shell
-  components split out of `@atolljs/islands` (which stays
-  React-free on the main thread): `<Island/>` mounts a worker app
-  declaratively, `islandComponent<P>('name')` proxies a worker app as a
-  local-typed component without importing it, and `lazyIsland(loader)`
-  mirrors `React.lazy` — suspends on the dynamic import (a real code-split
-  boundary) then mounts the `islandApp`-stamped reference.
-- **New package: `@atolljs/islands`** — the React-in-worker
-  islands pattern extracted from the react-dom-worker example into an
-  opt-in package. `defineIslandWorker({ apps })` is the whole worker entry
-  (React realms via a real `react-reconciler@0.34`, or `{ imperative }`
-  realms on the worker-side proxy DOM); `connectIslandWorker({ worker })`
-  + `mountIsland()` are the main-thread driver — no React on the main
-  thread, just op replay.
-- **Global DOM shim + innerHTML in the proxy DOM.** `installDomShim(doc)`
-  sets `globalThis.document` and a `window` facade (never touching
-  `globalThis.addEventListener`/`self` — the pool's channel lives there), so
-  real DOM-dependent libraries run unmodified inside a realm: `innerHTML`
-  parses via htmlparser2, `document`/`window.addEventListener` emit `listen`
-  ops on the island container (id 0) for delegation, and dispatched
-  `EventPayload`s gain a synthesized `target` proxy node. Also new on proxy
-  elements: `outerHTML`, `insertAdjacentHTML/Element`, `cloneNode`,
-  `append`/`prepend`/`replaceChildren`/`remove`, `closest`/`matches`,
-  `getRootNode`, `ownerDocument`; `document.addEventListener` and text-node
-  `data`/`nodeValue` accessors.
-- The react-dom-worker example now consumes the package (a `file:` dep +
-  source aliases) and demos the shim with a vendored plain-JS widget.
-
-## 0.1.1 — packaging
-
-No API changes — this release fixes what ships and how it ships.
-
-- **Published tarball 139 kB → 60 kB.** `*.test.ts` sources and dist
-  sourcemaps no longer ship (the `src` TypeScript sources still do, via
-  the `./sdk/*` export).
-- **Core `dist` is now per-module, not a 230 kB monolith.** Dependencies
-  (`zod`, `msgpackr`, `@msgpack/msgpack`, `solid-js`) are external instead of
-  inlined, so importing only `WorkerPool`/`connectWorker` no longer pulls
-  `mz`/zod into your bundle — consumer bundlers tree-shake the parts you
-  don't use.
-- `fast-json-stringify` moved to `devDependencies` — it was a
-  benchmark-only dependency being installed by consumers.
-- `workerBootstrap` is marked as the package's one side-effectful module so
-  bundlers don't drop its `self.onmessage` wiring when pruning.
-- `@atolljs/node` and `@atolljs/nestjs` now ship READMEs.
-- Release pipeline: CI **stages** packages with `npm stage publish` —
-  versions stay non-installable until maintainer 2FA approval — and supports
-  OIDC trusted publishing (`npm trust github … --allow-stage-publish`) so the
-  workflow can be run secretless and stage-only.
-
 ## 0.1.0 — initial release
 
-Typed shared-memory worker pools for TypeScript. The worker file is the
-contract: `defineWorker` declares the method surface once, `connectWorker`
-gives the main thread a typed, lazy client — and a shared-memory contract can
-flow live values into UI state without a single `postMessage` copy.
+Typed shared-memory worker pools and worker-rendered UI islands for
+TypeScript. The worker file is the contract: `defineWorker` declares the
+method surface once, `connectWorker` gives the main thread a typed, lazy
+client — and a shared-memory contract can flow live values into UI state
+without a single `postMessage` copy. On top of that sits the islands layer:
+whole framework apps render inside workers and stream DOM ops to the main
+thread.
 
-### Core SDK — `@atolljs/core`
+### Core — `@atolljs/core`
 
 **Worker authoring & clients**
 
-- `defineWorker({ sharedMemory?, methods })` — self-bootstrapping worker entry;
-  methods are plain functions or `serviceMethod` units with zod wire schemas.
-  Nested `services: { name: { ... } }` namespaces methods as `name.method`.
+- `defineWorker({ sharedMemory?, methods })` — self-bootstrapping worker
+  entry; methods are plain functions or `serviceMethod` units with zod wire
+  schemas. Nested `services: { name: { ... } }` namespaces methods as
+  `name.method`.
 - `connectWorker<typeof worker>({ worker, sharedMemory?, poolSize, … })` —
   typed client proxy over a `WorkerPool`; **lazy spawn** makes it SSR-safe —
   the pool starts on the first call (or `client.start()`), never on import.
@@ -111,8 +63,44 @@ flow live values into UI state without a single `postMessage` copy.
   `rpc<A, R>` — contract objects both threads can hold at runtime; wire ids
   derive as `service.method`; signatures infer from schemas.
 
-**SharedWorker** — `connectSharedWorker` + `sharedWorkerHost`: one worker (and
-one buffer) shared across tabs/iframes.
+**SharedWorker** — `connectSharedWorker` + `sharedWorkerHost`: one worker
+(and one buffer) shared across tabs/iframes.
+
+**Testing** — `InProcessWorker`
+(`@atolljs/core/testing/inProcessWorker`) runs the whole protocol
+in-process: real task registry, real op stream, real shared-memory binding —
+only the thread boundary is faked.
+
+### Islands — worker-rendered UI
+
+**`@atolljs/islands`** — the engine. Main thread: `connectIslandWorker({
+worker })` + `mountIsland()` — no framework code on the main thread, just op
+replay. Worker side (`@atolljs/islands/worker`): `definePolyWorker({ apps })`
+hosts a named island registry in one worker; `defineMonoWorker(app)` dedicates
+a worker to a single app.
+
+- `islandApp(...)` stamps worker-side apps; `emit` sends events island → host;
+  `callbackProp(fn)` marshals function props as emit-backed callables; `Slot`
+  projects host children into the worker tree.
+- Op stream rides a shared-memory doorbell (`push`) or plain postMessage
+  (`mode: 'poll'` / `doorbell: false` — no `SharedArrayBuffer` needed);
+  `mountTimeout` guards against silent worker entries.
+- `installDomShim(doc)` sets `globalThis.document` + a `window` facade so
+  real DOM-dependent libraries run unmodified in the worker: `innerHTML`
+  parses via htmlparser2, delegated `listen` ops, `outerHTML`,
+  `insertAdjacentHTML`, `cloneNode`, `closest`/`matches`, and friends on the
+  proxy DOM.
+
+**Per-framework island packages** — each ships a host-side mount and worker
+helpers (`define<Fw>PolyWorker` / `define<Fw>MonoWorker`):
+
+| Package | Host API |
+|---|---|
+| `@atolljs/react-island` | `<Island/>`, `islandComponent`, `lazyIsland` (Suspense code-splitting) |
+| `@atolljs/vue-island` | `<AtollIsland/>`, `useIsland`, `vueIsland` |
+| `@atolljs/svelte-island` | `<AtollIsland/>` component, `svelteIsland` |
+| `@atolljs/solid-island` | `<AtollIsland/>`, `solidIsland` |
+| `@atolljs/angular-island` | `<atoll-island>` component + `[atollIsland]` directive |
 
 ### Framework bindings — independently published
 
@@ -147,10 +135,23 @@ ctor-param injection. Pools terminate on injector destroy (teardown/HMR).
   guard prevents nested pools when feature modules are shared between
   API and worker contexts.
 
+### Packaging
+
+- Per-module `dist` (not a monolith) — dependencies (`zod`, `msgpackr`,
+  `@msgpack/msgpack`, `solid-js`) are external so bundlers tree-shake unused
+  parts; deep imports reach the TypeScript sources via the `./*` export.
+- `workerBootstrap` is marked side-effectful so bundlers keep its
+  `self.onmessage` wiring.
+- Releases stage to npm (`npm stage publish`) for maintainer-approved,
+  provenance-attested publishing — OIDC trusted publishing supported
+  (`npm trust github … --allow-stage-publish`), so the workflow can run
+  secretless and stage-only.
+
 ### Requirements & caveats
 
 - Browser `Worker` (or `node:worker_threads`); `SharedArrayBuffer` +
-  `crossOriginIsolated` only when `sharedMemory` is used.
+  `crossOriginIsolated` only when `sharedMemory` is used (islands run
+  headerless in `poll` mode).
 - Safari lacks `SharedWorker` — feature-detect before `connectSharedWorker`.
 - Bindings ship TypeScript source; your bundler compiles them. Works with
   TypeScript 6 and 7.
@@ -159,10 +160,11 @@ ctor-param injection. Pools terminate on injector destroy (teardown/HMR).
 
 ### Ecosystem in the box
 
-- Docs: `jwhenry3.github.io/atolljs/` — `/sdk/` internals site, `/consumer/`
-  usage site (quickstart, per-framework pages, isolation/hosting guides).
+- Consumer docs + live demos at `jwhenry3.github.io/atolljs/consumer/` —
+  a `coi-sw.js` service worker injects COOP/COEP on headerless hosts so the
+  demos run in `push` mode, with automatic `poll` fallback; in-repo agent/
+  developer docs live under `docs/`.
 - Runnable examples for all six frameworks + NestJS + Node, an `incidents`
-  domain package as the reference integration, and a `benchmark` example.
-- 43 test files / 348 tests including a real `nest build` → boot → HTTP e2e.
-- Releases stage to npm (`npm stage publish`) for maintainer-approved,
-  provenance-attested publishing.
+  domain package as the reference integration, and a worker-DOM islands demo
+  (React + Vue + imperative islands in one page).
+- 66 test files / 478 tests including a real `nest build` → boot → HTTP e2e.
