@@ -97,62 +97,6 @@ import { DigestAtollModule } from './digest.module';
 
 void runAtollWorker(DigestAtollModule);   // real DI inside the worker`;
 
-const HOUSED_MODULE = `// src/housed/housed-atoll.module.ts — the 'housed' pool is
-// MESSAGE-ONLY: a sharedMemory here would allocate a SECOND buffer, so
-// withSharedBuffer hands each spawned worker the incidents pool's
-// buffer instead. Two pools' workers, one shared buffer.
-import { Module } from '@nestjs/common';
-import { Worker } from 'node:worker_threads';
-import { AtollModule, getAtollPool } from '@atolljs/nestjs';
-import { withSharedBuffer } from '@atolljs/node';
-
-@Module({
-  imports: [
-    AtollModule.registerPool({
-      name: 'housed',
-      worker: withSharedBuffer(
-        () => new Worker(new URL('./housed.worker.ts', import.meta.url)),
-        () => getAtollPool('incidents')?.sharedBuffer, // lazy — respawns included
-      ),
-      poolSize: 2,
-    }),
-  ],
-})
-export class HousedAtollModule {}`;
-
-const HOUSED_WORKER = `// src/housed/housed.worker.ts — an HTTP worker, NOT a task worker
-// (no runAtollWorker/bootstrap): bind the shared buffer, then boot a
-// whole Nest app that exists ONLY inside workers.
-import 'reflect-metadata';
-import { NestFactory } from '@nestjs/core';
-import { bindSharedBuffer } from '@atolljs/node';
-import { serveHttp } from '@atolljs/node/http';
-import { HousedApiModule } from './housed-api.module';
-
-void (async () => {
-  await bindSharedBuffer(); // the incidents pool's buffer — same memory
-  const app = await NestFactory.create(HousedApiModule, { logger: ['warn', 'error'] });
-  await app.init();
-  serveHttp(app.getHttpServer(), { listen: 0 }); // internal port, announced to parent
-})();`;
-
-const HOUSED_MAIN = `// src/main.ts — /api/housed/* proxies into workers; the rest of
-// the app keeps its own controllers on the API thread.
-import { proxyToWorker, workerHttpPorts } from '@atolljs/node/http';
-
-const pool = getAtollPool('housed');
-const tracker = workerHttpPorts(pool);
-let cursor = 0;
-app.use(
-  '/api/housed',
-  proxyToWorker({
-    pool,
-    tracker,
-    to: '/api/housed', // express stripped the mount — restore it for worker routes
-    worker: (workers) => workers[cursor++ % workers.length], // round-robin
-  }),
-);`;
-
 const USAGE_BUILD = `// nest-cli.json — opt into webpack so worker entries bundle
 {
   "compilerOptions": {
@@ -202,21 +146,11 @@ export function Nestjs() {
         Beyond task dispatch, a route subtree can live <em>only</em> in
         workers: a dedicated message-only pool boots a real Nest app per
         worker — decorators, DI, and guards intact — and the main app
-        proxies a URL prefix into it. Requests transit the main thread once;
-        the whole controller stack executes off-thread.
-      </p>
-      <CodeBlock code={HOUSED_MODULE} file="housed/housed-atoll.module.ts" />
-      <CodeBlock code={HOUSED_WORKER} file="housed/housed.worker.ts" />
-      <CodeBlock code={HOUSED_MAIN} file="main.ts" />
-      <p>
-        Housed controllers inject normally — <code>IncidentsAnalytics</code>'s{' '}
-        <code>@AtollService</code> methods find an empty pool registry in-worker
-        and run their real bodies, so per-worker state (telemetry, caches)
-        stays genuinely per-worker. The standalone pieces —{' '}
-        <code>serveHttp</code>, <code>workerHttpPorts</code>,{' '}
-        <code>proxyToWorker</code>, <code>withSharedBuffer</code>,{' '}
-        <code>bindSharedBuffer</code> — come from <code>@atolljs/node</code>{' '}
-        and work without Nest too; see <a href="#/node-servers">Node worker servers</a>.
+        proxies a URL prefix into it, with optional clustered and WebSocket
+        entry points to the same routes.{' '}
+        <a href="#/fw-nestjs/housed">Housed APIs</a> walks through the whole
+        setup; <a href="#/node-servers">HTTP offload</a> covers the
+        underlying <code>@atolljs/node/http</code> machinery.
       </p>
 
       <h2>Build</h2>
@@ -262,9 +196,8 @@ export function Nestjs() {
       <ul>
         <li><a href={`${apiBase}/api/incidents/stats`} target="_blank" rel="noreferrer"><code>{apiBase}/api/incidents/stats</code></a> — worker-computed aggregates</li>
         <li><a href={`${apiBase}/api/digest/worker`} target="_blank" rel="noreferrer"><code>{apiBase}/api/digest/worker</code></a> — the answering worker's threadId + per-worker telemetry</li>
-        <li><a href={`${apiBase}/api/housed/incidents/whoami`} target="_blank" rel="noreferrer"><code>{apiBase}/api/housed/incidents/whoami</code></a> — served entirely inside a housed worker</li>
-        <li><a href={`${apiBase}/api/housed/incidents/worker-telemetry`} target="_blank" rel="noreferrer"><code>{apiBase}/api/housed/incidents/worker-telemetry</code></a> — per-worker state from the housed Nest app</li>
         <li><a href={`${apiBase}/api/incidents/42`} target="_blank" rel="noreferrer"><code>{apiBase}/api/incidents/42</code></a> — a direct shared-memory read, zero dispatch</li>
+        <li><a href={`${apiBase}/api/housed/incidents/whoami`} target="_blank" rel="noreferrer"><code>{apiBase}/api/housed/incidents/whoami</code></a> — the housed worker API (see <a href="#/fw-nestjs/housed">Housed APIs</a>)</li>
       </ul>
 
       <h2>Notes</h2>

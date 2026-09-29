@@ -1,4 +1,4 @@
-# @atolljs/node — node:worker_threads adapter + HTTP connection offload
+# @atolljs/node — node:worker_threads adapter + HTTP clustering/offload
 
 `@atolljs/node` adapts the SDK's DOM-shaped `Worker` expectations to Node's
 `worker_threads` (an EventEmitter), so `WorkerPool`/`connectWorker` run in
@@ -8,7 +8,7 @@ any Node program without a framework. `packages/node` ships three surfaces:
 |---|---|
 | `@atolljs/node` | `createNodePool`, `createNodeWorker`, `NodeWorkerAdapter` |
 | `@atolljs/node/shim` | worker-entry prelude — binds `self = parentPort` before Atoll's bootstrap evaluates |
-| `@atolljs/node/http` | `routeHttpConnections` (main) + `serveHttp` (worker) — sockets routed into pool workers; `routeHttpGateway` — path-level routing: some routes in worker A, some in B, some on main |
+| `@atolljs/node/http` | `createHttpCluster` (main) + `serveHttp` (worker) — connections clustered into pool workers; `routeHttpGateway` — path-level routing: some routes in worker A, some in B, some on main |
 
 ## Task dispatch (any Node program)
 
@@ -34,9 +34,10 @@ stays bundler-detectable where a bundler is involved.
   bundle, or keep worker-side imports resolvable by plain Node.
 - Node needs no COOP/COEP headers — `SharedArrayBuffer` is always available.
 
-## HTTP connection offload (`@atolljs/node/http`, Node ≥ 26)
+## HTTP clustering (`@atolljs/node/http`, Node ≥ 26)
 
-The pool can own the whole HTTP lifecycle, not just dispatched tasks. The
+The pool can own the whole HTTP lifecycle, not just dispatched tasks — the
+`cluster` module's accept-and-handoff, rebuilt on `worker_threads`. The
 main thread accepts TCP connections with `pauseOnConnect` (never reads
 request bytes) and transfers each `net.Socket` to a worker via
 `postMessage(msg, [socket])`. Inside the worker, an `http.Server` feeds the
@@ -46,8 +47,8 @@ response serialization all run off the API thread:
 ```ts
 // main thread — accepts + routes, never parses HTTP
 const pool = createNodePool({ worker, sharedMemory, poolSize: 'auto' });
-const routed = routeHttpConnections({ pool, port: 3204 });
-await routed.close();      // stop accepting; transferred sockets stay with workers
+const cluster = createHttpCluster({ pool, port: 3204 });
+await cluster?.close();     // stop accepting; transferred sockets stay with workers
 ```
 
 ```ts
@@ -58,7 +59,7 @@ serveHttp(expressApp);            // or koa.callback(), fastify().server,
 ```
 
 - **`pool.workers`** — the pool exposes a live snapshot of slot workers
-  (respawns included) for auxiliary messaging; `routeHttpConnections` reads
+  (respawns included) for auxiliary messaging; `createHttpCluster` reads
   it fresh per connection. Task dispatch still owns `runTask`/`dispatch` —
   HTTP connections and `EXECUTE_TASK` messages coexist on the same workers.
 - **Routing** — default round-robin; `route(socket, workers)` in options
@@ -72,13 +73,16 @@ serveHttp(expressApp);            // or koa.callback(), fastify().server,
   TLS termination is NOT supported — a handshake would consume bytes on the
   accepting thread; serve plain HTTP behind a proxy/terminator. The socket
   must not have buffered data — `pauseOnConnect` is what makes this true.
-- **Capability gate** — socket transfer landed in Node.js 26. On older
-  runtimes both functions throw a clear error (`SOCKET_TRANSFER_SUPPORTED`
-  is exported for feature checks); the functional tests skip below 26.
+- **Capability gate** — socket transfer (the mechanism clustering rides on)
+  landed in Node.js 26. `createHttpCluster` bakes the check in: below 26 it
+  logs a notice and returns `null` — callers never guard the call
+  (`SOCKET_TRANSFER_SUPPORTED` stays exported for tests/feature detection).
+  `serveHttp` *without* `listen` still throws there, since sockets are its
+  only transport.
 
 ## Gateway: per-route ownership (any Node)
 
-Socket transfer routes per *connection* — it can't split a listener by URL
+Clustering routes per *connection* — it can't split a listener by URL
 path, because the accepting thread never reads request bytes. When routes
 need explicit owners — `/api/a/*` on worker A, `/api/b/*` on worker B, the
 rest on the main thread — `routeHttpGateway` takes the other approach: the
@@ -112,6 +116,11 @@ const gateway = routeHttpGateway({
 - A route whose worker hasn't announced yet gets a 503.
 - Main-thread handler work (cheap shared-memory reads, fan-out dispatch)
   stays in-process — that's the "some routes on main" leg.
+- **WebSockets** — upgrade handshakes match the same prefix table and are
+  *tunneled*: the gateway replays the handshake to the owning worker's
+  listener and splices the sockets, so frames never touch main-thread code.
+  Unmatched upgrades go to `onUpgrade` (e.g. your own ws server on main),
+  or the socket is destroyed.
 
 ### Embedding in a host framework — `workerHttpPorts` + `proxyToWorker`
 
@@ -132,6 +141,21 @@ attach). `proxyToWorker` resolves the target worker per request and forwards
 `req`/`res` to its internal port. See `examples/nestjs` for a housed Nest
 module.
 
+WebSocket upgrades bypass middleware, so they get their own mount point —
+`proxyUpgradeToWorker` returns an `'upgrade'` listener for the host server:
+
+```ts
+app.getHttpServer().on('upgrade', proxyUpgradeToWorker({ pool, tracker, worker }));
+```
+
+It replays the handshake to the worker's listener and tunnels frames
+socket↔socket. Note the URL is *not* mount-stripped here (upgrade events
+skip Express), so `to` is a rewrite prefix — usually omitted.
+
+For clustering, nothing is needed at all: the WS handshake rides the
+transferred socket, so `new WebSocketServer({ server })` on the server
+`serveHttp` returns works inside the worker unchanged.
+
 **Sharing one buffer across pools**: a pool's `sharedMemory` creates its own
 `WebAssembly.Memory`, so a second pool can't take the same contract — give it
 none (message-only) and hand each worker `pool.sharedBuffer` with
@@ -142,5 +166,5 @@ binds all defined contracts — before booting. `bindSharedBuffer` also accepts
 a manual `workerData.buffer`.
 
 Reference implementation: `examples/http-offload` — gateway on :3204 (any
-Node) plus the socket-transfer listener on :3205 (Node ≥ 26); e2e asserts
+Node) plus the clustered listener on :3205 (Node ≥ 26); e2e asserts
 one route shape answered by three different threads.

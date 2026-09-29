@@ -85,7 +85,16 @@ workers, one buffer.
 Because housed controllers live in a real Nest app, they inject providers
 normally — `IncidentsAnalytics`'s `@AtollService` methods find an empty pool
 registry in-worker and run their real bodies, so `worker-telemetry` reports
-genuinely per-worker state. Works on any Node version (no socket transfer).
+genuinely per-worker state. The proxy path works on any Node version.
+
+**Clustering (Node ≥ 26):** `main.ts` also opens a second listener via
+`createHttpCluster` — every connection on that port (`TRANSFER_PORT`,
+default `PORT + 1`) is handed to a housed worker *unparsed*: no HTTP parsing
+or serialization ever touches the API thread. Clustering is per-connection,
+not per-path, which is why it needs its own port rather than sharing the
+app's. The worker side needs no change — `serveHttp` accepts transferred
+sockets
+alongside its internal `listen: 0` port.
 
 ## A second pool is nearly free — `src/digest/`
 

@@ -7,17 +7,20 @@ import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { SOCKET_TRANSFER_SUPPORTED } from '@atolljs/node/http';
 
 const exampleDir = dirname(fileURLToPath(new URL('.', import.meta.url)));
 const PORT = 3910;
+const TRANSFER_PORT = 3911;
 const base = `http://localhost:${PORT}/api`;
+const transferBase = `http://localhost:${TRANSFER_PORT}/api/housed`;
 
 let child: ChildProcess | undefined;
 
 beforeAll(async () => {
   execFileSync('npm', ['run', 'build'], { cwd: exampleDir, stdio: 'pipe', shell: true });
   child = spawn('node', [join(exampleDir, 'dist', 'main.js')], {
-    env: { ...process.env, PORT: String(PORT) },
+    env: { ...process.env, PORT: String(PORT), TRANSFER_PORT: String(TRANSFER_PORT) },
     stdio: 'pipe',
   });
   // Seed-on-bootstrap means the port only accepts once the buffer is populated.
@@ -92,6 +95,18 @@ describe('nestjs example e2e', () => {
     expect(hs.hotspots.length).toBeGreaterThan(0);
     expect(hs.hotspots[0]).toHaveProperty('site');
   });
+
+  it.runIf(SOCKET_TRANSFER_SUPPORTED)(
+    'serves the housed API clustered (no main-thread parsing)',
+    async () => {
+      // The transfer port hands whole connections to housed workers — the
+      // same /api/housed/* routes, reached without the proxy hop.
+      const res = await fetch(`${transferBase}/incidents/whoami`);
+      expect(res.ok).toBe(true);
+      const who = await res.json();
+      expect(who.worker).toBeGreaterThan(0);
+    },
+  );
 
   it('proxies housed routes to workers round-robin', async () => {
     const hits = await Promise.all(

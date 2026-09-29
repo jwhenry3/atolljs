@@ -1,7 +1,7 @@
 # http-offload — HTTP served inside worker threads, two ways
 
-> The gateway (:3204) runs on **any** Node version. The pure socket-transfer
-> listener (:3205) requires **Node.js ≥ 26** — `net.Socket` transfer across
+> The gateway (:3204) runs on **any** Node version. The clustered listener
+> (:3205) requires **Node.js ≥ 26** — `net.Socket` transfer across
 > `worker_threads` landed in v26.
 
 Two topologies over the same two-worker pool:
@@ -23,9 +23,10 @@ announces each port to the parent).
 prefix only names the owner. `worker`/`x-worker` in every response shows
 which thread actually served it.
 
-## :3205 — socket transfer (Node ≥ 26)
+## :3205 — clustering (Node ≥ 26)
 
-The inverse of task dispatch: the main thread accepts TCP connections with
+The `cluster` module's accept-and-handoff on `worker_threads` — the inverse
+of task dispatch: the main thread accepts TCP connections with
 `pauseOnConnect` and transfers each `net.Socket` to a pool worker — it never
 reads request bytes. Each worker's `http.Server` + Express owns parsing,
 routing, and serialization entirely off-thread.
@@ -33,7 +34,7 @@ routing, and serialization entirely off-thread.
 ## Layout
 
 - `src/main.ts` — `createNodePool(poolSize: 2)` + `routeHttpGateway` on :3204
-  + `routeHttpConnections` on :3205 (Node ≥ 26). The API thread also
+  + `createHttpCluster` on :3205 (Node ≥ 26). The API thread also
   dispatches the boot-time `seedIncidents` task — the same workers serve
   HTTP and tasks.
 - `src/offload.worker.ts` — worker entry: `@atolljs/node/shim`, the incidents

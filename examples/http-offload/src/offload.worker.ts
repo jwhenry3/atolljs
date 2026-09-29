@@ -12,5 +12,5 @@ import { createApp } from './app';
 //                gateway on the main thread can proxy matching route prefixes
 //                here (path-level ownership — works on any Node version);
 //   HTTP_CONNECTION messages — raw sockets transferred by
-//                routeHttpConnections on Node ≥ 26.
+//                createHttpCluster on Node ≥ 26.
 serveHttp(createApp(), { listen: 0 });

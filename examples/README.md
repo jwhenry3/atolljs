@@ -66,9 +66,8 @@ entry with esbuild (`npm run bundle` → `dist/incidents.worker.js`) — `dev`,
 
 `http-offload` flips the demo further: Express runs inside the pool itself. A
 gateway on :3204 pins `/api/a/*` to worker A, `/api/b/*` to worker B, and
-serves the rest on the API thread (any Node), plus a pure socket-transfer
-listener on :3205 that hands accepted connections to workers unseen
-(Node ≥ 26).
+serves the rest on the API thread (any Node), plus a clustered listener on
+:3205 that hands accepted connections to workers unparsed (Node ≥ 26).
 
 ## SharedArrayBuffer requirements
 

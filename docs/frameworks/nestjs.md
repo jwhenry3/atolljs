@@ -58,7 +58,9 @@ each entry file stays single-purpose:
   receives the incidents buffer and binds all contracts, then
   `NestFactory.create(HousedApiModule)` + `app.init()` +
   `serveHttp(app.getHttpServer(), { listen: 0 })` binds an internal
-  `127.0.0.1` port and announces it via the `HTTP_PORT` handshake.
+  `127.0.0.1` port and announces it via the `HTTP_PORT` handshake — and the
+  same `serveHttp` call also accepts `HTTP_CONNECTION` sockets, so the
+  worker serves both topologies with no extra wiring.
   No `runAtollWorker`/bootstrap — housed workers serve HTTP, not tasks.
 - **`src/housed/housed-atoll.module.ts`** — registers the `'housed'` pool,
   *message-only*: a pool's `sharedMemory` creates a NEW buffer, so the worker
@@ -81,6 +83,21 @@ each entry file stays single-purpose:
   state like `workerTelemetry()` is genuinely per-worker.
 - `HousedApiModule` (the worker-side module) imports **no** `registerPool` —
   pools only exist on the main thread.
+- **Clustering (Node ≥ 26)** — `main.ts` additionally calls
+  `createHttpCluster({ pool, port: PORT + 1 })` (env `TRANSFER_PORT`) —
+  self-gating: it logs a notice and returns `null` below Node 26, so the
+  call site needs no capability check. A dedicated listener where the main
+  thread hands each accepted socket to a housed worker unparsed. Clustering
+  is per-CONNECTION — it can't share the app's port by URL path (the acceptor
+  never reads bytes), so the gateway proxy stays the single-port story and
+  the cluster listener is a second, zero-parse entry to the same housed
+  routes.
+- **WebSockets** — upgrades bypass `app.use`, so a housed ws endpoint mounts
+  on the server itself:
+  `app.getHttpServer().on('upgrade', proxyUpgradeToWorker({ pool, tracker, worker }))`
+  — the handshake replays to the worker's listener, then frames tunnel
+  socket↔socket. On the cluster listener nothing is needed: a ws server
+  attached to the worker's `serveHttp` server handles upgrades in-worker.
 
 ## Build — plain `nest build`
 

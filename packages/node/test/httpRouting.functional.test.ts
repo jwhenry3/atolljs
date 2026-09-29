@@ -1,8 +1,16 @@
+import { connect as netConnect, type Socket } from 'node:net';
 import type { AddressInfo } from 'node:net';
 import { fileURLToPath } from 'node:url';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createNodePool } from '../src/pool';
-import { routeHttpConnections, routeHttpGateway, SOCKET_TRANSFER_SUPPORTED } from '../src/http';
+import { createServer as createHttpServer } from 'node:http';
+import {
+  createHttpCluster,
+  proxyUpgradeToWorker,
+  routeHttpGateway,
+  workerHttpPorts,
+  SOCKET_TRANSFER_SUPPORTED,
+} from '../src/http';
 
 const fixture = fileURLToPath(new URL('../../../test/fixtures/httpServer.worker.mjs', import.meta.url));
 const gatewayFixture = fileURLToPath(
@@ -11,12 +19,18 @@ const gatewayFixture = fileURLToPath(
 
 // net.Socket transfer across worker_threads requires Node.js >= 26 — the
 // routing tests below skip on older runtimes; the gate itself is asserted.
-describe.runIf(!SOCKET_TRANSFER_SUPPORTED)('routeHttpConnections (unsupported runtime)', () => {
-  it('throws a clear capability error', () => {
+// createHttpCluster bakes the capability check in: callers use it
+// unconditionally and get null (plus a notice) on unsupported runtimes.
+describe.runIf(!SOCKET_TRANSFER_SUPPORTED)('createHttpCluster (unsupported runtime)', () => {
+  it('returns null and warns instead of throwing', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const pool = createNodePool({ workerFile: fixture, poolSize: 1 });
     try {
-      expect(() => routeHttpConnections({ pool, port: 0 })).toThrow(/Node\.js >= 26/);
+      expect(createHttpCluster({ pool, port: 0 })).toBeNull();
+      expect(warn).toHaveBeenCalledOnce();
+      expect(warn.mock.calls[0][0]).toMatch(/Node\.js >= 26/);
     } finally {
+      warn.mockRestore();
       pool.terminate();
     }
   });
@@ -52,6 +66,37 @@ const startGateway = async (poolSize: number) => {
   return { pool, gateway, port };
 };
 
+/** Raw upgrade handshake over TCP — returns [raw response head, socket]. */
+const upgradeRequest = (port: number, path: string) =>
+  new Promise<[string, Socket]>((resolve, reject) => {
+    const socket = netConnect({ host: '127.0.0.1', port }, () => {
+      socket.write(
+        `GET ${path} HTTP/1.1\r\n` +
+          `Host: localhost:${port}\r\n` +
+          'Upgrade: echo\r\n' +
+          'Connection: Upgrade\r\n\r\n',
+      );
+    });
+    let buf = '';
+    const onData = (chunk: Buffer) => {
+      buf += chunk.toString('utf8');
+      const end = buf.indexOf('\r\n\r\n');
+      if (end !== -1) {
+        socket.off('data', onData);
+        resolve([buf.slice(0, end), socket]);
+      }
+    };
+    socket.on('data', onData);
+    socket.on('error', reject);
+  });
+
+/** Write a payload on an upgraded socket and collect what echoes back. */
+const echo = (socket: Socket, payload: string) =>
+  new Promise<string>((resolve) => {
+    socket.once('data', (chunk) => resolve(chunk.toString('utf8')));
+    socket.write(payload);
+  });
+
 describe('routeHttpGateway', () => {
   it('pins prefixes to specific workers and leaves the rest on main', async () => {
     const { pool, gateway, port } = await startGateway(2);
@@ -75,18 +120,87 @@ describe('routeHttpGateway', () => {
       pool.terminate();
     }
   });
+
+  it('tunnels upgrade handshakes to the owning worker — socket spliced, frames echo', async () => {
+    const { pool, gateway, port } = await startGateway(2);
+    try {
+      const [head, socket] = await upgradeRequest(port, '/a/echo');
+      try {
+        expect(head).toContain('101 Switching Protocols');
+        // The handshake ran inside the OWNING worker (slot 0), and 'to: /'
+        // rewrote the path — proof the tunnel honored route resolution.
+        expect(Number(head.match(/x-worker: (\d+)/i)?.[1])).toBeGreaterThan(0);
+        expect(head).toMatch(/x-url: \/echo/i);
+        // Post-upgrade bytes splice straight through the tunnel.
+        expect(await echo(socket, 'hello')).toBe('hello');
+      } finally {
+        socket.destroy();
+      }
+    } finally {
+      await gateway.close();
+      pool.terminate();
+    }
+  });
+
+  it('destroys unmatched upgrade sockets (no fallback registered)', async () => {
+    const { pool, gateway, port } = await startGateway(1);
+    try {
+      const closed = await new Promise<boolean>((resolve) => {
+        const s = netConnect({ host: '127.0.0.1', port }, () =>
+          s.write(
+            'GET /nowhere/echo HTTP/1.1\r\nHost: x\r\nUpgrade: echo\r\nConnection: Upgrade\r\n\r\n',
+          ),
+        );
+        s.on('error', () => {}); // ECONNRESET is the expected teardown
+        s.on('close', () => resolve(true));
+      });
+      expect(closed).toBe(true);
+    } finally {
+      await gateway.close();
+      pool.terminate();
+    }
+  });
+
+  it('proxyUpgradeToWorker — a bare server upgrade listener tunnels to the worker', async () => {
+    const pool = createNodePool({ workerFile: gatewayFixture, poolSize: 1 });
+    const tracker = workerHttpPorts(pool);
+    const server = createHttpServer((_req, res) => res.writeHead(404).end());
+    server.on('upgrade', proxyUpgradeToWorker({ pool, tracker, worker: 0 }));
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const port = (server.address() as AddressInfo).port;
+    try {
+      // Wait for the worker's HTTP_PORT announcement, then upgrade.
+      const deadline = Date.now() + 10_000;
+      while (tracker.ports.size < 1) {
+        if (Date.now() > deadline) throw new Error('worker did not announce port');
+        tracker.refresh();
+        await new Promise((r) => setTimeout(r, 50));
+      }
+      const [head, socket] = await upgradeRequest(port, '/socket.io/');
+      try {
+        expect(head).toContain('101 Switching Protocols');
+        expect(Number(head.match(/x-worker: (\d+)/i)?.[1])).toBeGreaterThan(0);
+      } finally {
+        socket.destroy();
+      }
+    } finally {
+      tracker.dispose();
+      await new Promise<void>((r) => server.close(() => r()));
+      pool.terminate();
+    }
+  });
 });
 
 const startRouter = async (poolSize: number) => {
   const pool = createNodePool({ workerFile: fixture, poolSize });
-  const routed = routeHttpConnections({ pool, port: 0 });
+  const routed = createHttpCluster({ pool, port: 0 })!; // gated by runIf above
   const port = await new Promise<number>((resolve) => {
     routed.server.once('listening', () => resolve((routed.server.address() as AddressInfo).port));
   });
   return { pool, routed, port };
 };
 
-describe.runIf(SOCKET_TRANSFER_SUPPORTED)('routeHttpConnections', () => {
+describe.runIf(SOCKET_TRANSFER_SUPPORTED)('createHttpCluster', () => {
   it('serves transferred sockets inside workers — parsing and replies off-thread', async () => {
     const { pool, routed, port } = await startRouter(2);
     try {

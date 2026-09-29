@@ -6,7 +6,7 @@
 //           some routes owned by worker A, some by worker B, some by main.
 //           Workers listen on internal 127.0.0.1 ports (serveHttp listen).
 //
-//   :3205 — pure socket transfer (Node ≥ 26). The main thread never parses
+//   :3205 — clustering (Node ≥ 26). The main thread never parses
 //           HTTP: accepted TCP sockets are transferred to workers round-robin,
 //           where each worker's http.Server + Express own the lifecycle.
 //
@@ -16,9 +16,8 @@ import { Worker } from 'node:worker_threads';
 import { workerClient } from '@atolljs/core';
 import { createNodePool } from '@atolljs/node';
 import {
-  routeHttpConnections,
+  createHttpCluster,
   routeHttpGateway,
-  SOCKET_TRANSFER_SUPPORTED,
 } from '@atolljs/node/http';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import {
@@ -92,22 +91,17 @@ const gateway = routeHttpGateway({
   },
 });
 
-/* ── :3205 — pure socket transfer (Node ≥ 26) ───────────────────────────── */
+/* ── :3205 — clustering (Node ≥ 26; createHttpCluster no-ops below it) ──── */
 
-let routed: ReturnType<typeof routeHttpConnections> | undefined;
-if (SOCKET_TRANSFER_SUPPORTED) {
-  routed = routeHttpConnections({
-    pool,
-    port: Number(process.env.TRANSFER_PORT ?? 3205),
-    onListen: () =>
-      console.log('  :3205 — pure socket transfer (connections routed, never parsed)'),
-  });
-} else {
-  console.log('  :3205 socket-transfer listener skipped — requires Node.js >= 26');
-}
+const cluster = createHttpCluster({
+  pool,
+  port: Number(process.env.TRANSFER_PORT ?? 3205),
+  onListen: () =>
+    console.log('  :3205 — clustered (connections routed to workers unparsed)'),
+});
 
 const shutdown = async () => {
-  await Promise.all([gateway.close(), routed?.close()]).catch(() => {});
+  await Promise.all([gateway.close(), cluster?.close()]).catch(() => {});
   pool.terminate();
   process.exit(0);
 };

@@ -189,23 +189,13 @@ export function NodeBackends() {
       </p>
       <CodeBlock code={USAGE_POOL} file="src/incidents.ts" />
       <CodeBlock code={USAGE_WORKER} file="src/incidents.worker.ts" />
-
-      <h2>The HTTP adapter — pick your framework</h2>
       <p>
-        Same five routes in each example: <code>POST /api/incidents/seed</code>,
-        {' '}<code>GET /seed-progress</code>, <code>GET /stats</code>,{' '}
-        <code>GET /query?severity=critical&amp;status=open</code>,{' '}
-        <code>GET /:id</code>. Only the route syntax differs — the pool and
-        worker files are identical across all four.
+        The same pool drives any HTTP framework — see{' '}
+        <a href="#/fw-node/adapters">Framework adapters</a> for
+        Express/Fastify/Hono/Koa, and{' '}
+        <a href="#/node-servers">HTTP offload</a> to move request handling
+        itself into workers.
       </p>
-      <h3>Express</h3>
-      <CodeBlock code={USAGE_EXPRESS} file="src/main.ts" />
-      <h3>Fastify</h3>
-      <CodeBlock code={USAGE_FASTIFY} file="src/main.ts" />
-      <h3>Hono</h3>
-      <CodeBlock code={USAGE_HONO} file="src/main.ts" />
-      <h3>Koa</h3>
-      <CodeBlock code={USAGE_KOA} file="src/main.ts" />
 
       <h2>Bundling the worker — required on plain Node</h2>
       <p>
@@ -244,6 +234,41 @@ export function NodeBackends() {
         </tbody>
       </table>
 
+      <h2>Notes</h2>
+      <ul>
+        <li>No COOP/COEP needed — Node always allows <code>SharedArrayBuffer</code>.</li>
+        <li><code>poolSize: 'auto'</code> sizes to cores; one pool per process is typical — every route shares it.</li>
+        <li>Args/results cross <code>postMessage</code> (structured clone) — keep them small; the shared buffer carries the large state.</li>
+        <li>Terminate the pool on shutdown (<code>pool.terminate()</code> in SIGINT/SIGTERM) so workers don't outlive the server.</li>
+        <li>Each example's <code>test/api.e2e.test.ts</code> spawns the real server on an ephemeral port and exercises every route — the same flow <code>npm test</code> runs.</li>
+      </ul>
+    </article>
+  );
+}
+
+export function NodeAdapters() {
+  return (
+    <article>
+      <h1>Node.js — framework adapters</h1>
+      <p className="lead">
+        The same pool + worker pair drops into any Node HTTP framework.
+        Same five routes in each example: <code>POST /api/incidents/seed</code>,{' '}
+        <code>GET /seed-progress</code>, <code>GET /stats</code>,{' '}
+        <code>GET /query?severity=critical&amp;status=open</code>,{' '}
+        <code>GET /:id</code>. Only the route syntax differs — the pool and
+        worker files (<a href="#/fw-node">Node.js</a>) are identical across
+        all four.
+      </p>
+
+      <h2>Express</h2>
+      <CodeBlock code={USAGE_EXPRESS} file="src/main.ts" />
+      <h2>Fastify</h2>
+      <CodeBlock code={USAGE_FASTIFY} file="src/main.ts" />
+      <h2>Hono</h2>
+      <CodeBlock code={USAGE_HONO} file="src/main.ts" />
+      <h2>Koa</h2>
+      <CodeBlock code={USAGE_KOA} file="src/main.ts" />
+
       <h2>Live examples</h2>
       <p>
         The repo ships all four under <code>examples/</code>. Start them via{' '}
@@ -260,15 +285,6 @@ export function NodeBackends() {
             ) — <code>examples/{ex.id}</code>, dep: <code>{ex.pkg}</code>
           </li>
         ))}
-      </ul>
-
-      <h2>Notes</h2>
-      <ul>
-        <li>No COOP/COEP needed — Node always allows <code>SharedArrayBuffer</code>.</li>
-        <li><code>poolSize: 'auto'</code> sizes to cores; one pool per process is typical — every route shares it.</li>
-        <li>Args/results cross <code>postMessage</code> (structured clone) — keep them small; the shared buffer carries the large state.</li>
-        <li>Terminate the pool on shutdown (<code>pool.terminate()</code> in SIGINT/SIGTERM) so workers don't outlive the server.</li>
-        <li>Each example's <code>test/api.e2e.test.ts</code> spawns the real server on an ephemeral port and exercises every route — the same flow <code>npm test</code> runs.</li>
       </ul>
     </article>
   );

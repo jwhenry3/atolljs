@@ -18,5 +18,5 @@
       "@atolljs/node/*": ["../../packages/node/src/*"]
     }
   },
-  "include": ["src"]
+  "include": ["src", "test"]
 }

@@ -84,7 +84,7 @@ export function Overview() {
           </tr>
           <tr>
             <td><code>@atolljs/node</code></td>
-            <td><code>createNodePool</code>, <code>createNodeWorker</code>, <code>/shim</code>, <code>withSharedBuffer</code>/<code>bindSharedBuffer</code>; <code>/http</code> adds <code>routeHttpConnections</code>, <code>serveHttp</code>, <code>routeHttpGateway</code>, <code>proxyToWorker</code> — HTTP served from inside workers</td>
+            <td><code>createNodePool</code>, <code>createNodeWorker</code>, <code>/shim</code>, <code>withSharedBuffer</code>/<code>bindSharedBuffer</code>; <code>/http</code> adds <code>createHttpCluster</code>, <code>serveHttp</code>, <code>routeHttpGateway</code>, <code>proxyToWorker</code> — HTTP served from inside workers</td>
           </tr>
           <tr>
             <td><code>@atolljs/nestjs</code></td>

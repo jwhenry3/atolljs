@@ -10,8 +10,9 @@ import { Hosting } from './pages/Hosting';
 import { IslandApps } from './pages/IslandApps';
 import { Islands } from './pages/Islands';
 import { Nestjs } from './pages/Nestjs';
+import { NestjsHoused } from './pages/NestjsHoused';
 import { NextjsServer } from './pages/Nextjs';
-import { NodeBackends } from './pages/NodeBackends';
+import { NodeAdapters, NodeBackends } from './pages/NodeBackends';
 import { NodeServers } from './pages/NodeServers';
 import { Overview } from './pages/Overview';
 import { Quickstart } from './pages/Quickstart';
@@ -54,10 +55,24 @@ const SECTIONS: { label: string; routes: Route[] }[] = [
   {
     label: 'Backend',
     routes: [
-      { id: 'fw-nestjs', label: 'NestJS', page: () => <Nestjs /> },
+      {
+        id: 'fw-node',
+        label: 'Node.js',
+        page: () => <NodeBackends />,
+        children: [
+          { id: 'fw-node/adapters', label: 'Framework adapters', page: () => <NodeAdapters /> },
+          { id: 'node-servers', label: 'HTTP offload', page: () => <NodeServers /> },
+        ],
+      },
+      {
+        id: 'fw-nestjs',
+        label: 'NestJS',
+        page: () => <Nestjs />,
+        children: [
+          { id: 'fw-nestjs/housed', label: 'Housed APIs', page: () => <NestjsHoused /> },
+        ],
+      },
       { id: 'fw-nextjs-server', label: 'Next.js', page: () => <NextjsServer /> },
-      { id: 'fw-node', label: 'Node.js', page: () => <NodeBackends /> },
-      { id: 'node-servers', label: 'HTTP offload', page: () => <NodeServers /> },
     ],
   },
   {

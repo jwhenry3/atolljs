@@ -3,7 +3,7 @@
  *
  *   :3924 gateway (any Node) — path ownership: /api/a/* → worker A,
  *          /api/b/* → worker B, the rest on the main thread.
- *   :3925 pure socket transfer (Node ≥ 26) — connections routed unseen.
+ *   :3925 clustered (Node ≥ 26) — connections routed unseen.
  */
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import { dirname } from 'node:path';
@@ -107,7 +107,7 @@ describe('http-offload gateway (mixed route ownership)', () => {
   });
 });
 
-describe.runIf(SUPPORTED)('http-offload socket transfer (Node ≥ 26)', () => {
+describe.runIf(SUPPORTED)('http-offload clustering (Node ≥ 26)', () => {
   it('routes raw connections to workers on :3925', async () => {
     const transferBase = 'http://localhost:3925/api';
     const res = await fetch(`${transferBase}/whoami`, { headers: { connection: 'close' } });

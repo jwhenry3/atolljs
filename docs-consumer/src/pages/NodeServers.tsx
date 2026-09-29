@@ -9,12 +9,13 @@ const APIS = [
   { name: 'workerClient', signature: 'workerClient<WorkerDef>(pool)', desc: 'Typed Proxy over the pool — calls read like the worker’s own methods; args/results cross postMessage.' },
   { name: 'createNodeWorker', signature: 'createNodeWorker(nodeWorker)', desc: 'Wraps a node:worker_threads.Worker for connectWorker or a hand-built WorkerPool.' },
   { name: '@atolljs/node/shim', signature: "import '@atolljs/node/shim'", desc: 'Worker-side entry shim — binds self = parentPort before defineWorker’s bootstrap evaluates. Always the first import.' },
-  { name: 'routeHttpConnections', signature: 'routeHttpConnections({ pool, port, route?, onListen? })', desc: 'Pure socket transfer (Node ≥ 26): the main thread accepts TCP with pauseOnConnect and transfers each net.Socket to a pool worker — it never parses a byte of HTTP. Optional route hook picks the worker per connection; default round-robin.' },
+  { name: 'createHttpCluster', signature: 'createHttpCluster({ pool, port, route?, onListen? })', desc: 'Clustering via socket transfer (Node ≥ 26): the main thread accepts TCP with pauseOnConnect and transfers each net.Socket to a pool worker — it never parses a byte of HTTP. Optional route hook picks the worker per connection; default round-robin.' },
   { name: 'serveHttp', signature: 'serveHttp(handler | http.Server, { listen? })', desc: 'Worker side: feeds transferred sockets into a worker-owned http.Server — any (req,res) listener works (Express, Koa .callback(), fastify().server). listen: 0 also binds an internal 127.0.0.1 port announced to the parent.' },
   { name: 'routeHttpGateway', signature: 'routeHttpGateway({ pool, port, routes, handler })', desc: 'Path-level ownership (any Node): the main thread parses HTTP once and proxies matching URL prefixes to worker internal ports; unmatched requests hit your handler. Pin /api/a/* to worker A, /api/b/* to worker B, serve the rest on main.' },
   { name: 'workerHttpPorts', signature: 'workerHttpPorts(pool)', desc: 'Announcement tracker for embedding — tracks each worker’s internal port over the pool channel; respawns re-announce and reclaim their routes. Pair with proxyToWorker.' },
   { name: 'proxyToWorker', signature: 'proxyToWorker({ pool, tracker, worker, to })', desc: 'Mountable request handler — resolves a worker per request (slot index or selector) and forwards to its internal port. Use as app.use(\'/prefix\', ...) in Express/Nest.' },
-  { name: 'SOCKET_TRANSFER_SUPPORTED', signature: 'boolean', desc: 'Runtime capability gate for socket transfer — false below Node 26, where routeHttpConnections throws a clear error.' },
+  { name: 'proxyUpgradeToWorker', signature: 'proxyUpgradeToWorker({ pool, tracker, worker, to? })', desc: 'WebSocket upgrades: returns an \'upgrade\' listener for your server (middleware never sees handshakes). Replays the handshake to the worker and tunnels frames socket↔socket.' },
+  { name: 'SOCKET_TRANSFER_SUPPORTED', signature: 'boolean', desc: 'Runtime capability flag for socket transfer — false below Node 26. Rarely needed: createHttpCluster checks it internally and returns null (with a notice) when unsupported.' },
   { name: 'withSharedBuffer', signature: 'withSharedBuffer(spawn, buffer | () => buffer)', desc: 'Wraps a worker factory so every spawn is handed an existing pool’s sharedBuffer over the message channel — thunk evaluated per spawn, so respawns get it too.' },
   { name: 'bindSharedBuffer', signature: 'bindSharedBuffer(timeoutMs?)', desc: 'Worker side of the pair: resolves when the buffer arrives (or reads workerData.buffer), binds every defined contract, returns the buffer. For message-only pools that read another pool’s memory.' },
 ];
@@ -43,14 +44,14 @@ import { createApp } from './app';                  // Express inside the worker
 serveHttp(createApp(), { listen: 0 });`;
 
 const TRANSFER = `// main thread — pure connection offload (Node ≥ 26)
-import { routeHttpConnections, SOCKET_TRANSFER_SUPPORTED } from '@atolljs/node/http';
+import { createHttpCluster } from '@atolljs/node/http';
 
-if (SOCKET_TRANSFER_SUPPORTED) {
-  routeHttpConnections({ pool, port: 3205 });
-  // net.createServer({ pauseOnConnect: true }) accepts the socket,
-  // transfers it round-robin — parsing, routing, handlers, and
-  // response serialization all happen inside the worker's http.Server.
-}`;
+const cluster = createHttpCluster({ pool, port: 3205 });
+// net.createServer({ pauseOnConnect: true }) accepts the socket,
+// transfers it round-robin — parsing, routing, handlers, and
+// response serialization all happen inside the worker's http.Server.
+// Below Node 26 the call logs a notice and returns null — no
+// capability check needed in caller code; cluster?.close() covers it.`;
 
 const GATEWAY = `// :3204 — gateway: split one listener by route prefix (any Node)
 import { routeHttpGateway } from '@atolljs/node/http';
@@ -116,25 +117,28 @@ export function NodeServers() {
         example) the factory points at the TS source instead.
       </p>
 
-      <h2>Topology 1 — pure socket transfer (Node ≥ 26)</h2>
+      <h2>Topology 1 — clustering (Node ≥ 26)</h2>
       <p>
-        The strongest form: the main thread accepts TCP connections and
-        transfers each <code>net.Socket</code> to a worker before reading a
-        single byte — it is a dumb acceptor, and every part of the request
-        lifecycle runs off-thread. Round-robin by default; a{' '}
+        The strongest form — the <code>cluster</code> module's handoff,
+        rebuilt on <code>worker_threads</code>: the main thread accepts TCP
+        connections and transfers each <code>net.Socket</code> to a worker
+        before reading a single byte. It is a dumb acceptor; every part of
+        the request lifecycle runs off-thread. Round-robin by default; a{' '}
         <code>route</code> hook can pick the worker per connection.
       </p>
       <CodeBlock code={TRANSFER} file="main.ts" />
       <p>
         Requires Node 26 or later — <code>net.Socket</code>/<code>net.Server</code>{' '}
-        are only transferable from that version. On older runtimes{' '}
-        <code>SOCKET_TRANSFER_SUPPORTED</code> is <code>false</code> and the
-        call throws a clear capability error.
+        are only transferable from that version. The capability check is
+        baked in: on older runtimes <code>createHttpCluster</code> logs a
+        notice and returns <code>null</code>, so callers never guard the call
+        (<code>SOCKET_TRANSFER_SUPPORTED</code> remains exported for tests
+        and feature detection).
       </p>
 
       <h2>Topology 2 — the gateway (any Node)</h2>
       <p>
-        Socket transfer routes per <em>connection</em> — it can't split one
+        Clustering routes per <em>connection</em> — it can't split one
         listener by URL path because the main thread never sees the request.
         To pin route prefixes to specific workers (or keep some routes on
         main), the main thread parses once and proxies to worker-owned
@@ -144,9 +148,15 @@ export function NodeServers() {
       <CodeBlock code={GATEWAY} file="main.ts" />
       <p>
         Respawned workers re-announce their port and reclaim their prefixes.
-        For embedding into a host framework (NestJS, Fastify…) the same
-        machinery comes as mountable pieces: <code>workerHttpPorts</code> +
-        <code>proxyToWorker</code> — the housed-API pattern, below.
+        WebSocket handshakes match the same prefix table: the gateway replays
+        the upgrade to the owning worker and splices the sockets — frames
+        never touch main-thread code. Unmatched upgrades go to{' '}
+        <code>onUpgrade</code> (or the socket is destroyed). For embedding
+        into a host framework (NestJS, Fastify…) the same machinery comes as
+        mountable pieces: <code>workerHttpPorts</code> +{' '}
+        <code>proxyToWorker</code> for requests,{' '}
+        <code>proxyUpgradeToWorker</code> on the server&apos;s{' '}
+        <code>&apos;upgrade&apos;</code> event — the housed-API pattern, below.
       </p>
 
       <h2>Two pools, one shared buffer</h2>
@@ -191,15 +201,15 @@ export function NodeServers() {
         <li><a href={`${apiBase}/api/incidents/42`} target="_blank" rel="noreferrer"><code>{apiBase}/api/incidents/42</code></a> — direct shared-memory read, zero dispatch</li>
       </ul>
       <p>
-        Port 3205 serves the same app through pure socket transfer when
+        Port 3205 serves the same app clustered — transferred sockets — when
         running Node ≥ 26.
       </p>
 
       <h2>Notes</h2>
       <ul>
         <li>No COOP/COEP needed — SharedArrayBuffer is always available in Node.</li>
-        <li>Gateway/embedding requests transit the main thread once (parse + proxy); only socket transfer keeps the whole lifecycle off-thread.</li>
-        <li>Close cleanly: <code>gateway.close()</code>/<code>routed.close()</code> then <code>pool.terminate()</code> on shutdown.</li>
+        <li>Gateway/embedding requests transit the main thread once (parse + proxy); WebSocket frames are tunneled socket↔socket after the handshake. Only clustering keeps the whole lifecycle off-thread — and it needs no WS-specific code: attach <code>WebSocketServer</code> to the server <code>serveHttp</code> returns.</li>
+        <li>Close cleanly: <code>gateway.close()</code>/<code>cluster?.close()</code> then <code>pool.terminate()</code> on shutdown.</li>
         <li>Worker entries must stay bundler-detectable: literal <code>new Worker(new URL('./x.worker.ts', import.meta.url))</code> — never a computed URL.</li>
       </ul>
     </article>
