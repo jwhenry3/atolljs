@@ -21,6 +21,7 @@ import {
   type RenderContext,
 } from '@atolljs/islands/worker';
 import { pushOp } from '../../src/worker/instance';
+import type { InternalDocument } from '../../src/worker/dom/document';
 
 const ROWS_DEFAULT = 200;
 
@@ -145,7 +146,7 @@ export const callbackApp = islandApp('cb', {
  */
 export const driverApp = islandApp('drive', {
   imperative: (doc: ProxyDocument): void => {
-    const instance = (doc as { instance: string }).instance;
+    const instance = (doc as InternalDocument).instance;
     const input = doc.createElement('input');
     input.setAttribute('data-atoll-slot', 'plug');
     // Re-slotting the same element detaches the previous slot name.

@@ -34,7 +34,7 @@ describe('attr/style op application', () => {
   it('applies and removes attributes, style ops, slots, and skips malformed ops', async () => {
     const el = host();
     const slots: Array<[string, HTMLElement | null]> = [];
-    const errors: unknown[] = [];
+    const errors: unknown[][] = [];
     const errSpy = vi.spyOn(console, 'error').mockImplementation((...a) => errors.push(a));
     const island = await mountIsland({
       worker: renderWorker,
@@ -88,7 +88,7 @@ describe('attr/style op application', () => {
 
   it('a throwing worker listener surfaces via console.error, not a crash', async () => {
     const el = host();
-    const errors: unknown[] = [];
+    const errors: unknown[][] = [];
     const errSpy = vi.spyOn(console, 'error').mockImplementation((...a) => errors.push(a));
     const island = await mountIsland({ worker: renderWorker, el, app: 'drive' });
     el.querySelector('button.boom')!.dispatchEvent(
