@@ -6,7 +6,7 @@
  * `mountIsland({ worker })` shorthand (no connectIslandWorker call).
  */
 import { beforeAll, describe, expect, it, vi } from 'vitest';
-import { InProcessWorker } from '../../../test/inProcessWorker';
+import { InProcessWorker } from '@jwhenry123/mesh/sdk/testing/inProcessWorker';
 
 vi.stubGlobal('Worker', InProcessWorker);
 InProcessWorker.handlerModules = [() => import('../src/worker/vue.worker')];

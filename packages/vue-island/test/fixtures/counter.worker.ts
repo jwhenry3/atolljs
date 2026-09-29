@@ -5,7 +5,7 @@
  * the worker-dom `emit()` inside the handler (proving the emit op reaches
  * the island's `onEvent`). Plain `h()`/`defineComponent` — no SFC compiler.
  */
-import { defineComponent, h, ref } from 'vue';
+import { createStaticVNode, defineComponent, h, ref } from 'vue';
 import { defineIslandWorker, emit } from '@jwhenry123/mesh-worker-dom/worker';
 import { vueIslandApp } from '../../src/worker';
 
@@ -66,6 +66,26 @@ const Controls = defineComponent({
   },
 });
 
+/**
+ * Static content — what compiled `v-once`/hoisted nodes produce: a
+ * `createStaticVNode` HTML string the renderer must land via
+ * `insertStaticContent` (template.innerHTML → move children) as real DOM.
+ */
+const StaticApp = defineComponent({
+  name: 'VueStatic',
+  setup() {
+    return () =>
+      h('div', { class: 'static-app' }, [
+        createStaticVNode('<b class="frozen">never re-renders</b><i class="also-frozen">two</i>', 2),
+        h('span', { class: 'live' }, 'live sibling'),
+      ]);
+  },
+});
+
 export const counterWorker = defineIslandWorker({
-  apps: { counter: vueIslandApp(Counter), controls: vueIslandApp(Controls) },
+  apps: {
+    counter: vueIslandApp(Counter),
+    controls: vueIslandApp(Controls),
+    static: vueIslandApp(StaticApp),
+  },
 });

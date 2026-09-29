@@ -7,7 +7,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { WorkerPool } from './workerPool';
 import { TaskRegistry } from '../worker/registry';
-import { InProcessWorker } from '../../../test/inProcessWorker';
+import { InProcessWorker } from '@jwhenry123/mesh/sdk/testing/inProcessWorker';
 
 vi.stubGlobal('Worker', InProcessWorker);
 vi.stubGlobal('crossOriginIsolated', false);

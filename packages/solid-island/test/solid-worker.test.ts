@@ -6,7 +6,7 @@
  * updateProps ops replay onto real DOM here exactly as they do in a browser.
  */
 import { beforeAll, describe, expect, it, vi } from 'vitest';
-import { InProcessWorker } from '../../../test/inProcessWorker';
+import { InProcessWorker } from '@jwhenry123/mesh/sdk/testing/inProcessWorker';
 import {
   connectIslandWorker,
   mountIsland,

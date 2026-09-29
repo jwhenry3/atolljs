@@ -9,7 +9,7 @@ import { BrowserDynamicTestingModule, platformBrowserDynamicTesting } from '@ang
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { provideMesh } from '@jwhenry123/mesh-angular';
 import { incidents } from '@jwhenry123/mesh-incidents';
-import { InProcessWorker } from '../../../test/inProcessWorker';
+import { InProcessWorker } from '@jwhenry123/mesh/sdk/testing/inProcessWorker';
 
 vi.stubGlobal('Worker', InProcessWorker);
 InProcessWorker.handlerModules = [

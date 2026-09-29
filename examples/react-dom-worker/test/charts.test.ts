@@ -8,7 +8,7 @@
  * round-trip into the island's emit channel.
  */
 import { beforeAll, describe, expect, it, vi } from 'vitest';
-import { InProcessWorker } from '../../../test/inProcessWorker';
+import { InProcessWorker } from '@jwhenry123/mesh/sdk/testing/inProcessWorker';
 
 const requireFromRoot = async () => {
   const { createRequire } = await import('node:module');

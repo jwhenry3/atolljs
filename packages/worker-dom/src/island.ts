@@ -610,11 +610,18 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
         break;
       }
       case 'append': {
-        const parent = nodes.get(op.parent);
+        let parent = nodes.get(op.parent);
         const child = nodes.get(op.child);
         if (!parent || !child) {
           console.error(`[island] append skipped: parent=${op.parent}→${String(parent)} child=${op.child}→${String(child)}`);
           break;
+        }
+        // The DOM spec puts a template's children in its .content fragment —
+        // route there explicitly rather than trusting the DOM impl's own
+        // redirect (worker-side, content writes emit ops under the
+        // template's id).
+        if (isElementNode(parent) && parent.tagName === 'TEMPLATE') {
+          parent = (parent as HTMLTemplateElement).content;
         }
         const before = op.before !== undefined ? (nodes.get(op.before) ?? null) : null;
         parent.insertBefore(child, before);

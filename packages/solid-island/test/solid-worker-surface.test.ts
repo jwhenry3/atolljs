@@ -7,7 +7,7 @@
  * real op protocol via the registry worker in `surface.worker.ts`.
  */
 import { beforeAll, describe, expect, it, vi } from 'vitest';
-import { InProcessWorker } from '../../../test/inProcessWorker';
+import { InProcessWorker } from '@jwhenry123/mesh/sdk/testing/inProcessWorker';
 import {
   connectIslandWorker,
   mountIsland,

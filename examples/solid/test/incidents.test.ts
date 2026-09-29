@@ -4,7 +4,7 @@
  */
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { createRoot } from 'solid-js';
-import { InProcessWorker } from '../../../test/inProcessWorker';
+import { InProcessWorker } from '@jwhenry123/mesh/sdk/testing/inProcessWorker';
 import type { QueryArgs } from '@jwhenry123/mesh/incidents';
 
 vi.stubGlobal('Worker', InProcessWorker);

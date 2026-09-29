@@ -7,7 +7,7 @@ import {
   registerMeshPool,
   unregisterMeshPool,
 } from '../src/pools';
-import { InProcessWorker } from '../../../test/inProcessWorker';
+import { InProcessWorker } from '@jwhenry123/mesh/sdk/testing/inProcessWorker';
 
 const mem = () => defineSharedMemory({ n: field.number() });
 

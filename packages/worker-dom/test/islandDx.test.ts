@@ -7,7 +7,7 @@
  * inside the pool.
  */
 import { beforeAll, describe, expect, it, vi } from 'vitest';
-import { InProcessWorker } from '../../../test/inProcessWorker';
+import { InProcessWorker } from '@jwhenry123/mesh/sdk/testing/inProcessWorker';
 
 vi.stubGlobal('Worker', InProcessWorker);
 InProcessWorker.handlerModules = [() => import('./fixtures/perf.worker')];
@@ -122,6 +122,19 @@ describe('flush mode', () => {
     expect(el.textContent).toContain('tick');
     // Poll interval drains the out-of-task commit too (50ms tick < waitFor).
     await vi.waitFor(() => expect(el.querySelector('.tocked')).not.toBeNull());
+    island.destroy();
+  });
+
+  it('template.content appends route into the real element\'s content fragment', async () => {
+    const el = host();
+    const island = await mountIsland({ worker: renderWorker, el, app: 'tpl' });
+    const tpl = el.querySelector('template') as HTMLTemplateElement;
+    // The content.write op landed inside the template's content fragment —
+    // the DOM-spec home for template children — not as a light-DOM child.
+    expect(tpl.content.querySelector('span')?.textContent).toBe('inside template');
+    expect(tpl.childNodes.length).toBe(0);
+    // And cloning the content instantiated it into live DOM.
+    expect(el.querySelector('.instantiated span')?.textContent).toBe('inside template');
     island.destroy();
   });
 });

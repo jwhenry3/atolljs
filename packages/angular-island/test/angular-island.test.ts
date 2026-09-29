@@ -19,7 +19,7 @@ import {
 } from '@angular/platform-browser-dynamic/testing';
 import { connectIslandWorker } from '@jwhenry123/mesh-worker-dom';
 import type { IslandClient, IslandHandle } from '@jwhenry123/mesh-worker-dom';
-import { InProcessWorker } from '../../../test/inProcessWorker';
+import { InProcessWorker } from '@jwhenry123/mesh/sdk/testing/inProcessWorker';
 import { MeshIslandComponent, MeshIslandDirective } from '../src/index';
 
 vi.stubGlobal('Worker', InProcessWorker);

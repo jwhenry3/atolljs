@@ -153,3 +153,20 @@ In this repo, `vitest.config.ts` does the equivalent: an exact-match alias
 externalized `node_modules` files — `solid-js/universal` included — resolve
 `solid-js` through the same alias instead of Node's exports map, keeping one
 reactive module instance everywhere).
+
+## Caveat: `el.textContent` vs `insert()` children
+
+Setting `el.textContent` on the proxy DOM emits one `utext` op — "replace
+all children with a text node" driver-side — and records a *phantom* text
+child (no instance id) in the worker's shadow tree. That's correct for a
+leaf-text element. The trap is an element that *also* holds `insert()`-
+managed children: the phantom has no wire identity, so a later
+`insert(el, node, phantomText)` resolves its anchor to nothing on the
+driver and the two trees drift (and the next `utext` wipes the inserted
+children anyway — `node.textContent` replaces all children).
+
+The convention: dynamic text goes through `insert()` as a real text node —
+`insert(el, () => doc.createTextNode(label()))`. Compiled universal JSX
+already does this (`{expr}` compiles to an `insert` call); this only bites
+hand-rolled universal code that mixes `textContent` with child management
+on one element.

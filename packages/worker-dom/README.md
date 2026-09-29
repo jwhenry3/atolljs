@@ -86,6 +86,70 @@ export const worker = defineVueIslandWorker({ counter: Counter });
 All four speak the same protocol — a registry worker can mix React,
 Vue, Svelte, Solid, Angular, and imperative apps freely.
 
+## Writing a worker renderer
+
+A renderer adapter is a `RenderedIslandApp` — one method:
+
+```ts
+interface RenderedIslandApp {
+  mount(ctx: { realm: string; doc: ProxyDocument; props: Record<string, unknown> }):
+    { update?(props): void; dispose?(): void } | void;
+}
+```
+
+`mount` runs inside the realm's scope; everything the framework writes into
+`ctx.doc` serializes to the op stream. The proxy-DOM surface a renderer can
+rely on: `createElement`/`createElementNS`/`createTextNode`/`createComment`,
+`insertBefore`/`appendChild`/`removeChild` (fragments splice their children
+in), `setAttribute`/`setAttributeNS`, `textContent`, `innerHTML`,
+`cloneNode`, `template.content`, and `addEventListener` (`{once, passive,
+capture}` options cross the wire). Comments are real anchors — frameworks
+placing branch markers (Vue `v-if`, Svelte `{#if}`) should use
+`doc.createComment`, not empty text nodes.
+
+Realm discipline: `mount` itself is realm-scoped, but framework schedulers
+that flush *after* the task (Vue's microtask queue, Svelte's tick) have no
+active realm — resolve via `getActiveRealm() || getLastActiveRealm()` and
+prefer the captured `ctx.realm`/`ctx.doc` over ambient lookup. Work the
+renderer kicks off from timers or promise continuations must re-enter with
+`runInRealm(realm, fn)` — with several islands on one shared client the
+last-active fallback can resolve the *sibling* realm, so treat ambient
+resolution as a convenience, not a contract. After mutations made outside a
+dispatch task, `bumpOpsVersion()` rings the push-mode doorbell so the
+driver flushes the queued ops.
+
+`update(props)` receives the newly serialized props — patch fine-grained.
+Omit it and `updateProps` degrades to imperative semantics (dispose +
+fresh document + remount). `dispose()` runs inside the realm before its
+proxy document is torn down — unmount framework roots, stop effects.
+
+Events: worker-side `addEventListener` becomes a `listen` op; a dispatch
+round-trips back as a realm-scoped task whose payload carries `target`/
+`currentTarget` as proxy nodes and stamps `e.target.value`/`checked`.
+`preventDefault` can never work — the real event already dispatched on the
+main thread — so renderers should not promise it.
+
+## Testing islands in-process
+
+`@jwhenry123/mesh/sdk/testing/inProcessWorker` ships a `Worker` test double
+that runs the whole protocol in-process — real task registry, real op
+stream, real shared-memory binding; only the thread boundary is faked:
+
+```ts
+import { InProcessWorker } from '@jwhenry123/mesh/sdk/testing/inProcessWorker';
+vi.stubGlobal('Worker', InProcessWorker);
+InProcessWorker.handlerModules = [() => import('./my.worker')];
+
+const island = await mountIsland({ worker: () => new Worker(url, { type: 'module' }), ... });
+```
+
+Entry modules load lazily on first pool init (like a real worker script —
+and even for doorbell-free, message-only pools); a module that throws fires
+an `error` event and the worker drops subsequent tasks, so mount failures
+reject instead of hanging. `InProcessWorker.created` tracks spawned
+instances; `flushObservers()` settles microtasks + the shared-memory
+observer loop.
+
 ## Island rules
 
 - **poolSize is pinned to 1.** One tree lives in one worker's memory —
@@ -159,6 +223,10 @@ Vue, Svelte, Solid, Angular, and imperative apps freely.
   libraries that read them during render or in deferred callbacks just work.
   On the main-thread driver, element checks are structural (`nodeType`), never
   `instanceof Element` — the same global may be a proxy in in-process setups.
+  Last-active resolution is a heuristic: on a shared client whose islands run
+  interleaved async work it can resolve the *sibling* realm — the contract
+  for worker-initiated work is `runInRealm` (see "Writing a worker
+  renderer").
 - **SVG + portals + library refs.** Ops carry a namespace (`create` gets `ns`)
   and host context tracks `<svg>`/`<foreignObject>` boundaries — the driver
   uses `createElementNS`, so `<svg>` trees land correctly, including through
@@ -201,6 +269,19 @@ Known limits for DOM-heavy libraries:
 - **`getContext('2d'/'webgl')` is out of scope** for the op protocol —
   canvas-based libraries belong on `OffscreenCanvas`, which is a different
   transport.
+
+## Workload fit
+
+Every event costs one postMessage round trip — `pointermove`, per-keystroke
+input, and scroll handlers re-render on worker latency, and `preventDefault`
+can't work because the real event already dispatched. Keep high-frequency
+input on the main thread (slots exist for exactly this) and put coarse
+interactions — clicks, toggles, form submits — behind the island. On the
+other side of the ledger, main-thread replay scales with op *count*, not
+tree size: fine-grained updates replay in ~1ms while whole-tree rebuilds
+cost an order of magnitude more per frame. `mountIsland`'s `onOps` hook
+reports the worker/main split if you want to measure a workload before
+committing it to an island.
 
 Peer deps `react`/`react-reconciler` are required even for imperative-only
 consumers — the package *is* the React-rendering pattern; tree-shaking drops

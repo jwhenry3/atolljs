@@ -3,7 +3,7 @@
  */
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { effectScope, ref } from 'vue';
-import { InProcessWorker } from '../../../test/inProcessWorker';
+import { InProcessWorker } from '@jwhenry123/mesh/sdk/testing/inProcessWorker';
 import type { QueryArgs } from '@jwhenry123/mesh/incidents';
 
 vi.stubGlobal('Worker', InProcessWorker);

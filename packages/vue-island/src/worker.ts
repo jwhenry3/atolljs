@@ -284,6 +284,33 @@ const { render, createApp } = createRenderer<ProxyNode, ProxyElement>({
   setScopeId(el, id) {
     el.setAttribute(id, '');
   },
+  /**
+   * v-once / hoisted static subtrees arrive as an HTML string — parse it
+   * once through a `<template>` (its `.content` emits real ops now) and
+   * move the children in. Vue caches the returned [first, last] bounds and
+   * hands them back on re-insert to move the block — collect the inclusive
+   * sibling range first since insertion mutates the links being walked.
+   */
+  insertStaticContent(content, parent, anchor, _namespace, start, end) {
+    touchRealm(parent);
+    if (start !== null && start !== undefined && end !== null && end !== undefined) {
+      const moving: ProxyNode[] = [];
+      let n: ProxyNode | null = start;
+      while (n !== null) {
+        moving.push(n);
+        if (n === end) break;
+        n = n.nextSibling;
+      }
+      for (const node of moving) parent.insertBefore(node, anchor ?? null);
+      return [start, end];
+    }
+    const doc = docForRender();
+    const tpl = doc.createElement('template');
+    tpl.innerHTML = content;
+    const nodes = tpl.content?.childNodes.slice() ?? [];
+    for (const n of nodes) parent.insertBefore(n, anchor ?? null);
+    return [nodes[0]!, nodes[nodes.length - 1]!];
+  },
 });
 
 /* ── Public API ────────────────────────────────────────────────────────── */

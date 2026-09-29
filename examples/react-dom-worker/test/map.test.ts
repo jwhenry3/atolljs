@@ -7,7 +7,7 @@
  * wheel zoom — all with zero Leaflet code on the main thread.
  */
 import { beforeAll, describe, expect, it, vi } from 'vitest';
-import { InProcessWorker } from '../../../test/inProcessWorker';
+import { InProcessWorker } from '@jwhenry123/mesh/sdk/testing/inProcessWorker';
 
 const requireFromRoot = async () => {
   const { createRequire } = await import('node:module');

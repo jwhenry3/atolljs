@@ -96,7 +96,7 @@ export default mergeConfig(
         reporter: ['text', 'lcov'],
         // The publishable surface: core sdk + every mesh-* binding package.
         include: ['src/sdk/**', 'packages/*/src/**'],
-        exclude: ['**/*.test.*', '**/test/**'],
+        exclude: ['**/*.test.*', '**/test/**', '**/testing/**'],
       },
     },
   })

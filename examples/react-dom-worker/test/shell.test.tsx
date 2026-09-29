@@ -9,7 +9,7 @@
  *   - badges/status/stats land in ordinary React-rendered DOM.
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { InProcessWorker } from '../../../test/inProcessWorker';
+import { InProcessWorker } from '@jwhenry123/mesh/sdk/testing/inProcessWorker';
 
 const requireFromRoot = async () => {
   const { createRequire } = await import('node:module');

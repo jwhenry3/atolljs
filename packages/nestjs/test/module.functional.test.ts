@@ -8,7 +8,7 @@ import { MeshModule } from '../src/module';
 import { MeshTask } from '../src/decorators';
 import { getMeshPool } from '../src/pools';
 import { runMeshWorker } from '../src/worker';
-import { InProcessWorker } from '../../../test/inProcessWorker';
+import { InProcessWorker } from '@jwhenry123/mesh/sdk/testing/inProcessWorker';
 
 const mem = defineSharedMemory({ n: field.number() });
 const newWorker = () => new InProcessWorker(new URL('https://t.test/w.js')) as unknown as Worker;

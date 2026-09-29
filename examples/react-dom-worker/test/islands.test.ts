@@ -15,7 +15,7 @@
  * auto-subscribe at mount.
  */
 import { beforeAll, describe, expect, it, vi } from 'vitest';
-import { InProcessWorker } from '../../../test/inProcessWorker';
+import { InProcessWorker } from '@jwhenry123/mesh/sdk/testing/inProcessWorker';
 
 /**
  * One React copy for the whole render stack. The suite aliases `react` to the

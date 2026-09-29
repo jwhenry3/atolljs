@@ -96,6 +96,25 @@ export const tickerApp = islandApp('ticker', {
   },
 });
 
+/**
+ * 'tpl' — writes directly into `template.content` (which used to emit no
+ * ops: the content view carried a phantom id), then clones the content into
+ * the live tree the way Svelte/instantiation patterns do.
+ */
+export const templateApp = islandApp('tpl', {
+  imperative: (doc: ProxyDocument): void => {
+    const tpl = doc.createElement('template');
+    doc.body.append(tpl);
+    const inner = doc.createElement('span');
+    inner.textContent = 'inside template';
+    tpl.content!.appendChild(inner);
+    const host = doc.createElement('div');
+    host.className = 'instantiated';
+    host.append(tpl.content!.cloneNode(true));
+    doc.body.append(host);
+  },
+});
+
 export const perfWorker = defineIslandWorker({
-  apps: { tree: treeApp, rtree: RTree, rcounter: RCounter, ticker: tickerApp },
+  apps: { tree: treeApp, rtree: RTree, rcounter: RCounter, ticker: tickerApp, tpl: templateApp },
 });

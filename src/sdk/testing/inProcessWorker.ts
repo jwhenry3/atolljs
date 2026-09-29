@@ -8,8 +8,8 @@
  * importing them performs their TaskRegistry.register side effects, exactly
  * what a bundled worker entry does at boot.
  */
-import { bindSharedMemories } from '../src/sdk/contract/sharedMemory';
-import { TaskRegistry } from '../src/sdk/worker/registry';
+import { bindSharedMemories } from '../contract/sharedMemory';
+import { TaskRegistry } from '../worker/registry';
 
 export class InProcessWorker {
   static created: InProcessWorker[] = [];

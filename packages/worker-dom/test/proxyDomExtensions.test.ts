@@ -387,6 +387,25 @@ describe('<template>.content', () => {
     expect(ops.some((o) => o.t === 'create' && o.type === 'template')).toBe(true);
   });
 
+  it('content.appendChild emits append ops targeted at the template id', () => {
+    let tplId = -1;
+    let childId = -1;
+    const ops = inRealm('template-append', () => {
+      const doc = createProxyDocument('template-append');
+      const tpl = doc.createElement('template');
+      tplId = tpl.instance.id;
+      const span = doc.createElement('span');
+      childId = span.instance.id;
+      // The pre-promotion gap: content's phantom fragment id swallowed
+      // these ops. The view now carries the element's instance.
+      tpl.content!.appendChild(span);
+      expect(tpl.content!.childNodes).toEqual([span]);
+    });
+    expect(
+      ops.some((o) => o.t === 'append' && o.parent === tplId && o.child === childId),
+    ).toBe(true);
+  });
+
   it('non-template elements read content as undefined', () => {
     inRealm('not-template', () => {
       const doc = createProxyDocument('not-template');

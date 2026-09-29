@@ -7,7 +7,7 @@
  */
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { connectIslandWorker, mountIsland } from '@jwhenry123/mesh-worker-dom';
-import { InProcessWorker } from '../../../test/inProcessWorker';
+import { InProcessWorker } from '@jwhenry123/mesh/sdk/testing/inProcessWorker';
 import { lifecycleLog } from './fixtures/spectrum.worker';
 
 vi.stubGlobal('Worker', InProcessWorker);

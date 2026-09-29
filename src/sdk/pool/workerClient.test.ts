@@ -7,7 +7,7 @@ import { defineSharedMemory, field } from '../contract/sharedMemory';
 import { serviceMethod } from '../service';
 import type { TaskRunner } from '../service';
 import type { TaskContract } from '../contract/types';
-import { InProcessWorker } from '../../../test/inProcessWorker';
+import { InProcessWorker } from '@jwhenry123/mesh/sdk/testing/inProcessWorker';
 
 vi.stubGlobal('Worker', InProcessWorker);
 

@@ -6,7 +6,7 @@
  */
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { createApp, effectScope, h, reactive } from 'vue';
-import { InProcessWorker } from '../../../test/inProcessWorker';
+import { InProcessWorker } from '@jwhenry123/mesh/sdk/testing/inProcessWorker';
 import { connectIslandWorker } from '@jwhenry123/mesh-worker-dom';
 import type { IslandHandle } from '../src/index';
 

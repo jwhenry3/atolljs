@@ -6,7 +6,7 @@
  * boundary.
  */
 import { beforeAll, describe, expect, it, vi } from 'vitest';
-import { InProcessWorker } from '../../../test/inProcessWorker';
+import { InProcessWorker } from '@jwhenry123/mesh/sdk/testing/inProcessWorker';
 import { connectIslandWorker, mountIsland } from '@jwhenry123/mesh-worker-dom';
 
 vi.stubGlobal('Worker', InProcessWorker);
@@ -130,5 +130,21 @@ describe('vueIslandApp', () => {
     const worker = InProcessWorker.created.at(-1)!;
     island.destroy();
     await vi.waitFor(() => expect(worker.terminated).toBe(true));
+  });
+
+  it('insertStaticContent lands v-once/static HTML as real DOM', async () => {
+    const el = realDoc.createElement('div');
+    realDoc.body.appendChild(el);
+    const client = connectIslandWorker({ worker: renderWorker });
+
+    const island = await mountIsland({ client, el, app: 'static' });
+    // The static vnode's HTML string parsed through a <template> and its
+    // children moved into the live tree — both nodes present, ordered
+    // before the dynamic sibling.
+    expect(el.querySelector('b.frozen')?.textContent).toBe('never re-renders');
+    expect(el.querySelector('i.also-frozen')?.textContent).toBe('two');
+    expect(el.querySelector('.live')?.textContent).toBe('live sibling');
+
+    island.destroy();
   });
 });

@@ -7,7 +7,7 @@
  * the worker entry's defineRealmWorker in this module graph).
  */
 import { beforeAll, describe, expect, it, vi } from 'vitest';
-import { InProcessWorker } from '../../../test/inProcessWorker';
+import { InProcessWorker } from '@jwhenry123/mesh/sdk/testing/inProcessWorker';
 import type { IslandHandle } from '@jwhenry123/mesh-worker-dom';
 import { counterApp } from './fixtures/counter.worker';
 

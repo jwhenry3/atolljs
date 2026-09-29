@@ -394,9 +394,11 @@ export class ProxyElement extends ProxyNode {
 
   /**
    * `<template>.content` — a fragment VIEW sharing the element's shadow
-   * child array (same backing store), so `tpl.innerHTML = html` then
-   * `tpl.content` hands the parsed children to cloneNode/firstChild like
-   * the DOM. Non-template elements read undefined.
+   * child array (same backing store) AND the element's instance id, so
+   * `content.appendChild` emits `append` ops targeted at the template. The
+   * driver routes template-parented ops into `el.content` — the DOM spec's
+   * home for template children anyway. Non-template elements read
+   * undefined.
    */
   get content(): ProxyFragment | undefined {
     if (this.instance.type !== 'template') return undefined;
@@ -404,6 +406,10 @@ export class ProxyElement extends ProxyNode {
     if (frag === undefined) {
       frag = this.doc.createDocumentFragment();
       frag._children = this._children;
+      // A fresh fragment's phantom (negative) id would swallow every op —
+      // adopt the element's instance so parent id, realm, and op targeting
+      // all read as the template.
+      (frag as { instance: unknown }).instance = this.instance;
       templateContents.set(this, frag);
     }
     return frag;

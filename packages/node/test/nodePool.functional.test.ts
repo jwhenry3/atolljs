@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { defineSharedMemory, field, TaskRegistry, type TaskContract } from '@jwhenry123/mesh/sdk';
 import { createNodePool } from '../src/pool';
 import { createNodeWorker } from '../src/worker';
-import { InProcessWorker } from '../../../test/inProcessWorker';
+import { InProcessWorker } from '@jwhenry123/mesh/sdk/testing/inProcessWorker';
 
 const fixture = fileURLToPath(new URL('../../../test/fixtures/meshProtocol.worker.mjs', import.meta.url));
 
