@@ -51,6 +51,7 @@ jobs:
             examples/solid/package-lock.json
             examples/svelte/package-lock.json
             examples/angular/package-lock.json
+            examples/react-dom-worker/package-lock.json
 
       - name: Install dependencies
         run: |
@@ -59,7 +60,7 @@ jobs:
           # root source tree, whose imports (react, zod, msgpackr, solid-js,
           # node:* types) resolve upward to the root node_modules.
           npm ci
-          for d in docs-consumer examples/react examples/vue examples/solid examples/svelte examples/angular; do
+          for d in docs-consumer examples/react examples/vue examples/solid examples/svelte examples/angular examples/react-dom-worker; do
             echo "=== npm ci: $d ==="
             (cd "$d" && npm ci)
           done
