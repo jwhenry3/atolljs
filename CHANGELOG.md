@@ -1,5 +1,110 @@
 # Changelog
 
+## 0.1.1
+
+HTTP offload topologies for Node, Redis-backed shared-memory persistence, a
+framework-neutral islands core, and a consumer-facing docs pass. No breaking
+changes to the 0.1.0 API.
+
+### HTTP offload — `@atolljs/node/http` (new)
+
+Two ways to push real HTTP work into `node:worker_threads` pools:
+
+- **Gateway** — `routeHttpGateway({ server, pool, routes })` matches request
+  prefixes on the main-thread listener and proxies them to worker-owned HTTP
+  servers (`serveHttp(app, { listen: 0 })` inside the worker announces an
+  internal port). Unmatched paths stay on the main listener — one port,
+  mixed ownership. `proxyToWorker(options)` is the same machinery as
+  connect/express-style middleware for embedding in an existing app.
+- **Clustering** — `createHttpCluster({ pool, port, route? })` transfers raw
+  accepted sockets (`pauseOnConnect`) to workers unparsed; workers run the
+  whole HTTP pipeline. Requires Node ≥ 26 (`SOCKET_TRANSFER_SUPPORTED` is
+  the capability flag; the call no-ops with a notice otherwise). Routing is
+  per-connection, so it lives on a second listener.
+- **WebSockets** — upgrades are matched against the same prefix table and
+  tunneled to the owning worker (rawHeaders preserved, `host`/path
+  rewritten, sockets spliced — the main thread leaves the data path after
+  the handshake). Unmatched upgrades go to a new `onUpgrade` fallback or are
+  destroyed, preserving Node semantics. `proxyUpgradeToWorker(options)` is
+  the `'upgrade'`-listener sibling of `proxyToWorker` for apps that mount
+  middleware themselves. Clustered WS needs no extra API — the whole socket
+  transfers.
+- **Sticky sessions** — `stickyByAddress()` is a `route` for
+  `createHttpCluster`: rendezvous hashing on `remoteAddress` pins a client
+  to a worker across *separate* connections (socket.io's polling→upgrade,
+  HTTP→WS session flows). Worker loss remaps only that worker's clients.
+- **Sharing one contract buffer** — `withSharedBuffer(spawn, getBuffer)` +
+  `bindSharedBuffer()` (`@atolljs/node`) hand a pool's `SharedArrayBuffer`
+  to message-only worker pools (e.g. HTTP workers reading another pool's
+  shared memory without a second INIT handshake).
+
+### Shared-memory persistence — `@atolljs/node/redis` (new)
+
+- `persistSharedMemory(memory, { client, name, key?, syncIntervalMs?,
+  fields?, subscriber? })` — mirrors a bound contract into Redis. The local
+  `SharedArrayBuffer` stays the synchronous source of truth (the contract
+  API can't be async); Redis holds per-field bytes as hash members at
+  `{key}:{name}` (field path → base64) as the durable/replicated copy.
+- A `syncIntervalMs` poll diffs the per-field **version counters** — the
+  same Atomics block `observe()` uses — so there is no hot-path write
+  instrumentation. `ready` resolves after `hgetall` restores bytes (with
+  version bumps so local waiters fire); `flush()` forces a write;
+  `stop()` does a final flush.
+- Optional **pub/sub replication** (`subscriber`): dirty fields publish
+  `{ src, path, b64 }`; subscribers apply bytes + bump local versions —
+  echo-suppressed, last-write-wins per field.
+- `redisMemoryAdapter(client, opts)` is the pool-config factory:
+  `persistence: redisMemoryAdapter(redis)` on `createNodePool` /
+  `AtollModule.registerPool(Async)`. `ioRedisSubscriber` adapts ioredis;
+  node-redis's `subscribe(ch, listener)` matches natively. The client
+  surface is `hset`/`hgetall`/`publish` on strings — no Redis dependency.
+- Core seam: `WorkerPoolConfig.persistence?: (memory) => MemoryPersistence`
+  (`{ ready, flush, stop }`) — invoked after bind, stopped inside
+  `terminate()`. `SharedMemory` gained adapter-facing `buffer` and
+  `fields()` accessors; `WorkerPool` exposes `sharedBuffer` and a `workers`
+  snapshot for auxiliary messaging.
+
+### Islands — framework-neutral core
+
+- **React moved out.** The react-reconciler host config now lives in
+  `@atolljs/react-island/worker` (`reactIslandApp`,
+  `defineReactPolyWorker`/`defineReactMonoWorker`); `@atolljs/islands` ships
+  no renderer. `definePolyWorker({ apps })` treats every app shape
+  uniformly — `{ imperative: (doc, props) => void }`, a framework helper, or
+  `{ mount(ctx) }` returning a handle with `update`/`sync`/`flush`/`dispose`.
+- **Slots are an attribute, not a component** — host children project into
+  the worker tree via `data-atoll-slot`, renderable by any framework;
+  React's `<Slot/>` is sugar over it.
+- **`@atolljs/islands/metrics`** — flag-gated proxy-engine instrumentation:
+  `proxyMs` (engine sinks) vs `appMs` (framework/adapter residual) vs
+  `mainMs` (replay), `opBytes` wire estimates, and `proxyInstanceStats()`
+  structural counts (retained nodes, handlers, queue depth). Off by
+  default; production pays one predictable branch. Powers the generated
+  per-framework benchmark table in the consumer docs.
+
+### Core packaging
+
+- The contract layer vendors a **narrowed zod surface** (`src/contract/zod`)
+  — named constructors instead of the `z` namespace, which can't
+  property-shake and dragged ~440KB into consumer builds. `mz` output and
+  `memory.schemas` are still ordinary zod (classic and mini schemas both
+  accepted).
+
+### Examples & docs
+
+- New runnable examples: `examples/express`, `examples/fastify`,
+  `examples/hono`, `examples/koa` (framework adapters over a worker pool),
+  and `examples/http-offload` (gateway + cluster on one app).
+- NestJS example demonstrates **housed APIs** — routes owned entirely
+  inside workers, reachable through the gateway or the cluster listener.
+- READMEs reworked for npm onboarding; consumer docs
+  (`jwhenry3.github.io/atolljs/consumer/`) reorganized — framework sub-pages,
+  Islands overview/quickstart/proxy-document pages, per-framework backend
+  topics (clustering, gateway routing, WebSockets, persistence), and a
+  generated bundle-size/processing-load page.
+- 76 test files / 529 tests including real `nest build` → boot → HTTP e2e
+  and socket-transfer e2e on Node ≥ 26.
+
 ## 0.1.0 — initial release
 
 Typed shared-memory worker pools and worker-rendered UI islands for
