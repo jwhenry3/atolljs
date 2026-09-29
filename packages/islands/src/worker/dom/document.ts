@@ -569,6 +569,19 @@ export const createProxyDocument = (instance: string): ProxyDocument => {
 export const docForInstance = (instance: string): InternalDocument =>
   instanceDocs.get(instance) ?? (createProxyDocument(instance) as InternalDocument);
 
+/** The instance's proxy document if one was materialized — never creates.
+ *  Rendered instances may hold none (React's host config writes instance
+ *  records, not proxy nodes, until a ref/portal adopts them). */
+export const peekInstanceDoc = (instance: string): InternalDocument | undefined =>
+  instanceDocs.get(instance);
+
+/** Dispose the instance's proxy document if one exists — covers docs
+ *  materialized through `docForInstance`, not just `ctx.doc`, so unmount
+ *  can't leave a stale entry for ambient-document resolution. */
+export const disposeInstanceDoc = (instance: string): void => {
+  instanceDocs.get(instance)?.dispose();
+};
+
 /**
  * The document `globalThis.document` should mean right now: the active
  * instance's when a task holds one; the single registered document when only

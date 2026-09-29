@@ -19,9 +19,6 @@
   },
   "include": [
     "src",
-    "test",
-    // The test fixture imports the worker entry, which imports
-    // react-reconciler — islands's ambient module declaration.
-    "../../packages/islands/src/react-reconciler.d.ts"
+    "test"
   ]
 }

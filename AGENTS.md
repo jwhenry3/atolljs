@@ -22,6 +22,9 @@ npm test            # vitest — all suites (sdk + packages + example e2e)
 npm run build       # typecheck (tsc --noEmit) + lib build + app build
 npm run dev:all     # every example dev server + the consumer docs site
 npm run serve:all   # build everything, serve one origin on :4173
+npm run serve:pages # build + serve the GitHub Pages artifact (dist-pages/) on :4174
+npm run stats       # measure per-package bundle size → docs-consumer/src/bundleStats.ts
+npm run stats:islands # bench per-framework worker/main split → docs-consumer/src/islandPerfStats.ts
 ```
 
 Per-package checks: each `packages/*` dir is independently buildable; example
@@ -60,6 +63,9 @@ packages/node/        node:worker_threads adapter (+ ./http socket routing)
 packages/nestjs/      NestJS module + decorators
 examples/<fw>/        demo apps; examples/react-dom-worker/ is the islands demo;
                       examples/http-offload/ serves HTTP inside pool workers (Node ≥26)
+examples/express|fastify|hono|koa   plain-Node REST APIs on @atolljs/node
+                      (esbuild-bundled worker entries — tsx paths don't reach
+                      worker_threads)
 docs/                 this project's documentation (markdown)
 docs-consumer/        consumer docs site (Vite app)
 scripts/              dev/serve/assemble orchestration

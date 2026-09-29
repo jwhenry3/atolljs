@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from './zod';
 
 /**
  * Atoll zod — the fixed-width schema vocabulary. Every helper produces a

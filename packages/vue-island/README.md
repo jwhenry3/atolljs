@@ -1,17 +1,20 @@
 # @atolljs/vue-island
 
-The Vue shell surface for `@atolljs/islands` — mount a
-worker-hosted tree as an ordinary element in a main-thread Vue app — plus
-the Vue **worker renderer**: `vueIslandApp` runs a plain Vue component
-through Vue's own `createRenderer` with host ops bound to the instance's
-proxy document, so every mutation serializes to the op stream the shell
-replays as real DOM.
+The Vue shell surface for `@atolljs/islands` — mount a worker-hosted tree as
+an ordinary element in a main-thread Vue app — plus the Vue **worker
+renderer**: a plain Vue component runs through Vue's own `createRenderer` with
+host ops bound to the instance's proxy document, so every mutation serializes
+to the op stream the shell replays as real DOM.
+
+**[Atoll — package documentation](https://jwhenry3.github.io/atolljs/consumer/#/quickstart)**
+
+## Install
 
 ```bash
 npm install @atolljs/core @atolljs/islands @atolljs/vue-island vue
 ```
 
-## `useIsland` / `AtollIsland`
+## `useIsland` / `<AtollIsland>`
 
 ```vue
 <script setup lang="ts">
@@ -30,11 +33,9 @@ const { host, handle, status } = useIsland({
 ```
 
 `<AtollIsland>` is the component form — same options as props plus
-`@ready`/`@error` emits. All the
-[islands island rules](../islands/README.md#island-rules) apply
-unchanged.
+`@ready`/`@error` emits.
 
-## The worker renderer: `vueIslandApp` / `defineVuePolyWorker`
+## The worker renderer
 
 ```ts
 // counter.worker.ts — the whole worker entry
@@ -55,27 +56,28 @@ export const worker = defineVuePolyWorker({ apps: { counter: Counter } });
 // or a 1:1 instance worker: defineVueMonoWorker(Counter)
 ```
 
-Semantics: `mount` renders through a module-level `createRenderer` whose
-host ops map onto the instance's proxy document; `island.updateProps` clones
-the mounted root vnode and re-renders, so Vue patches in place (same DOM
-elements survive). `emit`/`runInInstance` are re-exported for the
-island→shell channel.
+`mount` renders through a `createRenderer` whose host ops map onto the
+instance's proxy document; `island.updateProps` clones the mounted root vnode
+and re-renders, so Vue patches in place (same DOM elements survive).
+`emit`/`runInInstance` are re-exported for the island→shell channel.
 
-Notes:
+## Notes
 
-- **Event modifiers cross the wire.** `@click.once`/`.passive`/`.capture`
-  become real `addEventListener` options — including worker-side `once`
-  auto-detach.
-- **Vue's scheduler is a microtask.** State-driven re-renders commit just
-  after the dispatch task returns — ops ride the doorbell/`flush()` path
-  rather than the dispatch's own batch.
-- Conditional anchors (`v-if`/fragment boundaries) are real comment nodes
-  — positional anchors driver-side, invisible in output.
+- **Event modifiers cross the wire** — `@click.once`/`.passive`/`.capture`
+  become real `addEventListener` options.
+- **Vue's scheduler is a microtask** — state-driven re-renders commit just
+  after the dispatch task returns and ride the doorbell/`flush()` path.
+- Conditional anchors (`v-if`/fragment boundaries) are real comment nodes.
+- Vue 3.5+; runtime-only build suffices (`h()`/`defineComponent` — SFCs
+  compile via your bundler as usual).
+- Props must be `structuredClone`-able — `mountIsland` rejects uncloneable
+  values naming the offending key.
 
-## Requirements
+## Documentation
 
-- Vue 3.5+; runtime-only build suffices (`h()`/`defineComponent` — no
-  template compiler needed unless your components use SFCs, which your
-  bundler compiles as usual).
-- `structuredClone`-able props (they cross `postMessage`; `mountIsland`
-  rejects uncloneable values naming the offending key).
+- [Atoll — package documentation](https://jwhenry3.github.io/atolljs/consumer/#/quickstart)
+- [Worker islands for Vue](https://jwhenry3.github.io/atolljs/consumer/#/fw-vue/worker-islands)
+- [Worker islands](https://jwhenry3.github.io/atolljs/consumer/#/islands) —
+  `mountIsland` options, `IslandHandle`, island rules
+- In-repo internals: [`docs/islands.md`](../../docs/islands.md),
+  [`docs/islands-worker.md`](../../docs/islands-worker.md)

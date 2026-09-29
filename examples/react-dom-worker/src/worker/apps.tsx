@@ -13,7 +13,8 @@
  */
 
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
-import { emit, islandApp, Slot, type EventPayload } from '@atolljs/islands/worker';
+import { emit, islandApp, type EventPayload } from '@atolljs/islands/worker';
+import { Slot } from '@atolljs/react-island/worker';
 import {
   Bar,
   CartesianGrid,

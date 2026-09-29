@@ -153,22 +153,12 @@ app.use(
   }),
 );`;
 
-const USAGE_BUILD = `// nest-cli.json — opt into webpack + a config factory
+const USAGE_BUILD = `// nest-cli.json — opt into webpack so worker entries bundle
 {
   "compilerOptions": {
-    "webpack": true,
-    "webpackConfigFactory": "webpack.config.js"
+    "webpack": true
   }
 }
-
-// webpack.config.js — worker chunks are detected automatically from
-// new Worker(new URL(...)); the only plugin needed resolves the aliases
-module.exports = (config) => {
-  config.resolve.plugins.push(
-    new TsconfigPathsPlugin({ configFile: 'tsconfig.json' })
-  );
-  return config;
-};
 
 // package.json
 //   "build": "nest build"
@@ -231,20 +221,20 @@ export function Nestjs() {
 
       <h2>Build</h2>
       <p>
-        Plain <code>nest build</code> — webpack mode with a{' '}
-        <code>webpackConfigFactory</code>. Worker chunks need no configuration:
-        webpack detects each <code>new Worker(new URL('./x.worker.ts',
-        import.meta.url))</code> in the pool config and compiles it as its own
-        chunk, so the <code>worker:</code> factory points at the TS source —
-        never a dist filename. <code>atoll-nestjs/worker</code> self-contains
+        Plain <code>nest build</code> — webpack mode. Worker chunks need no
+        configuration: webpack detects each <code>new Worker(new
+        URL('./x.worker.ts', import.meta.url))</code> in the pool config and
+        compiles it as its own chunk, so the <code>worker:</code> factory
+        points at the TS source — never a dist filename.{' '}
+        <code>atoll-nestjs/worker</code> self-contains
         the <code>node:worker_threads</code> shim + bootstrap — worker entries
         are a couple of imports. The lower-level node pieces (
         <code>createNodeWorker</code>, the shim,{' '}
         <code>createNodePool</code>) live in{' '}
-        <code>@atolljs/node</code> — usable in plain Node programs with
-        no Nest at all.
+        <a href="#/fw-node"><code>@atolljs/node</code></a> — usable in plain
+        Node programs (Express, Fastify, Hono, Koa) with no Nest at all.
       </p>
-      <CodeBlock code={USAGE_BUILD} file="nest-cli.json + webpack.config.js" language="javascript" />
+      <CodeBlock code={USAGE_BUILD} file="nest-cli.json" language="javascript" />
 
       <h2>Binding API</h2>
       <table className="doc-table">

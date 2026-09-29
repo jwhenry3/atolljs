@@ -40,10 +40,13 @@
  * flush = drain only). See worker/proxyDom.ts.
  *
  * RENDERED INSTANCES: `{ mount: (ctx) => handle | void }` is the same shape
- * for non-React framework renderers — mount(ctx) renders into the instance's
- * proxy document and returns a handle whose `update(props)` takes over
- * updateProps (fine-grained patching instead of rebuild) and whose
- * `dispose()` runs before the document dies.
+ * for EVERY framework renderer, React included — mount(ctx) renders into the
+ * instance's proxy document and returns a handle whose `update(props)` takes
+ * over updateProps (fine-grained patching instead of rebuild), whose
+ * `sync(fn)`/`flush()` let task-ordered renderers (react-reconciler) pin
+ * commits into the task batch, and whose `dispose()` runs before the
+ * document dies. This package ships no renderer: React's lives in
+ * `@atolljs/react-island/worker` — framework-neutral by construction.
  *
  * Ops still ride back through the pool's ordinary postMessage channel — the
  * sharedMemory contract here is only the doorbell (see memory.ts): a commit
@@ -52,8 +55,6 @@
  * message-only mode.
  */
 
-import type { ReactElement } from 'react';
-import type { ReactInstance } from './reactInstance';
 import { defineWorker } from '@atolljs/core';
 import type { SharedMemory, WorkerDefinition } from '@atolljs/core';
 import { islandAppNameOf } from '../app';
@@ -63,6 +64,8 @@ import {
   createProxyDocument,
   installInstanceDispatcher,
   docForInstance,
+  peekInstanceDoc,
+  disposeInstanceDoc,
   type InternalDocument,
   type ProxyDocument,
 } from './proxyDom';
@@ -72,7 +75,6 @@ import {
   instances,
   pushOp,
   runInInstance,
-  setActiveInstance,
   setDoorbellContract,
   setInstanceSize,
   takeOps,
@@ -81,13 +83,13 @@ import type { EventPayload, IslandWorkerMethods, Op } from '../ops';
 
 /**
  * Registry value shapes:
- *  - a React component function — reconciled into the instance's own root.
- *    (`props: any` so plain `function App({ x }: Props)` components register
- *    without casts — props are serialized across the wire anyway.)
- *  - `{ imperative: (doc, props) => void }` — NO React at all. mount() hands
- *    it a proxy DOM scoped to the instance; its mutations emit ops directly.
+ *  - `{ imperative: (doc, props) => void }` — no framework at all. mount()
+ *    hands it a proxy DOM scoped to the instance; its mutations emit ops
+ *    directly.
+ *  - `{ mount: (ctx) => handle | void }` — a framework adapter's output
+ *    (`reactIslandApp`, `vueIslandApp`, …). Bare component functions are NOT
+ *    registry values — wrap them first (defineReactPolyWorker does it).
  */
-export type ReactIslandApp = (props: any) => ReactElement;
 export interface ImperativeIslandApp {
   imperative: (doc: ProxyDocument, props: Record<string, unknown>) => void;
   /**
@@ -118,6 +120,21 @@ export interface RenderedHandle {
    */
   update?(props: Record<string, unknown>): void;
   /**
+   * Run `fn` inside the renderer's synchronous commit lane (React:
+   * flushSyncFromReconciler + flushSyncWork) so its mutations emit ops
+   * inside the current task batch. Dispatch wraps event-handler invocation
+   * in this when the handle provides one; renderers without a sync lane
+   * simply omit it.
+   */
+  sync?(fn: () => void): void;
+  /**
+   * Drain renderer work scheduled outside tasks — passive effects, async
+   * state updates (React: flushPassiveEffects + flushSyncWork). The worker's
+   * flush() method calls it inside the instance's scope, then drains the
+   * op queue.
+   */
+  flush?(): void;
+  /**
    * App teardown — runs inside the instance's scope BEFORE its proxy document
    * is disposed (unmount, remount, updateProps rebuild). Same rules as
    * ImperativeIslandApp.dispose: cancel framework roots/effects here.
@@ -125,18 +142,18 @@ export interface RenderedHandle {
   dispose?(): void;
 }
 /**
- * A renderer-backed app: a non-React framework renderer (Vue, Svelte,
+ * A renderer-backed app: a framework renderer (React, Vue, Svelte,
  * Solid, Angular) whose `mount` renders component output into the instance's
  * proxy document — every proxy mutation already serializes to ops. Package
- * adapters (e.g. @atolljs/vue-island/worker) wrap a component into
- * this shape so it can sit beside React and imperative apps in the same
- * `apps` registry.
+ * adapters (e.g. @atolljs/react-island/worker, @atolljs/vue-island/worker)
+ * wrap a component into this shape so it can sit beside imperative apps in
+ * the same `apps` registry.
  */
 export interface RenderedIslandApp {
   mount(ctx: RenderContext): RenderedHandle | void;
 }
 /** The apps an island can mount — keyed by the name the shell passes to mount(). */
-export type IslandApp = ReactIslandApp | ImperativeIslandApp | RenderedIslandApp;
+export type IslandApp = ImperativeIslandApp | RenderedIslandApp;
 
 export interface PolyWorkerRegistry {
   /** Name → island app registry. The shell's `mountIsland({ app: name })`
@@ -201,14 +218,18 @@ interface RenderedInstance extends InstanceBase {
     app: RenderedIslandApp;
     /** The mount-returned handle — drives fine-grained updates/teardown. */
     handle: RenderedHandle | void;
-    /** The instance's proxy document — replaced on each rebuild. */
-    doc: ProxyDocument;
     props: Record<string, unknown>;
   };
+  // The instance's proxy document is NOT stored here: it lives in
+  // instanceDocs, materialized lazily by `ctx.doc` or `docForInstance`
+  // adoption (React mounts only need one when a library holds a ref or a
+  // portal target) — rendered instances without a doc preserve the
+  // ambient-document resolution semantics imperative instances rely on.
+  // Look it up with peekInstanceDoc; tear it down with disposeInstanceDoc.
 }
 
 /** A mounted instance — one per island worker in production. */
-export type Instance = ReactInstance | ImperativeInstance | RenderedInstance;
+export type Instance = ImperativeInstance | RenderedInstance;
 
 const isImperativeInstance = (r: Instance): r is ImperativeInstance => r.imperative !== undefined;
 const isRenderedInstance = (r: Instance): r is RenderedInstance => r.rendered !== undefined;
@@ -240,15 +261,6 @@ const resolveApp = (name: string): IslandApp | undefined =>
 
 const newPid = (): string => `w-${Math.random().toString(36).slice(2, 8)}`;
 
-/**
- * react/react-reconciler arrive here — dynamically, so a worker bundle whose
- * registry holds only Vue/Svelte/Solid/Angular/imperative apps never pays
- * for the reconciler. Cached after the first React mount.
- */
-let reactRuntime: Promise<typeof import('./reactInstance')> | undefined;
-const loadReactRuntime = (): Promise<typeof import('./reactInstance')> =>
-  (reactRuntime ??= import('./reactInstance'));
-
 /** 'controls' or 'data-table@7' → 'data-table' — registry name part of a instance key. */
 const appNameOf = (instance: string): string => {
   const at = instance.lastIndexOf('@');
@@ -274,10 +286,10 @@ function createIslandRuntime(
   // installDomShim, which builds on this.
   installInstanceDispatcher();
 
-  // Legacy root (tag 0) — no concurrent features. Container creation is
-  // per-instance, not module-level, so a second mount() can't collide with the
-  // first instance's tree. Imperative mounts skip the reconciler entirely —
-  // their "host environment" is the proxy DOM, and build() emits ops itself.
+  // Container creation is per-instance, not module-level, so a second mount()
+  // can't collide with the first instance's tree. Imperative mounts skip the
+  // renderer entirely — their "host environment" is the proxy DOM, and
+  // build() emits ops itself.
   function createInstance(key: string, pid: string): Instance {
     const app = resolveApp(appNameOf(key));
     if (isRendered(app)) {
@@ -285,7 +297,7 @@ function createIslandRuntime(
         key,
         app: appNameOf(key),
         pid,
-        rendered: { app, handle: undefined, doc: createProxyDocument(key), props: {} },
+        rendered: { app, handle: undefined, props: {} },
       };
     }
     if (isImperative(app)) {
@@ -302,30 +314,10 @@ function createIslandRuntime(
       };
     }
     throw new Error(
-      `createInstance: "${appNameOf(key)}" resolved to a React app — React mounts are created by reactInstance (lazy import), this path is unreachable`,
+      `createInstance: "${appNameOf(key)}" is a bare component — registry values must be ` +
+        `{ imperative } or a framework adapter's RenderedIslandApp ` +
+        `(reactIslandApp/vueIslandApp/…, or the package's define*PolyWorker which wraps for you)`,
     );
-  }
-
-  /**
-   * Commit synchronously around `fn` and return the ops it produced, scoped
-   * to `instance`'s queue.
-   *
-   * In 0.34, `updateContainer`/setState only *schedule* work — the actual
-   * render+commit happens when the root scheduler task runs (a macrotask via
-   * the `scheduler` package). `flushSyncFromReconciler` pins the update
-   * priority to the discrete/sync lane for the duration of `fn` and flushes
-   * pending sync work in its `finally`, so by the time it returns the
-   * mutation hooks have run and the instance's op queue is full.
-   */
-  function syncCommit(instance: ReactInstance, fn: () => void): Op[] {
-    const prev = setActiveInstance(instance.key);
-    try {
-      instance.reconciler.flushSyncFromReconciler(fn);
-      instance.reconciler.flushSyncWork();
-      return takeOps(instance.key);
-    } finally {
-      setActiveInstance(prev);
-    }
   }
 
   /**
@@ -355,15 +347,27 @@ function createIslandRuntime(
    * the proxy document, `clear`, then re-mount on a fresh document. Used
    * for remounts and for updateProps when the handle exposes no `update`.
    */
+  /** The RenderContext handed to `app.mount` — `doc` materializes the
+   *  instance's proxy document on first access so renderers that never
+   *  touch it (React) register nothing in instanceDocs. */
+  function renderCtx(key: string, props: Record<string, unknown>): RenderContext {
+    return {
+      instance: key,
+      get doc() {
+        return docForInstance(key);
+      },
+      props,
+    };
+  }
+
   function rebuildRendered(instance: RenderedInstance, props: Record<string, unknown>): Op[] {
     return runInInstance(instance.key, () => {
       const r = instance.rendered;
       r.handle?.dispose?.();
-      r.doc.dispose();
+      disposeInstanceDoc(instance.key);
       pushOp(instance.key, { t: 'clear' });
-      r.doc = createProxyDocument(instance.key);
       r.props = props;
-      r.handle = r.app.mount({ instance: instance.key, doc: r.doc, props });
+      r.handle = r.app.mount(renderCtx(instance.key, props));
       return takeOps(instance.key);
     });
   }
@@ -394,71 +398,40 @@ function createIslandRuntime(
           );
         }
 
-        let mounted = mounts.get(instance);
-        // Imperative/rendered remount — same clear+rebuild semantics as
-        // updateProps; the instance (and pid) survives.
+        const mounted = mounts.get(instance);
+        // Remount — same clear+rebuild semantics as updateProps; the instance
+        // (and pid) survives.
         if (mounted !== undefined && isImperativeInstance(mounted)) {
           return rebuildImperative(mounted, props);
         }
-        if (mounted !== undefined && isRenderedInstance(mounted)) {
+        if (mounted !== undefined) {
           return rebuildRendered(mounted, props);
         }
 
-        let ops: Op[] = [];
-        if (!isRendered(App) && !isImperative(App)) {
-          // React app — the reconciler arrives via a lazy import so
-          // non-React worker bundles never pay for it.
-          const rt = await loadReactRuntime();
-          let reactInstance: ReactInstance;
-          if (mounted !== undefined) {
-            // Remount — unmount the existing tree so React detaches its
-            // instances, then rebuild on a fresh container. The pid is kept.
-            const old = mounted as ReactInstance;
-            ops = syncCommit(old, () => old.unmountTree());
-            reactInstance = rt.createReactInstance(instance, appNameOf(instance), old.pid);
-          } else {
-            reactInstance = rt.createReactInstance(instance, appNameOf(instance), newPid());
-          }
-          mounts.set(instance, reactInstance);
-          return ops.concat(
-            syncCommit(reactInstance, () => reactInstance.render(App, props)),
-          );
-        }
+        // First mount. (A registry entry's kind can't change under a mounted
+        // instance key — the registry is fixed at module load.)
+        const created = createInstance(instance, newPid());
+        mounts.set(instance, created);
 
-        // Imperative/rendered first mount. (A mounted React instance being
-        // replaced by a non-React app unmounts through syncCommit first.)
-        if (mounted !== undefined) {
-          const old = mounted as ReactInstance;
-          ops = syncCommit(old, () => old.unmountTree());
-          mounted = createInstance(instance, old.pid);
-        } else {
-          mounted = createInstance(instance, newPid());
-        }
-        mounts.set(instance, mounted);
-
-        if (isImperativeInstance(mounted)) {
+        if (isImperativeInstance(created)) {
           // First mount of an imperative instance — run build() in the instance's
           // scope and drain the ops its proxy-DOM mutations emitted.
-          const imp = mounted.imperative;
+          const imp = created.imperative;
           imp.props = props;
-          return ops.concat(
-            runInInstance(instance, () => {
-              imp.build(imp.doc, props);
-              return takeOps(instance);
-            }),
-          );
+          return runInInstance(instance, () => {
+            imp.build(imp.doc, props);
+            return takeOps(instance);
+          });
         }
 
         // First mount of a rendered instance — mount() in the instance's scope;
         // the framework's proxy-DOM mutations emit the initial op batch.
-        const r = (mounted as RenderedInstance).rendered;
+        const r = created.rendered;
         r.props = props;
-        return ops.concat(
-          runInInstance(instance, () => {
-            r.handle = r.app.mount({ instance, doc: r.doc, props });
-            return takeOps(instance);
-          }),
-        );
+        return runInInstance(instance, () => {
+          r.handle = r.app.mount(renderCtx(instance, props));
+          return takeOps(instance);
+        });
       },
 
       /**
@@ -478,17 +451,13 @@ function createIslandRuntime(
         if (isImperativeInstance(mounted)) return rebuildImperative(mounted, props);
         // Rendered mounts prefer their own fine-grained update; absent a
         // handle.update they fall back to the same rebuild.
-        if (isRenderedInstance(mounted)) {
-          const r = mounted.rendered;
-          if (r.handle?.update === undefined) return rebuildRendered(mounted, props);
-          return runInInstance(instance, () => {
-            r.handle!.update!(props);
-            r.props = props;
-            return takeOps(instance);
-          });
-        }
-        const App = resolveApp(mounted.app) as (props: Record<string, unknown>) => ReactElement;
-        return syncCommit(mounted, () => mounted.render(App, props));
+        const r = mounted.rendered;
+        if (r.handle?.update === undefined) return rebuildRendered(mounted, props);
+        return runInInstance(instance, () => {
+          r.handle!.update!(props);
+          r.props = props;
+          return takeOps(instance);
+        });
       },
 
       /**
@@ -524,77 +493,69 @@ function createIslandRuntime(
                     : undefined);
           }
         }
-        if (isImperativeInstance(instance) || isRenderedInstance(instance)) {
-          // No reconciler to flush — the handler's proxy-DOM mutations emit
-          // ops directly; runInInstance gives emit() and instance-less ops a
-          // queue to route to.
-          return runInInstance(instance.key, () => {
-            entry.fn(payload);
-            return takeOps(instance.key);
-          });
-        }
-        return syncCommit(instance, () => {
-          entry.fn(payload);
+        return runInInstance(instance.key, () => {
+          // Task-ordered renderers (React) wrap the handler in their sync
+          // lane — the handle's `sync` hook — so handler-driven commits emit
+          // ops inside this dispatch batch. Renderers without one flush their
+          // work through the doorbell/flush path instead.
+          const sync = isRenderedInstance(instance) ? instance.rendered.handle?.sync : undefined;
+          if (sync !== undefined) sync(() => entry.fn(payload));
+          else entry.fn(payload);
+          return takeOps(instance.key);
         });
       },
 
       /**
        * The pushed-size channel: the driver measured the island's container
-       * and stores it for the instance (see hostConfig instanceSizes). Imperative
-       * mounts additionally fire their proxy document's onResize handlers —
+       * and stores it for the instance (see instanceSizes). Mounts
+       * additionally fire their proxy document's onResize handlers —
        * inside the instance's scope so their mutations emit ops, which ride
-       * back in this task's return batch. React mounts have no proxy doc;
-       * the stored size is still what a shim-installed document would read.
+       * back in this task's return batch.
        */
       setSize(instance: string, width: number, height: number): Op[] {
         setInstanceSize(instance, width, height);
         const mounted = mounts.get(instance);
-        if (
-          mounted !== undefined &&
-          (isImperativeInstance(mounted) || isRenderedInstance(mounted))
-        ) {
-          return runInInstance(mounted.key, () => {
-            const doc = isImperativeInstance(mounted)
-              ? mounted.imperative.doc
-              : mounted.rendered.doc;
-            (doc as InternalDocument)._notifySize(width, height);
-            return takeOps(instance);
-          });
-        }
-        return takeOps(instance);
+        if (mounted === undefined) return takeOps(instance);
+        const doc = isImperativeInstance(mounted)
+          ? mounted.imperative.doc
+          : peekInstanceDoc(instance);
+        // Rendered mounts that never materialized their document (React)
+        // have no onResize listeners — the stored size still answers shim
+        // reads, so just drain.
+        if (doc === undefined) return takeOps(instance);
+        return runInInstance(mounted.key, () => {
+          (doc as InternalDocument)._notifySize(width, height);
+          return takeOps(instance);
+        });
       },
 
       /**
        * Tear down ONE instance while the worker keeps serving its others —
-       * the multi-island-per-worker counterpart to process death: unmounts
-       * the React tree (or disposes the imperative instance's proxy document),
-       * drops the instance entry, and returns the detach op batch. Stale
+       * the multi-island-per-worker counterpart to process death: disposes
+       * the renderer handle (or the imperative instance's proxy document),
+       * drops the instance entry, and returns the clear op. Stale
        * handler dispatches then no-op via the mounts.get() guard.
        */
       unmount(instance: string): Op[] {
         const mounted = mounts.get(instance);
         if (mounted === undefined) return [];
         mounts.delete(instance);
-        if (isImperativeInstance(mounted)) {
-          // The app's dispose hook cancels deferred work (library timers,
-          // animation loops) BEFORE the doc dies — disposing the doc then
-          // unwinds its DOM shim and drops its handlers.
-          runInInstance(instance, () => {
+        return runInInstance(instance, () => {
+          if (isImperativeInstance(mounted)) {
+            // The app's dispose hook cancels deferred work (library timers,
+            // animation loops) BEFORE the doc dies — disposing the doc then
+            // unwinds its DOM shim and drops its handlers.
             const imp = mounted.imperative;
             imp.dispose?.(imp.doc);
             imp.doc.dispose();
-          });
-          return [{ t: 'clear' }];
-        }
-        if (isRenderedInstance(mounted)) {
-          runInInstance(instance, () => {
-            const r = mounted.rendered;
-            r.handle?.dispose?.();
-            r.doc.dispose();
-          });
-          return [{ t: 'clear' }];
-        }
-        return syncCommit(mounted, () => mounted.unmountTree());
+          } else {
+            mounted.rendered.handle?.dispose?.();
+            disposeInstanceDoc(instance);
+          }
+          // Teardown ops die with the instance — the clear op covers them.
+          takeOps(instance);
+          return [{ t: 'clear' as const }];
+        });
       },
 
       /**
@@ -605,17 +566,16 @@ function createIslandRuntime(
       flush(instance: string): Op[] {
         const mounted = mounts.get(instance);
         if (mounted === undefined) return [];
-        // Imperative and rendered mounts have no passive effects — ops
-        // committed outside a task (timers, continuations mutating the proxy
-        // DOM) just drain.
-        if (isImperativeInstance(mounted) || isRenderedInstance(mounted)) return takeOps(instance);
-        const prev = setActiveInstance(instance);
-        try {
-          mounted.flush();
+        // Imperative mounts commit nothing outside tasks — ops pushed by
+        // timers/continuations just drain. Rendered mounts flush their
+        // renderer first (React: passive effects + scheduled sync work) so
+        // those commits drain in the same batch.
+        if (isImperativeInstance(mounted)) return takeOps(instance);
+        const r = mounted.rendered;
+        return runInInstance(mounted.key, () => {
+          r.handle?.flush?.();
           return takeOps(instance);
-        } finally {
-          setActiveInstance(prev);
-        }
+        });
       },
 
       /** The mounted instance's random id — the island's "worker pid" badge. */

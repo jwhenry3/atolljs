@@ -103,4 +103,8 @@ npm run dev:all    # dev servers: consumer-docs :4181 · react :5173 · vue :517
 npm run serve:all  # builds all apps into dist/<name>/ and serves one origin:
                    #   http://localhost:4173  →  /consumer/ /react/ /vue/ /solid/ /svelte/ /angular/
                    # nextjs stays server-rendered on :3001 (--no-build skips rebuilding)
+
+npm run serve:pages  # builds the GitHub Pages artifact into dist-pages/ and
+                     # serves it on :4174 — a local preview of the deploy
+                     # (static apps only; nextjs/nestjs aren't included)
 ```

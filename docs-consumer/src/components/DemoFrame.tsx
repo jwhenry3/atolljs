@@ -10,13 +10,13 @@ interface DemoFrameProps {
  * Embeds one of the framework example apps. In a docs dev server the examples
  * run on their own ports (npm run dev:all); in the built docs they are mounted
  * at ./<id>/ relative to the site root — works under any base path
- * (serve:all, GitHub Pages). Next.js is server-rendered and always runs on its own port.
+ * (serve:all, GitHub Pages). Server-rendered examples (Next.js) get no frame
+ * at all — a static host has no Node runtime to render them.
  */
 export function DemoFrame({ id, port, name, path = '' }: DemoFrameProps) {
-  const base =
-    import.meta.env.DEV || id === 'nextjs'
-      ? `${window.location.protocol}//${window.location.hostname}:${port}`
-      : `./${id}/`;
+  const base = import.meta.env.DEV
+    ? `${window.location.protocol}//${window.location.hostname}:${port}`
+    : `./${id}/`;
   // ?v=<build stamp> — index.html keeps a stable name, so a fresh stamp per
   // build forces browsers past aggressively cached documents.
   const src = `${base}${path.replace(/^\//, '')}?v=${__BUILD_ID__}`;

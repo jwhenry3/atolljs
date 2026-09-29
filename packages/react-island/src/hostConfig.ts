@@ -2,8 +2,9 @@
  * React-reconciler host adapter for the worker DOM backend.
  *
  * The generic instance state (op queues, instance ids, handler registry,
- * doorbell, geometry) lives in `instance.ts`. This file only wires the
- * reconciler's create/append/update/remove/commit hooks to that backend.
+ * doorbell, geometry) lives in `@atolljs/islands/worker`'s instance module.
+ * This file only wires the reconciler's create/append/update/remove/commit
+ * hooks to that backend.
  *
  * react-reconciler@0.34 reads ~150 fields off the config object. Most are
  * stubs for features this renderer doesn't implement (hydration,
@@ -15,19 +16,21 @@
 import { createContext } from 'react';
 import {
   bumpOpsVersion,
+  docForInstance,
   getActiveInstance,
   getLastActiveInstance,
   instances,
+  newElement,
+  newText,
   pushOp,
   serializeProps,
   unregisterHandler,
   type ElementInstance,
   type HostInstance,
+  type ProxyNode,
   type RootContainer,
   type TextInstance,
-} from './instance';
-import { newElement, newText } from './instance';
-import { docForInstance, type ProxyNode } from './proxyDom';
+} from '@atolljs/islands/worker';
 
 /* ── Event-priority plumbing ────────────────────────────────────────────── */
 /*
@@ -125,7 +128,7 @@ const childHostContextFor = (parent: HostContext, type: string): HostContext => 
 export const hostConfig = {
   // Identity / capabilities
   rendererVersion: '0.34.0',
-  rendererPackageName: '@atolljs/islands',
+  rendererPackageName: '@atolljs/react-island',
   extraDevToolsConfig: null,
   isPrimaryRenderer: true,
   warnsIfNotActing: false,

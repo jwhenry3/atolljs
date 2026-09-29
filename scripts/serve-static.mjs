@@ -6,7 +6,7 @@
 //   node scripts/serve-static.mjs <dir> <port>
 import { createReadStream, existsSync, statSync } from 'node:fs';
 import http from 'node:http';
-import { extname, join, normalize, resolve, sep } from 'node:path';
+import { dirname, extname, join, normalize, resolve, sep } from 'node:path';
 
 const [dir, portArg] = process.argv.slice(2);
 const root = resolve(dir);
@@ -47,7 +47,8 @@ const MIME = {
 
 http
   .createServer((req, res) => {
-    const pathname = decodeURIComponent(new URL(req.url, 'http://localhost').pathname);
+    const url = new URL(req.url, 'http://localhost');
+    const pathname = decodeURIComponent(url.pathname);
     res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
     // credentialless for the worker-islands demo: its map island hot-loads
     // no-cors OSM tile <img>s, which require-corp would block. Still grants
@@ -67,15 +68,39 @@ http
       res.writeHead(403).end('forbidden');
       return;
     }
-    if (!existsSync(file) || statSync(file).isDirectory()) {
+    // A directory without a trailing slash must redirect, not serve —
+    // built apps use relative ./assets/ URLs, which resolve against the
+    // bare path's parent (e.g. /consumer → /assets/… → 404). GitHub Pages
+    // does the same redirect.
+    if (
+      existsSync(file) && statSync(file).isDirectory() &&
+      !pathname.endsWith('/')
+    ) {
+      res.writeHead(301, { Location: `${pathname}/${url.search}` }).end();
+      return;
+    }
+    // A directory serves its own index.html — required for nested demo
+    // mounts (/consumer/<demo>/ inside the docs site), which otherwise fall
+    // through to the first path segment and get the docs index instead.
+    if (existsSync(file) && statSync(file).isDirectory()) {
+      file = join(file, 'index.html');
+    }
+    if (!existsSync(file)) {
+      // Missing asset with an extension — a real 404, not an SPA route.
       if (extname(file)) {
         res.writeHead(404).end('not found');
         return;
       }
-      const appDir = join(root, pathname.split('/').filter(Boolean)[0] ?? '');
-      file = existsSync(join(appDir, 'index.html'))
-        ? join(appDir, 'index.html')
-        : join(root, 'index.html');
+      // SPA fallback — the deepest ancestor mount with an index.html wins
+      // (/consumer/<demo>/route resolves to the demo, not the docs root),
+      // then the root's index.html.
+      let dir = dirname(file);
+      while (!existsSync(join(dir, 'index.html'))) {
+        const parent = dirname(dir);
+        if (parent === dir || dir === root) break;
+        dir = parent;
+      }
+      file = join(dir, 'index.html');
       if (!existsSync(file)) {
         res.writeHead(404).end('not found');
         return;

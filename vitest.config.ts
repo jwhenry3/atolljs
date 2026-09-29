@@ -31,6 +31,7 @@ export default mergeConfig(
         { find: /^@atolljs\/islands$/, replacement: r('packages/islands/src/index.ts') },
         { find: /^@atolljs\/islands\/(.*)$/, replacement: r('packages/islands/src') + '/$1' },
         { find: /^@atolljs\/react-island$/, replacement: r('packages/react-island/src/index.tsx') },
+        { find: /^@atolljs\/react-island\/(.*)$/, replacement: r('packages/react-island/src') + '/$1' },
         // The framework island packages — tests and example worker entries
         // import the published specifiers (incl. the ./worker subpath) and
         // land on sources, same as islands above.

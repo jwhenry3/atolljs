@@ -7,26 +7,24 @@ renderers.
 The `/worker` entry of `@atolljs/islands` is what a worker bundle
 imports (`src/worker/index.ts`): the two worker definers, the proxy DOM, the
 op protocol, event dispatch, `emit`/`callbackProp`, and instance lifecycle —
-framework-neutral by construction. `hostConfig` is deliberately NOT exported —
-a static re-export would pull react + react-reconciler into every `/worker`
-bundle; the reconciler is reachable only through `definePolyWorker`'s lazy
-import of `reactInstance`.
+framework-neutral by construction: it contains no framework import, so a
+non-React registry never parses `react`/`react-reconciler`. React's
+reconciler adapter (`reactInstance` + `hostConfig`) lives in
+`@atolljs/react-island/worker` — importing that entry is what pulls React
+into a worker bundle, once, shared across every React app in the registry.
 
 ## Three app kinds
 
-`apps` values (or the `defineMonoWorker` argument) are one of three shapes.
-React components are reconciled into the instance's own root;
-`{ imperative }` apps get a proxy document and emit ops directly;
-`RenderedIslandApp`s are the framework-adapter shape the `*-island` worker
-packages produce.
+`apps` values (or the `defineMonoWorker` argument) are one of two shapes —
+bare component functions are NOT registry values:
 
 ```ts
-// A PolyWorker registry mixes all three kinds freely — and any mix of
+// A PolyWorker registry mixes both kinds freely — and any mix of
 // frameworks, since each *-island adapter wraps its component into the
 // RenderedIslandApp shape:
 export const worker = definePolyWorker({
   apps: {
-    dashboard: DashboardApp,                        // React component
+    dashboard: reactIslandApp(DashboardApp),        // RenderedIslandApp (React)
     counter:   vueIslandApp(Counter),               // RenderedIslandApp (Vue)
     map:       { imperative: buildMap, dispose },   // imperative proxy-DOM
   },
@@ -35,9 +33,18 @@ export const worker = definePolyWorker({
 // RenderedIslandApp — the contract every worker renderer satisfies:
 interface RenderedIslandApp {
   mount(ctx: { instance: string; doc: ProxyDocument; props: Record<string, unknown> }):
-    { update?(props): void; dispose?(): void } | void;
+    {
+      update?(props): void;  // fine-grained re-render (else rebuild)
+      sync?(fn): void;       // commit inside the task batch (React)
+      flush?(): void;        // drain out-of-task work (passive effects)
+      dispose?(): void;
+    } | void;
 }
 ```
+
+For a single-framework registry the per-package definers wrap for you:
+`defineReactPolyWorker({ apps: { dashboard: DashboardApp } })` maps each
+component through `reactIslandApp` — same for Vue/Svelte/Solid/Angular.
 
 An imperative app's optional `dispose(doc)` — and a rendered handle's
 `dispose()` — run inside the instance's scope *before* its proxy document is
@@ -129,8 +136,9 @@ flushes the queued ops.
 ## Channels — emit, callbackProp, slots
 
 ```ts
-import { emit, runInInstance, bumpOpsVersion, getActiveInstance, Slot }
+import { emit, runInInstance, bumpOpsVersion, getActiveInstance }
   from '@atolljs/islands/worker';
+import { Slot } from '@atolljs/react-island/worker'; // React islands only
 import { callbackProp } from '@atolljs/islands'; // shell side
 
 // island → shell: lands in mountIsland's onEvent. Call inside a handler or
@@ -177,10 +185,15 @@ should not promise it.
 
 Implement `RenderedIslandApp.mount(ctx)`: render into `ctx.doc` with your
 framework's native renderer (every mutation already serializes), return
-`{ update?, dispose? }`. Omit `update` and `updateProps` degrades to
-imperative semantics — dispose + fresh document + remount. `dispose` runs
-inside the instance before its document dies — unmount roots, stop effects.
-The four `*-island` packages in `packages/` are the reference implementations.
+`{ update?, sync?, flush?, dispose? }`. Omit `update` and `updateProps`
+degrades to imperative semantics — dispose + fresh document + remount.
+`sync`/`flush` are the task-ordering hooks: a renderer whose commits are
+scheduled (React's reconciler) wraps event-handler invocation in `sync` so
+its ops land in the dispatch batch, and drains deferred work in `flush`.
+`dispose` runs inside the instance before its document dies — unmount roots,
+stop effects. The five `*-island` packages in `packages/` are the reference
+implementations (`react-island/src/worker.ts` is the shortest full example:
+wrap → sync lane → dispose).
 
 ## Testing islands in-process
 

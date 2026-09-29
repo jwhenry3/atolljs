@@ -30,7 +30,7 @@ export function FrameworkIslands({ id }: { id: string }) {
       </ul>
       <p>
         Shell bindings wrap <code>connectIslandWorker</code> +{' '}
-        <code>mountIsland</code> — see the <a href="#/islands">Worker islands</a>{' '}
+        <code>mountIsland</code> — see the <a href="#/islands">Islands</a>{' '}
         page for the underlying options (modes, slots, lifecycle), and{' '}
         <a href="#/island-apps">Writing island apps</a> for the worker-side
         authoring surface.

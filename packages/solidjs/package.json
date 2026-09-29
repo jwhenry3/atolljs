@@ -2,6 +2,7 @@
   "name": "@atolljs/solidjs",
   "version": "0.1.0",
   "description": "SolidJS bindings — createObservable, createSharedValue, createTask",
+  "homepage": "https://jwhenry3.github.io/atolljs/consumer/#/quickstart",
   "type": "module",
   "exports": {
     ".": "./src/index.ts"

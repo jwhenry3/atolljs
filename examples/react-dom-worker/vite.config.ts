@@ -26,6 +26,10 @@ export default defineConfig(({ command }) => ({
         find: /^@atolljs\/react-island$/,
         replacement: `${fileURLToPath(new URL('../../packages/react-island/src/', import.meta.url)).replace(/\\/g, '/')}index.tsx`,
       },
+      {
+        find: /^@atolljs\/react-island\/worker$/,
+        replacement: `${fileURLToPath(new URL('../../packages/react-island/src/', import.meta.url)).replace(/\\/g, '/')}worker.ts`,
+      },
       // The vue island's worker entry — aliases resolve the package to its
       // sources like islands above. `vue` itself comes from the root
       // install (the file: dep), one copy shared with nothing else here.

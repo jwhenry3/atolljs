@@ -40,21 +40,35 @@ wires the incident tasks and shared fields through the framework bindings.
 | Angular  | `examples/angular` | `npm run dev`   | 4201 |
 | Next.js  | `examples/nextjs`  | `npm run dev`   | 3001 |
 
-### Node backends
+## Backend examples
 
-The Node examples flip the demo around: instead of a UI consuming the pool,
-an HTTP server fronts it.
+The same incidents contract served as a JSON REST API — a `WorkerPool` of
+`node:worker_threads` threads (`@atolljs/node`), no browser involved. Heavy
+scans dispatch to pool workers; record reads hit shared memory directly on
+the API thread.
 
-| Example | Dir | Command | Port |
-|---|---|---|---|
+| Example  | Dir                | Command         | Port |
+|----------|--------------------|-----------------|------|
+| NestJS   | `examples/nestjs`  | `npm run dev`   | 3100 |
+| Express  | `examples/express` | `npm run dev`   | 3200 |
+| Fastify  | `examples/fastify` | `npm run dev`   | 3201 |
+| Hono     | `examples/hono`    | `npm run dev`   | 3202 |
+| Koa      | `examples/koa`     | `npm run dev`   | 3203 |
 | HTTP offload | `examples/http-offload` | `npm run dev` | 3204 |
 
-`http-offload` runs Express inside the pool: a gateway on :3204 pins
-`/api/a/*` to worker A, `/api/b/*` to worker B, and serves the rest on the
-API thread (any Node), plus a pure socket-transfer listener on :3205 that
-hands accepted connections to workers unseen (Node ≥ 26). Its worker entry
-is bundled with esbuild because `worker_threads` spawn plain Node
-(tsx/tsconfig `paths` don't propagate).
+The four non-Nest backends share one shape: `src/incidents.ts` wires
+`createNodePool` + `workerClient<IncidentsWorker>`, `src/incidents.worker.ts`
+is the worker entry (`@atolljs/node/shim` first), and `src/main.ts` is the
+framework's thin HTTP adapter. Because `worker_threads` spawns plain Node
+processes (tsx/loader hooks don't propagate), each example bundles its worker
+entry with esbuild (`npm run bundle` → `dist/incidents.worker.js`) — `dev`,
+`build`, and `start` run it automatically.
+
+`http-offload` flips the demo further: Express runs inside the pool itself. A
+gateway on :3204 pins `/api/a/*` to worker A, `/api/b/*` to worker B, and
+serves the rest on the API thread (any Node), plus a pure socket-transfer
+listener on :3205 that hands accepted connections to workers unseen
+(Node ≥ 26).
 
 ## SharedArrayBuffer requirements
 

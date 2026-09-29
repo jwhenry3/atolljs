@@ -30,14 +30,25 @@ try {
   stop(1);
 }
 
-if (!(await checkPorts([['root', 4173], ['nextjs', 3001], ['nestjs', 3100], ['http-offload', 3204]]))) {
+// Backend examples are Node services — they run their own server processes.
+const backends = [
+  ['nestjs', 'examples/nestjs', 3100],
+  ['express', 'examples/express', 3200],
+  ['fastify', 'examples/fastify', 3201],
+  ['hono', 'examples/hono', 3202],
+  ['koa', 'examples/koa', 3203],
+  ['http-offload', 'examples/http-offload', 3204],
+];
+
+const servePorts = [['root', 4173], ['nextjs', 3001], ...backends.map(([name, , port]) => [name, port])];
+if (!(await checkPorts(servePorts))) {
   process.exit(1);
 }
 
 launch('root', root, process.execPath, [serveStatic, 'dist', '4173']);
 // Next.js is a server-rendered app — serve it with `next start`.
 launch('nextjs', 'examples/nextjs', npmCmd, npmScript('start'));
-// NestJS is a Node service — run the bundled dist/main.js.
-launch('nestjs', 'examples/nestjs', npmCmd, npmScript('start'));
-// http-offload is a Node service — sockets routed into pool workers.
-launch('http-offload', 'examples/http-offload', npmCmd, npmScript('start'));
+// Each backend is a Node service — run its bundled dist/main.js (or equivalent).
+for (const [name, cwd] of backends) {
+  launch(name, cwd, npmCmd, npmScript('start'));
+}

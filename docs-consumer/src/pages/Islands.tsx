@@ -4,7 +4,7 @@ import { DemoFrame } from '../components/DemoFrame';
 export function Islands() {
   return (
     <article>
-      <h1>Worker islands</h1>
+      <h1>Islands</h1>
       <p className="lead">
         <code>@atolljs/islands</code> renders a framework tree{' '}
         <em>inside</em> a Atoll worker: the worker owns the render loop and every
@@ -50,10 +50,11 @@ npm install @atolljs/react-island`}
       <CodeBlock
         file="render.worker.ts — the whole worker entry"
         code={`import { definePolyWorker } from '@atolljs/islands/worker';
+import { reactIslandApp } from '@atolljs/react-island/worker';
 
 export const renderWorker = definePolyWorker({
   apps: {
-    dashboard: DashboardApp,                          // a React component
+    dashboard: reactIslandApp(DashboardApp),          // a React component
     vanilla: { imperative: (doc, props) => { ... } }, // or pure proxy-DOM code
   },
 });`}
@@ -80,7 +81,7 @@ island.destroy();`}
         (multi-island-per-worker — the client is released when its last island
         destroys). When your shell is a framework app, prefer the{' '}
         <code>*-island</code> package's components — they wrap exactly these
-        calls (see the Worker islands page under each framework).
+        calls (see the Islands page under each framework).
       </p>
 
       <h2>Live demo</h2>

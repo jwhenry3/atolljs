@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from './zod';
 import type {
   ScalarKind,
   ListFieldSpec,
@@ -71,7 +71,7 @@ export function listSchema<F extends ListFields>(fields: F): z.ZodObject<ListZod
 function memberToSchema(member: ListMember): z.ZodTypeAny {
   if (member instanceof z.ZodType) {
     const bytes =
-      member.def?.type === 'string' ? (member as z.ZodString).meta()?.bytes : undefined;
+      member._zod.def?.type === 'string' ? zodMetaBytes(member) : undefined;
     return typeof bytes === 'number'
       ? member.refine((s) => utf8.encode(s as string).byteLength <= bytes, `exceeds ${bytes} UTF-8 bytes`)
       : member;
@@ -160,12 +160,12 @@ export function memberToSpec(member: ListMember, name: string): ListFieldSpec {
     if ((member as { bool?: unknown }).bool === true) return member as { bool: true };
     throw new TypeError(`member "${name}": expected a scalar token, { string: n }, { bool: true }, or a zod schema`);
   }
-  const def = member.def as ZodMemberDef;
+  const def = member._zod.def as unknown as ZodMemberDef;
   if (def.type === 'number') return numberMemberToSpec(def);
   if (def.type === 'bigint') return BIGINT_FORMATS[def.format ?? ''] ?? 'i64';
   if (def.type === 'boolean') return { bool: true };
   if (def.type === 'string') {
-    const bytes = (member as z.ZodString).meta()?.bytes;
+    const bytes = zodMetaBytes(member);
     if (typeof bytes === 'number') return { string: bytes };
     throw new TypeError(
       `member "${name}": z.string() needs .meta({ bytes: n }) — inline strings are fixed-width`
@@ -183,7 +183,7 @@ export function memberToSpec(member: ListMember, name: string): ListFieldSpec {
 /** The declared member map of a zod object, or null when `schema` isn't one. */
 export function zodObjectShape(schema: unknown): ListFields | null {
   if (!(schema instanceof z.ZodObject)) return null;
-  return (schema.def as { shape: ListFields }).shape;
+  return (schema._zod.def as unknown as { shape: ListFields }).shape;
 }
 
 /**
@@ -193,7 +193,7 @@ export function zodObjectShape(schema: unknown): ListFields | null {
  */
 export function zodArrayInfo(schema: unknown): { element: z.ZodTypeAny; capacity: number | null } | null {
   if (!(schema instanceof z.ZodArray)) return null;
-  const def = schema.def as ZodMemberDef & { element: z.ZodTypeAny };
+  const def = schema._zod.def as unknown as ZodMemberDef & { element: z.ZodTypeAny };
   let capacity: number | null = null;
   for (const c of def.checks ?? []) {
     const cd = checkDef(c);
@@ -203,9 +203,14 @@ export function zodArrayInfo(schema: unknown): { element: z.ZodTypeAny; capacity
   return { element: def.element, capacity };
 }
 
+/** `.meta()?.bytes` — optional-call: mini schemas ($ZodString too) have no `.meta` method. */
+function zodMetaBytes(schema: unknown): number | null {
+  const meta = (schema as { meta?: () => { bytes?: unknown } }).meta?.();
+  return typeof meta?.bytes === 'number' ? meta.bytes : null;
+}
+
 /** The byte budget carried by `mz.string(n)` / `z.string().meta({ bytes: n })` — null otherwise. */
 export function zodStringBytes(schema: unknown): number | null {
   if (!(schema instanceof z.ZodString)) return null;
-  const bytes = schema.meta()?.bytes;
-  return typeof bytes === 'number' ? bytes : null;
+  return zodMetaBytes(schema);
 }

@@ -13,7 +13,7 @@ import { DemoFrame } from '../components/DemoFrame';
 export function ReactWorkerIslands() {
   return (
     <article>
-      <h1>React — worker islands</h1>
+      <h1>React — islands</h1>
       <p className="lead">
         <code>@atolljs/react-island</code> — a worker-hosted React (or
         imperative proxy-DOM) tree mounted as an ordinary element in a React shell.
@@ -81,16 +81,17 @@ export function ReactWorkerIslands() {
             </td>
           </tr>
           <tr>
-            <td><code>definePolyWorker</code></td>
-            <td><code>definePolyWorker({'{'} apps {'}'})</code></td>
+            <td><code>defineReactPolyWorker</code></td>
+            <td><code>defineReactPolyWorker({'{'} apps {'}'})</code> — <code>react-island/worker</code></td>
             <td>
               Registry worker — one script serving a whole apps map; islands
-              mount by name and several may share one client/worker.
+              mount by name and several may share one client/worker. Components
+              wrap through <code>reactIslandApp</code> automatically.
             </td>
           </tr>
           <tr>
-            <td><code>defineMonoWorker</code></td>
-            <td><code>defineMonoWorker(app)</code></td>
+            <td><code>defineReactMonoWorker</code></td>
+            <td><code>defineReactMonoWorker(app)</code> — <code>react-island/worker</code></td>
             <td>
               Instance worker — the 1:1 topology: one script, one app, mounted
               namelessly. Its bundle carries only that app's dependencies.
@@ -126,14 +127,15 @@ export function ReactWorkerIslands() {
 
       <h2>The worker side — two topologies</h2>
       <p>
-        <b>Registry workers</b> (<code>definePolyWorker</code>) serve a whole
+        <b>Registry workers</b> (<code>defineReactPolyWorker</code>) serve a whole
         apps map from one script — the React islands mount by name, and the two
         data-table islands share ONE client so both mounts live in a single
         worker (separate reconcilers, op queues, and pids — one OS thread).
-        <b>Instance workers</b> (<code>defineMonoWorker</code>) are the 1:1 form —
+        <b>Instance workers</b> (<code>defineReactMonoWorker</code>) are the 1:1 form —
         one script per app, mounted namelessly, bundling only that app's
-        dependencies (map/vanilla shed recharts and the other React apps; the
-        shared worker chunk still carries the reconciler).
+        dependencies (map/vanilla shed recharts, the other React apps, and the
+        reconciler itself — <code>@atolljs/islands/worker</code> is
+        framework-neutral).
       </p>
       <CodeBlock
         file="examples/react-dom-worker/src/worker/render.worker.ts"

@@ -5,9 +5,14 @@
  *   import { definePolyWorker } from '@atolljs/islands/worker';
  *   export const renderWorker = definePolyWorker({ apps: { ... } });
  *
- * Apps (React or `{ imperative }`) also use from here: `emit` (island→shell
- * channel), `runInInstance` (instance scoping for worker-initiated work), `Slot`
- * (transclusion), `createProxyDocument`/`installDomShim` (imperative DOM).
+ * Framework apps also use from here: `emit` (island→shell
+ * channel), `runInInstance` (instance scoping for worker-initiated work),
+ * `createProxyDocument`/`installDomShim` (imperative DOM), plus the
+ * renderer-facing instance factories (`newElement`/`newText`/`serializeProps`,
+ * `ROOT_CONTAINER`) the `*-island` worker adapters drive.
+ *
+ * Framework-neutral by construction: this entry imports no framework — React's
+ * reconciler adapter lives in `@atolljs/react-island/worker`.
  */
 export { definePolyWorker, defineMonoWorker } from './defineWorkers';
 export type {
@@ -15,17 +20,12 @@ export type {
   Instance,
   IslandApp,
   PolyWorkerRegistry,
-  ReactIslandApp,
   RenderContext,
   RenderedHandle,
   RenderedIslandApp,
 } from './defineWorkers';
 
 export { islandApp, islandAppNameOf } from '../app';
-
-// hostConfig is deliberately NOT exported — a static re-export would pull
-// react + react-reconciler into every /worker bundle. The reconciler is
-// reachable only through definePolyWorker's lazy import of reactInstance.
 
 export {
   allocId,
@@ -37,17 +37,20 @@ export {
   getLastTouchedInstance,
   getInstanceSize,
   instances,
+  newElement,
+  newText,
   pushOp,
   registerHandler,
   ROOT_CONTAINER,
   runInInstance,
+  serializeProps,
   setActiveInstance,
   setDoorbellContract,
   setInstanceSize,
   takeOps,
   unregisterHandler,
 } from './instance';
-export type { ElementInstance, HostInstance, TextInstance } from './instance';
+export type { ElementInstance, HostInstance, RootContainer, TextInstance } from './instance';
 
 export {
   createProxyDocument,
@@ -69,8 +72,6 @@ export type {
   WindowShim,
   WireListenerOpts,
 } from './proxyDom';
-
-export { Slot } from './slot';
 
 export type { EventPayload, IslandWorkerMethods, Op, WireProps } from '../ops';
 export { isEventRef } from '../ops';
