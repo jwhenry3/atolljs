@@ -1,4 +1,4 @@
-// isMainThread is mocked false for this whole file — @MeshTask decorators take
+// isMainThread is mocked false for this whole file — @AtollTask decorators take
 // their worker branch, and pool providers resolve to null like they do inside
 // a real worker's application context.
 import 'reflect-metadata';
@@ -17,10 +17,10 @@ import {
   defineSharedMemory,
   field,
   TaskRegistry,
-} from '@jwhenry123/mesh/sdk';
-import { bindMeshWorkerInstance, MeshService, MeshTask } from '../src/decorators';
-import { MeshModule } from '../src/module';
-import { getMeshPoolToken } from '../src/pools';
+} from '@atolljs/core/sdk';
+import { bindAtollWorkerInstance, AtollService, AtollTask } from '../src/decorators';
+import { AtollModule } from '../src/module';
+import { getAtollPoolToken } from '../src/pools';
 
 const mem = defineSharedMemory({ n: field.number() });
 
@@ -32,16 +32,16 @@ class Dep {
 class WorkerService {
   constructor(private readonly dep: Dep) {}
 
-  @MeshTask({ pool: 'p' })
+  @AtollTask({ pool: 'p' })
   read() {
     return this.dep.n;
   }
 }
 
-describe('worker-side @MeshTask delegation', () => {
+describe('worker-side @AtollTask delegation', () => {
   it('handlers registered at decoration time delegate to the DI-bound instance', async () => {
     const di = new WorkerService(new Dep());
-    bindMeshWorkerInstance(WorkerService, di);
+    bindAtollWorkerInstance(WorkerService, di);
     // The decorator auto-registered on class evaluation; the bound DI instance
     // is what actually executes — ctor deps resolve, not `new WorkerService()`.
     await expect(TaskRegistry.execute('WorkerService.read')).resolves.toBe(100);
@@ -49,7 +49,7 @@ describe('worker-side @MeshTask delegation', () => {
 
   it('falls back to a lazily-constructed instance when none is bound', async () => {
     class Unbound {
-      @MeshTask({ pool: 'p' })
+      @AtollTask({ pool: 'p' })
       read() {
         return 'lazy';
       }
@@ -58,14 +58,14 @@ describe('worker-side @MeshTask delegation', () => {
   });
 });
 
-describe('worker-side @MeshService delegation', () => {
+describe('worker-side @AtollService delegation', () => {
   const calcService = defineService('calc', {
     read: { resultSchema: z.number() }, // () => number — inferred
     unbound: {}, // declared but not implemented below
   });
 
   @Injectable()
-  @MeshService(calcService, { pool: 'p' })
+  @AtollService(calcService, { pool: 'p' })
   class CalcService {
     constructor(private readonly dep: Dep) {}
 
@@ -80,7 +80,7 @@ describe('worker-side @MeshService delegation', () => {
 
   it('registers service methods and delegates them to the DI-bound instance', async () => {
     const di = new CalcService(new Dep());
-    bindMeshWorkerInstance(CalcService, di);
+    bindAtollWorkerInstance(CalcService, di);
     await expect(TaskRegistry.execute('calc.read')).resolves.toBe(101);
   });
 
@@ -91,9 +91,9 @@ describe('worker-side @MeshService delegation', () => {
   });
 });
 
-describe('contract-less @MeshService({ pool })', () => {
+describe('contract-less @AtollService({ pool })', () => {
   @Injectable()
-  @MeshService({ pool: 'p' })
+  @AtollService({ pool: 'p' })
   class Analytics {
     constructor(private readonly dep: Dep) {}
 
@@ -107,7 +107,7 @@ describe('contract-less @MeshService({ pool })', () => {
   }
 
   it('registers every method as `ClassName.method` bound to the DI instance', async () => {
-    bindMeshWorkerInstance(Analytics, new Analytics(new Dep()));
+    bindAtollWorkerInstance(Analytics, new Analytics(new Dep()));
     await expect(TaskRegistry.execute('Analytics.hotspots', 5)).resolves.toBe(105);
     await expect(TaskRegistry.execute('Analytics.rollup')).resolves.toBe('all');
   });
@@ -119,7 +119,7 @@ describe('pool providers inside a worker context', () => {
     // before any worker construction inside a worker.
     @Module({
       imports: [
-        MeshModule.registerPool({
+        AtollModule.registerPool({
           name: 'nested',
           sharedMemory: mem,
           worker: () => {
@@ -132,7 +132,7 @@ describe('pool providers inside a worker context', () => {
 
     const app = await NestFactory.createApplicationContext(WorkerFeature, { logger: false });
     try {
-      expect(app.get(getMeshPoolToken('nested'))).toBeNull();
+      expect(app.get(getAtollPoolToken('nested'))).toBeNull();
     } finally {
       await app.close();
     }

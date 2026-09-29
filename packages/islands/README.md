@@ -1,10 +1,10 @@
-# @jwhenry123/mesh-islands
+# @atolljs/islands
 
-Framework islands inside Mesh workers — opt-in DOM rendering off the main
+Framework islands inside Atoll workers — opt-in DOM rendering off the main
 thread. The vocabulary:
 
-- **Mesh** — the fabric: worker pools, contracts, shared memory, task dispatch
-  (`@jwhenry123/mesh`).
+- **Atoll** — the fabric: worker pools, contracts, shared memory, task dispatch
+  (`@atolljs/core`).
 - **PolyWorker** — one worker hosting a REGISTRY of islands
   (`definePolyWorker({ apps })`). The bundle-optimization shape: several
   islands share one module graph, one framework runtime, one op pump.
@@ -28,7 +28,7 @@ run unmodified inside an instance.
 
 ```ts
 // render.worker.ts — the whole worker entry
-import { definePolyWorker } from '@jwhenry123/mesh-islands/worker';
+import { definePolyWorker } from '@atolljs/islands/worker';
 
 export const renderWorker = definePolyWorker({
   apps: {
@@ -40,7 +40,7 @@ export const renderWorker = definePolyWorker({
 
 ```ts
 // main thread — one call: `worker` builds an island-owned client internally
-import { mountIsland } from '@jwhenry123/mesh-islands';
+import { mountIsland } from '@atolljs/islands';
 
 const island = await mountIsland({
   worker: () => new Worker(new URL('./render.worker.ts', import.meta.url), { type: 'module' }),
@@ -70,10 +70,10 @@ an entry, which is where setups diverge:
 A path the bundler didn't resolve shows up as a `mountIsland` `mountTimeout`
 rejection naming the unanswered entry — not a silent hang.
 
-## React shells: `@jwhenry123/mesh-react-island`
+## React shells: `@atolljs/react-island`
 
 When the *shell* itself is a React app, the companion package
-[`@jwhenry123/mesh-react-island`](../react-island) wraps these calls in
+[`@atolljs/react-island`](../react-island) wraps these calls in
 components — `<Island/>` for the declarative `mountIsland`, and the
 `islandComponent`/`lazyIsland` proxies that make a worker app look and type
 like a local component (Suspense on the module load, `fallback` prop on the
@@ -97,19 +97,19 @@ ship as `*-island` packages — each re-exports `definePolyWorker`/`emit`
 so the worker entry needs no direct islands import:
 
 ```ts
-// vue:  import { defineVuePolyWorker }  from '@jwhenry123/mesh-vue-island/worker'
-// svelte: import { defineSveltePolyWorker } from '@jwhenry123/mesh-svelte-island/worker'
-// solid: import { defineSolidPolyWorker }  from '@jwhenry123/mesh-solid-island/worker'
-// angular: import { defineAngularPolyWorker } from '@jwhenry123/mesh-angular-island/worker'
+// vue:  import { defineVuePolyWorker }  from '@atolljs/vue-island/worker'
+// svelte: import { defineSveltePolyWorker } from '@atolljs/svelte-island/worker'
+// solid: import { defineSolidPolyWorker }  from '@atolljs/solid-island/worker'
+// angular: import { defineAngularPolyWorker } from '@atolljs/angular-island/worker'
 export const worker = defineVuePolyWorker({ apps: { counter: Counter } });
 ```
 
 | Package | Worker renderer | updateProps | Notes |
 |---|---|---|---|
-| `mesh-vue-island` | Vue `createRenderer` → proxy DOM | fine-grained (`cloneVNode` + `render`) | `.once`/`.passive`/`.capture` modifiers ride the wire; out-of-task commits arrive on `flush()`/doorbell |
-| `mesh-svelte-island` | Svelte 5 `mount()` into `doc.body`, `$state` props box | fine-grained | Compiled components only (vite-plugin-svelte); `emit`/`runInInstance` re-exported |
-| `mesh-solid-island` | `solid-js/universal` `createRenderer` | fine-grained (per-key signal props) | **Pin the client build** — `worker`/`node` resolve conditions pick the SSR build; the adapter probes and throws if it happens anyway. JSX needs `babel-preset-solid` `{generate:'universal'}` (see its README) |
-| `mesh-angular-island` | `RendererFactory2`/`Renderer2` → proxy DOM + `createComponent`, zoneless | `setInput` + manual CD | JIT components need `import '@angular/compiler'` in the worker entry (missing it throws a named error); AOT/`ɵcmp` components need nothing |
+| `@atolljs/vue-island` | Vue `createRenderer` → proxy DOM | fine-grained (`cloneVNode` + `render`) | `.once`/`.passive`/`.capture` modifiers ride the wire; out-of-task commits arrive on `flush()`/doorbell |
+| `@atolljs/svelte-island` | Svelte 5 `mount()` into `doc.body`, `$state` props box | fine-grained | Compiled components only (vite-plugin-svelte); `emit`/`runInInstance` re-exported |
+| `@atolljs/solid-island` | `solid-js/universal` `createRenderer` | fine-grained (per-key signal props) | **Pin the client build** — `worker`/`node` resolve conditions pick the SSR build; the adapter probes and throws if it happens anyway. JSX needs `babel-preset-solid` `{generate:'universal'}` (see its README) |
+| `@atolljs/angular-island` | `RendererFactory2`/`Renderer2` → proxy DOM + `createComponent`, zoneless | `setInput` + manual CD | JIT components need `import '@angular/compiler'` in the worker entry (missing it throws a named error); AOT/`ɵcmp` components need nothing |
 
 All four speak the same protocol — a registry worker can mix React,
 Vue, Svelte, Solid, Angular, and imperative apps freely.
@@ -183,12 +183,12 @@ main thread — so renderers should not promise it.
 
 ## Testing islands in-process
 
-`@jwhenry123/mesh/sdk/testing/inProcessWorker` ships a `Worker` test double
+`@atolljs/core/sdk/testing/inProcessWorker` ships a `Worker` test double
 that runs the whole protocol in-process — real task registry, real op
 stream, real shared-memory binding; only the thread boundary is faked:
 
 ```ts
-import { InProcessWorker } from '@jwhenry123/mesh/sdk/testing/inProcessWorker';
+import { InProcessWorker } from '@atolljs/core/sdk/testing/inProcessWorker';
 vi.stubGlobal('Worker', InProcessWorker);
 InProcessWorker.handlerModules = [() => import('./my.worker')];
 
@@ -246,7 +246,7 @@ observer loop.
   emit channel. Fire-and-forget: the callable returns `undefined` (there's
   no await channel), and calls made outside a dispatch task flush via the
   doorbell. Markers work nested inside prop objects/arrays too.
-- **Slots** — `<Slot name="x"/>` renders a leaf `data-mesh-slot` element whose
+- **Slots** — `<Slot name="x"/>` renders a leaf `data-atoll-slot` element whose
   contents the shell fills with real main-thread DOM.
 - **The proxy DOM is write-path-plus-container-geometry.** Shadow-tree reads
   work (children, querySelector, innerHTML); so does ONE measured box — the

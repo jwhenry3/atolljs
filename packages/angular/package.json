@@ -1,5 +1,5 @@
 {
-  "name": "@jwhenry123/mesh-angular",
+  "name": "@atolljs/angular",
   "version": "0.1.0",
   "description": "Angular bindings — observableSignal, sharedValue, taskState",
   "type": "module",
@@ -13,12 +13,12 @@
     "access": "public"
   },
   "peerDependencies": {
-    "@jwhenry123/mesh": "0.1.0",
+    "@atolljs/core": "0.1.0",
     "@angular/core": "^22.2.0"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/jwhenry3/mesh",
+    "url": "https://github.com/jwhenry3/atolljs",
     "directory": "packages/angular"
   }
 }

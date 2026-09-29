@@ -12,10 +12,10 @@
     "jsxImportSource": "solid-js",
     "skipLibCheck": true,
     "paths": {
-      "@jwhenry123/mesh-solidjs": ["../../packages/solidjs/src/index.ts"],
-      "@jwhenry123/mesh-incidents": ["../../packages/incidents/src/index.ts"],
-      "@jwhenry123/mesh/sdk": ["../../src/sdk/index.ts"],
-      "@jwhenry123/mesh/sdk/*": ["../../src/sdk/*"]
+      "@atolljs/solidjs": ["../../packages/solidjs/src/index.ts"],
+      "@atolljs/incidents": ["../../packages/incidents/src/index.ts"],
+      "@atolljs/core/sdk": ["../../src/sdk/index.ts"],
+      "@atolljs/core/sdk/*": ["../../src/sdk/*"]
     }
   },
   "include": ["src", "vite.config.ts"]

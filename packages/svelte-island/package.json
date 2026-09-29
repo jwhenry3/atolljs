@@ -1,7 +1,7 @@
 {
-  "name": "@jwhenry123/mesh-svelte-island",
+  "name": "@atolljs/svelte-island",
   "version": "0.1.0",
-  "description": "Svelte shell bindings for mesh-islands islands — use:island action, createIslandState",
+  "description": "Svelte shell bindings for atoll-islands islands — use:island action, createIslandState",
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
@@ -14,13 +14,13 @@
     "access": "public"
   },
   "peerDependencies": {
-    "@jwhenry123/mesh": "0.1.0",
-    "@jwhenry123/mesh-islands": "0.1.0",
+    "@atolljs/core": "0.1.0",
+    "@atolljs/islands": "0.1.0",
     "svelte": "^5.57.1"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/jwhenry3/mesh",
+    "url": "https://github.com/jwhenry3/atolljs",
     "directory": "packages/svelte-island"
   }
 }

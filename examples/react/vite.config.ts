@@ -10,19 +10,19 @@ const reactBindingsRoot = fileURLToPath(new URL('../../packages/react/src/', imp
 
 export default defineConfig(({ command }) => ({
   // Built output is mounted at /react/ under the unified dist root; dev serves /.
-  base: command === 'build' ? '/react/' : '/',
+  base: command === 'build' ? './' : '/',
   plugins: [react()],
   resolve: {
-    // The aliased @jwhenry123/mesh-react source resolves `react` from the
+    // The aliased @atolljs/react source resolves `react` from the
     // workspace root otherwise — two React copies get bundled and the
     // binding's hooks read a null dispatcher. Force a single copy.
     dedupe: ['react', 'react-dom'],
     alias: [
-      { find: '@jwhenry123/mesh-react', replacement: `${reactBindingsRoot}index.ts` },
-      { find: '@jwhenry123/mesh-incidents', replacement: `${incidentsRoot}index.ts` },
-      { find: /^@jwhenry123\/mesh$/, replacement: `${sdkRoot}index.ts` },
-      { find: /^@jwhenry123\/mesh\/sdk$/, replacement: `${sdkRoot}index.ts` },
-      { find: /^@jwhenry123\/mesh\/sdk\//, replacement: sdkRoot },
+      { find: '@atolljs/react', replacement: `${reactBindingsRoot}index.ts` },
+      { find: '@atolljs/incidents', replacement: `${incidentsRoot}index.ts` },
+      { find: /^@atolljs\/core$/, replacement: `${sdkRoot}index.ts` },
+      { find: /^@atolljs\/core\/sdk$/, replacement: `${sdkRoot}index.ts` },
+      { find: /^@atolljs\/core\/sdk\//, replacement: sdkRoot },
     ],
   },
   // SharedArrayBuffer requires a cross-origin isolated context

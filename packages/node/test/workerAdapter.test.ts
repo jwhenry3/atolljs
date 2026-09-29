@@ -102,7 +102,7 @@ describe('NodeWorkerAdapter', () => {
 
 describe('createNodeWorker', () => {
   it('spawns a worker thread from a file path', async () => {
-    const fixture = fileURLToPath(new URL('../../../test/fixtures/meshProtocol.worker.mjs', import.meta.url));
+    const fixture = fileURLToPath(new URL('../../../test/fixtures/atollProtocol.worker.mjs', import.meta.url));
     const worker = createNodeWorker(fixture);
     try {
       const done = new Promise<unknown>((resolve) =>
@@ -116,7 +116,7 @@ describe('createNodeWorker', () => {
   });
 
   it('wraps an already-constructed Worker (bundler-detectable form)', async () => {
-    const fixture = fileURLToPath(new URL('../../../test/fixtures/meshProtocol.worker.mjs', import.meta.url));
+    const fixture = fileURLToPath(new URL('../../../test/fixtures/atollProtocol.worker.mjs', import.meta.url));
     const nodeWorker = new NodeWorker(fixture);
     const adapted = createNodeWorker(nodeWorker);
     try {

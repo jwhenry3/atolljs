@@ -6,8 +6,8 @@
  * boundary.
  */
 import { beforeAll, describe, expect, it, vi } from 'vitest';
-import { InProcessWorker } from '@jwhenry123/mesh/sdk/testing/inProcessWorker';
-import { connectIslandWorker, mountIsland } from '@jwhenry123/mesh-islands';
+import { InProcessWorker } from '@atolljs/core/sdk/testing/inProcessWorker';
+import { connectIslandWorker, mountIsland } from '@atolljs/islands';
 
 vi.stubGlobal('Worker', InProcessWorker);
 InProcessWorker.handlerModules = [() => import('./fixtures/counter.worker')];

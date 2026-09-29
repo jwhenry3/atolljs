@@ -9,7 +9,7 @@ import {
   emit,
   islandApp,
   type ProxyDocument,
-} from '@jwhenry123/mesh-islands/worker';
+} from '@atolljs/islands/worker';
 
 export const echoApp = islandApp('echo', {
   imperative: (doc: ProxyDocument, props: Record<string, unknown>): void => {
@@ -21,7 +21,7 @@ export const echoApp = islandApp('echo', {
     btn.textContent = 'ping';
     btn.addEventListener('click', () => emit('pinged', { n: 1 }));
     const slot = doc.createElement('div');
-    slot.dataset.meshSlot = 'slot';
+    slot.dataset.atollSlot = 'slot';
     doc.body.append(p, btn, slot);
   },
 });

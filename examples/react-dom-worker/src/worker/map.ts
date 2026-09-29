@@ -30,7 +30,7 @@ import {
   islandApp,
   runInInstance,
   type ProxyDocument,
-} from '@jwhenry123/mesh-islands/worker';
+} from '@atolljs/islands/worker';
 
 export interface MapMarker {
   id: string;
@@ -123,8 +123,8 @@ function startLeaflet(
     const marker = L.marker([m.lat, m.lng], {
       title: m.label,
       icon: L.divIcon({
-        className: 'mesh-map-pin',
-        html: `<span class="mesh-map-pin-dot"></span><span class="mesh-map-pin-label">${m.label}</span>`,
+        className: 'atoll-map-pin',
+        html: `<span class="atoll-map-pin-dot"></span><span class="atoll-map-pin-label">${m.label}</span>`,
         iconSize: [80, 28],
         iconAnchor: [8, 14],
       }),
@@ -139,11 +139,11 @@ function startLeaflet(
   const places = L.Control.extend({
     onAdd: () => {
       const box = document.createElement('div');
-      box.className = 'leaflet-bar mesh-map-places';
+      box.className = 'leaflet-bar atoll-map-places';
       for (const place of PLACES) {
         const btn = document.createElement('button');
         btn.type = 'button';
-        btn.className = 'mesh-map-place-btn';
+        btn.className = 'atoll-map-place-btn';
         btn.textContent = place.name;
         btn.addEventListener('click', () => {
           map.setView([place.lat, place.lng], place.zoom);

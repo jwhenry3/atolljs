@@ -8,7 +8,7 @@
  * round-trip into the island's emit channel.
  */
 import { beforeAll, describe, expect, it, vi } from 'vitest';
-import { InProcessWorker } from '@jwhenry123/mesh/sdk/testing/inProcessWorker';
+import { InProcessWorker } from '@atolljs/core/sdk/testing/inProcessWorker';
 
 const requireFromRoot = async () => {
   const { createRequire } = await import('node:module');
@@ -27,10 +27,10 @@ vi.mock('react/jsx-runtime', async () => {
 vi.stubGlobal('Worker', InProcessWorker);
 InProcessWorker.handlerModules = [() => import('../src/worker/render.worker')];
 
-let connectIslandWorker: typeof import('@jwhenry123/mesh-islands').connectIslandWorker;
-let mountIsland: typeof import('@jwhenry123/mesh-islands').mountIsland;
+let connectIslandWorker: typeof import('@atolljs/islands').connectIslandWorker;
+let mountIsland: typeof import('@atolljs/islands').mountIsland;
 beforeAll(async () => {
-  ({ connectIslandWorker, mountIsland } = await import('@jwhenry123/mesh-islands'));
+  ({ connectIslandWorker, mountIsland } = await import('@atolljs/islands'));
 });
 
 const islandClient = () =>

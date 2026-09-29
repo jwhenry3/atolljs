@@ -149,6 +149,38 @@ add_header Cross-Origin-Resource-Policy "same-site" always;`}
         language="plaintext"
       />
 
+      <h2>Static hosts that can't set headers (GitHub Pages)</h2>
+      <p>
+        When the server can't send headers at all, a <strong>service
+        worker</strong> can inject them — it intercepts every response in its
+        scope and rewrites headers before the document parses. This repo's
+        Pages deploy ships <code>coi-sw.js</code> (same idea as{' '}
+        <code>coi-serviceworker</code>): each entry page registers{' '}
+        <code>./coi-sw.js</code> inline and reloads once after first install —
+        a document is only isolated if it was fetched while controlled.
+      </p>
+      <ul>
+        <li>
+          The SW uses <code>COEP: credentialless</code> for the islands demo
+          (its map island loads <code>no-cors</code> tile images that{' '}
+          <code>require-corp</code> would block) and <code>require-corp</code>{' '}
+          elsewhere. Browsers without <code>credentialless</code> support just
+          stay non-isolated.
+        </li>
+        <li>
+          <strong>Degrade, don't break:</strong> islands can run fully without
+          SAB — <code>mode: 'poll'</code> on <code>mountIsland</code>/
+          <code>&lt;Island&gt;</code> (or <code>doorbell: false</code> on{' '}
+          <code>connectIslandWorker</code>) skips the doorbell contract so the
+          pool never touches <code>SharedArrayBuffer</code>. Check{' '}
+          <code>window.crossOriginIsolated</code> and pick the mode.
+        </li>
+        <li>
+          Workloads that <em>are</em> shared memory can't degrade — show a
+          notice instead of failing on worker bootstrap.
+        </li>
+      </ul>
+
       <h2>Gotchas</h2>
       <ul>
         <li>

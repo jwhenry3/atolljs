@@ -9,16 +9,16 @@
     "types": ["vite/client", "svelte"],
     "strict": true,
     "noEmit": true,
-    // The worker fixture's '@jwhenry123/mesh-islands/worker' import chain
+    // The worker fixture's '@atolljs/islands/worker' import chain
     // reaches worker/slot.tsx — same reason react-island sets this.
     "jsx": "react-jsx",
     "isolatedModules": true,
     "skipLibCheck": true,
     "paths": {
-      "@jwhenry123/mesh/sdk": ["../../src/sdk/index.ts"],
-      "@jwhenry123/mesh/sdk/*": ["../../src/sdk/*"],
-      "@jwhenry123/mesh-islands": ["../../packages/islands/src/index.ts"],
-      "@jwhenry123/mesh-islands/*": ["../../packages/islands/src/*"]
+      "@atolljs/core/sdk": ["../../src/sdk/index.ts"],
+      "@atolljs/core/sdk/*": ["../../src/sdk/*"],
+      "@atolljs/islands": ["../../packages/islands/src/index.ts"],
+      "@atolljs/islands/*": ["../../packages/islands/src/*"]
     }
   },
   "include": [

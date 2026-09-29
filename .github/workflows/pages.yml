@@ -1,19 +1,21 @@
-# Builds the docs sites + static framework examples and deploys the assembled
-# dist-pages/ tree to GitHub Pages:
-#   /           landing page (links to both docs sites)
-#   /sdk/       docs site (+ demo mounts embedded by its iframes)
-#   /consumer/  docs-consumer site (+ its own demo mounts)
+# Builds the docs-consumer site + static framework examples and deploys the
+# assembled dist-pages/ tree to GitHub Pages:
+#   /           landing page (links to the docs site + repo markdown docs)
+#   /consumer/  docs-consumer site (+ demo mounts embedded by its iframes)
 #
-# NOTE: GitHub Pages cannot set COOP/COEP response headers, so
-# SharedArrayBuffer is unavailable there — the embedded live demos and the
-# in-page playground will not run on Pages. The docs content deploys fine.
+# NOTE: GitHub Pages cannot set COOP/COEP response headers — the assembled
+# artifact ships coi-sw.js, a service worker that injects them so
+# SharedArrayBuffer works anyway (first visit reloads once). Where isolation
+# still isn't available the islands demo falls back to its poll transport and
+# the shared-memory demos show a notice. (The internals docs are in-repo
+# markdown under docs/ and don't deploy.)
 name: Deploy docs to GitHub Pages
 
 on:
   push:
     branches: [master]
     paths:
-      - 'docs/**'
+      - 'pages-landing/**'
       - 'docs-consumer/**'
       - 'examples/**'
       - 'packages/**'
@@ -43,7 +45,6 @@ jobs:
           cache: npm
           cache-dependency-path: |
             package-lock.json
-            docs/package-lock.json
             docs-consumer/package-lock.json
             examples/react/package-lock.json
             examples/vue/package-lock.json
@@ -54,11 +55,11 @@ jobs:
       - name: Install dependencies
         run: |
           set -e
-          # Root deps first: every project aliases @jwhenry123/mesh/* to the
+          # Root deps first: every project aliases @atolljs/core/* to the
           # root source tree, whose imports (react, zod, msgpackr, solid-js,
           # node:* types) resolve upward to the root node_modules.
           npm ci
-          for d in docs docs-consumer examples/react examples/vue examples/solid examples/svelte examples/angular; do
+          for d in docs-consumer examples/react examples/vue examples/solid examples/svelte examples/angular; do
             echo "=== npm ci: $d ==="
             (cd "$d" && npm ci)
           done

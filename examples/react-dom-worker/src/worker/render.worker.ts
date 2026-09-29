@@ -9,7 +9,7 @@
  * islands live in their own instance workers instead (map.worker.ts,
  * vanilla.worker.ts) — 1:1 scripts that ship zero React.
  */
-import { definePolyWorker } from '@jwhenry123/mesh-islands/worker';
+import { definePolyWorker } from '@atolljs/islands/worker';
 import { ChartsApp, ControlsApp, StatsApp, TableApp } from './apps';
 
 // Every value is the islandApp-stamped definition — the shell can mount by

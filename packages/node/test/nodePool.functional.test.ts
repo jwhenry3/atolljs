@@ -1,12 +1,12 @@
 import { fileURLToPath } from 'node:url';
 import { threadId, Worker as NodeWorker } from 'node:worker_threads';
 import { describe, expect, it } from 'vitest';
-import { defineSharedMemory, field, TaskRegistry, type TaskContract } from '@jwhenry123/mesh/sdk';
+import { defineSharedMemory, field, TaskRegistry, type TaskContract } from '@atolljs/core/sdk';
 import { createNodePool } from '../src/pool';
 import { createNodeWorker } from '../src/worker';
-import { InProcessWorker } from '@jwhenry123/mesh/sdk/testing/inProcessWorker';
+import { InProcessWorker } from '@atolljs/core/sdk/testing/inProcessWorker';
 
-const fixture = fileURLToPath(new URL('../../../test/fixtures/meshProtocol.worker.mjs', import.meta.url));
+const fixture = fileURLToPath(new URL('../../../test/fixtures/atollProtocol.worker.mjs', import.meta.url));
 
 const counterMemory = () => defineSharedMemory({ counter: field.number() });
 

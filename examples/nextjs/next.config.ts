@@ -17,14 +17,14 @@ const nextConfig: NextConfig = {
     // and aliases must be relative (absolute paths aren't portable here).
     root: '../../',
     resolveAlias: {
-      '@jwhenry123/mesh-nextjs': '../../packages/nextjs/src/index.ts',
-      '@jwhenry123/mesh-react': '../../packages/react/src/index.ts',
-      '@jwhenry123/mesh-incidents': '../../packages/incidents/src/index.ts',
-      '@jwhenry123/mesh-node': '../../packages/node/src/index.ts',
-      '@jwhenry123/mesh-node/*': '../../packages/node/src/*',
-      '@jwhenry123/mesh/sdk': '../../src/sdk/index.ts',
-      '@jwhenry123/mesh/sdk/*': '../../src/sdk/*',
-      // Pin react to this app's copy: the aliased @jwhenry123/mesh-react source
+      '@atolljs/nextjs': '../../packages/nextjs/src/index.ts',
+      '@atolljs/react': '../../packages/react/src/index.ts',
+      '@atolljs/incidents': '../../packages/incidents/src/index.ts',
+      '@atolljs/node': '../../packages/node/src/index.ts',
+      '@atolljs/node/*': '../../packages/node/src/*',
+      '@atolljs/core/sdk': '../../src/sdk/index.ts',
+      '@atolljs/core/sdk/*': '../../src/sdk/*',
+      // Pin react to this app's copy: the aliased @atolljs/react source
       // would otherwise resolve the workspace-root react — a second instance
       // whose hooks dispatcher is null at render time.
       react: './node_modules/react',
@@ -52,12 +52,12 @@ const nextConfig: NextConfig = {
   },
 
   webpack: (config) => {
-    config.resolve.alias['@jwhenry123/mesh'] = `${sdkDir}/index.ts`;
-    config.resolve.alias['@jwhenry123/mesh-nextjs'] = `${nextjsDir}/index.ts`;
-    config.resolve.alias['@jwhenry123/mesh-react'] = `${reactDir}/index.ts`;
-    config.resolve.alias['@jwhenry123/mesh-incidents'] = `${incidentsDir}/index.ts`;
-    config.resolve.alias['@jwhenry123/mesh-node'] = `${nodeDir}/index.ts`;
-    config.resolve.alias['@jwhenry123/mesh/sdk'] = sdkDir;
+    config.resolve.alias['@atolljs/core'] = `${sdkDir}/index.ts`;
+    config.resolve.alias['@atolljs/nextjs'] = `${nextjsDir}/index.ts`;
+    config.resolve.alias['@atolljs/react'] = `${reactDir}/index.ts`;
+    config.resolve.alias['@atolljs/incidents'] = `${incidentsDir}/index.ts`;
+    config.resolve.alias['@atolljs/node'] = `${nodeDir}/index.ts`;
+    config.resolve.alias['@atolljs/core/sdk'] = sdkDir;
     // Same single-React constraint as the turbopack resolveAlias above.
     config.resolve.alias['react'] = path.resolve(process.cwd(), 'node_modules/react');
     config.resolve.alias['react-dom'] = path.resolve(process.cwd(), 'node_modules/react-dom');

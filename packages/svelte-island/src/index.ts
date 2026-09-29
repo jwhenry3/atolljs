@@ -1,13 +1,13 @@
 /**
- * `@jwhenry123/mesh-svelte-island` — the Svelte shell surface for
- * `@jwhenry123/mesh-islands` islands: a worker-hosted React (or
+ * `@atolljs/svelte-island` — the Svelte shell surface for
+ * `@atolljs/islands` islands: a worker-hosted React (or
  * imperative proxy-DOM) tree mounted into an ordinary element via a
  * Svelte action.
  *
  * ```svelte
  * <script>
- *   import { island, createIslandState } from '@jwhenry123/mesh-svelte-island';
- *   import { connectIslandWorker } from '@jwhenry123/mesh-islands';
+ *   import { island, createIslandState } from '@atolljs/svelte-island';
+ *   import { connectIslandWorker } from '@atolljs/islands';
  *
  *   const client = connectIslandWorker({
  *     worker: () => new Worker(new URL('./render.worker.ts', import.meta.url), { type: 'module' }),
@@ -19,7 +19,7 @@
  * {#if echo.status === 'ready'}mounted as {echo.handle?.pid}{/if}
  * ```
  *
- * Semantics (mirroring `@jwhenry123/mesh-react-island`'s `<Island/>`):
+ * Semantics (mirroring `@atolljs/react-island`'s `<Island/>`):
  * - Mounting is async — the action attaches immediately, spawns the worker
  *   and replays the first op batch in the background; `onReady` fires with
  *   the `IslandHandle` once the mount handshake resolves.
@@ -41,13 +41,13 @@ import {
   connectIslandWorker,
   islandAppNameOf,
   mountIsland,
-} from '@jwhenry123/mesh-islands';
+} from '@atolljs/islands';
 import type {
   IslandAppLike,
   IslandClient,
   IslandHandle,
   IslandWorkerOptions,
-} from '@jwhenry123/mesh-islands';
+} from '@atolljs/islands';
 import type { Action } from 'svelte/action';
 
 // Re-export the contract types consumers need without a second import.
@@ -85,7 +85,7 @@ export interface IslandActionOptions {
   /** Fired after each applied op batch — stats hooks. */
   onActivity?: () => void;
   /**
-   * Transclusion slots — a worker `<div data-mesh-slot="name">` hands its
+   * Transclusion slots — a worker `<div data-atoll-slot="name">` hands its
    * real element to `slots[name](el)` for shell-owned content (called again
    * with `null` on teardown). Read through `latest`, so `update` can swap
    * the map without remounting.

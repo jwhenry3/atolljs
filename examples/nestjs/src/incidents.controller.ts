@@ -1,6 +1,6 @@
 import { Controller, Get, Inject, NotFoundException, Param, ParseIntPipe, Post, Query } from '@nestjs/common';
-import { InjectMeshPool } from '@jwhenry123/mesh-nestjs';
-import { workerClient, type WorkerPool } from '@jwhenry123/mesh/sdk';
+import { InjectAtollPool } from '@atolljs/nestjs';
+import { workerClient, type WorkerPool } from '@atolljs/core/sdk';
 import {
   incidentsMemory,
   REGIONS,
@@ -10,7 +10,7 @@ import {
   type Incident,
   type IncidentsWorker,
   type QueryArgs,
-} from '@jwhenry123/mesh-incidents';
+} from '@atolljs/incidents';
 import { IncidentsAnalytics } from './shared/incidents-analytics.service';
 
 const toIndex = (list: readonly string[], value?: string) =>
@@ -26,7 +26,7 @@ export class IncidentsController {
   // Explicit @Inject tokens — webpack/ts-loader does emit design:paramtypes,
   // so these are belt-and-suspenders rather than required.
   constructor(
-    @InjectMeshPool('incidents') private readonly pool: WorkerPool,
+    @InjectAtollPool('incidents') private readonly pool: WorkerPool,
     @Inject(IncidentsAnalytics) private readonly analytics: IncidentsAnalytics,
   ) {}
 
@@ -73,7 +73,7 @@ export class IncidentsController {
 
   /**
    * RPC-style offload: analytics.hotspots() is a normal async call here, but
-   * @MeshTask dispatches it to the 'incidents' pool — the body runs inside a
+   * @AtollTask dispatches it to the 'incidents' pool — the body runs inside a
    * worker's Nest app where the service's injected deps resolve for real.
    */
   @Get('hotspots')

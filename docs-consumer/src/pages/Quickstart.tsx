@@ -10,12 +10,12 @@ export function Quickstart() {
       </p>
 
       <h2>1 · Install</h2>
-      <CodeBlock code="npm install @jwhenry123/mesh @jwhenry123/mesh-react" language="bash" />
+      <CodeBlock code="npm install @atolljs/core @atolljs/react" language="bash" />
 
       <h2>2 · Declare shared memory — imported by both threads</h2>
       <CodeBlock
         file="counter.memory.ts"
-        code={`import { defineSharedMemory, field } from '@jwhenry123/mesh/sdk';
+        code={`import { defineSharedMemory, field } from '@atolljs/core/sdk';
 
 export const counterMemory = defineSharedMemory({
   count: field.number(),
@@ -25,7 +25,7 @@ export const counterMemory = defineSharedMemory({
       <h2>3 · Define the worker — methods live here</h2>
       <CodeBlock
         file="counter.worker.ts"
-        code={`import { defineWorker } from '@jwhenry123/mesh/sdk';
+        code={`import { defineWorker } from '@atolljs/core/sdk';
 import { counterMemory } from './counter.memory';
 
 // defineWorker wires the message loop and registers every method.
@@ -46,7 +46,7 @@ export type CounterWorker = typeof counterWorker;`}
       <h2>4 · Connect from the main thread — type only</h2>
       <CodeBlock
         file="counter.ts"
-        code={`import { connectWorker } from '@jwhenry123/mesh/sdk';
+        code={`import { connectWorker } from '@atolljs/core/sdk';
 import { counterMemory } from './counter.memory';
 import type { CounterWorker } from './counter.worker';  // no worker code in this bundle
 
@@ -65,7 +65,7 @@ export const counter = connectWorker<CounterWorker>({
       <CodeBlock
         file="App.tsx"
         language="tsx"
-        code={`import { useSharedValue, useTask } from '@jwhenry123/mesh-react';
+        code={`import { useSharedValue, useTask } from '@atolljs/react';
 import { counterMemory } from './counter.memory';
 import { counter } from './counter';
 

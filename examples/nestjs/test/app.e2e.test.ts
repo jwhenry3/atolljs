@@ -49,7 +49,7 @@ describe('nestjs example e2e', () => {
     expect(rec.site).toMatch(/^[A-Z]{3}-\d{4}$/);
   });
 
-  it('runs @MeshTask service methods inside workers', async () => {
+  it('runs @AtollTask service methods inside workers', async () => {
     const hs = await (await fetch(`${base}/incidents/hotspots?limit=3`)).json();
     expect(Array.isArray(hs)).toBe(true);
     expect(hs.length).toBeGreaterThan(0);

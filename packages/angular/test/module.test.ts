@@ -1,9 +1,9 @@
 // @vitest-environment happy-dom
 /**
- * MeshModule — the NgModule form of provideMesh. TestBed-free coverage via
+ * AtollModule — the NgModule form of provideAtoll. TestBed-free coverage via
  * createEnvironmentInjector (same style as bindings.test.ts) plus real
  * TestBed NgModule tests for forRoot / registerPool / the async forms and
- * the @InjectMeshPool parameter decorator.
+ * the @InjectAtollPool parameter decorator.
  */
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import {
@@ -21,7 +21,7 @@ import {
   BrowserDynamicTestingModule,
   platformBrowserDynamicTesting,
 } from '@angular/platform-browser-dynamic/testing';
-import { getMeshPoolToken, injectMeshPool, InjectMeshPool, MeshModule } from '../src/index';
+import { getAtollPoolToken, injectAtollPool, InjectAtollPool, AtollModule } from '../src/index';
 
 // Angular's type requires an EnvironmentInjector parent; runtime accepts null.
 const ROOT_PARENT = null as unknown as EnvironmentInjector;
@@ -35,15 +35,15 @@ const fakeClient = () => ({
   sharedMemory: undefined,
 });
 
-describe('MeshModule (environment injector)', () => {
+describe('AtollModule (environment injector)', () => {
   it('forRoot registers the client pool and terminates on injector destroy', () => {
     const client = fakeClient();
     const injector = createEnvironmentInjector(
-      [importProvidersFrom(MeshModule.forRoot({ pools: [{ name: 'root', client }] }))],
+      [importProvidersFrom(AtollModule.forRoot({ pools: [{ name: 'root', client }] }))],
       rootEnv(),
     );
     try {
-      expect(runInInjectionContext(injector, () => injectMeshPool('root'))).toBe(client);
+      expect(runInInjectionContext(injector, () => injectAtollPool('root'))).toBe(client);
     } finally {
       injector.destroy();
     }
@@ -53,11 +53,11 @@ describe('MeshModule (environment injector)', () => {
   it('registerPool registers one pool in the importing scope', () => {
     const client = fakeClient();
     const injector = createEnvironmentInjector(
-      [importProvidersFrom(MeshModule.registerPool({ name: 'feature', client }))],
+      [importProvidersFrom(AtollModule.registerPool({ name: 'feature', client }))],
       rootEnv(),
     );
     try {
-      expect(runInInjectionContext(injector, () => injectMeshPool('feature'))).toBe(client);
+      expect(runInInjectionContext(injector, () => injectAtollPool('feature'))).toBe(client);
     } finally {
       injector.destroy();
     }
@@ -74,7 +74,7 @@ describe('MeshModule (environment injector)', () => {
         // has to list it explicitly to run app initializers.
         ApplicationInitStatus,
         importProvidersFrom(
-          MeshModule.forRootAsync({
+          AtollModule.forRootAsync({
             pools: [
               {
                 name: 'async-root',
@@ -97,7 +97,7 @@ describe('MeshModule (environment injector)', () => {
       };
       status.runInitializers();
       await status.donePromise;
-      expect(injector.get(getMeshPoolToken('async-root'))).toBe(client);
+      expect(injector.get(getAtollPoolToken('async-root'))).toBe(client);
     } finally {
       injector.destroy();
     }
@@ -105,7 +105,7 @@ describe('MeshModule (environment injector)', () => {
   });
 });
 
-describe('MeshModule (TestBed)', () => {
+describe('AtollModule (TestBed)', () => {
   beforeAll(() => {
     TestBed.initTestEnvironment(BrowserDynamicTestingModule, platformBrowserDynamicTesting());
   });
@@ -115,13 +115,13 @@ describe('MeshModule (TestBed)', () => {
     const featureClient = fakeClient();
 
     @NgModule({
-      imports: [MeshModule.registerPool({ name: 'feature', client: featureClient })],
+      imports: [AtollModule.registerPool({ name: 'feature', client: featureClient })],
     })
     class FeatureModule {}
 
     @NgModule({
       imports: [
-        MeshModule.forRoot({ pools: [{ name: 'root', client: rootClient }] }),
+        AtollModule.forRoot({ pools: [{ name: 'root', client: rootClient }] }),
         FeatureModule,
       ],
     })
@@ -129,8 +129,8 @@ describe('MeshModule (TestBed)', () => {
 
     TestBed.configureTestingModule({ imports: [AppModule] });
     try {
-      expect(TestBed.inject(getMeshPoolToken('root'))).toBe(rootClient);
-      expect(TestBed.inject(getMeshPoolToken('feature'))).toBe(featureClient);
+      expect(TestBed.inject(getAtollPoolToken('root'))).toBe(rootClient);
+      expect(TestBed.inject(getAtollPoolToken('feature'))).toBe(featureClient);
     } finally {
       TestBed.resetTestingModule();
     }
@@ -138,16 +138,16 @@ describe('MeshModule (TestBed)', () => {
     expect(featureClient.terminate).toHaveBeenCalled();
   });
 
-  it('@InjectMeshPool resolves a pool on an @Injectable constructor param', () => {
+  it('@InjectAtollPool resolves a pool on an @Injectable constructor param', () => {
     const client = fakeClient();
 
     @Injectable()
     class Consumer {
-      constructor(@InjectMeshPool('svc') public readonly pool: unknown) {}
+      constructor(@InjectAtollPool('svc') public readonly pool: unknown) {}
     }
 
     @NgModule({
-      imports: [MeshModule.forRoot({ pools: [{ name: 'svc', client }] })],
+      imports: [AtollModule.forRoot({ pools: [{ name: 'svc', client }] })],
       providers: [Consumer],
     })
     class AppModule {}
@@ -169,7 +169,7 @@ describe('MeshModule (TestBed)', () => {
 
     @NgModule({
       imports: [
-        MeshModule.registerPoolAsync({
+        AtollModule.registerPoolAsync({
           name: 'async',
           inject: [POOL_CONFIG],
           useFactory,
@@ -185,7 +185,7 @@ describe('MeshModule (TestBed)', () => {
       const status = TestBed.inject(ApplicationInitStatus);
       await status.donePromise;
       expect(useFactory).toHaveBeenCalledWith({ client });
-      expect(TestBed.inject(getMeshPoolToken('async'))).toBe(client);
+      expect(TestBed.inject(getAtollPoolToken('async'))).toBe(client);
     } finally {
       TestBed.resetTestingModule();
     }
@@ -198,7 +198,7 @@ describe('MeshModule (TestBed)', () => {
 
     @NgModule({
       imports: [
-        MeshModule.forRootAsync({
+        AtollModule.forRootAsync({
           pools: [
             {
               name: 'async-root',
@@ -216,7 +216,7 @@ describe('MeshModule (TestBed)', () => {
     try {
       const status = TestBed.inject(ApplicationInitStatus);
       await status.donePromise;
-      expect(TestBed.inject(getMeshPoolToken('async-root'))).toBe(client);
+      expect(TestBed.inject(getAtollPoolToken('async-root'))).toBe(client);
     } finally {
       TestBed.resetTestingModule();
     }

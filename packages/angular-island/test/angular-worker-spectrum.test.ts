@@ -6,8 +6,8 @@
  * `lifecycleLog` doubles as the worker-side assertion channel).
  */
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { connectIslandWorker, mountIsland } from '@jwhenry123/mesh-islands';
-import { InProcessWorker } from '@jwhenry123/mesh/sdk/testing/inProcessWorker';
+import { connectIslandWorker, mountIsland } from '@atolljs/islands';
+import { InProcessWorker } from '@atolljs/core/sdk/testing/inProcessWorker';
 import { lifecycleLog } from './fixtures/spectrum.worker';
 
 vi.stubGlobal('Worker', InProcessWorker);
@@ -180,7 +180,7 @@ describe('model()/output() two-way binding', () => {
     // channel only sees them because the handler also calls emit().
     click(el, '.flip');
     await vi.waitFor(() => expect(text(el, '.mirror')).toBe('child: on'));
-    expect(text(el, 'mesh-two-way .flip')).toBe('on');
+    expect(text(el, 'atoll-two-way .flip')).toBe('on');
     await vi.waitFor(() =>
       expect(emitted.some((e) => e.name === 'flipped')).toBe(true),
     );
@@ -253,7 +253,7 @@ describe('host bindings + (window:) listeners', () => {
   it('binds host attrs/classes/listeners, resolves the window facade', async () => {
     const el = host();
     const island = await mount(el, 'hostBind');
-    const hostEl = () => el.querySelector('mesh-host-bind') as HTMLElement;
+    const hostEl = () => el.querySelector('atoll-host-bind') as HTMLElement;
 
     await vi.waitFor(() => expect(hostEl()).not.toBeNull());
     expect(hostEl().getAttribute('role')).toBe('button');
@@ -314,16 +314,16 @@ describe('AOT-shaped component (static ɵcmp, no compiler)', () => {
     const el = host();
     const island = await mount(el, 'aot', { label: 'compiled' });
 
-    await vi.waitFor(() => expect(text(el, 'mesh-aot .inc')).toBe('compiled: 0'));
-    expect(text(el, 'mesh-aot .val')).toBe('0');
-    expect((el.querySelector('mesh-aot .inc') as HTMLButtonElement).disabled).toBe(false);
+    await vi.waitFor(() => expect(text(el, 'atoll-aot .inc')).toBe('compiled: 0'));
+    expect(text(el, 'atoll-aot .val')).toBe('0');
+    expect((el.querySelector('atoll-aot .inc') as HTMLButtonElement).disabled).toBe(false);
 
-    click(el, 'mesh-aot .inc');
-    await vi.waitFor(() => expect(text(el, 'mesh-aot .val')).toBe('1'));
-    expect(text(el, 'mesh-aot .inc')).toBe('compiled: 1');
+    click(el, 'atoll-aot .inc');
+    await vi.waitFor(() => expect(text(el, 'atoll-aot .val')).toBe('1'));
+    expect(text(el, 'atoll-aot .inc')).toBe('compiled: 1');
 
     await island.updateProps({ label: 'aot-2' });
-    await vi.waitFor(() => expect(text(el, 'mesh-aot .inc')).toBe('aot-2: 1'));
+    await vi.waitFor(() => expect(text(el, 'atoll-aot .inc')).toBe('aot-2: 1'));
 
     island.destroy();
   });

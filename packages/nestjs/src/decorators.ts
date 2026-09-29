@@ -1,4 +1,4 @@
-// Framework-free @MeshTask decorator — safe to import inside worker bundles.
+// Framework-free @AtollTask decorator — safe to import inside worker bundles.
 // Method metadata lives in a WeakMap (no Reflect.metadata dependency —
 // bundlers like esbuild don't emit design:paramtypes anyway).
 import { isMainThread } from 'node:worker_threads';
@@ -6,24 +6,24 @@ import {
   TaskRegistry,
   type ServiceContract,
   type TaskContract,
-} from '@jwhenry123/mesh/sdk';
-import { getMeshPool } from './pools';
+} from '@atolljs/core/sdk';
+import { getAtollPool } from './pools';
 
-export interface MeshTaskMeta {
+export interface AtollTaskMeta {
   contract: TaskContract;
   pool: string;
   /** The undecorated body — what actually executes inside the worker. */
   original: (...args: any[]) => any;
 }
 
-const metaStore = new WeakMap<object, Map<string | symbol, MeshTaskMeta>>();
+const metaStore = new WeakMap<object, Map<string | symbol, AtollTaskMeta>>();
 
-export function getMeshTaskMeta(proto: object, key: string | symbol): MeshTaskMeta | undefined {
+export function getAtollTaskMeta(proto: object, key: string | symbol): AtollTaskMeta | undefined {
   return metaStore.get(proto)?.get(key);
 }
 
-// Worker-side: instances decorated handlers run against. registerMeshHandlers
-// (via runMeshWorker) binds the DI-resolved instance here; until then calls
+// Worker-side: instances decorated handlers run against. registerAtollHandlers
+// (via runAtollWorker) binds the DI-resolved instance here; until then calls
 // delegate to a lazily-instantiated `new Cls()` — constructor params arrive
 // undefined, so offloaded methods without a bound instance must not depend
 // on injected members. Resolution happens at CALL time, so binding order
@@ -33,14 +33,14 @@ type Ctor = abstract new (...args: any[]) => object;
 const workerInstances = new Map<Ctor, object>();
 
 /** Binds the DI-resolved instance that a class's worker-side handlers run on. */
-export function bindMeshWorkerInstance(ctor: Ctor, instance: object): void {
+export function bindAtollWorkerInstance(ctor: Ctor, instance: object): void {
   workerInstances.set(ctor, instance);
 }
 
 const workerInstance = (ctor: Ctor) => {
   let inst = workerInstances.get(ctor);
   // The lazy `new ctor()` fallback only applies to dep-less classes — a class
-  // with constructor params must be bound via bindMeshWorkerInstance (DI).
+  // with constructor params must be bound via bindAtollWorkerInstance (DI).
   if (!inst) workerInstances.set(ctor, (inst = new (ctor as new () => object)()));
   return inst;
 };
@@ -50,7 +50,7 @@ const workerInstance = (ctor: Ctor) => {
  * services alike:
  *
  *   @Get('hotspots')
- *   @MeshTask({ pool: 'incidents' })
+ *   @AtollTask({ pool: 'incidents' })
  *   hotspots(@Query('limit') limit?: string) { …scan shared memory… }
  *
  * Main thread: calling the method dispatches EXECUTE_TASK to the named pool
@@ -61,15 +61,15 @@ const workerInstance = (ctor: Ctor) => {
  * the decorator auto-registers `ClassName.method` as a task handler bound to
  * a lazily-created instance — so the worker entry just imports the module.
  *
- * Overloads: `@MeshTask()` (auto taskId, 'default' pool),
- * `@MeshTask({ pool })`, `@MeshTask('task-id')`, or `@MeshTask(contract)` to
+ * Overloads: `@AtollTask()` (auto taskId, 'default' pool),
+ * `@AtollTask({ pool })`, `@AtollTask('task-id')`, or `@AtollTask(contract)` to
  * reuse a TaskContract's zod schemas. Args and results cross postMessage —
  * keep them structured-cloneable.
  */
-export function MeshTask(): MethodDecorator;
-export function MeshTask(options: { pool?: string }): MethodDecorator;
-export function MeshTask(task: string | TaskContract, options?: { pool?: string }): MethodDecorator;
-export function MeshTask(
+export function AtollTask(): MethodDecorator;
+export function AtollTask(options: { pool?: string }): MethodDecorator;
+export function AtollTask(task: string | TaskContract, options?: { pool?: string }): MethodDecorator;
+export function AtollTask(
   taskOrOpts?: string | TaskContract | { pool?: string },
   options: { pool?: string } = {},
 ): MethodDecorator {
@@ -101,7 +101,7 @@ export function MeshTask(
     }
 
     descriptor.value = async function (this: unknown, ...args: unknown[]) {
-      const pool = getMeshPool(poolName);
+      const pool = getAtollPool(poolName);
       return pool ? pool.runTask(contract, ...args) : original.apply(this, args);
     };
     return descriptor;
@@ -113,9 +113,9 @@ export function MeshTask(
  * framework-neutral dispatch. Two forms:
  *
  *   // contract-less: EVERY own prototype method becomes a task —
- *   // `ClassName.method` ids, like applying @MeshTask({ pool }) to each
+ *   // `ClassName.method` ids, like applying @AtollTask({ pool }) to each
  *   @Injectable()
- *   @MeshService({ pool: 'incidents' })
+ *   @AtollService({ pool: 'incidents' })
  *   export class IncidentsAnalytics {
  *     hotspots(limit = 10) { …scan shared memory… }
  *   }
@@ -123,7 +123,7 @@ export function MeshTask(
  *   // contract form: only methods declared in a ServiceContract are bound,
  *   // dispatching under the contract's taskIds (and schemas)
  *   @Injectable()
- *   @MeshService(someService, { pool: 'incidents' })
+ *   @AtollService(someService, { pool: 'incidents' })
  *   export class IncidentsRpc {
  *     seedIncidents() { …scan shared memory… return ms; }
  *   }
@@ -133,17 +133,17 @@ export function MeshTask(
  * the contract form. Contract form: methods not declared in the service are
  * untouched; service methods missing on the class are NOT bound (the worker
  * entry should compose `implementService` directly for those, or the call
- * surfaces as "handler not found" on dispatch — same as a missing @MeshTask
+ * surfaces as "handler not found" on dispatch — same as a missing @AtollTask
  * registration).
  */
-export function MeshService(service: ServiceContract, options?: { pool?: string }): ClassDecorator;
-export function MeshService(options: { pool: string }): ClassDecorator;
-export function MeshService(
+export function AtollService(service: ServiceContract, options?: { pool?: string }): ClassDecorator;
+export function AtollService(options: { pool: string }): ClassDecorator;
+export function AtollService(
   serviceOrOpts: ServiceContract | { pool: string },
   options: { pool?: string } = {},
 ): ClassDecorator {
   // Contract-less form — every method dispatches to `pool` under
-  // `ClassName.method` ids via the auto-taskId MeshTask overload.
+  // `ClassName.method` ids via the auto-taskId AtollTask overload.
   if (!('tasks' in serviceOrOpts)) {
     const { pool } = serviceOrOpts;
     return (ctor) => {
@@ -152,7 +152,7 @@ export function MeshService(
         if (key === 'constructor') continue;
         const descriptor = Object.getOwnPropertyDescriptor(proto, key);
         if (!descriptor || typeof descriptor.value !== 'function') continue;
-        const applied = MeshTask({ pool })(proto, key, descriptor);
+        const applied = AtollTask({ pool })(proto, key, descriptor);
         if (applied) Object.defineProperty(proto, key, applied);
       }
     };
@@ -168,7 +168,7 @@ export function MeshService(
       if (!contract) continue;
       const descriptor = Object.getOwnPropertyDescriptor(proto, key);
       if (!descriptor || typeof descriptor.value !== 'function') continue;
-      const applied = MeshTask(contract, { pool })(proto, key, descriptor);
+      const applied = AtollTask(contract, { pool })(proto, key, descriptor);
       if (applied) Object.defineProperty(proto, key, applied);
     }
   };

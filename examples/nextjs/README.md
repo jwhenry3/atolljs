@@ -1,6 +1,6 @@
 # Telecom Incident Explorer — Next.js
 
-The incidents demo on the `@jwhenry123/mesh/sdk` sdk: 1M fixed-layout records seeded into
+The incidents demo on the `@atolljs/core/sdk` sdk: 1M fixed-layout records seeded into
 shared memory by a worker pool; the main thread publishes queries, the worker
 scans/sorts/aggregates, and only the visible page crosses postMessage.
 
@@ -10,33 +10,33 @@ scans/sorts/aggregates, and only the visible page crosses postMessage.
 - `src/useIncidents.ts` — composes the bindings with the incident domain
 - `src/App.tsx` — TanStack Table UI
 - `src/app/` — App Router shell; `page.tsx` mounts the client component
-- `src/app/api/mesh/` — **server-side mesh**: a route handler backed by a
+- `src/app/api/atoll/` — **server-side atoll**: a route handler backed by a
   `node:worker_threads` pool (`createNodePool`)
 
-## Server-side workers — `/api/mesh`
+## Server-side workers — `/api/atoll`
 
-Next.js route handlers run on Node, so the `@jwhenry123/mesh-node` package
+Next.js route handlers run on Node, so the `@atolljs/node` package
 works inside them. `route.ts` creates a 2-worker pool bound to its own tiny
 shared contract and exposes a CPU-bound hash task:
 
 ```ts
 const getPool = (): DigestPool => {
-  const g = globalThis as { __meshDigestPool?: DigestPool };
-  return (g.__meshDigestPool ??= createNodePool({
+  const g = globalThis as { __atollDigestPool?: DigestPool };
+  return (g.__atollDigestPool ??= createNodePool({
     sharedMemory: digestMemory,
     poolSize: 2,
     tasks: { hash: HashDigest },
     // webpack/turbopack detect new Worker(new URL(...)) and emit the entry
     // as its own chunk — the factory points at the TS source.
     createWorker: () => createNodeWorker(
-      new Worker(new URL('./mesh.worker.ts', import.meta.url)),
+      new Worker(new URL('./atoll.worker.ts', import.meta.url)),
     ),
   }));
 };
 ```
 
-- `POST /api/mesh {"input":"x","rounds":50000}` — chained SHA-256 on a worker
-- `GET /api/mesh` — reads `jobsDone` from shared memory, zero dispatch
+- `POST /api/atoll {"input":"x","rounds":50000}` — chained SHA-256 on a worker
+- `GET /api/atoll` — reads `jobsDone` from shared memory, zero dispatch
 
 The `globalThis` singleton survives dev-mode HMR re-evaluation — without it
 every hot reload would leak worker threads.
@@ -49,7 +49,7 @@ npm run dev   # http://localhost:3001
 ```
 
 SharedArrayBuffer needs cross-origin isolation — `next.config.ts` sets COOP/COEP
-headers and aliases `@jwhenry123/mesh/sdk` to the sdk source (webpack + turbopack).
+headers and aliases `@atolljs/core/sdk` to the sdk source (webpack + turbopack).
 the shared package's `pool.ts` uses the bundler-detectable
 `new Worker(new URL(..., import.meta.url))` pattern via `createWorker`.
 The worker pool only constructs on the client (`typeof window` guard in the

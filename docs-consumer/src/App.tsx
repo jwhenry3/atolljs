@@ -4,6 +4,8 @@ import { FRAMEWORKS } from './frameworks';
 import { FRAMEWORK_PAGES } from './frameworkPages';
 import { FrameworkPage } from './pages/FrameworkPage';
 import { Hosting } from './pages/Hosting';
+import { IslandApps } from './pages/IslandApps';
+import { Islands } from './pages/Islands';
 import { Nestjs } from './pages/Nestjs';
 import { Overview } from './pages/Overview';
 import { Quickstart } from './pages/Quickstart';
@@ -35,6 +37,13 @@ const SECTIONS: { label: string; routes: Route[] }[] = [
       { id: 'tasks', label: 'Worker pool & tasks', page: () => <TasksAndPool /> },
       { id: 'reactivity', label: 'Reactivity', page: () => <Reactivity /> },
       { id: 'shared-worker', label: 'Shared worker', page: () => <SharedWorker /> },
+    ],
+  },
+  {
+    label: 'Islands',
+    routes: [
+      { id: 'islands', label: 'Worker islands', page: () => <Islands /> },
+      { id: 'island-apps', label: 'Writing island apps', page: () => <IslandApps /> },
     ],
   },
   {
@@ -81,7 +90,7 @@ export function App() {
     <div className="shell">
       <aside className="sidebar">
         <a className="brand" href="#/overview">
-          mesh<span className="brand-sub">package docs</span>
+          atoll<span className="brand-sub">package docs</span>
         </a>
         <SiteSwitch current="consumer" />
         {SECTIONS.map((section) => (

@@ -54,7 +54,7 @@ http
     // crossOriginIsolated (Chromium) so the SAB doorbell works.
     res.setHeader(
       'Cross-Origin-Embedder-Policy',
-      // Segment match, not prefix — the docs mounts live at /sdk/<name>/ and
+      // Segment match, not prefix — the docs demo mounts live at
       // /consumer/<name>/ inside iframes, so the path arrives nested.
       pathname.split('/').includes('react-dom-worker') ? 'credentialless' : 'require-corp',
     );

@@ -1,5 +1,5 @@
 // Framework-free pool registry — safe to import inside worker bundles.
-// The main thread registers pools via MeshModule providers; @MeshTask
+// The main thread registers pools via AtollModule providers; @AtollTask
 // dispatch looks them up here. In a worker context the registry stays empty,
 // so decorated methods fall through to their real bodies.
 import type { Worker as NodeWorker } from 'node:worker_threads';
@@ -10,12 +10,12 @@ import {
   type SharedSpec,
   type TaskMap,
   type WorkerPoolConfig,
-} from '@jwhenry123/mesh/sdk';
-import { createNodePool } from '@jwhenry123/mesh-node';
+} from '@atolljs/core/sdk';
+import { createNodePool } from '@atolljs/node';
 
-export interface MeshPoolConfig<S extends SharedSpec = SharedSpec, T extends TaskMap = TaskMap>
+export interface AtollPoolConfig<S extends SharedSpec = SharedSpec, T extends TaskMap = TaskMap>
   extends Omit<WorkerPoolConfig<S, T>, 'workerUrl' | 'createWorker' | 'sharedMemory'> {
-  /** Registry name — @MeshTask({ pool: name }) targets it. Defaults to 'default'. */
+  /** Registry name — @AtollTask({ pool: name }) targets it. Defaults to 'default'. */
   name?: string;
   /** Bundled worker entry (e.g. dist/incidents.worker.js). */
   workerFile?: string;
@@ -43,32 +43,32 @@ export interface MeshPoolConfig<S extends SharedSpec = SharedSpec, T extends Tas
   sharedMemory?: SharedMemory<S>;
 }
 
-export interface MeshModuleOptions {
+export interface AtollModuleOptions {
   /** Each pool may carry a different shared-memory spec and task map. */
-  pools?: MeshPoolConfig[];
+  pools?: AtollPoolConfig[];
 }
 
-export const getMeshPoolToken = (name = 'default') => `MESH_POOL:${name}`;
+export const getAtollPoolToken = (name = 'default') => `ATOLL_POOL:${name}`;
 
 const registry = new Map<string, WorkerPool>();
 
-export function registerMeshPool(name: string, pool: WorkerPool): void {
+export function registerAtollPool(name: string, pool: WorkerPool): void {
   registry.set(name, pool);
 }
 
-export function unregisterMeshPool(name: string): void {
+export function unregisterAtollPool(name: string): void {
   registry.delete(name);
 }
 
-export function getMeshPool(name = 'default'): WorkerPool | undefined {
+export function getAtollPool(name = 'default'): WorkerPool | undefined {
   return registry.get(name);
 }
 
-export function buildMeshPool<S extends SharedSpec, T extends TaskMap>(
-  config: MeshPoolConfig<S, T>,
+export function buildAtollPool<S extends SharedSpec, T extends TaskMap>(
+  config: AtollPoolConfig<S, T>,
 ): WorkerPool<S, T> {
   if (!config.createWorker && !config.workerFile && !config.worker) {
-    throw new Error(`MeshPool "${config.name ?? 'default'}" requires worker, workerFile or createWorker.`);
+    throw new Error(`AtollPool "${config.name ?? 'default'}" requires worker, workerFile or createWorker.`);
   }
   const { name: _name, workerFile, worker, createWorker, sharedMemory, ...rest } = config;
   return createNodePool({

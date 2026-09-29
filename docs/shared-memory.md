@@ -1,0 +1,101 @@
+# Shared memory contracts
+
+Read when: working on `src/sdk/contract/`, adding/changing field kinds,
+debugging layout or codec behavior.
+
+`defineSharedMemory(spec, options?)` declares a fixed, deterministic layout
+over a `SharedArrayBuffer`. Both threads import the same object; the pool
+binds it on the main thread and the worker bootstrap binds it inside workers —
+identical memory on both sides. Reference contract:
+`packages/incidents/src/contract/memory.contracts.ts`.
+
+## Field kinds
+
+| Factory | Type | Storage |
+|---|---|---|
+| `field.number()` | `number` | 8 bytes (f64) |
+| `field.boolean()` | `boolean` | 1 byte stored, descriptor reserves 8 |
+| `field.string({ maxBytes })` · `field.string({ schema })` | `string` | 4-byte length + inline UTF-8 — budget derives from `mz.string(n)` |
+| `field.object({ schema })` | `T` | inline fixed record — width derives from `mz.object(...)` members |
+| `field.object({ maxBytes, schema? })` | `T` | 4-byte length + codec-encoded payload |
+| `field.array({ schema })` | `T[]` | count header + bounded inline elements — from `z.array(el).max(n)` |
+| `field.array({ maxBytes, schema? })` | `T[]` | same, codec-encoded |
+| `field.int32Array({ length })` / `float64Array` / `bigInt64Array` / `uint8Array` | typed array | raw view — `read()` is zero-copy |
+| `field.list({ schema, count })` | record array | fixed-layout records — `schema` is an `mz.object` of fixed-width members (`mz.u32()`, `mz.string(10)`) |
+
+## Intent groups
+
+Spec fields may nest one level under an intent group — the incidents contract
+uses `lists` (record arrays scanned in workers), `state` (codec-encoded
+snapshots), and `signals` (reactive scalars). The group is purely declarative:
+allocation is a flat layout underneath, and every surface mirrors the nesting —
+`memory.state.metrics`, `memory.spec.state.metrics`,
+`memory.schemas.state.metrics`, and observers addressed by path
+(`observe(memory, 'signals.seedProgress')`).
+
+## The `mz` datatype wrapper
+
+Every shared-memory value is fixed-width — a `SharedArrayBuffer` cannot
+resize, so strings and encoded objects declare byte budgets and list members
+compile to scalar widths. `mz` is the curated fixed-width vocabulary — only
+helpers whose schemas derive a byte width exist: `mz.u8()`–`mz.u64()`,
+`mz.f32()`/`mz.f64()`, `mz.int(min, max)` (bounds pick the narrowest covering
+kind), `mz.boolean()` (flag byte), `mz.string(bytes)` (inline capacity), and
+the `mz.object`/`mz.array` composers. Each is a real zod schema — layout and
+validation come from the same declaration.
+
+Fixed width composes upward: `field.object({ schema })` with an `mz.object`
+stores one inline record (byteLength is derived — there is no `maxBytes` to
+guess), `field.array({ schema })` with a bounded `z.array(el).max(n)` stores a
+count + inline elements, and `field.string({ schema })` reads its budget from
+`mz.string(n)`. `maxBytes` remains the escape hatch for payloads no fixed
+width can describe — its presence selects the codec path.
+
+## Connectors
+
+Every field exposes a `Connector<T>`: `read()` / `write(v)`, plus a shared
+*version counter* bumped by `Atomics` on each write. That's how the other
+thread observes changes without messages.
+
+List fields return a `ListConnector<R>` with record-level access:
+`readAt(i, out, fields?)`, `writeAt(i, record)` (partial writes supported via
+a field list), and `commit()` to bump the version counter after a batch —
+`writeAt` is intentionally pure memory access.
+
+## Codecs and schemas
+
+Structured fields encode through the contract's codec — `msgpackrCodec` (the
+default: MessagePack with structure sharing, the fastest option for uniform
+records), `msgpackCodec`, or `jsonCodec`. Optional zod schemas (`listSchema`,
+object/array `schema` options) validate values at the boundary. Every field
+also surfaces its schema on `memory.schemas.<name>` and its descriptor on
+`memory.spec.<name>` — list members may be zod schemas directly
+(`z.uint32()`, bounded `z.int().min().max()`,
+`z.string().meta({ bytes: n })`), which compile to the same layout while
+carrying their own validation. Register custom field kinds globally with
+`registerConnectorFactory(kind, factory)` or per contract via
+`SharedMemoryOptions.plugins`.
+
+## Custom connectors & the allocator
+
+A field kind is just a registered `ConnectorFactory` —
+`(descriptor: FieldDescriptor, ctx: ConnectorContext, byteOffset) => Connector`
+(`src/sdk/contract/sharedMemory.ts`). The context hands the factory the
+`SharedArrayBuffer`, the contract's codec, and the field's slot in the shared
+version counter; the returned connector's `read()`/`write(v)` own that region.
+`registerConnectorFactory(kind, factory)` registers a custom storage backend
+SDK-wide; `plugins` overrides per contract.
+
+Underneath the pool sits `MemoryManager` (`src/sdk/pool/memory.ts`) — the
+allocator it wraps when `sharedMemory` is configured. It owns a shared
+`WebAssembly.Memory` (`initialPages` 16 = 1 MB, `maximumPages` 16384 = 1 GB by
+default), grows it via `ensureCapacity(bytes)`, and exposes storage through
+`getView(type, byteOffset?, length?)` and `getBuffer()`. Both the
+`WorkerPool` and the SharedWorker host use it; you only need it directly when
+managing buffers yourself.
+
+## Binding lifecycle
+
+`memory.bind(buffer)` installs connectors. Reading a field before binding
+throws — use `memory.bound` and `memory.onBound(cb)` to sequence code that
+must wait (this is what makes SSR and lazy pool construction safe).

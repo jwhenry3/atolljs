@@ -1,11 +1,11 @@
 import { useEffect } from 'react';
-import { useSharedValue, useTask } from '@jwhenry123/mesh-nextjs';
+import { useSharedValue, useTask } from '@atolljs/nextjs';
 import {
   incidents,
   incidentsMemory,
   initIncidents,
   type QueryArgs,
-} from '@jwhenry123/mesh-incidents';
+} from '@atolljs/incidents';
 
 /**
  * Incident data layer: run init once, stream seedProgress/metrics out of

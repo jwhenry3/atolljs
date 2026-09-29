@@ -15,7 +15,7 @@ import {
   vModelText,
   withDirectives,
 } from 'vue';
-import { definePolyWorker, emit } from '@jwhenry123/mesh-islands/worker';
+import { definePolyWorker, emit } from '@atolljs/islands/worker';
 import { vueIslandApp } from '../../src/worker';
 
 const Counter = defineComponent({

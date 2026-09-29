@@ -16,9 +16,9 @@ const DIAGRAM = `main thread                                    worker(s)
 export function Overview() {
   return (
     <article>
-      <h1>mesh — the Worker Mesh</h1>
+      <h1>Atoll — the Worker Atoll</h1>
       <p className="lead">
-        A worker mesh: pools and shared workers joined to your app through one
+        A worker atoll: pools and shared workers joined to your app through one
         shared-memory fabric. Threads share a fixed-layout{' '}
         <code>SharedArrayBuffer</code> contract; work is offloaded two ways —
         task <em>commands</em> (dispatch → result) and <em>state reactivity</em>{' '}
@@ -27,11 +27,11 @@ export function Overview() {
       </p>
 
       <h2>Install</h2>
-      <CodeBlock code={`npm install @jwhenry123/mesh`} language="bash" />
+      <CodeBlock code={`npm install @atolljs/core`} language="bash" />
       <p>
         The core package ships the SDK — imported as{' '}
-        <code>@jwhenry123/mesh/sdk</code>. Framework bindings are separate,
-        independently published packages — <code>@jwhenry123/mesh-&lt;framework&gt;</code> —
+        <code>@atolljs/core/sdk</code>. Framework bindings are separate,
+        independently published packages — <code>@atolljs/&lt;framework&gt;</code> —
         so you only install the framework you actually use.
       </p>
 
@@ -55,39 +55,49 @@ export function Overview() {
         </thead>
         <tbody>
           <tr>
-            <td><code>@jwhenry123/mesh/sdk</code></td>
+            <td><code>@atolljs/core/sdk</code></td>
             <td>Shared-memory contracts, worker pool, worker bootstrap, observables, tasks, codecs, logging</td>
           </tr>
           <tr>
-            <td><code>@jwhenry123/mesh-react</code></td>
+            <td><code>@atolljs/react</code></td>
             <td><code>useObservable</code>, <code>useSharedValue</code>, <code>useTask</code> — React hooks</td>
           </tr>
           <tr>
-            <td><code>@jwhenry123/mesh-vue</code></td>
+            <td><code>@atolljs/vue</code></td>
             <td><code>useObservable</code>, <code>useSharedValue</code>, <code>useTask</code> — Ref-producing composables</td>
           </tr>
           <tr>
-            <td><code>@jwhenry123/mesh-solidjs</code></td>
+            <td><code>@atolljs/solidjs</code></td>
             <td><code>createObservable</code>, <code>createSharedValue</code>, <code>createTask</code> — Accessors</td>
           </tr>
           <tr>
-            <td><code>@jwhenry123/mesh-svelte</code></td>
+            <td><code>@atolljs/svelte</code></td>
             <td><code>observableValue</code>, <code>sharedValue</code>, <code>taskState</code> — rune-backed state</td>
           </tr>
           <tr>
-            <td><code>@jwhenry123/mesh-angular</code></td>
+            <td><code>@atolljs/angular</code></td>
             <td><code>observableSignal</code>, <code>sharedValue</code>, <code>taskState</code> — Signals</td>
           </tr>
           <tr>
-            <td><code>@jwhenry123/mesh-nextjs</code></td>
+            <td><code>@atolljs/nextjs</code></td>
             <td>Re-exports the React binding — App Router safe, SSR-ready</td>
+          </tr>
+          <tr>
+            <td><code>@atolljs/islands</code></td>
+            <td><code>mountIsland</code>, <code>connectIslandWorker</code>, <code>callbackProp</code>, <code>islandApp</code> — main-thread mounting; <code>/worker</code> exports <code>definePolyWorker</code>/<code>defineMonoWorker</code>, the proxy DOM, <code>emit</code>, <code>Slot</code></td>
+          </tr>
+          <tr>
+            <td><code>@atolljs/*-island</code></td>
+            <td>Shell components + worker renderers for islands — <code>react-island</code> (<code>&lt;Island&gt;</code>, <code>lazyIsland</code>, <code>islandComponent</code>), <code>vue-island</code> (<code>AtollIsland</code>, <code>useIsland</code>), <code>svelte-island</code> (<code>island</code> action), <code>solid-island</code> (<code>&lt;Island&gt;</code>, <code>createIsland</code>), <code>angular-island</code> (<code>atollIsland</code> directive)</td>
           </tr>
         </tbody>
       </table>
       <p>
         Bindings contain zero domain code — they adapt the SDK's observable
         primitives to each framework's reactivity model. Your app owns the
-        domain: contracts, worker handlers, and composition.
+        domain: contracts, worker handlers, and composition. The islands layer
+        is separate: it moves the whole render tree into a worker — see{' '}
+        <a href="#/islands">Worker islands</a> for when that's the right trade.
       </p>
     </article>
   );

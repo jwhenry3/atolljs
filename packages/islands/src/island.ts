@@ -14,13 +14,13 @@
  * is least-busy round-robin, so a second worker would receive dispatches for
  * a tree it doesn't hold (sticky routing is future work).
  */
-import { connectWorker, observe } from '@jwhenry123/mesh/sdk';
+import { connectWorker, observe } from '@atolljs/core/sdk';
 import type {
   ConnectWorkerConfig,
   SharedSpec,
   WorkerClient,
   WorkerDefinition,
-} from '@jwhenry123/mesh/sdk';
+} from '@atolljs/core/sdk';
 import { makeDoorbell, type DoorbellSpec } from './memory';
 import {
   isEventRef,
@@ -58,7 +58,7 @@ export interface ConnectIslandWorkerConfig extends IslandWorkerOptions {
   /**
    * Bundler-detectable factory `() => new Worker(new URL('./x.worker.ts',
    * import.meta.url), { type: 'module' })`, or a URL. The worker script must
-   * call `definePolyWorker({ apps })` from '@jwhenry123/mesh-islands/worker'.
+   * call `definePolyWorker({ apps })` from '@atolljs/islands/worker'.
    */
   worker: (() => Worker) | URL;
   /**
@@ -96,7 +96,7 @@ interface MountIslandBaseOptions {
   /** Island → shell channel: receives every `emit` op the app produces. */
   onEvent?: (name: string, payload: unknown) => void;
   /**
-   * Transclusion slots — worker markup renders `<div data-mesh-slot="name">`
+   * Transclusion slots — worker markup renders `<div data-atoll-slot="name">`
    * as a LEAF; when its create op lands, the real element is handed to
    * `slots[name](el)` so the shell can mount main-thread content inside it
    * (a widget, a canvas, even a main-thread React root — real DOM, real
@@ -351,14 +351,14 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
   const prevProps = new Map<number, WireProps>();
   /** instance id → event name → attached listener (kept for removal). */
   const nodeListeners = new Map<number, Map<string, EventListener>>();
-  /** instance id → slot name, for elements carrying `data-mesh-slot`. */
+  /** instance id → slot name, for elements carrying `data-atoll-slot`. */
   const slotNodes = new Map<number, string>();
 
   /** Hand a live element to its slot mount callback (or drop it silently). */
   const mountSlot = (node: HTMLElement, id: number, name: string): void => {
     // Always set the attribute — nested-remove detection below finds slot
     // elements inside detached subtrees by querying for it.
-    node.setAttribute('data-mesh-slot', name);
+    node.setAttribute('data-atoll-slot', name);
     const prev = slotNodes.get(id);
     if (prev !== undefined && prev !== name) opts.slots?.[prev]?.(null);
     slotNodes.set(id, name);
@@ -419,7 +419,7 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
   // SVGElement/MathMLElement, which share Element's API surface but are NOT
   // HTMLElements — guards and signatures must accept both.
   function setProp(el: Element, id: number, name: string, value: unknown): void {
-    if (name === 'data-mesh-slot') {
+    if (name === 'data-atoll-slot') {
       mountSlot(el as HTMLElement, id, String(value));
       return;
     }
@@ -474,9 +474,9 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
   }
 
   function removeProp(el: Element, id: number, name: string, oldValue: unknown): void {
-    if (name === 'data-mesh-slot') {
+    if (name === 'data-atoll-slot') {
       unmountSlot(id);
-      el.removeAttribute('data-mesh-slot');
+      el.removeAttribute('data-atoll-slot');
       return;
     }
     if (isEventRef(oldValue)) {
@@ -517,15 +517,15 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
    * The `attr` op — the proxy DOM's setAttribute/removeAttribute channel.
    * Values are always strings (or null to remove): the worker-side facade
    * only knows attributes. Reuses setProp's heuristics where they apply —
-   * `data-mesh-slot` routes to the slot machinery, `class`/`className` land
+   * `data-atoll-slot` routes to the slot machinery, `class`/`className` land
    * on the property, other names prefer a DOM property when one exists
    * (`id`, `value`) and fall back to the attribute.
    */
   function setAttr(node: Element, id: number, name: string, value: string | null): void {
-    if (name === 'data-mesh-slot') {
+    if (name === 'data-atoll-slot') {
       if (value === null) {
         unmountSlot(id);
-        node.removeAttribute('data-mesh-slot');
+        node.removeAttribute('data-atoll-slot');
       } else {
         mountSlot(node as HTMLElement, id, value);
       }
@@ -610,8 +610,11 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
           : realDocument.createElement(op.type);
         nodes.set(op.id, node);
         nodeIds.set(node, op.id);
-        prevProps.set(op.id, op.props);
         for (const [name, value] of Object.entries(op.props)) setProp(node, op.id, name, value);
+        // Record prevProps AFTER applying: setProp's style diff reads this map
+        // as "what's already on the element" — seeding it first would make the
+        // create-time style object diff against itself and drop every key.
+        prevProps.set(op.id, op.props);
         break;
       }
       case 'text': {

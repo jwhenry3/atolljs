@@ -1,13 +1,13 @@
 // @vitest-environment happy-dom
 /**
- * `useIsland` + `<MeshIsland/>` — mount an island worker declaratively from
+ * `useIsland` + `<AtollIsland/>` — mount an island worker declaratively from
  * a Vue shell. In-process E2E like the react-island suite: real registry +
  * op protocol, the only fake being the thread boundary.
  */
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { createApp, effectScope, h, reactive } from 'vue';
-import { InProcessWorker } from '@jwhenry123/mesh/sdk/testing/inProcessWorker';
-import { connectIslandWorker } from '@jwhenry123/mesh-islands';
+import { InProcessWorker } from '@atolljs/core/sdk/testing/inProcessWorker';
+import { connectIslandWorker } from '@atolljs/islands';
 import type { IslandHandle } from '../src/index';
 
 vi.stubGlobal('Worker', InProcessWorker);
@@ -15,7 +15,7 @@ vi.stubGlobal('Worker', InProcessWorker);
 // side effects — exactly what a bundled worker entry does at boot.
 InProcessWorker.handlerModules = [() => import('./fixtures/echo.worker')];
 
-let MeshIsland: typeof import('../src/index').MeshIsland;
+let AtollIsland: typeof import('../src/index').AtollIsland;
 let useIsland: typeof import('../src/index').useIsland;
 // In-process artifact: once a worker instance mounts, ambient `document` can
 // resolve to its PROXY document (shared globalThis) — capture the real one
@@ -23,13 +23,13 @@ let useIsland: typeof import('../src/index').useIsland;
 let realDoc: Document;
 beforeAll(async () => {
   realDoc = document;
-  ({ MeshIsland, useIsland } = await import('../src/index'));
+  ({ AtollIsland, useIsland } = await import('../src/index'));
 });
 
 const renderWorker = () =>
   new Worker(new URL('./fixtures/echo.worker.ts', import.meta.url), { type: 'module' });
 
-describe('<MeshIsland/>', () => {
+describe('<AtollIsland/>', () => {
   it('mounts, relays events, re-props, and destroys cleanly', async () => {
     const host = realDoc.createElement('div');
     realDoc.body.appendChild(host);
@@ -41,7 +41,7 @@ describe('<MeshIsland/>', () => {
 
     const app = createApp({
       render: () =>
-        h(MeshIsland, {
+        h(AtollIsland, {
           client,
           app: 'echo',
           props: islandProps,
@@ -58,7 +58,7 @@ describe('<MeshIsland/>', () => {
     await vi.waitFor(() =>
       expect(host.querySelector('.echo')?.textContent).toBe('hello island'),
     );
-    expect((host.querySelector('.mesh-island') as HTMLElement).className).toBe('mesh-island');
+    expect((host.querySelector('.atoll-island') as HTMLElement).className).toBe('atoll-island');
     expect(handle?.pid).toMatch(/^w-/);
     expect(emitted.some((e) => e.name === 'ready')).toBe(true);
 

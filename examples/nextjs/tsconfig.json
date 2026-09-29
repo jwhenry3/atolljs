@@ -24,25 +24,25 @@
       }
     ],
     "paths": {
-      "@jwhenry123/mesh-nextjs": [
+      "@atolljs/nextjs": [
         "../../packages/nextjs/src/index.ts"
       ],
-      "@jwhenry123/mesh-react": [
+      "@atolljs/react": [
         "../../packages/react/src/index.ts"
       ],
-      "@jwhenry123/mesh-incidents": [
+      "@atolljs/incidents": [
         "../../packages/incidents/src/index.ts"
       ],
-      "@jwhenry123/mesh-node": [
+      "@atolljs/node": [
         "../../packages/node/src/index.ts"
       ],
-      "@jwhenry123/mesh-node/*": [
+      "@atolljs/node/*": [
         "../../packages/node/src/*"
       ],
-      "@jwhenry123/mesh/sdk": [
+      "@atolljs/core/sdk": [
         "../../src/sdk/index.ts"
       ],
-      "@jwhenry123/mesh/sdk/*": [
+      "@atolljs/core/sdk/*": [
         "../../src/sdk/*"
       ]
     }

@@ -1,4 +1,4 @@
-import { defineSharedMemory, field } from '@jwhenry123/mesh/sdk';
+import { defineSharedMemory, field } from '@atolljs/core/sdk';
 
 /**
  * The doorbell layout. One counter the worker bumps after every commit —

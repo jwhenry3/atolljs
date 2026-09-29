@@ -586,6 +586,4 @@ export const ambientDoc = (): InternalDocument | undefined =>
     ? instanceDocs.values().next().value
     : instanceDocs.get(getLastActiveInstance());
 
-const docForCurrentContext = (): InternalDocument | undefined =>
-  activeInstanceDoc() ?? ambientDoc();
 

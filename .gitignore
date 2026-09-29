@@ -5,3 +5,5 @@ nul
 *.tsbuildinfo
 coverage/
 
+.playwright-mcp/
+.tmp/

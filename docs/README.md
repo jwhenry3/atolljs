@@ -1,45 +1,56 @@
-# mesh sdk docs
+# Atoll — project documentation
 
-Documentation site for `@jwhenry123/mesh/sdk` and the framework bindings — Vite +
-React, hash-routed, on port **4180**.
+In-repo documentation for `@atolljs/core` and its packages, written for
+both developers and coding agents. **Agents: read the index below, then read
+every doc relevant to your task before making extensive changes** — these
+files encode non-obvious invariants (fixed-width memory layout, instance
+scoping, bundler worker-detection rules) that are easy to violate.
 
-- Concept pages cover contracts, the worker pool/task model, and the reactivity
-  layer (`observe`, `watch`, `defineTask`, logging).
-- Each framework page embeds the real binding + glue sources (via `?raw`
-  imports, so docs never drift from the code) and iframes the running example.
-- The playground page runs a real worker + shared-memory contract in-page
-  through the `@jwhenry123/mesh-react` bindings.
+The consumer-facing site (`docs-consumer/`) documents the published package
+surface for end users. These docs cover the framework as it exists in this
+repository — internals, contracts, and conventions.
 
-## Run
+## Reading map
 
-```sh
-npm install
-npm run dev    # http://localhost:4180
-```
+| If you're working on… | Read |
+|---|---|
+| Anything (first contact) | [overview.md](overview.md) — architecture, repo layout, how to run |
+| `src/sdk/contract/` — memory layout, fields, codecs | [shared-memory.md](shared-memory.md) |
+| `src/sdk/pool/`, `src/sdk/worker/`, task dispatch | [tasks-and-pool.md](tasks-and-pool.md) |
+| `src/sdk/reactive.ts`, `observable.ts`, `task.ts`, `log.ts` | [reactivity.md](reactivity.md) |
+| `src/sdk/shared/` — SharedWorker host/client | [shared-worker.md](shared-worker.md) |
+| COOP/COEP headers, iframe embedding, `SharedArrayBuffer` availability | [cross-origin-isolation.md](cross-origin-isolation.md) |
+| `packages/islands/` — `mountIsland`, driver, op protocol | [islands.md](islands.md) |
+| `packages/islands/src/worker/` — proxy DOM, instances, worker entries | [islands-worker.md](islands-worker.md) |
+| `packages/*-island/` — Vue/Svelte/Solid/Angular worker renderers | [islands-frameworks.md](islands-frameworks.md) |
+| `packages/react`, `packages/react-island` | [frameworks/react.md](frameworks/react.md) |
+| `packages/vue`, `packages/vue-island` | [frameworks/vue.md](frameworks/vue.md) |
+| `packages/solidjs`, `packages/solid-island` | [frameworks/solid.md](frameworks/solid.md) |
+| `packages/svelte`, `packages/svelte-island` | [frameworks/svelte.md](frameworks/svelte.md) |
+| `packages/angular`, `packages/angular-island` | [frameworks/angular.md](frameworks/angular.md) |
+| `packages/nextjs` | [frameworks/nextjs.md](frameworks/nextjs.md) |
+| `packages/nestjs`, `packages/node` | [frameworks/nestjs.md](frameworks/nestjs.md) |
 
-Or start it together with everything else from the repository root:
+## Core concepts (read in order)
 
-```sh
-npm run dev:all
-```
+1. [overview.md](overview.md) — the three layers: contracts, worker pair, reactivity
+2. [shared-memory.md](shared-memory.md) — `defineSharedMemory`, `field.*`, `mz`, connectors
+3. [tasks-and-pool.md](tasks-and-pool.md) — `defineWorker`/`connectWorker`, services, pool config
+4. [reactivity.md](reactivity.md) — `observe`/`watch`/`reactive`, `defineTask`, logging
+5. [shared-worker.md](shared-worker.md) — one worker + buffer across tabs/iframes
+6. [cross-origin-isolation.md](cross-origin-isolation.md) — when SAB exists at all
 
-To serve the built docs with the prebuilt framework demos embedded:
+## Islands (off-main-thread rendering)
 
-```sh
-npm run serve:docs   # builds docs + examples, serves http://localhost:4180
-                     # with live demos mounted at /react/, /vue/, ...
-```
+- [islands.md](islands.md) — vocabulary (Atoll/PolyWorker/MonoWorker/Island), `mountIsland`, topologies, transport modes
+- [islands-worker.md](islands-worker.md) — app kinds, proxy DOM, `installDomShim`, `emit`/`callbackProp`/`Slot`, instance discipline, testing
+- [islands-frameworks.md](islands-frameworks.md) — the `*-island` packages, mixed registries, bundle composition, real-library limits
 
-SharedArrayBuffer needs cross-origin isolation — the vite config sets COOP/COEP
-headers, so the live playground demo works in-page.
-To assemble the GitHub Pages artifact locally:
+## Conventions for agents
 
-```sh
-npm run build:pages   # builds docs + consumer docs + examples -> dist-pages/
-```
-
-The `Deploy docs to GitHub Pages` workflow (`.github/workflows/pages.yml`)
-publishes that tree on pushes to `main` — enable Pages in repo settings with
-source "GitHub Actions". Note: Pages cannot send COOP/COEP headers, so the
-embedded live demos and playground won't run there (SharedArrayBuffer is
-unavailable); the docs content itself works fine.
+- Prefer linking file paths (`packages/islands/src/island.ts`) over copying
+  source — the files are the truth; these docs describe behavior and invariants.
+- When you change a documented API or invariant, update the corresponding doc
+  in the same change.
+- `packages/*/README.md` files are the per-package contract — keep them and
+  these docs consistent.

@@ -1,11 +1,11 @@
 /**
- * `@jwhenry123/mesh-react-island` — the React shell surface for
- * `@jwhenry123/mesh-islands` islands: a worker-hosted React (or
+ * `@atolljs/react-island` — the React shell surface for
+ * `@atolljs/islands` islands: a worker-hosted React (or
  * imperative proxy-DOM) tree mounted as an ordinary element in a
  * main-thread React app.
  *
  * ```tsx
- * import { Island } from '@jwhenry123/mesh-react-island';
+ * import { Island } from '@atolljs/react-island';
  * import { ChartsApp } from './worker/apps'; // the islandApp-stamped component
  *
  * const renderWorker = () =>
@@ -16,7 +16,7 @@
  *   app={ChartsApp}              // or the registry name string 'charts'
  *   props={{ width: 520 }}       // inferred from ChartsApp's own props
  *   onEvent={(name, payload) => setStatus(`${name}: ${JSON.stringify(payload)}`)}
- *   slots={{ wave: <Sparkline /> }} // React portals into worker data-mesh-slot="wave"
+ *   slots={{ wave: <Sparkline /> }} // React portals into worker data-atoll-slot="wave"
  * />
  * ```
  *
@@ -29,7 +29,7 @@
  * - `onEvent`/`onActivity` are read through refs — passing fresh closures
  *   each render never remounts the worker. `slots` are React portals into
  *   worker-created anchor elements; the portal content renders wherever the
- *   worker places the matching `data-mesh-slot`.
+ *   worker places the matching `data-atoll-slot`.
  * - `app` changes remount the island; `worker`/`client` are MOUNT-STABLE —
  *   swap them via React `key`, not by passing a new value mid-life.
  * - Unmount destroys the island; the worker terminates unless the client
@@ -49,14 +49,15 @@ import {
   connectIslandWorker,
   islandAppNameOf,
   mountIsland,
-} from '@jwhenry123/mesh-islands';
+} from '@atolljs/islands';
 import type {
   IslandAppLike,
   IslandAppProps,
   IslandClient,
   IslandHandle,
   IslandWorkerOptions,
-} from '@jwhenry123/mesh-islands';
+  Mode,
+} from '@atolljs/islands';
 
 // Re-export the app-contract types the component API is generic over, so
 // consumers can name them without a second package import.
@@ -83,12 +84,20 @@ export interface IslandProps<A = string>
   client?: IslandClient;
   /** Extra pool options — concurrency, taskTimeout, respawn… (poolSize stays 1). */
   workerOptions?: IslandWorkerOptions;
+  /**
+   * Initial flush mode — 'push' (default) drives op replay off the
+   * shared-memory doorbell (needs cross-origin isolation); 'poll' drains on
+   * a 50ms interval and, for `worker`-shorthand mounts, builds the client
+   * doorbell-free — no SharedArrayBuffer, no COOP/COEP requirement.
+   * Mount-time only; switch later via the handle's `setMode`.
+   */
+  mode?: Mode;
   /** Initial + updated root props — serialized to the worker. */
   props?: IslandAppProps<A>;
   /** Island → shell channel: every `emit` op lands here. */
   onEvent?: (name: string, payload: unknown) => void;
   /**
-   * Transclusion slots — a worker `<div data-mesh-slot="name">` becomes a
+   * Transclusion slots — a worker `<div data-atoll-slot="name">` becomes a
    * React portal mount point. The element's contents are rendered by React
    * on the main thread; the worker only owns the empty anchor.
    */
@@ -108,6 +117,7 @@ export function Island<A = string>({
   worker,
   client: clientProp,
   workerOptions,
+  mode,
   props,
   onEvent,
   onActivity,
@@ -176,7 +186,7 @@ export function Island<A = string>({
       return;
     }
 
-    // React portal anchors: the worker marks `data-mesh-slot="name"`, the
+    // React portal anchors: the worker marks `data-atoll-slot="name"`, the
     // driver hands us the real element, and we render the matching slot
     // content into it with createPortal.
     const slotProxy = new Proxy({} as Record<string, (el: HTMLElement | null) => void>, {
@@ -191,6 +201,7 @@ export function Island<A = string>({
           client,
           el,
           app: appName,
+          mode,
           // Serialized across the wire either way — cast preserves inference
           // for props types without an index signature.
           props: (propsRef.current ?? {}) as Record<string, unknown>,
@@ -236,7 +247,7 @@ export function Island<A = string>({
       <div ref={setRefs} {...rest} />
       {Object.entries(slotTargets).map(([name, el]) =>
         el && slotsRef.current?.[name] != null
-          ? createPortal(slotsRef.current[name] as ReactNode, el, `mesh-slot-${name}`)
+          ? createPortal(slotsRef.current[name] as ReactNode, el, `atoll-slot-${name}`)
           : null,
       )}
     </>
@@ -262,6 +273,8 @@ export interface IslandShellProps {
   worker?: (() => Worker) | URL;
   client?: IslandClient;
   workerOptions?: IslandWorkerOptions;
+  /** Initial flush mode — see IslandProps.mode. */
+  mode?: Mode;
   /** Island → shell channel: every `emit` op lands here. */
   onEvent?: (name: string, payload: unknown) => void;
   /** Fired after each applied op batch. */
@@ -285,6 +298,7 @@ const SHELL_PROP_KEYS: ReadonlySet<string> = new Set([
   'worker',
   'client',
   'workerOptions',
+  'mode',
   'onEvent',
   'onActivity',
   'onReady',
@@ -380,6 +394,7 @@ function ProxyIsland({
         worker={shell.worker ?? resolved.worker}
         client={shell.client}
         workerOptions={shell.workerOptions}
+        mode={shell.mode}
         props={islandProps as Record<string, unknown>}
         onEvent={shell.onEvent}
         onActivity={shell.onActivity}

@@ -17,8 +17,8 @@ export const FRAMEWORKS: FrameworkDoc[] = [
     id: 'react',
     name: 'React',
     port: 5173,
-    pkg: '@jwhenry123/mesh-react',
-    install: 'npm install @jwhenry123/mesh @jwhenry123/mesh-react',
+    pkg: '@atolljs/react',
+    install: 'npm install @atolljs/core @atolljs/react',
     summary:
       'Hooks over useSyncExternalStore. SSR-safe — field reads return undefined until the contract binds on the client.',
     apis: [
@@ -28,7 +28,7 @@ export const FRAMEWORKS: FrameworkDoc[] = [
     ],
     usageFile: 'App.tsx',
     usageLanguage: 'tsx',
-    usage: `import { useSharedValue, useTask } from '@jwhenry123/mesh-react';
+    usage: `import { useSharedValue, useTask } from '@atolljs/react';
 import { counterMemory } from './counter.memory';
 import { counter } from './counter';
 
@@ -45,15 +45,15 @@ export function App() {
     notes: [
       'counter.increment is typed from the worker\'s defineWorker methods — no task contract to declare.',
       'Pass a selector to useSharedValue to re-render only when a slice changes: useSharedValue(memory, \'metrics\', m => m.total, { equals: shallowEqual }).',
-      'Worker-hosted React trees (islands) live in the companion package @jwhenry123/mesh-react-island — see the Worker islands page under this section.',
+      'Worker-hosted React trees (islands) live in the companion package @atolljs/react-island — see the Worker islands page under this section.',
     ],
   },
   {
     id: 'vue',
     name: 'Vue',
     port: 5174,
-    pkg: '@jwhenry123/mesh-vue',
-    install: 'npm install @jwhenry123/mesh @jwhenry123/mesh-vue',
+    pkg: '@atolljs/vue',
+    install: 'npm install @atolljs/core @atolljs/vue',
     summary:
       'Composables producing Refs. Subscriptions release via onScopeDispose when the component unmounts.',
     apis: [
@@ -64,7 +64,7 @@ export function App() {
     usageFile: 'App.vue',
     usageLanguage: 'vue',
     usage: `<script setup lang="ts">
-import { useSharedValue, useTask } from '@jwhenry123/mesh-vue';
+import { useSharedValue, useTask } from '@atolljs/vue';
 import { counterMemory } from './counter.memory';
 import { counter } from './counter';
 
@@ -77,14 +77,17 @@ const increment = useTask(counter.increment);
     count: {{ count ?? '…' }}
   </button>
 </template>`,
-    notes: ['watch() the task\'s settled Ref to trigger follow-up work after a run.'],
+    notes: [
+      'watch() the task\'s settled Ref to trigger follow-up work after a run.',
+      'Worker-hosted Vue trees (islands) live in the companion package @atolljs/vue-island — see the Worker islands page under this section.',
+    ],
   },
   {
     id: 'solid',
     name: 'SolidJS',
     port: 5175,
-    pkg: '@jwhenry123/mesh-solidjs',
-    install: 'npm install @jwhenry123/mesh @jwhenry123/mesh-solidjs',
+    pkg: '@atolljs/solidjs',
+    install: 'npm install @atolljs/core @atolljs/solidjs',
     summary:
       'Signal adapter — the sdk uses solid-js internally for its reactive core, so shared values are natively tracked.',
     apis: [
@@ -94,7 +97,7 @@ const increment = useTask(counter.increment);
     ],
     usageFile: 'App.tsx',
     usageLanguage: 'tsx',
-    usage: `import { createSharedValue, createTask } from '@jwhenry123/mesh-solidjs';
+    usage: `import { createSharedValue, createTask } from '@atolljs/solidjs';
 import { counterMemory } from './counter.memory';
 import { counter } from './counter';
 
@@ -108,14 +111,17 @@ export function App() {
     </button>
   );
 }`,
-    notes: ['Subscriptions auto-dispose via onCleanup when the owner is destroyed.'],
+    notes: [
+      'Subscriptions auto-dispose via onCleanup when the owner is destroyed.',
+      'Worker-hosted Solid trees (islands) live in the companion package @atolljs/solid-island — see the Worker islands page under this section.',
+    ],
   },
   {
     id: 'svelte',
     name: 'Svelte',
     port: 5176,
-    pkg: '@jwhenry123/mesh-svelte',
-    install: 'npm install @jwhenry123/mesh @jwhenry123/mesh-svelte',
+    pkg: '@atolljs/svelte',
+    install: 'npm install @atolljs/core @atolljs/svelte',
     summary:
       'Svelte 5 runes adapter. Call the factories during component init; teardown happens in an $effect cleanup.',
     apis: [
@@ -126,7 +132,7 @@ export function App() {
     usageFile: 'App.svelte',
     usageLanguage: 'svelte',
     usage: `<script lang="ts">
-  import { sharedValue, taskState } from '@jwhenry123/mesh-svelte';
+  import { sharedValue, taskState } from '@atolljs/svelte';
   import { counterMemory } from './counter.memory';
   import { counter } from './counter';
 
@@ -137,21 +143,24 @@ export function App() {
 <button onclick={() => increment.run(1)}>
   count: {count.value ?? '…'}
 </button>`,
-    notes: ['Factories must run in a .svelte.ts module or during component init so runes compile correctly.'],
+    notes: [
+      'Factories must run in a .svelte.ts module or during component init so runes compile correctly.',
+      'Worker-hosted Svelte trees (islands) live in the companion package @atolljs/svelte-island — see the Worker islands page under this section.',
+    ],
   },
   {
     id: 'angular',
     name: 'Angular',
     port: 4201,
-    pkg: '@jwhenry123/mesh-angular',
-    install: 'npm install @jwhenry123/mesh @jwhenry123/mesh-angular',
+    pkg: '@atolljs/angular',
+    install: 'npm install @atolljs/core @atolljs/angular',
     summary:
-      'Signal adapter for zoneless Angular. Call in an injection context (field initializer or constructor) so subscriptions release on destroy. NgModule apps get the same pools through MeshModule — the NestJS binding\'s forRoot/registerPool vocabulary.',
+      'Signal adapter for zoneless Angular. Call in an injection context (field initializer or constructor) so subscriptions release on destroy. NgModule apps get the same pools through AtollModule — the NestJS binding\'s forRoot/registerPool vocabulary.',
     apis: [
-      { name: 'provideMesh', signature: 'provideMesh({ pools: MeshPoolDeclaration[] }, ...features)', desc: 'Register worker pools or connectWorker clients ({ name, client }) as environment providers — terminated on injector destroy; also usable at route level.' },
-      { name: 'injectMeshPool', signature: 'injectMeshPool<T>(name): T', desc: 'Inject a pool registered by provideMesh inside an injection context; mockable via TestBed.' },
-      { name: 'MeshModule', signature: 'MeshModule.forRoot({pools?}) / forRootAsync / registerPool(decl) / registerPoolAsync', desc: 'NgModule alternative to provideMesh — same pool tokens + lifecycle, declared on the importing module; async forms resolve their factory before bootstrap.' },
-      { name: 'InjectMeshPool', signature: '@InjectMeshPool(name)', desc: 'Constructor-parameter decorator form of injectMeshPool for @Injectable() classes.' },
+      { name: 'provideAtoll', signature: 'provideAtoll({ pools: AtollPoolDeclaration[] }, ...features)', desc: 'Register worker pools or connectWorker clients ({ name, client }) as environment providers — terminated on injector destroy; also usable at route level.' },
+      { name: 'injectAtollPool', signature: 'injectAtollPool<T>(name): T', desc: 'Inject a pool registered by provideAtoll inside an injection context; mockable via TestBed.' },
+      { name: 'AtollModule', signature: 'AtollModule.forRoot({pools?}) / forRootAsync / registerPool(decl) / registerPoolAsync', desc: 'NgModule alternative to provideAtoll — same pool tokens + lifecycle, declared on the importing module; async forms resolve their factory before bootstrap.' },
+      { name: 'InjectAtollPool', signature: '@InjectAtollPool(name)', desc: 'Constructor-parameter decorator form of injectAtollPool for @Injectable() classes.' },
       { name: 'observableSignal', signature: 'observableSignal(source: ObservableValue<T>): Signal<T>', desc: 'Subscribe to any observable snapshot.' },
       { name: 'sharedValue', signature: 'sharedValue(memory, key, select?, options?): Signal<T | undefined>', desc: 'Bind one shared-memory field to a Signal; optional selector + equality.' },
       { name: 'taskState', signature: 'taskState(task | asyncFn): { state: Signal<TaskSnapshot>, run, runOnce }', desc: 'Bind an AsyncTask — or any async fn — to a Signal and get its triggers.' },
@@ -163,13 +172,13 @@ export function App() {
 bootstrapApplication(AppComponent, {
   providers: [
     provideZonelessChangeDetection(),
-    provideMesh({ pools: [{ name: 'counter', client: counter }] }),
+    provideAtoll({ pools: [{ name: 'counter', client: counter }] }),
   ],
 });
 
 // app.component.ts
 import { Component, effect } from '@angular/core';
-import { injectMeshPool, sharedValue, taskState } from '@jwhenry123/mesh-angular';
+import { injectAtollPool, sharedValue, taskState } from '@atolljs/angular';
 import { counterMemory } from './counter.memory';
 import { counter } from './counter';
 
@@ -179,7 +188,7 @@ import { counter } from './counter';
     count: {{ count() ?? '…' }}</button>\`,
 })
 export class AppComponent {
-  private readonly counter = injectMeshPool<typeof counter>('counter');
+  private readonly counter = injectAtollPool<typeof counter>('counter');
   count = sharedValue(counterMemory, 'count');
   increment = taskState(this.counter.increment);
 
@@ -187,14 +196,17 @@ export class AppComponent {
     effect(() => console.log('count →', this.count()));
   }
 }`,
-    notes: ['Works with OnPush + zoneless change detection out of the box.'],
+    notes: [
+      'Works with OnPush + zoneless change detection out of the box.',
+      'Worker-hosted Angular trees (islands) live in the companion package @atolljs/angular-island — see the Worker islands page under this section.',
+    ],
   },
   {
     id: 'nextjs',
     name: 'Next.js',
     port: 3001,
-    pkg: '@jwhenry123/mesh-nextjs',
-    install: 'npm install @jwhenry123/mesh @jwhenry123/mesh-nextjs',
+    pkg: '@atolljs/nextjs',
+    install: 'npm install @atolljs/core @atolljs/nextjs',
     summary:
       'The React hooks re-exported for App Router apps — same signatures, imported by client components under a \'use client\' boundary.',
     apis: [
@@ -206,7 +218,7 @@ export class AppComponent {
     usageLanguage: 'tsx',
     usage: `'use client';   // required — the hooks read browser-side state
 
-import { useSharedValue, useTask } from '@jwhenry123/mesh-nextjs';
+import { useSharedValue, useTask } from '@atolljs/nextjs';
 import { counterMemory } from '../counter.memory';
 import { counter } from '../counter';   // connectWorker client — safe to import under SSR
 

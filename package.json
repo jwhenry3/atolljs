@@ -1,5 +1,5 @@
 {
-  "name": "@jwhenry123/mesh",
+  "name": "@atolljs/core",
   "version": "0.1.0",
   "type": "module",
   "main": "./dist/index.js",
@@ -30,7 +30,6 @@
     "dev:all": "node scripts/dev-all.mjs",
     "kill:all": "node scripts/kill-all.mjs",
     "serve:all": "node scripts/serve-all.mjs",
-    "serve:docs": "node scripts/serve-docs.mjs",
     "build": "tsc --noEmit && vite build && vite build --config vite.app.config.ts",
     "test": "vitest run",
     "build:pages": "node scripts/build-pages.mjs",
@@ -68,6 +67,6 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/jwhenry3/mesh"
+    "url": "https://github.com/jwhenry3/atolljs"
   }
 }

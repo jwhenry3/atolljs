@@ -1,5 +1,5 @@
 {
-  "name": "@jwhenry123/mesh-incidents",
+  "name": "@atolljs/incidents",
   "private": true,
   "version": "0.0.0",
   "description": "Demo domain package — incident contract, worker, pool, tasks",
@@ -12,12 +12,12 @@
     "src"
   ],
   "peerDependencies": {
-    "@jwhenry123/mesh": "0.0.0",
+    "@atolljs/core": "0.0.0",
     "zod": "^4.6.5"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/jwhenry3/mesh",
+    "url": "https://github.com/jwhenry3/atolljs",
     "directory": "packages/incidents"
   }
 }

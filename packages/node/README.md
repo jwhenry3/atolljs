@@ -1,6 +1,6 @@
-# @jwhenry123/mesh-node
+# @atolljs/node
 
-`node:worker_threads` runtime adapter for `@jwhenry123/mesh` — lets `WorkerPool`
+`node:worker_threads` runtime adapter for `@atolljs/core` — lets `WorkerPool`
 and `connectWorker` run on Node's Worker (an EventEmitter) instead of the DOM
 surface they expect.
 
@@ -10,7 +10,7 @@ surface they expect.
   bundler-detectable.
 - `createNodeWorker(nodeWorker)` / `NodeWorkerAdapter` — wraps a Node Worker for
   `connectWorker` or a hand-built `WorkerPool`.
-- `@jwhenry123/mesh-node/shim` — worker-side entry shim; imports first and binds
+- `@atolljs/node/shim` — worker-side entry shim; imports first and binds
   `self = parentPort` before `defineWorker`'s bootstrap evaluates.
 
 `SharedArrayBuffer` works in Node with no headers — cross-origin isolation is a

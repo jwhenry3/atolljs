@@ -10,8 +10,8 @@
  * the rest — no platform-browser, no zone.js, no TestBed on this side.
  */
 import { beforeAll, describe, expect, it, vi } from 'vitest';
-import { connectIslandWorker, mountIsland } from '@jwhenry123/mesh-islands';
-import { InProcessWorker } from '@jwhenry123/mesh/sdk/testing/inProcessWorker';
+import { connectIslandWorker, mountIsland } from '@atolljs/islands';
+import { InProcessWorker } from '@atolljs/core/sdk/testing/inProcessWorker';
 
 vi.stubGlobal('Worker', InProcessWorker);
 InProcessWorker.handlerModules = [() => import('./fixtures/counter.worker')];
@@ -43,7 +43,7 @@ describe('angularIslandApp', () => {
     // Initial render — the component host carries its selector tag, the
     // input() arrived via setInput inside mount().
     await vi.waitFor(() =>
-      expect(el.querySelector('mesh-counter .label')?.textContent).toBe('island counter'),
+      expect(el.querySelector('atoll-counter .label')?.textContent).toBe('island counter'),
     );
     expect(el.querySelector('.count')?.textContent).toBe('0');
     expect(island.pid).toMatch(/^w-/);

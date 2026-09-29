@@ -10,15 +10,15 @@ const svelteBindingsRoot = fileURLToPath(new URL('../../packages/svelte/src/', i
 
 export default defineConfig(({ command }) => ({
   // Built output is mounted at /svelte/ under the unified dist root; dev serves /.
-  base: command === 'build' ? '/svelte/' : '/',
+  base: command === 'build' ? './' : '/',
   plugins: [svelte()],
   resolve: {
     alias: [
-      { find: '@jwhenry123/mesh-svelte', replacement: `${svelteBindingsRoot}index.ts` },
-      { find: '@jwhenry123/mesh-incidents', replacement: `${incidentsRoot}index.ts` },
-      { find: /^@jwhenry123\/mesh$/, replacement: `${sdkRoot}index.ts` },
-      { find: /^@jwhenry123\/mesh\/sdk$/, replacement: `${sdkRoot}index.ts` },
-      { find: /^@jwhenry123\/mesh\/sdk\//, replacement: sdkRoot },
+      { find: '@atolljs/svelte', replacement: `${svelteBindingsRoot}index.ts` },
+      { find: '@atolljs/incidents', replacement: `${incidentsRoot}index.ts` },
+      { find: /^@atolljs\/core$/, replacement: `${sdkRoot}index.ts` },
+      { find: /^@atolljs\/core\/sdk$/, replacement: `${sdkRoot}index.ts` },
+      { find: /^@atolljs\/core\/sdk\//, replacement: sdkRoot },
     ],
   },
   // SharedArrayBuffer requires a cross-origin isolated context

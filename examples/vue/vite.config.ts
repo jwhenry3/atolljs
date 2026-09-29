@@ -10,15 +10,15 @@ const vueBindingsRoot = fileURLToPath(new URL('../../packages/vue/src/', import.
 
 export default defineConfig(({ command }) => ({
   // Built output is mounted at /vue/ under the unified dist root; dev serves /.
-  base: command === 'build' ? '/vue/' : '/',
+  base: command === 'build' ? './' : '/',
   plugins: [vue()],
   resolve: {
     alias: [
-      { find: '@jwhenry123/mesh-vue', replacement: `${vueBindingsRoot}index.ts` },
-      { find: '@jwhenry123/mesh-incidents', replacement: `${incidentsRoot}index.ts` },
-      { find: /^@jwhenry123\/mesh$/, replacement: `${sdkRoot}index.ts` },
-      { find: /^@jwhenry123\/mesh\/sdk$/, replacement: `${sdkRoot}index.ts` },
-      { find: /^@jwhenry123\/mesh\/sdk\//, replacement: sdkRoot },
+      { find: '@atolljs/vue', replacement: `${vueBindingsRoot}index.ts` },
+      { find: '@atolljs/incidents', replacement: `${incidentsRoot}index.ts` },
+      { find: /^@atolljs\/core$/, replacement: `${sdkRoot}index.ts` },
+      { find: /^@atolljs\/core\/sdk$/, replacement: `${sdkRoot}index.ts` },
+      { find: /^@atolljs\/core\/sdk\//, replacement: sdkRoot },
     ],
   },
   // SharedArrayBuffer requires a cross-origin isolated context

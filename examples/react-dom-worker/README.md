@@ -8,7 +8,7 @@ mutation-phase hook appends a serialized op to a queue; task methods return the
 flushed batch, and the main thread's only job is to replay the ops as real DOM
 mutations.
 
-**The whole pattern lives in `@jwhenry123/mesh-islands`** — this example is
+**The whole pattern lives in `@atolljs/islands`** — this example is
 the consumer: its worker entries are ~20-line `definePolyWorker({ apps })` /
 `defineMonoWorker(app)` calls, its shell calls `connectIslandWorker({ worker })`
 + `mountIsland()`, and its imperative island demos the worker-side proxy DOM
@@ -35,7 +35,7 @@ own root — or `{ imperative: (doc, props) => void }` — apps built on the
 worker-side **proxy DOM** with no React usage (see below). There is **no
 React on the main thread of `index.html`**: `src/island.ts` is a dumb op
 applier plus an event sink per island. (If your shell *is* a React app,
-`@jwhenry123/mesh-react-island` exports `<Island/>` — the same
+`@atolljs/react-island` exports `<Island/>` — the same
 mount/updateProps/destroy lifecycle as a component — see `react-shell.html`.)
 
 **A microfrontend is not limited to one instance.** Instance keys are
@@ -50,7 +50,7 @@ can't be re-enabled even through a cast; everything else (`concurrency`,
 `taskTimeout`, `respawn`, `lazy`…) still passes through.
 
 **Transclusion — main-thread DOM inside a worker tree.** A worker app can
-render `<Slot name="x"/>` (a leaf `<div data-mesh-slot="x">`): the island
+render `<Slot name="x"/>` (a leaf `<div data-atoll-slot="x">`): the island
 owns the element's *box* — its layout, styles, and position in the op
 stream — while the shell owns its *contents*. When the create op lands, the
 driver calls `mountIsland({ slots: { x: (el) => … } })` with the real
@@ -68,7 +68,7 @@ op protocol doesn't care what the shell is made of. `index.html` +
 `src/main.ts` is framework-free: `mountIsland({ el, app, props })` calls
 plus hand-wired `island.updateProps` mediation — its bundle is ~4 kB.
 `react-shell.html` + `src/shell.tsx` is the same seven islands through
-`<Island/>` (`@jwhenry123/mesh-react-island`): each `mountIsland` call
+`<Island/>` (`@atolljs/react-island`): each `mountIsland` call
 becomes a component, badges ride `onReady` → state, and the
 controls→table mediation is literally `onEvent → setState →
 <Island props={…}>` — the component's deduped `updateProps` replaces the
@@ -271,7 +271,7 @@ it, so the shell sees `island.updateProps(props)`):
   route to that instance's queue (multi-instance module state exists for the
   in-process test, where one module instance plays every worker — and is
   also what makes same-app multi-instance testable).
-- **Slots are transclusion holes.** `data-mesh-slot` marks a leaf element:
+- **Slots are transclusion holes.** `data-atoll-slot` marks a leaf element:
   the driver calls `slots[name](el)` when it appears and `slots[name](null)`
   when the worker tree removes it — including when it's inside a subtree cut
   by a single `remove` op (the driver finds nested slots via the DOM

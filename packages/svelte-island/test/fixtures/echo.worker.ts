@@ -11,7 +11,7 @@ import {
   emit,
   islandApp,
   type ProxyDocument,
-} from '@jwhenry123/mesh-islands/worker';
+} from '@atolljs/islands/worker';
 
 export const echoApp = islandApp('echo', {
   imperative: (doc: ProxyDocument, props: Record<string, unknown>): void => {

@@ -1,19 +1,19 @@
 // @vitest-environment happy-dom
 /**
- * Functional test: the example's data layer driving the real mesh — pool,
+ * Functional test: the example's data layer driving the real Atoll — pool,
  * shared buffer, and the actual worker entry handlers — minus the OS thread
  * (InProcessWorker runs the protocol in-process).
  */
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
-import { InProcessWorker } from '@jwhenry123/mesh/sdk/testing/inProcessWorker';
-import type { QueryArgs } from '@jwhenry123/mesh/incidents';
+import { InProcessWorker } from '@atolljs/core/sdk/testing/inProcessWorker';
+import type { QueryArgs } from '@atolljs/core/incidents';
 
 (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
 vi.stubGlobal('Worker', InProcessWorker);
 InProcessWorker.handlerModules = [
-  () => import('@jwhenry123/mesh/incidents/worker/incidents.worker'),
+  () => import('@atolljs/core/incidents/worker/incidents.worker'),
 ];
 
 const QUERY: QueryArgs = {

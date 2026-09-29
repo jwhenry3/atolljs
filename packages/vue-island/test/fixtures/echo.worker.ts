@@ -1,5 +1,5 @@
 /**
- * Minimal island worker entry for the `useIsland`/`<MeshIsland/>` tests —
+ * Minimal island worker entry for the `useIsland`/`<AtollIsland/>` tests —
  * one 1:1 instance worker serving a single imperative app: a div echoing
  * props.text, plus a 'ready' emit on every build so the shell can see the
  * island→shell event channel fire. The app def is `islandApp`-stamped so
@@ -11,7 +11,7 @@ import {
   emit,
   islandApp,
   type ProxyDocument,
-} from '@jwhenry123/mesh-islands/worker';
+} from '@atolljs/islands/worker';
 
 export const echoApp = islandApp('echo', {
   imperative: (doc: ProxyDocument, props: Record<string, unknown>): void => {

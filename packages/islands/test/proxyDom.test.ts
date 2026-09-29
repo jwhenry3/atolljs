@@ -272,7 +272,7 @@ describe('installDomShim', () => {
       expect(globalThis.document).toBe(doc);
       const win = (globalThis as unknown as { window: Record<string, unknown> }).window;
       expect(win.document).toBe(doc);
-      expect((win.navigator as { userAgent: string }).userAgent).toBe('mesh-islands');
+      expect((win.navigator as { userAgent: string }).userAgent).toBe('atoll-islands');
       expect((win.location as { href: string }).href).toBe('about:blank');
       expect(win.innerWidth).toBe(0);
       expect(win.devicePixelRatio).toBe(1);

@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, effect, signal, type WritableSignal } from '@angular/core';
-import { injectMeshPool, sharedValue, taskState } from '@jwhenry123/mesh-angular';
+import { injectAtollPool, sharedValue, taskState } from '@atolljs/angular';
 import {
   fmtDur,
   fmtInt,
@@ -12,7 +12,7 @@ import {
   STATUSES,
   type IncidentsClient,
   type QueryArgs,
-} from '@jwhenry123/mesh-incidents';
+} from '@atolljs/incidents';
 
 const NULL_SEL = '';
 
@@ -31,9 +31,9 @@ export class AppComponent {
   protected readonly fmtDur = fmtDur;
   protected readonly pageSizes = [25, 50, 100, 200];
 
-  // The DI-registered client — the same instance provideMesh registered in
+  // The DI-registered client — the same instance provideAtoll registered in
   // main.ts; its pool spawns lazily on first call.
-  private readonly incidents = injectMeshPool<IncidentsClient>('incidents');
+  private readonly incidents = injectAtollPool<IncidentsClient>('incidents');
 
   // Compose the generic Angular bindings with the incident domain: run init
   // once, stream seedProgress/metrics out of shared memory, and re-run the

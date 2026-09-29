@@ -1,5 +1,5 @@
 {
-  "name": "@jwhenry123/mesh-svelte",
+  "name": "@atolljs/svelte",
   "version": "0.1.0",
   "description": "Svelte 5 bindings — observableValue, sharedValue, taskState",
   "type": "module",
@@ -13,12 +13,12 @@
     "access": "public"
   },
   "peerDependencies": {
-    "@jwhenry123/mesh": "0.1.0",
+    "@atolljs/core": "0.1.0",
     "svelte": "^5.57.1"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/jwhenry3/mesh",
+    "url": "https://github.com/jwhenry3/atolljs",
     "directory": "packages/svelte"
   }
 }

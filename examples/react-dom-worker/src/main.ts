@@ -6,7 +6,7 @@
  * pooling can't go wider). Four run reconciled React trees out of the
  * registry worker ('charts' is real recharts rendering namespaced SVG);
  * 'vue-notes' runs a REAL Vue createRenderer in the worker via the
- * mesh-vue-island adapter; 'vanilla' and 'map' run on dedicated REALM
+ * atoll-vue-island adapter; 'vanilla' and 'map' run on dedicated REALM
  * workers (defineMonoWorker — the 1:1 topology): 'vanilla' is a purely
  * IMPERATIVE app on the worker-side proxy DOM, 'map' a REAL unmodified
  * Leaflet 1.9 on proxy DOM + DOM shim — and neither worker's bundle carries
@@ -23,7 +23,7 @@
  *
  * There is still NO React on this thread — every visible element below the
  * toolbar arrives via op replay. The whole islands pattern lives in
- * @jwhenry123/mesh-islands; this file supplies the worker entrypoint and
+ * @atolljs/islands; this file supplies the worker entrypoint and
  * the mediation glue.
  */
 import {
@@ -31,7 +31,7 @@ import {
   mountIsland,
   type IslandHandle,
   type Mode,
-} from '@jwhenry123/mesh-islands';
+} from '@atolljs/islands';
 // Leaflet's stylesheet is shell-side: the worker fabricates the DOM Leaflet
 // builds (panes, tiles, controls) but CSS was always the shell's job.
 import 'leaflet/dist/leaflet.css';
@@ -50,6 +50,15 @@ const mapWorker = (): Worker =>
 const vueWorker = (): Worker =>
   new Worker(new URL('./worker/vue.worker.ts', import.meta.url), { type: 'module' });
 
+// SharedArrayBuffer only exists in cross-origin-isolated contexts — on
+// hosts without COOP/COEP (GitHub Pages where coi-sw.js didn't take, or a
+// browser without `credentialless`) the doorbell can't bind, so every
+// island runs its 50ms poll transport instead of push.
+const isolated =
+  typeof SharedArrayBuffer !== 'undefined' &&
+  (typeof window.crossOriginIsolated === 'undefined' || window.crossOriginIsolated);
+const initialMode: Mode = isolated ? 'push' : 'poll';
+
 const rootEl = document.getElementById('root');
 if (!rootEl) throw new Error('#root missing from index.html');
 const $ = (id: string): HTMLElement => {
@@ -62,7 +71,7 @@ const $ = (id: string): HTMLElement => {
 
 const state = { filter: '', desc: false };
 const islands: IslandHandle[] = [];
-let mode: Mode = 'push';
+let mode: Mode = initialMode;
 
 const statusEl = $('status-line');
 const setStatus = (msg: string): void => {
@@ -80,16 +89,21 @@ function renderStats(): void {
   pollBtn.style.fontWeight = mode === 'poll' ? '700' : '400';
   const flushes = islands.reduce((a, i) => a + i.flushCalls, 0);
   const ops = islands.reduce((a, i) => a + i.opsApplied, 0);
-  statsEl.textContent = `sync: ${mode} · flush calls: ${flushes} · ops applied: ${ops}`;
+  statsEl.textContent =
+    `sync: ${mode} · flush calls: ${flushes} · ops applied: ${ops}` +
+    (isolated ? '' : ' · no SharedArrayBuffer — poll only');
 }
 
 function setMode(next: Mode): void {
   mode = next;
   // Push mode is already subscribed at mount — this only switches modes.
+  // On a doorbell-free client 'push' falls back to polling — harmless.
   for (const island of islands) island.setMode(next);
   renderStats();
 }
 
+pushBtn.disabled = !isolated;
+pushBtn.title = isolated ? '' : 'needs cross-origin isolation (no SharedArrayBuffer)';
 pushBtn.onclick = () => setMode('push');
 pollBtn.onclick = () => setMode('poll');
 
@@ -133,7 +147,7 @@ async function main(): Promise<void> {
   // Mount order: stats first so the table's initial rowsChanged emit has a
   // listener, then table, then controls (its events only travel outward).
   const stats = await mountIsland({
-    client: connectIslandWorker({ worker: islandWorker }),
+    client: connectIslandWorker({ worker: islandWorker, doorbell: isolated }),
     el: $('island-stats'),
     app: 'stats',
     props: { visible: 2000, total: 2000, spark: 'wave' },
@@ -144,7 +158,7 @@ async function main(): Promise<void> {
   $('badge-stats').textContent = `worker ${stats.pid}`;
 
   const table = await mountIsland({
-    client: connectIslandWorker({ worker: islandWorker }),
+    client: connectIslandWorker({ worker: islandWorker, doorbell: isolated }),
     el: $('island-table'),
     app: 'data-table',
     props: { filter: state.filter, desc: state.desc },
@@ -160,7 +174,7 @@ async function main(): Promise<void> {
   $('badge-table').textContent = `worker ${table.pid}`;
 
   const controls = await mountIsland({
-    client: connectIslandWorker({ worker: islandWorker }),
+    client: connectIslandWorker({ worker: islandWorker, doorbell: isolated }),
     el: $('island-controls'),
     app: 'controls',
     onEvent: (name, payload) => {
@@ -188,7 +202,7 @@ async function main(): Promise<void> {
   // This copy starts filtered to eu-central and isn't wired into stats —
   // its emits still work, they just only reach this island's onEvent sink.
   const table2 = await mountIsland({
-    client: connectIslandWorker({ worker: islandWorker }),
+    client: connectIslandWorker({ worker: islandWorker, doorbell: isolated }),
     el: $('island-table-2'),
     app: 'data-table',
     props: { filter: 'eu-central', desc: true },
@@ -206,7 +220,7 @@ async function main(): Promise<void> {
   // it's build(doc) over the worker-side proxy DOM. Mount, events, and emit
   // all ride the same protocol; the worker just holds no React.
   const vanilla = await mountIsland({
-    client: connectIslandWorker({ worker: vanillaWorker }),
+    client: connectIslandWorker({ worker: vanillaWorker, doorbell: isolated }),
     el: $('island-vanilla'),
     app: 'vanilla',
     props: { title: 'vanilla island — imperative proxy DOM, zero React in this worker' },
@@ -227,6 +241,7 @@ async function main(): Promise<void> {
   // that doesn't share a worker.
   const vue = await mountIsland({
     worker: vueWorker,
+    mode: initialMode,
     el: $('island-vue'),
     app: 'vue-notes',
     props: { title: 'vue-notes — Vue createRenderer on the proxy DOM, zero React in this worker' },
@@ -245,7 +260,7 @@ async function main(): Promise<void> {
   // drag-pan and wheel zoom all work through the op stream; the only thing
   // shell-side is the stylesheet (imported above) and tile <img> loading.
   const map = await mountIsland({
-    client: connectIslandWorker({ worker: mapWorker }),
+    client: connectIslandWorker({ worker: mapWorker, doorbell: isolated }),
     el: $('island-map'),
     app: 'map',
     onEvent: (name, payload) => {
@@ -264,7 +279,7 @@ async function main(): Promise<void> {
   // ResponsiveContainer's container measurement has no channel in the
   // worker (the geometry caveat) — the shell just reads its own layout.
   const charts = await mountIsland({
-    client: connectIslandWorker({ worker: islandWorker }),
+    client: connectIslandWorker({ worker: islandWorker, doorbell: isolated }),
     el: $('island-charts'),
     app: 'charts',
     props: { width: 600, height: 260 },

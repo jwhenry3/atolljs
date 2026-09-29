@@ -1,7 +1,7 @@
 // One task's whole stack: method contract → worker impl. The result shape
 // reuses metricsSchema — it already lives in the memory contract because it
 // is also the `metrics` field's field schema.
-import { scoped, serviceMethod } from '@jwhenry123/mesh/sdk';
+import { scoped, serviceMethod } from '@atolljs/core/sdk';
 import { incidentsMemory, metricsSchema, type Incident, type Metrics } from '../contract/memory.contracts';
 
 const log = scoped('incidents');

@@ -1,11 +1,11 @@
 import { computed, watch, type Ref } from 'vue';
-import { useSharedValue, useTask } from '@jwhenry123/mesh-vue';
+import { useSharedValue, useTask } from '@atolljs/vue';
 import {
   incidents,
   incidentsMemory,
   initIncidents,
   type QueryArgs,
-} from '@jwhenry123/mesh-incidents';
+} from '@atolljs/incidents';
 
 /**
  * Incident data layer: run init once, stream seedProgress/metrics out of

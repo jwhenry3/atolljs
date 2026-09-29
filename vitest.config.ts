@@ -20,34 +20,34 @@ export default mergeConfig(
     resolve: {
       alias: [
         // Tests exercise the package sources directly, not dist builds.
-        { find: /^@jwhenry123\/mesh$/, replacement: r('src/sdk/index.ts') },
-        { find: /^@jwhenry123\/mesh\/sdk$/, replacement: r('src/sdk/index.ts') },
-        { find: /^@jwhenry123\/mesh\/sdk\/(.*)$/, replacement: r('src/sdk') + '/$1' },
-        { find: /^@jwhenry123\/mesh-node$/, replacement: r('packages/node/src/index.ts') },
-        { find: /^@jwhenry123\/mesh-node\/(.*)$/, replacement: r('packages/node/src') + '/$1' },
-        { find: /^@jwhenry123\/mesh-nestjs$/, replacement: r('packages/nestjs/src/index.ts') },
-        { find: /^@jwhenry123\/mesh-nestjs\/(.*)$/, replacement: r('packages/nestjs/src') + '/$1' },
-        { find: /^@jwhenry123\/mesh-incidents$/, replacement: r('packages/incidents/src/index.ts') },
-        { find: /^@jwhenry123\/mesh-incidents\/(.*)$/, replacement: r('packages/incidents/src') + '/$1' },
-        { find: /^@jwhenry123\/mesh-islands$/, replacement: r('packages/islands/src/index.ts') },
-        { find: /^@jwhenry123\/mesh-islands\/(.*)$/, replacement: r('packages/islands/src') + '/$1' },
-        { find: /^@jwhenry123\/mesh-react-island$/, replacement: r('packages/react-island/src/index.tsx') },
+        { find: /^@atolljs\/core$/, replacement: r('src/sdk/index.ts') },
+        { find: /^@atolljs\/core\/sdk$/, replacement: r('src/sdk/index.ts') },
+        { find: /^@atolljs\/core\/sdk\/(.*)$/, replacement: r('src/sdk') + '/$1' },
+        { find: /^@atolljs\/node$/, replacement: r('packages/node/src/index.ts') },
+        { find: /^@atolljs\/node\/(.*)$/, replacement: r('packages/node/src') + '/$1' },
+        { find: /^@atolljs\/nestjs$/, replacement: r('packages/nestjs/src/index.ts') },
+        { find: /^@atolljs\/nestjs\/(.*)$/, replacement: r('packages/nestjs/src') + '/$1' },
+        { find: /^@atolljs\/incidents$/, replacement: r('packages/incidents/src/index.ts') },
+        { find: /^@atolljs\/incidents\/(.*)$/, replacement: r('packages/incidents/src') + '/$1' },
+        { find: /^@atolljs\/islands$/, replacement: r('packages/islands/src/index.ts') },
+        { find: /^@atolljs\/islands\/(.*)$/, replacement: r('packages/islands/src') + '/$1' },
+        { find: /^@atolljs\/react-island$/, replacement: r('packages/react-island/src/index.tsx') },
         // The framework island packages — tests and example worker entries
         // import the published specifiers (incl. the ./worker subpath) and
         // land on sources, same as islands above.
-        { find: /^@jwhenry123\/mesh-vue-island$/, replacement: r('packages/vue-island/src/index.ts') },
-        { find: /^@jwhenry123\/mesh-vue-island\/(.*)$/, replacement: r('packages/vue-island/src') + '/$1' },
-        { find: /^@jwhenry123\/mesh-svelte-island$/, replacement: r('packages/svelte-island/src/index.ts') },
-        { find: /^@jwhenry123\/mesh-svelte-island\/(.*)$/, replacement: r('packages/svelte-island/src') + '/$1' },
-        { find: /^@jwhenry123\/mesh-solid-island$/, replacement: r('packages/solid-island/src/index.ts') },
-        { find: /^@jwhenry123\/mesh-solid-island\/(.*)$/, replacement: r('packages/solid-island/src') + '/$1' },
-        { find: /^@jwhenry123\/mesh-angular-island$/, replacement: r('packages/angular-island/src/index.ts') },
-        { find: /^@jwhenry123\/mesh-angular-island\/(.*)$/, replacement: r('packages/angular-island/src') + '/$1' },
+        { find: /^@atolljs\/vue-island$/, replacement: r('packages/vue-island/src/index.ts') },
+        { find: /^@atolljs\/vue-island\/(.*)$/, replacement: r('packages/vue-island/src') + '/$1' },
+        { find: /^@atolljs\/svelte-island$/, replacement: r('packages/svelte-island/src/index.ts') },
+        { find: /^@atolljs\/svelte-island\/(.*)$/, replacement: r('packages/svelte-island/src') + '/$1' },
+        { find: /^@atolljs\/solid-island$/, replacement: r('packages/solid-island/src/index.ts') },
+        { find: /^@atolljs\/solid-island\/(.*)$/, replacement: r('packages/solid-island/src') + '/$1' },
+        { find: /^@atolljs\/angular-island$/, replacement: r('packages/angular-island/src/index.ts') },
+        { find: /^@atolljs\/angular-island\/(.*)$/, replacement: r('packages/angular-island/src') + '/$1' },
         // The published exports map lacks ./incidents/*; tests reach worker
         // entries directly so worker-entry modules can be imported in-process.
-        { find: /^@jwhenry123\/mesh\/incidents\/(.*)$/, replacement: r('packages/incidents/src') + '/$1' },
+        { find: /^@atolljs\/core\/incidents\/(.*)$/, replacement: r('packages/incidents/src') + '/$1' },
         {
-          find: /^@jwhenry123\/mesh-(react|vue|solidjs|svelte|angular|nextjs)$/,
+          find: /^@atolljs\/(react|vue|solidjs|svelte|angular|nextjs)$/,
           replacement: r('packages') + '/$1/src/index.ts',
         },
         // Tests need the client build — the server build resolved under Node
@@ -94,7 +94,7 @@ export default mergeConfig(
       coverage: {
         provider: 'v8',
         reporter: ['text', 'lcov'],
-        // The publishable surface: core sdk + every mesh-* binding package.
+        // The publishable surface: core sdk + every atoll-* binding package.
         include: ['src/sdk/**', 'packages/*/src/**'],
         exclude: ['**/*.test.*', '**/test/**', '**/testing/**'],
       },

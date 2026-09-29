@@ -1,6 +1,6 @@
-# mesh — package docs
+# Atoll — package docs
 
-Consumer-facing documentation for the `@jwhenry123/mesh` npm package (everything is a subpath: `/sdk`, `/<framework>`): install,
+Consumer-facing documentation for the `@atolljs/core` npm package (everything is a subpath: `/sdk`, `/<framework>`): install,
 quickstart, API reference, per-framework usage, and hosting/headers guidance.
 (The `docs/` site is the developer docs — internals, source walkthroughs, and
 the in-page playground; this one is written for someone importing the packages.)

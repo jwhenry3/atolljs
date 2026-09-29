@@ -7,7 +7,7 @@
  * wheel zoom — all with zero Leaflet code on the main thread.
  */
 import { beforeAll, describe, expect, it, vi } from 'vitest';
-import { InProcessWorker } from '@jwhenry123/mesh/sdk/testing/inProcessWorker';
+import { InProcessWorker } from '@atolljs/core/sdk/testing/inProcessWorker';
 
 const requireFromRoot = async () => {
   const { createRequire } = await import('node:module');
@@ -26,10 +26,10 @@ vi.mock('react/jsx-runtime', async () => {
 vi.stubGlobal('Worker', InProcessWorker);
 InProcessWorker.handlerModules = [() => import('../src/worker/map.worker')];
 
-let connectIslandWorker: typeof import('@jwhenry123/mesh-islands').connectIslandWorker;
-let mountIsland: typeof import('@jwhenry123/mesh-islands').mountIsland;
+let connectIslandWorker: typeof import('@atolljs/islands').connectIslandWorker;
+let mountIsland: typeof import('@atolljs/islands').mountIsland;
 beforeAll(async () => {
-  ({ connectIslandWorker, mountIsland } = await import('@jwhenry123/mesh-islands'));
+  ({ connectIslandWorker, mountIsland } = await import('@atolljs/islands'));
 });
 
 const islandClient = () =>
@@ -75,9 +75,9 @@ describe('leaflet map island', () => {
 
       // Leaflet's own DOM arrived as ops — tiles, pins, controls, attribution.
       expect(el.querySelectorAll('img.leaflet-tile').length).toBeGreaterThan(0);
-      expect(el.querySelectorAll('.mesh-map-pin').length).toBe(3);
+      expect(el.querySelectorAll('.atoll-map-pin').length).toBe(3);
       expect(el.querySelectorAll('.leaflet-control-zoom a').length).toBe(2);
-      expect(el.querySelectorAll('.mesh-map-place-btn').length).toBe(3);
+      expect(el.querySelectorAll('.atoll-map-place-btn').length).toBe(3);
       expect(el.querySelector('.leaflet-control-attribution')?.textContent)
         .toContain('OpenStreetMap');
 
@@ -85,7 +85,7 @@ describe('leaflet map island', () => {
       //    → emit reaches the shell. Clicks go BEFORE any drag: Leaflet
       //    suppresses a click that follows a real drag (_draggableMoved),
       //    which is correct behavior, not a proxy-DOM gap.
-      const pin = el.querySelector('.mesh-map-pin')!;
+      const pin = el.querySelector('.atoll-map-pin')!;
       fire(pin, new MouseEvent('click', { bubbles: true }));
       await vi.waitFor(async () => {
         await island.flush();
@@ -95,7 +95,7 @@ describe('leaflet map island', () => {
         .toMatchObject({ id: 'paris', label: 'Paris' });
 
       // ── custom control (place picker) → setView + emit.
-      fire(el.querySelector('.mesh-map-place-btn')!, new MouseEvent('click', { bubbles: true }));
+      fire(el.querySelector('.atoll-map-place-btn')!, new MouseEvent('click', { bubbles: true }));
       await vi.waitFor(async () => {
         await island.flush();
         expect(emitted.some((e) => e.name === 'placeSelected')).toBe(true);

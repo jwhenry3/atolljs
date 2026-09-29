@@ -13,7 +13,7 @@
  * the harness can't flake on a slow machine.
  */
 import { beforeAll, describe, expect, it, vi } from 'vitest';
-import { InProcessWorker } from '@jwhenry123/mesh/sdk/testing/inProcessWorker';
+import { InProcessWorker } from '@atolljs/core/sdk/testing/inProcessWorker';
 import type { IslandClient } from '../src/index';
 import type { Op } from '../src/ops';
 

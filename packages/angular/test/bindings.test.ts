@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createEnvironmentInjector, runInInjectionContext, type EnvironmentInjector } from '@angular/core';
-import { defineSharedMemory, defineTask, field, observe, WorkerPool } from '@jwhenry123/mesh/sdk';
-import { injectMeshPool, observableSignal, provideMesh, sharedValue, taskState } from '../src/index';
+import { defineSharedMemory, defineTask, field, observe, WorkerPool } from '@atolljs/core/sdk';
+import { injectAtollPool, observableSignal, provideAtoll, sharedValue, taskState } from '../src/index';
 
 const mem = defineSharedMemory({ n: field.number(), label: field.string({ maxBytes: 64 }) });
 mem.bind(new SharedArrayBuffer(mem.totalBytes));
@@ -51,14 +51,14 @@ describe('taskState', () => {
   });
 });
 
-describe('provideMesh / injectMeshPool', () => {
+describe('provideAtoll / injectAtollPool', () => {
   it('registers a supplied pool under its name and terminates on injector destroy', () => {
     const pool = { terminate: vi.fn() } as unknown as WorkerPool;
     const injector = createEnvironmentInjector(
-      [provideMesh({ pools: [{ name: 'x', pool: () => pool }] })],
+      [provideAtoll({ pools: [{ name: 'x', pool: () => pool }] })],
       rootEnv(),
     );
-    const injected = runInInjectionContext(injector, () => injectMeshPool('x'));
+    const injected = runInInjectionContext(injector, () => injectAtollPool('x'));
     expect(injected).toBe(pool);
 
     injector.destroy();
@@ -82,7 +82,7 @@ describe('provideMesh / injectMeshPool', () => {
 
     const injector = createEnvironmentInjector(
       [
-        provideMesh({
+        provideAtoll({
           pools: [
             {
               name: 'inline',
@@ -96,7 +96,7 @@ describe('provideMesh / injectMeshPool', () => {
       rootEnv(),
     );
     try {
-      const pool = runInInjectionContext(injector, () => injectMeshPool('inline'));
+      const pool = runInInjectionContext(injector, () => injectAtollPool('inline'));
       expect(pool).toBeInstanceOf(WorkerPool);
       // ENVIRONMENT_INITIALIZER ran at injector creation — workers spawned
       // eagerly and each got the contract's INIT_MEMORY handshake.
@@ -109,8 +109,8 @@ describe('provideMesh / injectMeshPool', () => {
 
   it('defaults the first pool name to "default"', () => {
     const pool = { terminate: vi.fn() } as unknown as WorkerPool;
-    const injector = createEnvironmentInjector([provideMesh({ pools: [{ pool: () => pool }] })], rootEnv());
-    expect(runInInjectionContext(injector, () => injectMeshPool())).toBe(pool);
+    const injector = createEnvironmentInjector([provideAtoll({ pools: [{ pool: () => pool }] })], rootEnv());
+    expect(runInInjectionContext(injector, () => injectAtollPool())).toBe(pool);
     injector.destroy();
   });
 });

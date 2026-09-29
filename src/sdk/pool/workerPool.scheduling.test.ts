@@ -14,7 +14,7 @@ import {
 import { TaskRegistry } from '../worker/registry';
 import { workerClient } from './workerClient';
 import { defineWorker } from '../worker/defineWorker';
-import { InProcessWorker } from '@jwhenry123/mesh/sdk/testing/inProcessWorker';
+import { InProcessWorker } from '@atolljs/core/sdk/testing/inProcessWorker';
 import type { TaskContract } from '../contract/types';
 
 vi.stubGlobal('Worker', InProcessWorker);

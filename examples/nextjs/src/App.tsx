@@ -16,7 +16,7 @@ import {
   SEVERITIES,
   STATUSES,
   type QueryArgs,
-} from '@jwhenry123/mesh-incidents';
+} from '@atolljs/incidents';
 
 const NULL_SEL = '';
 

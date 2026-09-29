@@ -1,19 +1,19 @@
 // @vitest-environment happy-dom
 /**
- * Functional test: the angular example's AppComponent driving the real mesh
+ * Functional test: the angular example's AppComponent driving the real atoll
  * in-process. Instantiated inside TestBed's injection context so the signal
  * bindings, DestroyRef cleanup, and the component's effect() get real DI.
  */
 import { TestBed } from '@angular/core/testing';
 import { BrowserDynamicTestingModule, platformBrowserDynamicTesting } from '@angular/platform-browser-dynamic/testing';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
-import { provideMesh } from '@jwhenry123/mesh-angular';
-import { incidents } from '@jwhenry123/mesh-incidents';
-import { InProcessWorker } from '@jwhenry123/mesh/sdk/testing/inProcessWorker';
+import { provideAtoll } from '@atolljs/angular';
+import { incidents } from '@atolljs/incidents';
+import { InProcessWorker } from '@atolljs/core/sdk/testing/inProcessWorker';
 
 vi.stubGlobal('Worker', InProcessWorker);
 InProcessWorker.handlerModules = [
-  () => import('@jwhenry123/mesh/incidents/worker/incidents.worker'),
+  () => import('@atolljs/core/incidents/worker/incidents.worker'),
 ];
 
 let AppComponent: typeof import('../src/app.component').AppComponent;
@@ -26,7 +26,7 @@ describe('AppComponent (angular example)', () => {
     TestBed.initTestEnvironment(BrowserDynamicTestingModule, platformBrowserDynamicTesting());
     // Mirror main.ts: the domain-owned worker client under DI.
     TestBed.configureTestingModule({
-      providers: [provideMesh({ pools: [{ name: 'incidents', client: incidents }] })],
+      providers: [provideAtoll({ pools: [{ name: 'incidents', client: incidents }] })],
     });
     const comp = TestBed.runInInjectionContext(() => new AppComponent());
     const c = comp as unknown as {

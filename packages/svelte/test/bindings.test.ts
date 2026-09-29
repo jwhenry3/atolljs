@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { defineSharedMemory, defineTask, field, observe } from '@jwhenry123/mesh/sdk';
+import { defineSharedMemory, defineTask, field, observe } from '@atolljs/core/sdk';
 import { observableValue, sharedValue, taskState } from '../src/reactivity.svelte';
 import { inRoot } from './root.svelte';
 

@@ -10,7 +10,7 @@ import {
   STATUSES,
   STATUS_CLASSES,
   type IncidentRow,
-} from '@jwhenry123/mesh-incidents';
+} from '@atolljs/incidents';
 
 export const incidentColumns: ColumnDef<IncidentRow>[] = [
   { accessorKey: 'id', header: 'ID', size: 70 },

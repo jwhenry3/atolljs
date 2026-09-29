@@ -1,5 +1,5 @@
-import { observe, toTask } from '@jwhenry123/mesh/sdk';
-import type { AsyncTask, ObservableValue, PathConnector, SharedMemory, SharedSpec, SpecPath, SliceOptions } from '@jwhenry123/mesh/sdk';
+import { observe, toTask } from '@atolljs/core/sdk';
+import type { AsyncTask, ObservableValue, PathConnector, SharedMemory, SharedSpec, SpecPath, SliceOptions } from '@atolljs/core/sdk';
 
 /**
  * Wrap any sdk ObservableValue in rune-backed state. Call during component

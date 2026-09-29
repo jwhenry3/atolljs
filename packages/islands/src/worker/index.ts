@@ -1,8 +1,8 @@
 /**
- * The worker-side surface of @jwhenry123/mesh-islands — import from
- * '@jwhenry123/mesh-islands/worker' inside the worker entry:
+ * The worker-side surface of @atolljs/islands — import from
+ * '@atolljs/islands/worker' inside the worker entry:
  *
- *   import { definePolyWorker } from '@jwhenry123/mesh-islands/worker';
+ *   import { definePolyWorker } from '@atolljs/islands/worker';
  *   export const renderWorker = definePolyWorker({ apps: { ... } });
  *
  * Apps (React or `{ imperative }`) also use from here: `emit` (island→shell

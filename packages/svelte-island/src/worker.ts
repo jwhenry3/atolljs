@@ -1,5 +1,5 @@
 /**
- * `@jwhenry123/mesh-svelte-island/worker` — the Svelte 5 worker renderer.
+ * `@atolljs/svelte-island/worker` — the Svelte 5 worker renderer.
  *
  * `svelteIslandApp(Component)` wraps a compiled `.svelte` component into a
  * `RenderedIslandApp` that `definePolyWorker`/`defineMonoWorker` mount
@@ -16,7 +16,7 @@
  * ```
  *
  * COMPAT — most of the DOM surface Svelte's client runtime touches now
- * lives in the proxy DOM itself (`@jwhenry123/mesh-islands` upstream):
+ * lives in the proxy DOM itself (`@atolljs/islands` upstream):
  * `ProxyComment` + `document.createComment` (nodeType 8 over a real EMPTY
  * text node driver-side, so `<!>` block anchors keep a `before:`-able
  * position while `data` writes stay shadow-only), the comment-preserving
@@ -71,7 +71,7 @@ import {
   definePolyWorker,
   islandApp,
   ProxyElement,
-} from '@jwhenry123/mesh-islands/worker';
+} from '@atolljs/islands/worker';
 import type {
   DoorbellSpec,
   InternalDocument,
@@ -81,8 +81,8 @@ import type {
   RenderContext,
   RenderedHandle,
   RenderedIslandApp,
-} from '@jwhenry123/mesh-islands/worker';
-import type { SharedMemory, WorkerDefinition } from '@jwhenry123/mesh/sdk';
+} from '@atolljs/islands/worker';
+import type { SharedMemory, WorkerDefinition } from '@atolljs/core/sdk';
 import { createPropsBox } from './props.svelte';
 
 /** A compiled Svelte 5 component — what `mount()` accepts. */
@@ -90,8 +90,8 @@ export type SvelteIslandComponent<P extends Record<string, unknown> = Record<str
   Component<P>;
 
 // Island components emit over the island→shell channel often enough to
-// re-export — `import { emit } from '@jwhenry123/mesh-svelte-island/worker'`.
-export { emit, runInInstance } from '@jwhenry123/mesh-islands/worker';
+// re-export — `import { emit } from '@atolljs/svelte-island/worker'`.
+export { emit, runInInstance } from '@atolljs/islands/worker';
 
 /* ── Listener wrapping ──────────────────────────────────────────────────── */
 

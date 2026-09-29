@@ -6,7 +6,7 @@
  */
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { createRoot, createSignal } from 'solid-js';
-import { InProcessWorker } from '@jwhenry123/mesh/sdk/testing/inProcessWorker';
+import { InProcessWorker } from '@atolljs/core/sdk/testing/inProcessWorker';
 import type { CreateIslandResult } from '../src/index';
 import { echoApp } from './fixtures/echo.worker';
 
@@ -92,7 +92,7 @@ describe('createIsland', () => {
   });
 
   it('a shared client mounts two mounts into one worker — teardown is ref-counted', async () => {
-    const { connectIslandWorker } = await import('@jwhenry123/mesh-islands');
+    const { connectIslandWorker } = await import('@atolljs/islands');
     const client = connectIslandWorker({ worker: renderWorker });
     const before = InProcessWorker.created.length;
 

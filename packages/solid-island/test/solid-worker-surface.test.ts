@@ -7,11 +7,11 @@
  * real op protocol via the registry worker in `surface.worker.ts`.
  */
 import { beforeAll, describe, expect, it, vi } from 'vitest';
-import { InProcessWorker } from '@jwhenry123/mesh/sdk/testing/inProcessWorker';
+import { InProcessWorker } from '@atolljs/core/sdk/testing/inProcessWorker';
 import {
   connectIslandWorker,
   mountIsland,
-} from '@jwhenry123/mesh-islands';
+} from '@atolljs/islands';
 
 vi.stubGlobal('Worker', InProcessWorker);
 InProcessWorker.handlerModules = [() => import('./fixtures/surface.worker')];

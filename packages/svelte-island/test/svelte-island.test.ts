@@ -6,7 +6,7 @@
  * the worker entry's defineMonoWorker in this module graph).
  */
 import { beforeAll, describe, expect, it, vi } from 'vitest';
-import { InProcessWorker } from '@jwhenry123/mesh/sdk/testing/inProcessWorker';
+import { InProcessWorker } from '@atolljs/core/sdk/testing/inProcessWorker';
 import type { IslandHandle } from '../src/index';
 import { echoApp } from './fixtures/echo.worker';
 
@@ -17,7 +17,7 @@ InProcessWorker.handlerModules = [() => import('./fixtures/echo.worker')];
 
 let island: typeof import('../src/index').island;
 let createIslandState: typeof import('../src/index').createIslandState;
-let connectIslandWorker: typeof import('@jwhenry123/mesh-islands').connectIslandWorker;
+let connectIslandWorker: typeof import('@atolljs/islands').connectIslandWorker;
 // In-process artifact: a mounted imperative instance can point the ambient
 // `document` at its PROXY document (shared globalThis) — capture the real
 // one before any mounts. Real browsers never share globals across threads.
@@ -25,7 +25,7 @@ let realDoc: Document;
 beforeAll(async () => {
   realDoc = document;
   ({ island, createIslandState } = await import('../src/index'));
-  ({ connectIslandWorker } = await import('@jwhenry123/mesh-islands'));
+  ({ connectIslandWorker } = await import('@atolljs/islands'));
 });
 
 const renderWorker = () =>

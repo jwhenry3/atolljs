@@ -1,6 +1,6 @@
-# @jwhenry123/mesh-svelte-island
+# @atolljs/svelte-island
 
-The Svelte shell surface for `@jwhenry123/mesh-islands` — mount a
+The Svelte shell surface for `@atolljs/islands` — mount a
 worker-hosted tree as an ordinary element in a main-thread Svelte app —
 plus the Svelte 5 **worker renderer**: `svelteIslandApp` runs a compiled
 component with the real `mount()`/`unmount()` against the instance's proxy
@@ -8,14 +8,14 @@ document, so every DOM call the Svelte runtime makes serializes to the op
 stream the shell replays as real DOM.
 
 ```bash
-npm install @jwhenry123/mesh @jwhenry123/mesh-islands @jwhenry123/mesh-svelte-island svelte
+npm install @atolljs/core @atolljs/islands @atolljs/svelte-island svelte
 ```
 
 ## The `island` action / `createIslandState`
 
 ```svelte
 <script lang="ts">
-  import { island } from '@jwhenry123/mesh-svelte-island';
+  import { island } from '@atolljs/svelte-island';
   let width = $state(640);
 </script>
 
@@ -38,7 +38,7 @@ unchanged.
 ```ts
 // counter.worker.ts — the whole worker entry
 import Counter from './Counter.svelte';
-import { defineSveltePolyWorker, emit } from '@jwhenry123/mesh-svelte-island/worker';
+import { defineSveltePolyWorker, emit } from '@atolljs/svelte-island/worker';
 
 export const worker = defineSveltePolyWorker({ apps: { counter: Counter } });
 // or a 1:1 instance worker: defineSvelteMonoWorker(Counter)
@@ -47,7 +47,7 @@ export const worker = defineSveltePolyWorker({ apps: { counter: Counter } });
 ```svelte
 <!-- Counter.svelte — a completely ordinary component -->
 <script lang="ts">
-  import { emit } from '@jwhenry123/mesh-svelte-island/worker';
+  import { emit } from '@atolljs/svelte-island/worker';
   let { label = 'count' } = $props();
   let count = $state(0);
 </script>

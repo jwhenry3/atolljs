@@ -4,6 +4,26 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Worker Islands — DOM ops over postMessage</title>
+    <script>
+      // GitHub Pages can't send COOP/COEP headers — coi-sw.js injects them
+      // via a service worker so SharedArrayBuffer exists there (push-mode
+      // doorbell). First visit reloads once so the document becomes
+      // controlled; if isolation never arrives the islands run in poll mode.
+      (function () {
+        var flag = 'coi-reload:' + location.pathname;
+        if (window.crossOriginIsolated) { sessionStorage.removeItem(flag); return; }
+        if (!('serviceWorker' in navigator)) return;
+        navigator.serviceWorker
+          .register('coi-sw.js')
+          .then(function () { return navigator.serviceWorker.ready; })
+          .then(function () {
+            if (sessionStorage.getItem(flag)) return;
+            sessionStorage.setItem(flag, '1');
+            location.reload();
+          })
+          .catch(function () {});
+      })();
+    </script>
     <!--
       Minimal styling: the point of this page is that each .island-root is
       populated entirely by ops applied in src/island.ts — there is no
@@ -60,21 +80,21 @@
          applied shell-side to op-created DOM */
       #island-map { padding: 0; }
       #island-map .leaflet-container { height: 420px; }
-      .mesh-map-pin { display: flex; align-items: center; gap: 4px; }
-      .mesh-map-pin-dot {
+      .atoll-map-pin { display: flex; align-items: center; gap: 4px; }
+      .atoll-map-pin-dot {
         width: 10px; height: 10px; border-radius: 50%;
         background: #e5484d; border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,.5);
       }
-      .mesh-map-pin-label {
+      .atoll-map-pin-label {
         font: 11px/1 monospace; color: #e6edf3; background: rgba(16,20,24,.85);
         padding: 2px 5px; border-radius: 3px; white-space: nowrap;
       }
-      .mesh-map-places { display: flex; gap: 4px; }
-      .mesh-map-place-btn {
+      .atoll-map-places { display: flex; gap: 4px; }
+      .atoll-map-place-btn {
         padding: 3px 8px; font: 11px monospace; background: #22354f; color: #e6edf3;
         border: 0; border-radius: 4px; cursor: pointer;
       }
-      .mesh-map-place-btn:hover { background: #2d4365; }
+      .atoll-map-place-btn:hover { background: #2d4365; }
     </style>
   </head>
   <body>
@@ -88,7 +108,7 @@
       </div>
       <div id="status-line">mounting islands…</div>
       <div style="font: 12px monospace; color: #9aa4b2; margin-bottom: 12px">
-        <a href="/react-shell.html" style="color: #7fb6ff">same page with a React shell (&lt;Island/&gt;) →</a>
+        <a href="./react-shell.html" style="color: #7fb6ff">same page with a React shell (&lt;Island/&gt;) →</a>
       </div>
 
       <section class="island">

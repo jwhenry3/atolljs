@@ -9,7 +9,7 @@
  * vite config adds @vitejs/plugin-vue.
  */
 import { defineComponent, h, ref } from 'vue';
-import { defineVuePolyWorker, emit } from '@jwhenry123/mesh-vue-island/worker';
+import { defineVuePolyWorker, emit } from '@atolljs/vue-island/worker';
 
 /**
  * 'vue-notes' — a tiny notes composer: input + add button + list. State
@@ -32,7 +32,7 @@ const Notes = defineComponent({
     return () =>
       h('div', { class: 'vue-notes' }, [
         h('h3', { class: 'vanilla-heading' }, props.title),
-        h('div', { class: 'mesh-map-places' }, [
+        h('div', { class: 'atoll-map-places' }, [
           h('input', {
             placeholder: 'write a note…',
             value: draft.value,
@@ -46,7 +46,7 @@ const Notes = defineComponent({
               if (e.key === 'Enter') add();
             },
           }),
-          h('button', { class: 'mesh-map-place-btn', onClick: add }, 'add'),
+          h('button', { class: 'atoll-map-place-btn', onClick: add }, 'add'),
         ]),
         h(
           'ul',

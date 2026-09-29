@@ -5,7 +5,7 @@
  * worker chunk still carries the reconciler, which the imperative path
  * never instantiates).
  */
-import { defineMonoWorker } from '@jwhenry123/mesh-islands/worker';
+import { defineMonoWorker } from '@atolljs/islands/worker';
 import { vanillaApp } from './vanilla';
 
 export const vanillaWorker = defineMonoWorker(vanillaApp);

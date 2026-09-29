@@ -1,7 +1,7 @@
 /**
  * The React shell — the same seven-island page as index.html, but the shell
  * itself is a React app mounting islands through `<Island/>`
- * (@jwhenry123/mesh-react-island).
+ * (@atolljs/react-island).
  *
  * What changes versus main.ts:
  *   - Every island mounts through a `lazyIsland` proxy — the worker app
@@ -19,9 +19,9 @@
 import { useEffect, useMemo, useRef, useState, Suspense } from 'react';
 import type { ReactElement, ReactNode, RefObject } from 'react';
 import { createRoot } from 'react-dom/client';
-import { lazyIsland } from '@jwhenry123/mesh-react-island';
-import { connectIslandWorker } from '@jwhenry123/mesh-islands';
-import type { IslandHandle, Mode } from '@jwhenry123/mesh-islands';
+import { lazyIsland } from '@atolljs/react-island';
+import { connectIslandWorker } from '@atolljs/islands';
+import type { IslandHandle, Mode } from '@atolljs/islands';
 // Leaflet's stylesheet is shell-side: the worker fabricates the DOM Leaflet
 // builds but CSS was always the shell's job.
 import 'leaflet/dist/leaflet.css';
@@ -61,6 +61,15 @@ const VanillaIsland = lazyIsland(() =>
 const MapIsland = lazyIsland(() =>
   import('./worker/map').then((m) => ({ default: m.mapApp })),
 );
+
+// SharedArrayBuffer only exists in cross-origin-isolated contexts — on
+// hosts without COOP/COEP (GitHub Pages where coi-sw.js didn't take, or a
+// browser without `credentialless`) the doorbell can't bind, so every
+// island runs its 50ms poll transport instead of push.
+const isolated =
+  typeof SharedArrayBuffer !== 'undefined' &&
+  (typeof window.crossOriginIsolated === 'undefined' || window.crossOriginIsolated);
+const initialMode: Mode = isolated ? 'push' : 'poll';
 
 const loading = (
   <div className="island-root" style={{ color: '#7d8a9c' }}>
@@ -138,7 +147,7 @@ export function Shell({ worker = renderWorker }: { worker?: () => Worker }): Rea
   const [desc, setDesc] = useState(false);
   const [visible, setVisible] = useState(2000);
   const [status, setStatus] = useState('mounting islands…');
-  const [mode, setModeState] = useState<Mode>('push');
+  const [mode, setModeState] = useState<Mode>(initialMode);
   const [pids, setPids] = useState<Record<string, string>>({});
   const [statsTick, setStatsTick] = useState(0);
 
@@ -151,7 +160,10 @@ export function Shell({ worker = renderWorker }: { worker?: () => Worker }): Rea
   // islands mount their mounts into it ('data-table@N' keys — separate
   // reconcilers, op queues, and pids in ONE OS thread). The complex-
   // architecture counterpoint to the instance workers map/vanilla run on.
-  const tableClient = useMemo(() => connectIslandWorker({ worker }), [worker]);
+  const tableClient = useMemo(
+    () => connectIslandWorker({ worker, doorbell: isolated }),
+    [worker],
+  );
 
   const ready = (key: string) => (h: IslandHandle): void => {
     handles.current.set(key, h);
@@ -177,13 +189,15 @@ export function Shell({ worker = renderWorker }: { worker?: () => Worker }): Rea
       <p style={{ font: '12px monospace', color: '#9aa4b2', marginTop: -8 }}>
         registry worker + instance workers + one shared client — the shell is React +{' '}
         <code>{'<Island/>'}</code>.{' '}
-        <a href="/" style={{ color: '#7fb6ff' }}>framework-free shell →</a>
+        <a href="./index.html" style={{ color: '#7fb6ff' }}>framework-free shell →</a>
       </p>
       <div id="transport-bar">
         <span>transport:</span>
         <button
           id="push-btn"
           style={{ fontWeight: mode === 'push' ? 700 : 400 }}
+          disabled={!isolated}
+          title={isolated ? undefined : 'needs cross-origin isolation (no SharedArrayBuffer)'}
           onClick={() => setModeState('push')}
         >
           push (SAB doorbell)
@@ -205,6 +219,7 @@ export function Shell({ worker = renderWorker }: { worker?: () => Worker }): Rea
         <Suspense fallback={loading}>
           <ControlsIsland
             worker={renderWorker}
+            mode={initialMode}
             containerProps={{ className: 'island-root' }}
             onReady={ready('controls')}
             onActivity={bump}
@@ -270,6 +285,7 @@ export function Shell({ worker = renderWorker }: { worker?: () => Worker }): Rea
         <Suspense fallback={loading}>
           <StatsIsland
             worker={renderWorker}
+            mode={initialMode}
             visible={visible}
             total={2000}
             spark="wave"
@@ -288,6 +304,7 @@ export function Shell({ worker = renderWorker }: { worker?: () => Worker }): Rea
         <Suspense fallback={loading}>
           <VanillaIsland
             worker={vanillaWorker}
+            mode={initialMode}
             title="vanilla island — imperative proxy DOM, zero React in this worker"
             containerProps={{ className: 'island-root' }}
             onReady={ready('vanilla')}
@@ -310,6 +327,7 @@ export function Shell({ worker = renderWorker }: { worker?: () => Worker }): Rea
         >
           <ChartsIsland
             worker={renderWorker}
+            mode={initialMode}
             // Inline props — the same contract as the worker component.
             width={600}
             height={260}
@@ -335,6 +353,7 @@ export function Shell({ worker = renderWorker }: { worker?: () => Worker }): Rea
         <Suspense fallback={loading}>
           <MapIsland
             worker={mapWorker}
+            mode={initialMode}
             containerProps={{ className: 'island-root', id: 'island-map' }}
             onReady={ready('map')}
             onActivity={bump}

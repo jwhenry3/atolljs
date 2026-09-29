@@ -10,28 +10,28 @@ const islandsRoot = fileURLToPath(new URL('../../packages/islands/src/', import.
 const vueIslandRoot = fileURLToPath(new URL('../../packages/vue-island/src/', import.meta.url)).replace(/\\/g, '/');
 
 export default defineConfig(({ command }) => ({
-  // Built output is mounted at /react-dom-worker/ under the unified dist root; dev serves /.
-  base: command === 'build' ? '/react-dom-worker/' : '/',
+  // Relative base — the built output works at any mount depth (serve-all /<name>/, Pages /consumer/<name>/); dev serves /.
+  base: command === 'build' ? './' : '/',
   resolve: {
     // react-reconciler resolves `react` through its peer dep — without dedupe
     // the worker could bundle two React copies and hooks would read a null
     // dispatcher. Force a single copy for the whole example.
     dedupe: ['react'],
     alias: [
-      { find: /^@jwhenry123\/mesh$/, replacement: `${sdkRoot}index.ts` },
-      { find: /^@jwhenry123\/mesh\/sdk$/, replacement: `${sdkRoot}index.ts` },
-      { find: /^@jwhenry123\/mesh\/sdk\//, replacement: sdkRoot },
-      { find: /^@jwhenry123\/mesh-islands$/, replacement: `${islandsRoot}index.ts` },
-      { find: /^@jwhenry123\/mesh-islands\/worker$/, replacement: `${islandsRoot}worker/index.ts` },
+      { find: /^@atolljs\/core$/, replacement: `${sdkRoot}index.ts` },
+      { find: /^@atolljs\/core\/sdk$/, replacement: `${sdkRoot}index.ts` },
+      { find: /^@atolljs\/core\/sdk\//, replacement: sdkRoot },
+      { find: /^@atolljs\/islands$/, replacement: `${islandsRoot}index.ts` },
+      { find: /^@atolljs\/islands\/worker$/, replacement: `${islandsRoot}worker/index.ts` },
       {
-        find: /^@jwhenry123\/mesh-react-island$/,
+        find: /^@atolljs\/react-island$/,
         replacement: `${fileURLToPath(new URL('../../packages/react-island/src/', import.meta.url)).replace(/\\/g, '/')}index.tsx`,
       },
       // The vue island's worker entry — aliases resolve the package to its
       // sources like islands above. `vue` itself comes from the root
       // install (the file: dep), one copy shared with nothing else here.
-      { find: /^@jwhenry123\/mesh-vue-island$/, replacement: `${vueIslandRoot}index.ts` },
-      { find: /^@jwhenry123\/mesh-vue-island\/worker$/, replacement: `${vueIslandRoot}worker.ts` },
+      { find: /^@atolljs\/vue-island$/, replacement: `${vueIslandRoot}index.ts` },
+      { find: /^@atolljs\/vue-island\/worker$/, replacement: `${vueIslandRoot}worker.ts` },
     ],
   },
   // Two entry pages: index.html is the framework-free shell (src/main.ts),

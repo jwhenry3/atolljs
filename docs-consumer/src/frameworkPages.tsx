@@ -5,6 +5,7 @@
  * React gets the worker-islands page; other frameworks opt in the same way.
  */
 import type { ReactNode } from 'react';
+import { FrameworkIslands } from './pages/FrameworkIslands';
 import { ReactWorkerIslands } from './pages/ReactWorkerIslands';
 
 export interface FrameworkSubPage {
@@ -19,6 +20,34 @@ export const FRAMEWORK_PAGES: Record<string, FrameworkSubPage[]> = {
       id: 'worker-islands',
       label: 'Worker islands',
       page: () => <ReactWorkerIslands />,
+    },
+  ],
+  vue: [
+    {
+      id: 'worker-islands',
+      label: 'Worker islands',
+      page: () => <FrameworkIslands id="vue" />,
+    },
+  ],
+  svelte: [
+    {
+      id: 'worker-islands',
+      label: 'Worker islands',
+      page: () => <FrameworkIslands id="svelte" />,
+    },
+  ],
+  solid: [
+    {
+      id: 'worker-islands',
+      label: 'Worker islands',
+      page: () => <FrameworkIslands id="solid" />,
+    },
+  ],
+  angular: [
+    {
+      id: 'worker-islands',
+      label: 'Worker islands',
+      page: () => <FrameworkIslands id="angular" />,
     },
   ],
 };

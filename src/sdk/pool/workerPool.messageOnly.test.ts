@@ -7,7 +7,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { WorkerPool } from './workerPool';
 import { TaskRegistry } from '../worker/registry';
-import { InProcessWorker } from '@jwhenry123/mesh/sdk/testing/inProcessWorker';
+import { InProcessWorker } from '@atolljs/core/sdk/testing/inProcessWorker';
 
 vi.stubGlobal('Worker', InProcessWorker);
 vi.stubGlobal('crossOriginIsolated', false);
@@ -26,7 +26,7 @@ describe('workerPool — message-only (no sharedMemory)', () => {
     expect((p as { sharedMemory?: unknown }).sharedMemory).toBeUndefined();
     expect(InProcessWorker.created).toHaveLength(1);
     expect(sent).toHaveBeenCalledWith({ type: 'INIT' });
-    await expect(p.runTask({ taskId: 'greet' }, 'mesh')).resolves.toBe('hi mesh');
+    await expect(p.runTask({ taskId: 'greet' }, 'atoll')).resolves.toBe('hi atoll');
     p.terminate();
   });
 });

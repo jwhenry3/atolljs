@@ -1,6 +1,6 @@
 /**
- * `@jwhenry123/mesh-angular-island/worker` — the Angular instance renderer for
- * `@jwhenry123/mesh-islands` islands: renders a standalone Angular
+ * `@atolljs/angular-island/worker` — the Angular instance renderer for
+ * `@atolljs/islands` islands: renders a standalone Angular
  * component into the instance's proxy document, whose mutations serialize to
  * ops the main thread replays as real DOM.
  *
@@ -8,11 +8,11 @@
  * // counter.worker.ts
  * import '@angular/compiler'; // JIT facade — decorator components compile lazily
  * import { Component, input, signal } from '@angular/core';
- * import { defineMonoWorker, emit } from '@jwhenry123/mesh-islands/worker';
- * import { angularIslandApp } from '@jwhenry123/mesh-angular-island/worker';
+ * import { defineMonoWorker, emit } from '@atolljs/islands/worker';
+ * import { angularIslandApp } from '@atolljs/angular-island/worker';
  *
  * @Component({
- *   selector: 'mesh-counter',
+ *   selector: 'atoll-counter',
  *   template: `<button (click)="inc()">{{ label() }}: {{ count() }}</button>`,
  * })
  * class CounterComponent {
@@ -110,12 +110,12 @@ import {
   islandApp,
   pushOp,
   runInInstance,
-} from '@jwhenry123/mesh-islands/worker';
-import type { SharedMemory, WorkerDefinition } from '@jwhenry123/mesh/sdk';
+} from '@atolljs/islands/worker';
+import type { SharedMemory, WorkerDefinition } from '@atolljs/core/sdk';
 
 // Worker entries shouldn't need a second package specifier for the
-// island→shell channel — `import { emit } from 'mesh-angular-island/worker'`.
-export { emit, runInInstance } from '@jwhenry123/mesh-islands/worker';
+// island→shell channel — `import { emit } from 'atoll-angular-island/worker'`.
+export { emit, runInInstance } from '@atolljs/islands/worker';
 import type {
   DoorbellSpec,
   IslandWorkerMethods,
@@ -127,7 +127,7 @@ import type {
   RenderContext,
   RenderedHandle,
   RenderedIslandApp,
-} from '@jwhenry123/mesh-islands/worker';
+} from '@atolljs/islands/worker';
 
 /**
  * Angular namespace tokens → URIs — the same table platform-browser's
@@ -216,7 +216,7 @@ class IslandRenderer extends Renderer2 {
       const el = this.doc.querySelector(selectorOrNode);
       if (el === null) {
         throw new Error(
-          `[mesh-angular-island] host selector "${selectorOrNode}" matched nothing in the island document`,
+          `[atoll-angular-island] host selector "${selectorOrNode}" matched nothing in the island document`,
         );
       }
       return el;
@@ -613,7 +613,7 @@ export interface AngularIslandAppOptions {
  *
  * mount semantics:
  * - The component's template renders inside a host element carrying the
- *   component's selector tag (`<mesh-counter>`), itself appended to the
+ *   component's selector tag (`<atoll-counter>`), itself appended to the
  *   island root — the structure a browser bootstrap produces.
  * - `update(props)` calls `componentRef.setInput(name, value)` for each key
  *   matching a declared input — AOT `@Input` names AND JIT `input()`/
@@ -639,13 +639,13 @@ export function angularIslandApp(
         componentDef = getComponentDef(component);
       } catch (err) {
         throw new Error(
-          `[mesh-angular-island] ${component.name} needs the JIT compiler — ` +
+          `[atoll-angular-island] ${component.name} needs the JIT compiler — ` +
             `add \`import '@angular/compiler';\` to the worker entry ` +
             `(${err instanceof Error ? err.message.split('\n')[0] : String(err)})`,
         );
       }
       if (componentDef === null) {
-        throw new Error(`[mesh-angular-island] ${component.name} is not an Angular component`);
+        throw new Error(`[atoll-angular-island] ${component.name} is not an Angular component`);
       }
 
       let componentRef: ComponentRef<unknown> | null = null;
@@ -719,7 +719,7 @@ export function angularIslandApp(
           // without this token they're silently swallowed.
           {
             provide: INTERNAL_APPLICATION_ERROR_HANDLER,
-            useValue: (err: unknown) => console.error('[mesh-angular-island]', err),
+            useValue: (err: unknown) => console.error('[atoll-angular-island]', err),
           },
           ...(options?.providers ?? []),
         ],
@@ -736,7 +736,7 @@ export function angularIslandApp(
       void (globalThis as { window?: unknown }).window;
 
       // The component's own selector tag is its host element — what a real
-      // bootstrap produces (`<mesh-counter>` inside the island container).
+      // bootstrap produces (`<atoll-counter>` inside the island container).
       const host = ctx.doc.createElement(inferTagNameFromDefinition(componentDef));
       ctx.doc.body.appendChild(host);
       // JIT signal-member interop — wraps this def's factory and every
@@ -788,7 +788,7 @@ export function angularIslandApp(
           if (!warned.has(name)) {
             warned.add(name);
             console.warn(
-              `[mesh-angular-island] prop "${name}" is not a declared input of ${component.name} — dropped`,
+              `[atoll-angular-island] prop "${name}" is not a declared input of ${component.name} — dropped`,
             );
           }
         }

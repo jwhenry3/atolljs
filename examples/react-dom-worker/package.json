@@ -9,9 +9,9 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@jwhenry123/mesh-islands": "file:../../packages/islands",
-    "@jwhenry123/mesh-react-island": "file:../../packages/react-island",
-    "@jwhenry123/mesh-vue-island": "file:../../packages/vue-island",
+    "@atolljs/islands": "file:../../packages/islands",
+    "@atolljs/react-island": "file:../../packages/react-island",
+    "@atolljs/vue-island": "file:../../packages/vue-island",
     "vue": "file:../../node_modules/vue",
     "leaflet": "^1.9.4",
     "react": "file:../../node_modules/react",

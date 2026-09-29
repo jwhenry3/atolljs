@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 /**
- * `<mesh-island>` / `[meshIsland]` — mounts an island worker declaratively
+ * `<atoll-island>` / `[atollIsland]` — mounts an island worker declaratively
  * from an Angular shell. In-process E2E like the React island test: real
  * registry + op protocol, the only fake being the thread boundary
  * (InProcessWorker runs the real worker entry in the test's module graph).
@@ -17,10 +17,10 @@ import {
   BrowserDynamicTestingModule,
   platformBrowserDynamicTesting,
 } from '@angular/platform-browser-dynamic/testing';
-import { connectIslandWorker } from '@jwhenry123/mesh-islands';
-import type { IslandClient, IslandHandle } from '@jwhenry123/mesh-islands';
-import { InProcessWorker } from '@jwhenry123/mesh/sdk/testing/inProcessWorker';
-import { MeshIslandComponent, MeshIslandDirective } from '../src/index';
+import { connectIslandWorker } from '@atolljs/islands';
+import type { IslandClient, IslandHandle } from '@atolljs/islands';
+import { InProcessWorker } from '@atolljs/core/sdk/testing/inProcessWorker';
+import { AtollIslandComponent, AtollIslandDirective } from '../src/index';
 
 vi.stubGlobal('Worker', InProcessWorker);
 // In-process workers share one module graph — importing the worker entry
@@ -38,13 +38,13 @@ afterEach(() => {
   TestBed.resetTestingModule();
 });
 
-describe('MeshIslandComponent', () => {
+describe('AtollIslandComponent', () => {
   it('mounts, relays events, re-props on input change, destroys cleanly', async () => {
     const emitted: Array<{ name: string; payload: unknown }> = [];
     let handle: IslandHandle | undefined;
     const client: IslandClient = connectIslandWorker({ worker: renderWorker });
 
-    const fixture = TestBed.createComponent(MeshIslandComponent);
+    const fixture = TestBed.createComponent(AtollIslandComponent);
     fixture.componentRef.setInput('client', client);
     fixture.componentRef.setInput('app', 'echo');
     fixture.componentRef.setInput('props', { text: 'hello island' });
@@ -56,7 +56,7 @@ describe('MeshIslandComponent', () => {
     });
     fixture.detectChanges(); // ngOnInit → async mount
 
-    // The island owns the <mesh-island> host element's contents.
+    // The island owns the <atoll-island> host element's contents.
     const host = fixture.nativeElement as HTMLElement;
     await vi.waitFor(() =>
       expect(host.querySelector('.echo')?.textContent).toBe('hello island'),
@@ -92,13 +92,13 @@ describe('MeshIslandComponent', () => {
   });
 });
 
-describe('MeshIslandDirective', () => {
-  // Attribute-selector form: [meshIsland] applies the same lifecycle to any
+describe('AtollIslandDirective', () => {
+  // Attribute-selector form: [atollIsland] applies the same lifecycle to any
   // host element — here a plain div inside a host component's template.
   @Component({
     standalone: true,
-    imports: [MeshIslandDirective],
-    template: `<div meshIsland class="directive-host" [client]="client()" [props]="props()" [onEvent]="record"></div>`,
+    imports: [AtollIslandDirective],
+    template: `<div atollIsland class="directive-host" [client]="client()" [props]="props()" [onEvent]="record"></div>`,
   })
   class DirectiveHostComponent {
     // Signal-backed state: in the zoneless harness a signal write is what

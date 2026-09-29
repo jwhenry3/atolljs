@@ -1,4 +1,4 @@
-// Builds the docs sites + static framework examples, then assembles the
+// Builds the docs site + static framework examples, then assembles the
 // GitHub Pages artifact in dist-pages/ (see assemble-pages.mjs).
 // Usage: node scripts/build-pages.mjs [--no-build]
 import { fileURLToPath } from 'node:url';
@@ -8,7 +8,6 @@ const root = fileURLToPath(new URL('..', import.meta.url));
 const assemble = fileURLToPath(new URL('assemble-pages.mjs', import.meta.url));
 
 const projects = [
-  ['docs', 'docs'],
   ['docs-consumer', 'docs-consumer'],
   ['react', 'examples/react'],
   ['vue', 'examples/vue'],

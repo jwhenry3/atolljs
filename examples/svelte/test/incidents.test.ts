@@ -1,15 +1,15 @@
 /**
- * Functional test: the svelte example's createIncidents driving the real mesh
+ * Functional test: the svelte example's createIncidents driving the real atoll
  * in-process. `inRoot` supplies the rune effect root the example expects.
  */
 import { beforeAll, describe, expect, it, vi } from 'vitest';
-import { InProcessWorker } from '@jwhenry123/mesh/sdk/testing/inProcessWorker';
+import { InProcessWorker } from '@atolljs/core/sdk/testing/inProcessWorker';
 import { inRoot } from './root.svelte.js';
-import type { QueryArgs } from '@jwhenry123/mesh/incidents';
+import type { QueryArgs } from '@atolljs/core/incidents';
 
 vi.stubGlobal('Worker', InProcessWorker);
 InProcessWorker.handlerModules = [
-  () => import('@jwhenry123/mesh/incidents/worker/incidents.worker'),
+  () => import('@atolljs/core/incidents/worker/incidents.worker'),
 ];
 
 const QUERY: QueryArgs = {

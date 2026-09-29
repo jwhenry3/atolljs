@@ -7,8 +7,8 @@
  * the worker entry's defineMonoWorker in this module graph).
  */
 import { beforeAll, describe, expect, it, vi } from 'vitest';
-import { InProcessWorker } from '@jwhenry123/mesh/sdk/testing/inProcessWorker';
-import type { IslandHandle } from '@jwhenry123/mesh-islands';
+import { InProcessWorker } from '@atolljs/core/sdk/testing/inProcessWorker';
+import type { IslandHandle } from '@atolljs/islands';
 import { counterApp } from './fixtures/counter.worker';
 
 vi.stubGlobal('Worker', InProcessWorker);
@@ -16,15 +16,15 @@ vi.stubGlobal('Worker', InProcessWorker);
 // its defineMonoWorker registration, exactly what a bundled worker does.
 InProcessWorker.handlerModules = [() => import('./fixtures/counter.worker')];
 
-let mountIsland: typeof import('@jwhenry123/mesh-islands').mountIsland;
-let connectIslandWorker: typeof import('@jwhenry123/mesh-islands').connectIslandWorker;
+let mountIsland: typeof import('@atolljs/islands').mountIsland;
+let connectIslandWorker: typeof import('@atolljs/islands').connectIslandWorker;
 // In-process artifact: a mounted instance can point the ambient `document` at
 // its PROXY document (shared globalThis) — capture the real one before any
 // mounts. Real browsers never share globals across threads.
 let realDoc: Document;
 beforeAll(async () => {
   realDoc = document;
-  ({ connectIslandWorker, mountIsland } = await import('@jwhenry123/mesh-islands'));
+  ({ connectIslandWorker, mountIsland } = await import('@atolljs/islands'));
 });
 
 const renderWorker = () =>

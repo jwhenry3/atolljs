@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { effectScope } from 'vue';
-import { defineSharedMemory, defineTask, field, observe } from '@jwhenry123/mesh/sdk';
+import { defineSharedMemory, defineTask, field, observe } from '@atolljs/core/sdk';
 import { useObservable, useSharedValue, useTask } from '../src/index';
 
 const mem = defineSharedMemory({ n: field.number(), label: field.string({ maxBytes: 64 }) });

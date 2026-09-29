@@ -24,9 +24,9 @@
  *
  * Rune note: this is a `.svelte.ts` module — `$state` here is compiled by
  * vite-plugin-svelte (or svelte-package), the same mechanism the sibling
- * `@jwhenry123/mesh-svelte` package uses.
+ * `@atolljs/svelte` package uses.
  */
-import type { IslandHandle } from '@jwhenry123/mesh-islands';
+import type { IslandHandle } from '@atolljs/islands';
 import type { IslandActionOptions } from './index';
 
 /** The island lifecycle, coarse-grained: idle → mounting → ready | error → destroyed. */

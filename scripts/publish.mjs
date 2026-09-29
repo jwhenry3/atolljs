@@ -1,9 +1,9 @@
 // Lockstep staged publish — `node scripts/publish.mjs <version|v*.*.*> [--dry-run]`.
 //
-// Stamps every publishable package.json (repo root = @jwhenry123/mesh, plus
+// Stamps every publishable package.json (repo root = @atolljs/core, plus
 // packages/* — private packages are skipped) with the release version,
-// rewrites internal @jwhenry123/* dep ranges to match, then `npm stage
-// publish`es in dependency order: mesh → node/react → the rest. Staged
+// rewrites internal @atolljs/* dep ranges to match, then `npm stage
+// publish`es in dependency order: atoll → node/react → the rest. Staged
 // versions sit in npm's stage queue (not installable) until a maintainer
 // approves with 2FA — `npm stage list/view/approve` or the Staged Packages
 // tab on npmjs.com. CI runs this from a release tag; repo versions stay
@@ -53,12 +53,12 @@ for (const { dir, pkg } of packages) {
 
 // Dependency order — a package publishes after every internal dep it needs.
 const order = [
-  '@jwhenry123/mesh',
-  '@jwhenry123/mesh-node',
-  '@jwhenry123/mesh-react',
+  '@atolljs/core',
+  '@atolljs/node',
+  '@atolljs/react',
   // react-island peers on islands — publish the dep first.
-  '@jwhenry123/mesh-islands',
-  '@jwhenry123/mesh-react-island',
+  '@atolljs/islands',
+  '@atolljs/react-island',
 ];
 const sorted = [...packages].sort(
   (a, b) => (order.indexOf(a.pkg.name) === -1 ? 99 : order.indexOf(a.pkg.name)) -

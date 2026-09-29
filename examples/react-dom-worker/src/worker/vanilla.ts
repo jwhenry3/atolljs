@@ -1,6 +1,6 @@
 /**
  * The 'vanilla' island app — an imperative widget built ONLY on the proxy
- * DOM (@jwhenry123/mesh-islands/worker). There is no React anywhere in
+ * DOM (@atolljs/islands/worker). There is no React anywhere in
  * this instance: no reconciler, no container, no JSX — this file doesn't even
  * import react. Every mutation in build() IS an op, queued straight onto
  * the instance's op stream; the worker's mount() just runs build() inside
@@ -30,7 +30,7 @@ import {
   islandApp,
   type EventPayload,
   type ProxyDocument,
-} from '@jwhenry123/mesh-islands/worker';
+} from '@atolljs/islands/worker';
 import { MiniWidget } from '../vendor/miniwidget.js';
 
 const SWATCHES = [

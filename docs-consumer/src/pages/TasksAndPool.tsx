@@ -18,7 +18,7 @@ export function TasksAndPool() {
       </p>
       <CodeBlock
         file="service/queryIncidents.ts"
-        code={`import { serviceMethod } from '@jwhenry123/mesh/sdk';
+        code={`import { serviceMethod } from '@atolljs/core/sdk';
 import { z } from 'zod';
 
 export const queryIncidents = serviceMethod({
@@ -33,7 +33,7 @@ export const queryIncidents = serviceMethod({
       <h2>Worker side — defineWorker owns the method list</h2>
       <CodeBlock
         file="incidents.worker.ts"
-        code={`import { defineWorker } from '@jwhenry123/mesh/sdk';
+        code={`import { defineWorker } from '@atolljs/core/sdk';
 import { incidentsMemory } from './incidents.memory';
 import { queryIncidents } from './service/queryIncidents';
 
@@ -49,7 +49,7 @@ export type IncidentsWorker = typeof incidentsWorker;   // all main ever imports
       <h2>Main thread — connectWorker, type-only import</h2>
       <CodeBlock
         file="incidents.ts"
-        code={`import { connectWorker } from '@jwhenry123/mesh/sdk';
+        code={`import { connectWorker } from '@atolljs/core/sdk';
 import { incidentsMemory } from './incidents.memory';
 import type { IncidentsWorker } from './incidents.worker';   // zero worker code in this bundle
 
@@ -63,8 +63,8 @@ export const incidents = connectWorker<IncidentsWorker>({
 const page = await incidents.queryIncidents({ offset: 0, limit: 50 });
 incidents.terminate();         // next call re-spawns
 
-// Already hold a pool (e.g. Nest's @InjectMeshPool)? Wrap it directly:
-import { workerClient } from '@jwhenry123/mesh/sdk';
+// Already hold a pool (e.g. Nest's @InjectAtollPool)? Wrap it directly:
+import { workerClient } from '@atolljs/core/sdk';
 const api = workerClient<IncidentsWorker>(pool);`}
       />
 
@@ -103,7 +103,7 @@ await incidents.pool?.close();   // drain the queue, then terminate`}
       />
       <p>
         A <code>signal</code> abort rejects with <code>TaskAbortedError</code>{' '}
-        (exported from <code>@jwhenry123/mesh/sdk</code>, alongside{' '}
+        (exported from <code>@atolljs/core/sdk</code>, alongside{' '}
         <code>PoolQueueFullError</code>, <code>TaskTimeoutError</code>, and{' '}
         <code>WorkerCrashedError</code>). JavaScript can't interrupt a running
         function, so an in-flight abort rejects the caller and holds the worker's
@@ -158,7 +158,7 @@ page.run({ offset: 0, limit: 50 });                  // latest-wins
 page.data; page.pending; page.elapsedMs;
 
 // The primitive underneath, if you need it outside a framework:
-import { defineTask } from '@jwhenry123/mesh/sdk';
+import { defineTask } from '@atolljs/core/sdk';
 const queryTask = defineTask((q: QueryArgs) => incidents.queryIncidents(q));
 queryTask.subscribe((snap) => render(snap));`}
       />
@@ -167,7 +167,7 @@ queryTask.subscribe((snap) => render(snap));`}
       <p>
         <code>WorkerPool</code>/<code>connectWorker</code> run on{' '}
         <code>node:worker_threads</code> unchanged —{' '}
-        <code>@jwhenry123/mesh-node</code> adapts Node's <code>Worker</code> to
+        <code>@atolljs/node</code> adapts Node's <code>Worker</code> to
         the DOM surface the pool expects.{' '}
         <code>createNodePool({'{ workerFile | worker | createWorker, … }'})</code>{' '}
         is <code>WorkerPool</code> with the adapter baked in; its{' '}
@@ -180,7 +180,7 @@ queryTask.subscribe((snap) => render(snap));`}
         <code>createNodeWorker</code>.
       </p>
       <p>
-        A Node worker entry imports <code>@jwhenry123/mesh-node/shim</code>{' '}
+        A Node worker entry imports <code>@atolljs/node/shim</code>{' '}
         first — it binds <code>self = parentPort</code> before{' '}
         <code>defineWorker</code>'s bootstrap evaluates.{' '}
         <code>SharedArrayBuffer</code> works in Node with no headers: isolation

@@ -7,8 +7,8 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { act, Suspense } from 'react';
 import { createRoot } from 'react-dom/client';
-import { InProcessWorker } from '@jwhenry123/mesh/sdk/testing/inProcessWorker';
-import { islandApp, islandAppNameOf } from '@jwhenry123/mesh-islands';
+import { InProcessWorker } from '@atolljs/core/sdk/testing/inProcessWorker';
+import { islandApp, islandAppNameOf } from '@atolljs/islands';
 import type { IslandHandle } from '../src/index';
 import { echoApp } from './fixtures/echo.worker';
 import { disposed as soloDisposed } from './fixtures/solo.worker';
@@ -133,7 +133,7 @@ describe('<Island/>', () => {
       );
     });
     await vi.waitFor(() =>
-      expect(host.querySelector('[data-mesh-slot="slot"] .portal-content')?.textContent).toBe(
+      expect(host.querySelector('[data-atoll-slot="slot"] .portal-content')?.textContent).toBe(
         'portal',
       ),
     );
@@ -217,7 +217,7 @@ describe('worker-loaded component proxies', () => {
   });
 
   it('a shared client mounts two mounts into one worker — teardown is ref-counted', async () => {
-    const { connectIslandWorker } = await import('@jwhenry123/mesh-islands');
+    const { connectIslandWorker } = await import('@atolljs/islands');
     const client = connectIslandWorker({ worker: soloWorker });
     const before = InProcessWorker.created.length;
 

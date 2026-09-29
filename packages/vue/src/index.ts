@@ -1,6 +1,6 @@
 import { onScopeDispose, ref, type Ref } from 'vue';
-import { observe, toTask } from '@jwhenry123/mesh/sdk';
-import type { AsyncTask, ObservableValue, PathConnector, SharedMemory, SharedSpec, SpecPath, SliceOptions, TaskSnapshot } from '@jwhenry123/mesh/sdk';
+import { observe, toTask } from '@atolljs/core/sdk';
+import type { AsyncTask, ObservableValue, PathConnector, SharedMemory, SharedSpec, SpecPath, SliceOptions, TaskSnapshot } from '@atolljs/core/sdk';
 
 /** Wrap any sdk ObservableValue (task snapshot, field observable) in a Ref. */
 export function useObservable<T>(source: ObservableValue<T>): Ref<T> {

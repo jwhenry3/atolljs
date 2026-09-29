@@ -4,7 +4,7 @@
  * single app regardless of the requested name, so the shell can mount it
  * namelessly or as 'counter').
  */
-import { defineMonoWorker, islandApp } from '@jwhenry123/mesh-islands/worker';
+import { defineMonoWorker, islandApp } from '@atolljs/islands/worker';
 import { svelteIslandApp } from '../../src/worker';
 import Counter from './Counter.svelte';
 

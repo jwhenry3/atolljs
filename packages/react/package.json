@@ -1,5 +1,5 @@
 {
-  "name": "@jwhenry123/mesh-react",
+  "name": "@atolljs/react",
   "version": "0.1.0",
   "description": "React bindings — useObservable, useSharedValue, useTask",
   "type": "module",
@@ -13,12 +13,12 @@
     "access": "public"
   },
   "peerDependencies": {
-    "@jwhenry123/mesh": "0.1.0",
+    "@atolljs/core": "0.1.0",
     "react": "^19.3.0"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/jwhenry3/mesh",
+    "url": "https://github.com/jwhenry3/atolljs",
     "directory": "packages/react"
   }
 }

@@ -1,10 +1,10 @@
 import { Injectable, Module, OnApplicationBootstrap } from '@nestjs/common';
-import { InjectMeshPool, MeshModule } from '@jwhenry123/mesh-nestjs';
-import { workerClient, type WorkerPool } from '@jwhenry123/mesh/sdk';
-import { type IncidentsWorker } from '@jwhenry123/mesh-incidents';
+import { InjectAtollPool, AtollModule } from '@atolljs/nestjs';
+import { workerClient, type WorkerPool } from '@atolljs/core/sdk';
+import { type IncidentsWorker } from '@atolljs/incidents';
 import { IncidentsController } from './incidents.controller';
-import { IncidentsMeshModule } from './shared/incidents-mesh.module';
-import { DigestMeshModule } from './digest/digest.module';
+import { IncidentsAtollModule } from './shared/incidents-atoll.module';
+import { DigestAtollModule } from './digest/digest.module';
 import { DigestController } from './digest/digest.controller';
 
 /**
@@ -15,7 +15,7 @@ import { DigestController } from './digest/digest.controller';
 @Injectable()
 class SeedOnBootstrap implements OnApplicationBootstrap {
   private readonly incidents = workerClient<IncidentsWorker>(() => this.pool);
-  constructor(@InjectMeshPool('incidents') private readonly pool: WorkerPool) {}
+  constructor(@InjectAtollPool('incidents') private readonly pool: WorkerPool) {}
   async onApplicationBootstrap() {
     await this.incidents.seedIncidents();
   }
@@ -23,11 +23,11 @@ class SeedOnBootstrap implements OnApplicationBootstrap {
 
 @Module({
   imports: [
-    // Global mesh infrastructure once — pool registration stays inside the
+    // Global atoll infrastructure once — pool registration stays inside the
     // feature modules that own each worker domain (registerPool).
-    MeshModule.forRoot(),
-    IncidentsMeshModule,
-    DigestMeshModule,
+    AtollModule.forRoot(),
+    IncidentsAtollModule,
+    DigestAtollModule,
   ],
   controllers: [IncidentsController, DigestController],
   providers: [SeedOnBootstrap],

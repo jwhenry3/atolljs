@@ -1,5 +1,5 @@
 /**
- * Minimal island worker entry for the `[meshIsland]` / `<mesh-island>` tests
+ * Minimal island worker entry for the `[atollIsland]` / `<atoll-island>` tests
  * — one imperative instance app: a div echoing props.text plus a button that
  * emits over the island→shell channel. `defineMonoWorker` registers the
  * single `islandApp`-stamped def (1:1 topology — the shell's `app` input is
@@ -10,7 +10,7 @@ import {
   emit,
   islandApp,
   type ProxyDocument,
-} from '@jwhenry123/mesh-islands/worker';
+} from '@atolljs/islands/worker';
 
 export const echoApp = islandApp('echo', {
   imperative: (doc: ProxyDocument, props: Record<string, unknown>): void => {

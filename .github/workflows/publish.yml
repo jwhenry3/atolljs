@@ -7,7 +7,7 @@
 # Auth: npm trusted publishing (OIDC) — `id-token: write` lets the npm CLI
 # exchange the job's OIDC token for a short-lived credential; no stored
 # secret. Requires a trust relationship per package:
-#   npm trust github <pkg> --repo jwhenry3/mesh --file publish.yml --allow-stage-publish -y
+#   npm trust github <pkg> --repo jwhenry3/atolljs --file publish.yml --allow-stage-publish -y
 # Use --allow-stage-publish WITHOUT --allow-publish so this workflow is
 # stage-only — direct `npm publish` is rejected outright. Until a package
 # has a trust relationship, NODE_AUTH_TOKEN (granular NPM_TOKEN secret)

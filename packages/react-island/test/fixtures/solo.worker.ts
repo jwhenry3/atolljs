@@ -4,7 +4,7 @@
  * and `islandComponent<P>()` both resolve 'main'. Distinct from the echo
  * fixture so a same-worker second island gets its own instance.
  */
-import { defineMonoWorker, emit, type ProxyDocument } from '@jwhenry123/mesh-islands/worker';
+import { defineMonoWorker, emit, type ProxyDocument } from '@atolljs/islands/worker';
 
 export let disposed = false;
 

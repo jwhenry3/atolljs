@@ -78,9 +78,9 @@ const RESERVED = new Set<string>(RESERVED_CLIENT_KEYS);
  * methods object (sibling calls); ServiceMethod units contribute their
  * `def` schemas (and a `def.taskId` override) and run bound to the unit.
  *
- * BOOTSTRAP ORDERING (Node): the `@jwhenry123/mesh-node/shim` import must
+ * BOOTSTRAP ORDERING (Node): the `@atolljs/node/shim` import must
  * evaluate before this module — it binds `self = parentPort`, which
- * workerBootstrap needs at import time. Keep `import '@jwhenry123/mesh-node/shim'`
+ * workerBootstrap needs at import time. Keep `import '@atolljs/node/shim'`
  * first in the worker entry.
  */
 export function defineWorker<

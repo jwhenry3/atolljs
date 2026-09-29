@@ -1,11 +1,11 @@
 /**
- * `@jwhenry123/mesh-vue-island/worker` — the worker-side half of Vue
+ * `@atolljs/vue-island/worker` — the worker-side half of Vue
  * islands: `vueIslandApp(Component)` wraps a Vue component as a islands
  * `RenderedIslandApp`, so it can sit in a `definePolyWorker` `apps`
  * registry beside React and imperative apps:
  *
  *   // render.worker.ts
- *   import { defineVuePolyWorker } from '@jwhenry123/mesh-vue-island/worker';
+ *   import { defineVuePolyWorker } from '@atolljs/vue-island/worker';
  *   export const renderWorker = defineVuePolyWorker({ apps: { counter: Counter } });
  *
  * Vue's public `createRenderer` drives the instance's ProxyDocument — every
@@ -34,7 +34,7 @@ import {
   getLastTouchedInstance,
   islandApp,
   docForInstance,
-} from '@jwhenry123/mesh-islands/worker';
+} from '@atolljs/islands/worker';
 import type {
   DoorbellSpec,
   EventPayload,
@@ -45,12 +45,12 @@ import type {
   RenderContext,
   RenderedHandle,
   RenderedIslandApp,
-} from '@jwhenry123/mesh-islands/worker';
-import type { SharedMemory, WorkerDefinition } from '@jwhenry123/mesh/sdk';
+} from '@atolljs/islands/worker';
+import type { SharedMemory, WorkerDefinition } from '@atolljs/core/sdk';
 
 // Worker entries shouldn't need a second package specifier for the
-// island→shell channel — `import { emit } from 'mesh-vue-island/worker'`.
-export { emit, runInInstance } from '@jwhenry123/mesh-islands/worker';
+// island→shell channel — `import { emit } from 'atoll-vue-island/worker'`.
+export { emit, runInInstance } from '@atolljs/islands/worker';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const MATH_NS = 'http://www.w3.org/1998/Math/MathML';

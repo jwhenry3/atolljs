@@ -1,6 +1,6 @@
 import { DestroyRef, inject, signal, type Signal } from '@angular/core';
-import { observe, toTask } from '@jwhenry123/mesh/sdk';
-import type { AsyncTask, ObservableValue, PathConnector, SharedMemory, SharedSpec, SpecPath, SliceOptions, TaskSnapshot } from '@jwhenry123/mesh/sdk';
+import { observe, toTask } from '@atolljs/core/sdk';
+import type { AsyncTask, ObservableValue, PathConnector, SharedMemory, SharedSpec, SpecPath, SliceOptions, TaskSnapshot } from '@atolljs/core/sdk';
 
 function unhook(stop: () => void) {
   inject(DestroyRef, { optional: true })?.onDestroy(stop);
@@ -45,7 +45,7 @@ export function taskState<A, R>(source: AsyncTask<A, R> | ((input: A) => Promise
   return { state: observableSignal(task), run: task.run, runOnce: task.runOnce };
 }
 
-export { provideMesh, injectMeshPool, getMeshPoolToken } from './provideMesh';
-export type { MeshPoolDeclaration, MeshPoolSpec, MeshProvideOptions, MeshFeature } from './provideMesh';
-export { MeshModule, InjectMeshPool } from './meshModule';
-export type { MeshModuleAsyncOptions, MeshPoolAsyncOptions, MeshPoolAsyncDecl } from './meshModule';
+export { provideAtoll, injectAtollPool, getAtollPoolToken } from './provideAtoll';
+export type { AtollPoolDeclaration, AtollPoolSpec, AtollProvideOptions, AtollFeature } from './provideAtoll';
+export { AtollModule, InjectAtollPool } from './atollModule';
+export type { AtollModuleAsyncOptions, AtollPoolAsyncOptions, AtollPoolAsyncDecl } from './atollModule';

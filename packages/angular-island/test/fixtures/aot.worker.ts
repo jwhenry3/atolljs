@@ -23,7 +23,7 @@ import {
   ɵɵtext,
   type Type,
 } from '@angular/core';
-import { definePolyWorker } from '@jwhenry123/mesh-islands/worker';
+import { definePolyWorker } from '@atolljs/islands/worker';
 import { angularIslandApp } from '../../src/worker';
 
 class AotComponent {
@@ -41,7 +41,7 @@ class AotComponent {
 
   static ɵcmp = ɵɵdefineComponent({
     type: AotComponent,
-    selectors: [['mesh-aot']],
+    selectors: [['atoll-aot']],
     standalone: true,
     inputs: { label: 'label' },
     decls: 4,

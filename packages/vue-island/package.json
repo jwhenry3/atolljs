@@ -1,7 +1,7 @@
 {
-  "name": "@jwhenry123/mesh-vue-island",
+  "name": "@atolljs/vue-island",
   "version": "0.1.0",
-  "description": "Vue shell bindings for mesh-islands islands — useIsland composable + <MeshIsland/> component",
+  "description": "Vue shell bindings for atoll-islands islands — useIsland composable + <AtollIsland/> component",
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
@@ -14,13 +14,13 @@
     "access": "public"
   },
   "peerDependencies": {
-    "@jwhenry123/mesh": "0.1.0",
-    "@jwhenry123/mesh-islands": "0.1.0",
+    "@atolljs/core": "0.1.0",
+    "@atolljs/islands": "0.1.0",
     "vue": "^3.5.43"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/jwhenry3/mesh",
+    "url": "https://github.com/jwhenry3/atolljs",
     "directory": "packages/vue-island"
   }
 }

@@ -10,20 +10,20 @@ const solidBindingsRoot = fileURLToPath(new URL('../../packages/solidjs/src/', i
 
 export default defineConfig(({ command }) => ({
   // Built output is mounted at /solid/ under the unified dist root; dev serves /.
-  base: command === 'build' ? '/solid/' : '/',
+  base: command === 'build' ? './' : '/',
   plugins: [solid()],
   resolve: {
-    // The aliased @jwhenry123/mesh-solidjs source resolves `solid-js` from the
+    // The aliased @atolljs/solidjs source resolves `solid-js` from the
     // workspace root otherwise — two reactive runtimes get bundled, and
     // binding signals never register in the app's render effects (UI frozen
     // at initial values). Force a single copy.
     dedupe: ['solid-js'],
     alias: [
-      { find: '@jwhenry123/mesh-solidjs', replacement: `${solidBindingsRoot}index.ts` },
-      { find: '@jwhenry123/mesh-incidents', replacement: `${incidentsRoot}index.ts` },
-      { find: /^@jwhenry123\/mesh$/, replacement: `${sdkRoot}index.ts` },
-      { find: /^@jwhenry123\/mesh\/sdk$/, replacement: `${sdkRoot}index.ts` },
-      { find: /^@jwhenry123\/mesh\/sdk\//, replacement: sdkRoot },
+      { find: '@atolljs/solidjs', replacement: `${solidBindingsRoot}index.ts` },
+      { find: '@atolljs/incidents', replacement: `${incidentsRoot}index.ts` },
+      { find: /^@atolljs\/core$/, replacement: `${sdkRoot}index.ts` },
+      { find: /^@atolljs\/core\/sdk$/, replacement: `${sdkRoot}index.ts` },
+      { find: /^@atolljs\/core\/sdk\//, replacement: sdkRoot },
     ],
   },
   // SharedArrayBuffer requires a cross-origin isolated context

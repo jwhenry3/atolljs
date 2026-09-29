@@ -1,14 +1,14 @@
 import { Inject, Injectable } from '@nestjs/common';
 // Deep-import the decorator — keeps the service file free of the binding's
 // Nest module wiring; it's bundled into the worker too.
-import { MeshService } from '@jwhenry123/mesh-nestjs/decorators';
+import { AtollService } from '@atolljs/nestjs/decorators';
 import {
   incidentsMemory,
   REGIONS,
   SEVERITIES,
   STATUSES,
   type Incident,
-} from '@jwhenry123/mesh-incidents';
+} from '@atolljs/incidents';
 import { ScanTelemetry } from './scan-telemetry.service';
 
 const CRITICAL = SEVERITIES.indexOf('critical');
@@ -18,15 +18,15 @@ const rec = {} as Incident;
 /**
  * One service, two runtimes. Calling a method on the API thread looks like
  * a normal async call but dispatches to the 'incidents' pool — RPC
- * semantics; the class-level @MeshService marks every method for offload.
- * Inside a worker, runMeshWorker resolves this class with DI (telemetry is
+ * semantics; the class-level @AtollService marks every method for offload.
+ * Inside a worker, runAtollWorker resolves this class with DI (telemetry is
  * a real per-worker instance) and the bodies execute.
  *
  * @Inject on the ctor param is explicit — webpack/ts-loader does emit
  * design:paramtypes, so this is belt-and-suspenders rather than required.
  */
 @Injectable()
-@MeshService({ pool: 'incidents' })
+@AtollService({ pool: 'incidents' })
 export class IncidentsAnalytics {
   constructor(@Inject(ScanTelemetry) private readonly telemetry: ScanTelemetry) {}
 

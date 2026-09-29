@@ -8,7 +8,7 @@
  * what babel-preset-solid's universal output would emit calls into.
  */
 import { createSignal } from 'solid-js';
-import { defineMonoWorker, emit } from '@jwhenry123/mesh-islands/worker';
+import { defineMonoWorker, emit } from '@atolljs/islands/worker';
 import { h, insert, solidIsland } from '../../src/worker';
 
 function Counter(props: Record<string, unknown>): ReturnType<typeof h> {

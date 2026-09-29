@@ -1,4 +1,4 @@
-import { defineWorker } from '@jwhenry123/mesh/sdk';
+import { defineWorker } from '@atolljs/core/sdk';
 import { incidentsMemory } from '../contract/memory.contracts';
 import { computeMetrics } from '../service/computeMetrics';
 import { queryIncidents } from '../service/queryIncidents';

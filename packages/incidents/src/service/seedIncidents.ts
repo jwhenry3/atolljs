@@ -2,7 +2,7 @@
 // file's top-level export is a ServiceMethod unit built by serviceMethod().
 // defineService unwraps its `def`; implementService unwraps its `run`.
 import { z } from 'zod';
-import { scoped, serviceMethod } from '@jwhenry123/mesh/sdk';
+import { scoped, serviceMethod } from '@atolljs/core/sdk';
 import { CITIES, REGIONS, SERVICES, incidentsMemory, type Incident } from '../contract/memory.contracts';
 
 const log = scoped('incidents');

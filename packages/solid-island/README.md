@@ -1,6 +1,6 @@
-# @jwhenry123/mesh-solid-island
+# @atolljs/solid-island
 
-The Solid shell surface for `@jwhenry123/mesh-islands` — mount a
+The Solid shell surface for `@atolljs/islands` — mount a
 worker-hosted Solid (or imperative proxy-DOM) tree as an ordinary element
 in a main-thread Solid app — plus the Solid **worker renderer** for the
 worker side: `solidIslandApp` runs a plain Solid component against
@@ -9,13 +9,13 @@ so every node mutation serializes to the op stream the shell replays as
 real DOM.
 
 ```bash
-npm install @jwhenry123/mesh @jwhenry123/mesh-islands @jwhenry123/mesh-solid-island solid-js
+npm install @atolljs/core @atolljs/islands @atolljs/solid-island solid-js
 ```
 
 ## `createIsland` / `Island`
 
 ```tsx
-import { createIsland } from '@jwhenry123/mesh-solid-island';
+import { createIsland } from '@atolljs/solid-island';
 import { ChartsApp } from './worker/apps';
 
 const renderWorker = () =>
@@ -50,7 +50,7 @@ import {
   defineSolidPolyWorker,
   h,
   insert,
-} from '@jwhenry123/mesh-solid-island/worker';
+} from '@atolljs/solid-island/worker';
 
 function Counter(props: { label: string }) {
   const [count, setCount] = createSignal(0);
@@ -98,7 +98,7 @@ export default {
       include: [/\.worker\.[tj]sx?$/, /worker\/.*\.[tj]sx?$/],
       solid: {
         generate: 'universal',
-        moduleName: '@jwhenry123/mesh-solid-island/worker',
+        moduleName: '@atolljs/solid-island/worker',
       },
     }),
     // Shell (main thread): the regular DOM transform — no options needed.
@@ -108,7 +108,7 @@ export default {
 ```
 
 Or with babel directly — `["babel-preset-solid", { "generate": "universal",
-"moduleName": "@jwhenry123/mesh-solid-island/worker" }]` on the worker
+"moduleName": "@atolljs/solid-island/worker" }]` on the worker
 entries' compile scope.
 
 The preset's universal output calls into the runtime surface the worker

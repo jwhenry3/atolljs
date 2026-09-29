@@ -1,11 +1,11 @@
 import { createEffect, type Accessor } from 'solid-js';
-import { createSharedValue, createTask } from '@jwhenry123/mesh-solidjs';
+import { createSharedValue, createTask } from '@atolljs/solidjs';
 import {
   incidents,
   incidentsMemory,
   initIncidents,
   type QueryArgs,
-} from '@jwhenry123/mesh-incidents';
+} from '@atolljs/incidents';
 
 /**
  * Incident data layer: run init once, stream seedProgress/metrics out of

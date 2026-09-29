@@ -1,11 +1,11 @@
 /**
- * `@jwhenry123/mesh-solid-island` — the Solid shell surface for
- * `@jwhenry123/mesh-islands` islands: a worker-hosted React (or
+ * `@atolljs/solid-island` — the Solid shell surface for
+ * `@atolljs/islands` islands: a worker-hosted React (or
  * imperative proxy-DOM) tree mounted as an ordinary element in a
  * main-thread Solid app.
  *
  * ```tsx
- * import { createIsland } from '@jwhenry123/mesh-solid-island';
+ * import { createIsland } from '@atolljs/solid-island';
  * import { ChartsApp } from './worker/apps'; // the islandApp-stamped component
  *
  * const renderWorker = () =>
@@ -22,7 +22,7 @@
  * }
  * ```
  *
- * Semantics (mirrors @jwhenry123/mesh-react-island):
+ * Semantics (mirrors @atolljs/react-island):
  * - Mounting is async — `ref` mounts the island as soon as Solid assigns the
  *   container element; `status[0]()` moves 'mounting' → 'ready' | 'error'.
  * - `props` changes call `island.updateProps` — deduped by JSON-serialized
@@ -32,7 +32,7 @@
  *   getter on the options object — the watch effect tracks whatever it reads.
  * - `onEvent`/`onActivity`/`onReady`/`onError` are read through `options` at
  *   call time — passing fresh closures never remounts the worker. `slots`
- *   hand back the real elements the worker marked `data-mesh-slot="name"`;
+ *   hand back the real elements the worker marked `data-atoll-slot="name"`;
  *   render Solid content into them with `render(() => ..., el)` from
  *   'solid-js/web' (not pulled in here so the shell surface stays renderer-only).
  * - `app`/`worker`/`client` are MOUNT-STABLE — swap them via a keyed remount
@@ -53,14 +53,14 @@ import {
   connectIslandWorker,
   islandAppNameOf,
   mountIsland,
-} from '@jwhenry123/mesh-islands';
+} from '@atolljs/islands';
 import type {
   IslandAppLike,
   IslandAppProps,
   IslandClient,
   IslandHandle,
   IslandWorkerOptions,
-} from '@jwhenry123/mesh-islands';
+} from '@atolljs/islands';
 
 // Re-export the app-contract types the API is generic over, so consumers can
 // name them without a second package import.
@@ -103,7 +103,7 @@ export interface CreateIslandOptions<A = string> {
   /** Fired after each applied op batch — stats hooks. */
   onActivity?: () => void;
   /**
-   * Transclusion slots — a worker `<div data-mesh-slot="name">` hands its
+   * Transclusion slots — a worker `<div data-atoll-slot="name">` hands its
    * real element to `slots[name]` (and `null` on teardown). The element
    * stays worker-owned; mount main-thread content inside it with
    * `render(() => <Widget/>, el)` from 'solid-js/web'.

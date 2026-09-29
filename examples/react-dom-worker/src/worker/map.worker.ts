@@ -5,7 +5,7 @@
  * mounts it by the stamped name 'map' (or namelessly — a single-app worker
  * resolves its sole app regardless of the requested name).
  */
-import { defineMonoWorker } from '@jwhenry123/mesh-islands/worker';
+import { defineMonoWorker } from '@atolljs/islands/worker';
 import { mapApp } from './map';
 
 export const mapWorker = defineMonoWorker(mapApp);

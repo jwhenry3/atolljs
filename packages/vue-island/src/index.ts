@@ -1,19 +1,19 @@
 /**
- * `@jwhenry123/mesh-vue-island` — the Vue shell surface for
- * `@jwhenry123/mesh-islands` islands: a worker-hosted React (or
+ * `@atolljs/vue-island` — the Vue shell surface for
+ * `@atolljs/islands` islands: a worker-hosted React (or
  * imperative proxy-DOM) tree mounted as an ordinary element in a
  * main-thread Vue app. Plain `.ts` — no SFC compiler needed.
  *
  * ```ts
- * import { MeshIsland, useIsland } from '@jwhenry123/mesh-vue-island';
- * import { connectIslandWorker } from '@jwhenry123/mesh-islands';
+ * import { AtollIsland, useIsland } from '@atolljs/vue-island';
+ * import { connectIslandWorker } from '@atolljs/islands';
  *
  * const client = connectIslandWorker({
  *   worker: () => new Worker(new URL('./render.worker.ts', import.meta.url), { type: 'module' }),
  * });
  *
  * // component form:
- * h(MeshIsland, { client, app: 'charts', props: { width: 520 }, onEvent: (n, p) => ... })
+ * h(AtollIsland, { client, app: 'charts', props: { width: 520 }, onEvent: (n, p) => ... })
  *
  * // composable form (inside setup):
  * const { host, handle, status, error } = useIsland({ client, app: 'charts', props });
@@ -29,7 +29,7 @@
  *   re-run with equal props costs no worker round-trip.
  * - `onEvent`/`onActivity`/`onReady`/`onError` are read through the options
  *   object at call time — pass wrappers that read reactive props (as
- *   `MeshIsland` does) and fresh closures never remount the worker.
+ *   `AtollIsland` does) and fresh closures never remount the worker.
  * - `client`/`worker`/`app`/`slots` are MOUNT-STABLE — read once when the
  *   host element lands. Swap them via `key`/`v-if`, not mid-life.
  * - If `host` returns to null (v-if, unmount) the island is destroyed; a
@@ -53,13 +53,13 @@ import {
   connectIslandWorker,
   islandAppNameOf,
   mountIsland,
-} from '@jwhenry123/mesh-islands';
+} from '@atolljs/islands';
 import type {
   IslandAppLike,
   IslandClient,
   IslandHandle,
   IslandWorkerOptions,
-} from '@jwhenry123/mesh-islands';
+} from '@atolljs/islands';
 
 // Re-export the handle type consumers need to name.
 export type { IslandHandle };
@@ -94,7 +94,7 @@ export interface UseIslandOptions {
   /** Fired after each applied op batch — stats hooks. */
   onActivity?: () => void;
   /**
-   * Transclusion slots — a worker `<div data-mesh-slot="name">` hands its
+   * Transclusion slots — a worker `<div data-atoll-slot="name">` hands its
    * real element to `slots[name](el)` (and `null` on removal) so the shell
    * can mount main-thread content inside the worker-owned anchor.
    */
@@ -138,7 +138,7 @@ export function useIsland(options: UseIslandOptions): UseIslandReturn {
     error.value = err;
     status.value = 'error';
     if (options.onError !== undefined) options.onError(err);
-    else console.error('[mesh-vue-island] mount failed:', err);
+    else console.error('[atoll-vue-island] mount failed:', err);
   };
 
   const mount = async (el: HTMLElement, gen: number): Promise<void> => {
@@ -230,7 +230,7 @@ export function useIsland(options: UseIslandOptions): UseIslandReturn {
         .updateProps(JSON.parse(nextJson) as Record<string, unknown>)
         .catch((err: unknown) => {
           if (options.onError !== undefined) options.onError(err);
-          else console.error('[mesh-vue-island] updateProps failed:', err);
+          else console.error('[atoll-vue-island] updateProps failed:', err);
         });
     },
   );
@@ -247,9 +247,9 @@ export function useIsland(options: UseIslandOptions): UseIslandReturn {
   return { host, handle, status, error };
 }
 
-/* ── <MeshIsland/> ───────────────────────────────────────────────────────── */
+/* ── <AtollIsland/> ───────────────────────────────────────────────────────── */
 
-export interface MeshIslandProps {
+export interface AtollIslandProps {
   /** Pre-connected client (shared across islands mounts mounts into one worker). */
   client?: IslandClient;
   /** Worker factory — alternative to `client` for the 1:1 case. */
@@ -278,13 +278,13 @@ export interface MeshIslandProps {
 }
 
 /**
- * `<MeshIsland/>` — renders `<div class="mesh-island">` hosting one worker
+ * `<AtollIsland/>` — renders `<div class="atoll-island">` hosting one worker
  * island. `defineComponent` + `h()` so it works in the runtime-only Vue
  * build (no SFC compiler). `client`/`worker`/`app`/`slots` are mount-stable
  * — swap via `key`; `props` and the `on*` callbacks are read reactively.
  */
-export const MeshIsland = defineComponent({
-  name: 'MeshIsland',
+export const AtollIsland = defineComponent({
+  name: 'AtollIsland',
   props: {
     // `skipCheck` on the exotic-valued props: an IslandClient is a task
     // proxy — Vue's dev-time validator stringifies failed prop values, and
@@ -357,8 +357,8 @@ export const MeshIsland = defineComponent({
       onError: (err) => props.onError?.(err),
     });
     expose({ handle: island.handle, status: island.status, error: island.error });
-    return () => h('div', { class: 'mesh-island', ref: island.host });
+    return () => h('div', { class: 'atoll-island', ref: island.host });
   },
 });
 
-export default MeshIsland;
+export default AtollIsland;

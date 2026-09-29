@@ -4,6 +4,40 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Telecom Incident Explorer — Angular</title>
+    <script>
+      // GitHub Pages can't send COOP/COEP headers — coi-sw.js injects them
+      // via a service worker so SharedArrayBuffer exists. First visit
+      // reloads once to become controlled; if isolation still isn't
+      // available the demo can't run — say so instead of failing silently.
+      (function () {
+        var flag = 'coi-reload:' + location.pathname;
+        var banner = function () {
+          var show = function () {
+            var d = document.createElement('div');
+            d.setAttribute(
+              'style',
+              'padding:10px 16px;background:#3d2e12;border-bottom:1px solid #8a6d2f;color:#f0d493;font:13px/1.5 system-ui,sans-serif',
+            );
+            d.textContent =
+              'Live demo unavailable — this demo needs SharedArrayBuffer (COOP/COEP cross-origin isolation), which this page does not have. Run npm run dev:all or serve:all locally to see it.';
+            document.body.prepend(d);
+          };
+          if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', show);
+          else show();
+        };
+        if (window.crossOriginIsolated) { sessionStorage.removeItem(flag); return; }
+        if (!('serviceWorker' in navigator)) { banner(); return; }
+        navigator.serviceWorker
+          .register('coi-sw.js')
+          .then(function () { return navigator.serviceWorker.ready; })
+          .then(function () {
+            if (sessionStorage.getItem(flag)) { banner(); return; }
+            sessionStorage.setItem(flag, '1');
+            location.reload();
+          })
+          .catch(banner);
+      })();
+    </script>
   </head>
   <body>
     <app-root></app-root>

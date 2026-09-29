@@ -1,10 +1,10 @@
-import { sharedValue, taskState } from '@jwhenry123/mesh-svelte';
+import { sharedValue, taskState } from '@atolljs/svelte';
 import {
   incidents,
   incidentsMemory,
   initIncidents,
   type QueryArgs,
-} from '@jwhenry123/mesh-incidents';
+} from '@atolljs/incidents';
 
 /**
  * Incident data layer: run init once, stream seedProgress/metrics out of

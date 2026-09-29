@@ -2,7 +2,7 @@
  * Two entry points, two topologies:
  *
  *   // render.worker.ts — a REGISTRY worker: one script, many apps
- *   import { definePolyWorker } from '@jwhenry123/mesh-islands/worker';
+ *   import { definePolyWorker } from '@atolljs/islands/worker';
  *   export const renderWorker = definePolyWorker({
  *     apps: { controls: ControlsApp, table: TableApp },
  *   });
@@ -54,8 +54,8 @@
 
 import type { ReactElement } from 'react';
 import type { ReactInstance } from './reactInstance';
-import { defineWorker } from '@jwhenry123/mesh/sdk';
-import type { SharedMemory, WorkerDefinition } from '@jwhenry123/mesh/sdk';
+import { defineWorker } from '@atolljs/core/sdk';
+import type { SharedMemory, WorkerDefinition } from '@atolljs/core/sdk';
 import { islandAppNameOf } from '../app';
 import { renderMemory, type DoorbellSpec } from '../memory';
 import { CALLBACK_EVENT, unmarshalCallbackProps } from '../callbackProps';
@@ -128,7 +128,7 @@ export interface RenderedHandle {
  * A renderer-backed app: a non-React framework renderer (Vue, Svelte,
  * Solid, Angular) whose `mount` renders component output into the instance's
  * proxy document — every proxy mutation already serializes to ops. Package
- * adapters (e.g. @jwhenry123/mesh-vue-island/worker) wrap a component into
+ * adapters (e.g. @atolljs/vue-island/worker) wrap a component into
  * this shape so it can sit beside React and imperative apps in the same
  * `apps` registry.
  */

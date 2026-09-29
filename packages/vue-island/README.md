@@ -1,6 +1,6 @@
-# @jwhenry123/mesh-vue-island
+# @atolljs/vue-island
 
-The Vue shell surface for `@jwhenry123/mesh-islands` — mount a
+The Vue shell surface for `@atolljs/islands` — mount a
 worker-hosted tree as an ordinary element in a main-thread Vue app — plus
 the Vue **worker renderer**: `vueIslandApp` runs a plain Vue component
 through Vue's own `createRenderer` with host ops bound to the instance's
@@ -8,14 +8,14 @@ proxy document, so every mutation serializes to the op stream the shell
 replays as real DOM.
 
 ```bash
-npm install @jwhenry123/mesh @jwhenry123/mesh-islands @jwhenry123/mesh-vue-island vue
+npm install @atolljs/core @atolljs/islands @atolljs/vue-island vue
 ```
 
-## `useIsland` / `MeshIsland`
+## `useIsland` / `AtollIsland`
 
 ```vue
 <script setup lang="ts">
-import { useIsland, MeshIsland } from '@jwhenry123/mesh-vue-island';
+import { useIsland, AtollIsland } from '@atolljs/vue-island';
 import { ref } from 'vue';
 
 const width = ref(640);
@@ -29,7 +29,7 @@ const { host, handle, status } = useIsland({
 <template><div :ref="(el) => (host = el)" class="island-box" /></template>
 ```
 
-`<MeshIsland>` is the component form — same options as props plus
+`<AtollIsland>` is the component form — same options as props plus
 `@ready`/`@error` emits. All the
 [islands island rules](../islands/README.md#island-rules) apply
 unchanged.
@@ -39,7 +39,7 @@ unchanged.
 ```ts
 // counter.worker.ts — the whole worker entry
 import { defineComponent, h, ref } from 'vue';
-import { defineVuePolyWorker, emit } from '@jwhenry123/mesh-vue-island/worker';
+import { defineVuePolyWorker, emit } from '@atolljs/vue-island/worker';
 
 const Counter = defineComponent({
   props: { label: { type: String, default: 'count' } },

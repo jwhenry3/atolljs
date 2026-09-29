@@ -9,8 +9,8 @@
     "isolatedModules": true,
     "skipLibCheck": true,
     "paths": {
-      "@jwhenry123/mesh/sdk": ["../../src/sdk/index.ts"],
-      "@jwhenry123/mesh/sdk/*": ["../../src/sdk/*"]
+      "@atolljs/core/sdk": ["../../src/sdk/index.ts"],
+      "@atolljs/core/sdk/*": ["../../src/sdk/*"]
     },
     // Rune globals ($state, $effect) come from svelte's ambient types —
     // resolved from the root node_modules so a publishable package doesn't

@@ -1,6 +1,6 @@
 # Telecom Incident Explorer — Angular
 
-The incidents demo on the `@jwhenry123/mesh/sdk` sdk: 1M fixed-layout records seeded into
+The incidents demo on the `@atolljs/core/sdk` sdk: 1M fixed-layout records seeded into
 shared memory by a worker pool; the main thread publishes queries, the worker
 scans/sorts/aggregates, and only the visible page crosses postMessage.
 
@@ -19,4 +19,4 @@ npm run dev   # http://localhost:4201
 SharedArrayBuffer needs cross-origin isolation — `angular.json` sets COOP/COEP
 headers on the dev server, and the shared package's `pool.ts` uses the bundler-detectable
 `new Worker(new URL(..., import.meta.url))` pattern via `createWorker`.
-The sdk is consumed through the `@jwhenry123/mesh/sdk` tsconfig path → `../../src/sdk`.
+The sdk is consumed through the `@atolljs/core/sdk` tsconfig path → `../../src/sdk`.

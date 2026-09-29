@@ -179,7 +179,7 @@ const buildWindowFacade = (internal: InternalDocument): WindowFacadeBundle => {
 
   const facade: WindowShim = {
     document: internal,
-    navigator: { userAgent: 'mesh-islands' },
+    navigator: { userAgent: 'atoll-islands' },
     location: {
       href: 'about:blank',
       reload() {},

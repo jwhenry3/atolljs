@@ -12,7 +12,7 @@ export function SharedMemoryApi() {
 
       <CodeBlock
         file="memory.contract.ts"
-        code={`import { defineSharedMemory, field, mz } from '@jwhenry123/mesh/sdk';
+        code={`import { defineSharedMemory, field, mz } from '@atolljs/core/sdk';
 
 // Fields may group by intent — lists / state / signals nest one level and
 // every surface mirrors it: memory.signals.count, spec.signals.count, …
@@ -72,7 +72,7 @@ export const memory = defineSharedMemory({
         <code>{'{ encode, decode }'}</code> object:
       </p>
       <CodeBlock
-        code={`import { jsonCodec } from '@jwhenry123/mesh/sdk';
+        code={`import { jsonCodec } from '@atolljs/core/sdk';
 
 defineSharedMemory(spec, { codec: jsonCodec });  // opt out of the default`}
       />

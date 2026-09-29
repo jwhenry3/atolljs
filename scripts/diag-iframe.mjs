@@ -1,6 +1,6 @@
 import { chromium } from 'playwright';
 
-const url = process.argv[2] ?? 'http://localhost:4180/#/fw-react';
+const url = process.argv[2] ?? 'http://localhost:4181/#/fw-react';
 const browser = await chromium.launch({ headless: true });
 const context = await browser.newContext();
 const page = await context.newPage();

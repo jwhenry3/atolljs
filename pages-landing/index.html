@@ -3,8 +3,28 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>mesh — the Worker Mesh</title>
-  <meta name="description" content="Worker Mesh documentation — SDK internals and npm package usage." />
+  <title>Atoll — the Worker Atoll</title>
+  <meta name="description" content="Worker Atoll documentation — SDK internals and npm package usage." />
+  <script>
+    // GitHub Pages can't send COOP/COEP headers — coi-sw.js injects them
+    // via a service worker so SharedArrayBuffer exists there. The first
+    // visit reloads once so the document becomes controlled; no-ops when
+    // already isolated (dev servers, serve:all) or SWs are unsupported.
+    (function () {
+      var flag = 'coi-reload:' + location.pathname;
+      if (window.crossOriginIsolated) { sessionStorage.removeItem(flag); return; }
+      if (!('serviceWorker' in navigator)) return;
+      navigator.serviceWorker
+        .register('coi-sw.js')
+        .then(function () { return navigator.serviceWorker.ready; })
+        .then(function () {
+          if (sessionStorage.getItem(flag)) return;
+          sessionStorage.setItem(flag, '1');
+          location.reload();
+        })
+        .catch(function () {});
+    })();
+  </script>
   <style>
     :root {
       color-scheme: dark;
@@ -45,7 +65,7 @@
 </head>
 <body>
   <main>
-    <h1>mesh<span class="accent"> — the Worker Mesh</span></h1>
+    <h1>atoll<span class="accent"> — the Worker Atoll</span></h1>
     <p class="lead">
       Worker pools and shared workers joined to your app through one
       shared-memory fabric. Contracts share fixed-layout
@@ -54,30 +74,32 @@
     </p>
 
     <div class="cards">
-      <a class="card" href="./sdk/">
-        <h2>SDK Docs <span class="path">./sdk/</span></h2>
-        <p>
-          Architecture and internals — contract schema, fixed-layout memory,
-          worker pool and task dispatch, reactivity over Atomics version
-          counters, shared workers, and cross-origin isolation.
-        </p>
-      </a>
       <a class="card" href="./consumer/">
         <h2>Package Docs <span class="path">./consumer/</span></h2>
         <p>
-          Consumer guide for <code>@jwhenry123/mesh</code> — install, quickstart,
+          Consumer guide for <code>@atolljs/core</code> — install, quickstart,
           public API, framework bindings (React, Vue, SolidJS, Svelte, Angular,
-          Next.js), and hosting headers.
+          Next.js), worker islands, and hosting headers.
+        </p>
+      </a>
+      <a class="card" href="https://github.com/jwhenry3/atolljs/tree/master/docs">
+        <h2>Internals Docs <span class="path">repo → docs/</span></h2>
+        <p>
+          Architecture and internals as in-repo markdown — contract schema,
+          fixed-layout memory, worker pool and task dispatch, reactivity,
+          shared workers, the islands engine, and cross-origin isolation.
         </p>
       </a>
     </div>
 
     <div class="note">
-      Live demos embedded in the docs require cross-origin isolation
-      (<code>Cross-Origin-Opener-Policy</code> +
-      <code>Cross-Origin-Embedder-Policy</code>), which GitHub Pages cannot
-      send — the iframes will be inert here. Run <code>npm run dev:all</code> or
-      <code>npm run serve:all</code> locally to see them live.
+      GitHub Pages can't send cross-origin isolation headers itself, so the
+      demos get them from <code>coi-sw.js</code> — a service worker that
+      injects COOP/COEP into every response (the first visit reloads once to
+      pick it up). Where isolation still isn't available the worker-islands
+      demo runs on its poll transport, and the shared-memory demos show a
+      notice — run <code>npm run dev:all</code> or
+      <code>npm run serve:all</code> locally for the guaranteed-live version.
     </div>
   </main>
 </body>

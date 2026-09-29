@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 /**
- * Mesh zod — the fixed-width schema vocabulary. Every helper produces a
+ * Atoll zod — the fixed-width schema vocabulary. Every helper produces a
  * plain zod schema the layout compiler can read a byte width from: number
  * formats (`mz.u32()`), int bounds (`mz.int(0, 3)` → u8), byte budgets
  * (`mz.string(10)`), or flags (`mz.boolean()` → u8). There are no unfixed

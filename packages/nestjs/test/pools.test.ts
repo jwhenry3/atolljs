@@ -1,40 +1,40 @@
 import { describe, expect, it } from 'vitest';
-import { defineSharedMemory, field, WorkerPool } from '@jwhenry123/mesh/sdk';
+import { defineSharedMemory, field, WorkerPool } from '@atolljs/core/sdk';
 import {
-  buildMeshPool,
-  getMeshPool,
-  getMeshPoolToken,
-  registerMeshPool,
-  unregisterMeshPool,
+  buildAtollPool,
+  getAtollPool,
+  getAtollPoolToken,
+  registerAtollPool,
+  unregisterAtollPool,
 } from '../src/pools';
-import { InProcessWorker } from '@jwhenry123/mesh/sdk/testing/inProcessWorker';
+import { InProcessWorker } from '@atolljs/core/sdk/testing/inProcessWorker';
 
 const mem = () => defineSharedMemory({ n: field.number() });
 
 describe('pool registry', () => {
-  it('derives MESH_POOL:<name> tokens', () => {
-    expect(getMeshPoolToken()).toBe('MESH_POOL:default');
-    expect(getMeshPoolToken('incidents')).toBe('MESH_POOL:incidents');
+  it('derives ATOLL_POOL:<name> tokens', () => {
+    expect(getAtollPoolToken()).toBe('ATOLL_POOL:default');
+    expect(getAtollPoolToken('incidents')).toBe('ATOLL_POOL:incidents');
   });
 
   it('registers, resolves, and unregisters pools', () => {
     const pool = { marker: true } as unknown as WorkerPool;
-    registerMeshPool('x', pool);
-    expect(getMeshPool('x')).toBe(pool);
-    unregisterMeshPool('x');
-    expect(getMeshPool('x')).toBeUndefined();
-    expect(getMeshPool()).toBeUndefined(); // default never registered
+    registerAtollPool('x', pool);
+    expect(getAtollPool('x')).toBe(pool);
+    unregisterAtollPool('x');
+    expect(getAtollPool('x')).toBeUndefined();
+    expect(getAtollPool()).toBeUndefined(); // default never registered
   });
 });
 
-describe('buildMeshPool', () => {
+describe('buildAtollPool', () => {
   it('requires workerFile or createWorker', () => {
-    expect(() => buildMeshPool({ name: 'empty', sharedMemory: mem() })).toThrow(/workerFile or createWorker/);
+    expect(() => buildAtollPool({ name: 'empty', sharedMemory: mem() })).toThrow(/workerFile or createWorker/);
   });
 
   it('builds a real WorkerPool through the provided factory', () => {
     const spawnLog: InProcessWorker[] = [];
-    const pool = buildMeshPool({
+    const pool = buildAtollPool({
       name: 't',
       sharedMemory: mem(),
       poolSize: 2,

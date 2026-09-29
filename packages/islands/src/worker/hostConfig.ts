@@ -125,7 +125,7 @@ const childHostContextFor = (parent: HostContext, type: string): HostContext => 
 export const hostConfig = {
   // Identity / capabilities
   rendererVersion: '0.34.0',
-  rendererPackageName: '@jwhenry123/mesh-islands',
+  rendererPackageName: '@atolljs/islands',
   extraDevToolsConfig: null,
   isPrimaryRenderer: true,
   warnsIfNotActing: false,

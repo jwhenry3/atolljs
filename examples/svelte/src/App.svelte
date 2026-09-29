@@ -1,6 +1,6 @@
 <script lang="ts">
   import { createIncidents } from './incidents.svelte';
-  import { fmtDur, fmtInt, incidentColumns as columns, REGIONS, SERVICES, SEVERITIES, STATUSES, type QueryArgs } from '@jwhenry123/mesh-incidents';
+  import { fmtDur, fmtInt, incidentColumns as columns, REGIONS, SERVICES, SEVERITIES, STATUSES, type QueryArgs } from '@atolljs/incidents';
 
   let pageIndex = $state(0);
   let pageSize = $state(50);

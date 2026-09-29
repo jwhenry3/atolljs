@@ -1,15 +1,15 @@
 /**
- * Functional test: the solid example's createIncidents driving the real mesh
+ * Functional test: the solid example's createIncidents driving the real atoll
  * in-process.
  */
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { createRoot } from 'solid-js';
-import { InProcessWorker } from '@jwhenry123/mesh/sdk/testing/inProcessWorker';
-import type { QueryArgs } from '@jwhenry123/mesh/incidents';
+import { InProcessWorker } from '@atolljs/core/sdk/testing/inProcessWorker';
+import type { QueryArgs } from '@atolljs/core/incidents';
 
 vi.stubGlobal('Worker', InProcessWorker);
 InProcessWorker.handlerModules = [
-  () => import('@jwhenry123/mesh/incidents/worker/incidents.worker'),
+  () => import('@atolljs/core/incidents/worker/incidents.worker'),
 ];
 
 const QUERY: QueryArgs = {

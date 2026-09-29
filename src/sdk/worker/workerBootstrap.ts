@@ -8,7 +8,7 @@ let memoryInitialized = false;
 
 if (typeof self === 'undefined') {
   // Imported outside a worker context (e.g. a Nest entry that shares the
-  // mesh-nestjs barrel with the worker entry) — nothing to wire.
+  // atoll-nestjs barrel with the worker entry) — nothing to wire.
   workerLog.warn('workerBootstrap: no worker global found — skipping message wiring');
 } else {
   self.onmessage = async (event) => {

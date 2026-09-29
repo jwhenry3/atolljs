@@ -4,7 +4,7 @@
  * InProcessWorker, so everything except the OS thread boundary is real:
  * the registry, per-instance reconcilers, the op protocol, the emit channel,
  * and the shared-memory doorbell. The islands runtime itself now lives in
- * @jwhenry123/mesh-islands — this test exercises the same code through
+ * @atolljs/islands — this test exercises the same code through
  * the package's exports.
  *
  * One module instance plays every worker, so mounts are keyed by app name —
@@ -15,7 +15,7 @@
  * auto-subscribe at mount.
  */
 import { beforeAll, describe, expect, it, vi } from 'vitest';
-import { InProcessWorker } from '@jwhenry123/mesh/sdk/testing/inProcessWorker';
+import { InProcessWorker } from '@atolljs/core/sdk/testing/inProcessWorker';
 
 /**
  * One React copy for the whole render stack. The suite aliases `react` to the
@@ -51,11 +51,11 @@ InProcessWorker.handlerModules = [
   () => import('../src/worker/map.worker'),
 ];
 
-let connectIslandWorker: typeof import('@jwhenry123/mesh-islands').connectIslandWorker;
-let mountIsland: typeof import('@jwhenry123/mesh-islands').mountIsland;
+let connectIslandWorker: typeof import('@atolljs/islands').connectIslandWorker;
+let mountIsland: typeof import('@atolljs/islands').mountIsland;
 beforeAll(async () => {
   // Imported after the Worker stub — the client factory builds pools lazily.
-  ({ connectIslandWorker, mountIsland } = await import('@jwhenry123/mesh-islands'));
+  ({ connectIslandWorker, mountIsland } = await import('@atolljs/islands'));
 });
 
 /** One island client factory — the worker entry is this example's registry. */
@@ -200,7 +200,7 @@ describe('react-dom-worker islands', () => {
     b.destroy();
   });
 
-  it('transclusion: a data-mesh-slot element is handed to the shell, unmounted on removal', async () => {
+  it('transclusion: a data-atoll-slot element is handed to the shell, unmounted on removal', async () => {
     const el = document.createElement('div');
     document.body.appendChild(el);
 
@@ -227,7 +227,7 @@ describe('react-dom-worker islands', () => {
     // rendered a leaf).
     expect(mounted.length).toBe(1);
     const slotEl = mounted[0];
-    expect(slotEl.getAttribute('data-mesh-slot')).toBe('wave');
+    expect(slotEl.getAttribute('data-atoll-slot')).toBe('wave');
     expect(el.contains(slotEl)).toBe(true);
     expect(slotEl.querySelector('canvas')).not.toBeNull();
 

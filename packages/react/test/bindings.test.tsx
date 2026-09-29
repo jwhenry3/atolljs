@@ -2,7 +2,7 @@
 import { act, type ReactElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { defineSharedMemory, defineTask, field, observe } from '@jwhenry123/mesh/sdk';
+import { defineSharedMemory, defineTask, field, observe } from '@atolljs/core/sdk';
 import { useObservable, useSharedValue, useTask } from '../src/index';
 
 (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
@@ -39,9 +39,9 @@ describe('useSharedValue', () => {
       return <output>{label ?? 'unset'}</output>;
     }
     const { container } = render(<C />);
-    act(() => mem.label.write('mesh'));
+    act(() => mem.label.write('atoll'));
     await vi.waitFor(() =>
-      expect(container.querySelector('output')!.textContent).toBe('mesh')
+      expect(container.querySelector('output')!.textContent).toBe('atoll')
     );
   });
 

@@ -3,7 +3,27 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>mesh — package documentation</title>
+    <title>Atoll — package documentation</title>
+    <script>
+      // GitHub Pages can't send COOP/COEP headers — coi-sw.js injects them
+      // via a service worker so SharedArrayBuffer exists there. The first
+      // visit reloads once so the document becomes controlled; no-ops when
+      // already isolated (dev servers, serve:all) or SWs are unsupported.
+      (function () {
+        var flag = 'coi-reload:' + location.pathname;
+        if (window.crossOriginIsolated) { sessionStorage.removeItem(flag); return; }
+        if (!('serviceWorker' in navigator)) return;
+        navigator.serviceWorker
+          .register('coi-sw.js')
+          .then(function () { return navigator.serviceWorker.ready; })
+          .then(function () {
+            if (sessionStorage.getItem(flag)) return;
+            sessionStorage.setItem(flag, '1');
+            location.reload();
+          })
+          .catch(function () {});
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

@@ -10,9 +10,9 @@
     "jsx": "react-jsx",
     "skipLibCheck": true,
     "paths": {
-      "@jwhenry123/mesh-react": ["../react/src/index.ts"],
-      "@jwhenry123/mesh/sdk": ["../../src/sdk/index.ts"],
-      "@jwhenry123/mesh/sdk/*": ["../../src/sdk/*"]
+      "@atolljs/react": ["../react/src/index.ts"],
+      "@atolljs/core/sdk": ["../../src/sdk/index.ts"],
+      "@atolljs/core/sdk/*": ["../../src/sdk/*"]
     }
   },
   "include": ["src", "test", "../react/src"]

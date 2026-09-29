@@ -6,14 +6,14 @@
  * `mountIsland({ worker })` shorthand (no connectIslandWorker call).
  */
 import { beforeAll, describe, expect, it, vi } from 'vitest';
-import { InProcessWorker } from '@jwhenry123/mesh/sdk/testing/inProcessWorker';
+import { InProcessWorker } from '@atolljs/core/sdk/testing/inProcessWorker';
 
 vi.stubGlobal('Worker', InProcessWorker);
 InProcessWorker.handlerModules = [() => import('../src/worker/vue.worker')];
 
-let mountIsland: typeof import('@jwhenry123/mesh-islands').mountIsland;
+let mountIsland: typeof import('@atolljs/islands').mountIsland;
 beforeAll(async () => {
-  ({ mountIsland } = await import('@jwhenry123/mesh-islands'));
+  ({ mountIsland } = await import('@atolljs/islands'));
 });
 
 const vueWorker = () =>

@@ -11,7 +11,7 @@ export function Reactivity() {
 
       <h2>observe — a field as an observable</h2>
       <CodeBlock
-        code={`import { observe, shallowEqual } from '@jwhenry123/mesh/sdk';
+        code={`import { observe, shallowEqual } from '@atolljs/core/sdk';
 
 const metrics = observe(memory, 'metrics');
 metrics.get();                       // undefined until bound + first write
@@ -32,7 +32,7 @@ observe(memory, 'metrics', m => ({ open: m.open }), { equals: shallowEqual });`}
 
       <h2>watch — low-level field watching</h2>
       <CodeBlock
-        code={`import { watch, reactive } from '@jwhenry123/mesh/sdk';
+        code={`import { watch, reactive } from '@atolljs/core/sdk';
 
 // Whole field:
 const stop = watch(memory.connector('metrics'), (m) => console.log(m.critical));
@@ -59,7 +59,7 @@ const sig = reactive(memory.connector('metrics'));  // sig.get() in effects`}
 
       <h2>Logging</h2>
       <CodeBlock
-        code={`import { setLogLevel, setLogSink } from '@jwhenry123/mesh/sdk';
+        code={`import { setLogLevel, setLogSink } from '@atolljs/core/sdk';
 
 setLogLevel('debug');                 // silent | error | info | debug | trace
 setLogSink((entry) => myLogger(entry)); // route SDK logs anywhere`}

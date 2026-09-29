@@ -1,6 +1,6 @@
 # Telecom Incident Explorer — React
 
-The incidents demo on the `@jwhenry123/mesh/sdk` sdk: 1M fixed-layout records seeded into
+The incidents demo on the `@atolljs/core/sdk` sdk: 1M fixed-layout records seeded into
 shared memory by a worker pool; the main thread publishes queries, the worker
 scans/sorts/aggregates, and only the visible page crosses postMessage.
 

@@ -11,10 +11,10 @@
     "jsx": "react-jsx",
     "skipLibCheck": true,
     "paths": {
-      "@jwhenry123/mesh-react": ["../../packages/react/src/index.ts"],
-      "@jwhenry123/mesh-incidents": ["../../packages/incidents/src/index.ts"],
-      "@jwhenry123/mesh/sdk": ["../../src/sdk/index.ts"],
-      "@jwhenry123/mesh/sdk/*": ["../../src/sdk/*"]
+      "@atolljs/react": ["../../packages/react/src/index.ts"],
+      "@atolljs/incidents": ["../../packages/incidents/src/index.ts"],
+      "@atolljs/core/sdk": ["../../src/sdk/index.ts"],
+      "@atolljs/core/sdk/*": ["../../src/sdk/*"]
     }
   },
   "include": ["src", "vite.config.ts"]

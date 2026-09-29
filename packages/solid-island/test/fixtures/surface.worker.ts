@@ -11,7 +11,7 @@
  *   evaluation — proving updateProps re-runs only the changed key's readers.
  */
 import { createSignal, mapArray } from 'solid-js';
-import { emit } from '@jwhenry123/mesh-islands/worker';
+import { emit } from '@atolljs/islands/worker';
 import {
   defineSolidPolyWorker,
   h,

@@ -10,10 +10,10 @@
     "isolatedModules": true,
     "skipLibCheck": true,
     "paths": {
-      "@jwhenry123/mesh-vue": ["../../packages/vue/src/index.ts"],
-      "@jwhenry123/mesh-incidents": ["../../packages/incidents/src/index.ts"],
-      "@jwhenry123/mesh/sdk": ["../../src/sdk/index.ts"],
-      "@jwhenry123/mesh/sdk/*": ["../../src/sdk/*"]
+      "@atolljs/vue": ["../../packages/vue/src/index.ts"],
+      "@atolljs/incidents": ["../../packages/incidents/src/index.ts"],
+      "@atolljs/core/sdk": ["../../src/sdk/index.ts"],
+      "@atolljs/core/sdk/*": ["../../src/sdk/*"]
     }
   },
   "include": ["src", "vite.config.ts"]

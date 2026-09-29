@@ -5,7 +5,7 @@ export function SharedWorker() {
     <article>
       <h1>Shared worker</h1>
       <p className="lead">
-        <code>@jwhenry123/mesh/sdk</code> ships a <code>SharedWorker</code>-based
+        <code>@atolljs/core/sdk</code> ships a <code>SharedWorker</code>-based
         runtime alongside <code>WorkerPool</code>. Its purpose is{' '}
         <strong>shared state</strong>, not messaging: one worker owns one{' '}
         <code>SharedArrayBuffer</code>, and every page, tab, and iframe that
@@ -13,12 +13,12 @@ export function SharedWorker() {
         readable and observable in all.
       </p>
 
-      <CodeBlock code={`npm install @jwhenry123/mesh/sdk`} language="bash" />
+      <CodeBlock code={`npm install @atolljs/core/sdk`} language="bash" />
 
       <h2>Worker entry</h2>
       <CodeBlock
         file="src/incidents.sharedWorker.ts"
-        code={`import { sharedWorkerHost, TaskRegistry } from '@jwhenry123/mesh/sdk';
+        code={`import { sharedWorkerHost, TaskRegistry } from '@atolljs/core/sdk';
 import { incidentsMemory } from './memory';
 import { getIncidents, queryIncidents } from './queries';
 
@@ -30,7 +30,7 @@ sharedWorkerHost();`}
       <h2>Client</h2>
       <CodeBlock
         file="main thread / any page, tab, or iframe"
-        code={`import { connectSharedWorker } from '@jwhenry123/mesh/sdk';
+        code={`import { connectSharedWorker } from '@atolljs/core/sdk';
 import { incidentsMemory, InitIncidents, QueryIncidents } from './contracts';
 
 const worker = await connectSharedWorker({

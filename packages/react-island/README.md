@@ -1,19 +1,19 @@
-# @jwhenry123/mesh-react-island
+# @atolljs/react-island
 
-The React shell surface for `@jwhenry123/mesh-islands` — mount a
+The React shell surface for `@atolljs/islands` — mount a
 worker-hosted React (or imperative proxy-DOM) tree as an ordinary element
 in a main-thread React app. The worker's render loop produces a serialized
 op stream; this package's components own the mount lifecycle and replay it
 onto a real `div`.
 
 ```bash
-npm install @jwhenry123/mesh @jwhenry123/mesh-islands @jwhenry123/mesh-react-island react
+npm install @atolljs/core @atolljs/islands @atolljs/react-island react
 ```
 
 ## `<Island/>`
 
 ```tsx
-import { Island } from '@jwhenry123/mesh-react-island';
+import { Island } from '@atolljs/react-island';
 import { ChartsApp } from './worker/apps';
 
 const renderWorker = () =>
@@ -70,7 +70,7 @@ and types like a local component. Every prop that isn't a shell concern
 `fallback`/`containerProps`) forwards as the island's props.
 
 ```tsx
-import { islandComponent, lazyIsland } from '@jwhenry123/mesh-react-island';
+import { islandComponent, lazyIsland } from '@atolljs/react-island';
 import type { TableProps } from './worker/apps'; // type-only: erased, zero bundle cost
 
 // The pure-contract proxy — the shell NEVER imports the implementation.

@@ -1,0 +1,133 @@
+# Framework islands — the `*-island` packages
+
+Read when: working on `packages/vue-island`, `svelte-island`, `solid-island`,
+`angular-island`, `react-island`, or writing a new worker renderer.
+
+Each framework ships one `*-island` package covering both ends: a **shell
+surface** (mount a worker-hosted tree as an ordinary element in that
+framework's app) and a **worker renderer** (run the framework's own renderer
+against the proxy DOM). All five speak the same op protocol — a registry
+worker can mix them freely.
+
+## The packages
+
+| Package | Shell surface | Worker renderer | updateProps |
+|---|---|---|---|
+| `@atolljs/react-island` | `<Island/>`, `islandComponent`, `lazyIsland` | `react-reconciler@0.34` — lives in islands core, lazy-imported | reconciler re-render |
+| `@atolljs/vue-island` | `useIsland`, `<AtollIsland>` | `defineVuePolyWorker` — Vue `createRenderer` → proxy DOM | fine-grained (`cloneVNode` + `render`) |
+| `@atolljs/svelte-island` | `use:island` action, `createIslandState` | `defineSveltePolyWorker` — Svelte 5 `mount()` into `doc.body`, `$state` props box | fine-grained (props box mutation) |
+| `@atolljs/solid-island` | `createIsland`, `Island` | `defineSolidPolyWorker` — `solid-js/universal` `createRenderer` | fine-grained (per-key signal props) |
+| `@atolljs/angular-island` | `<atoll-island>`, `[atollIsland]`, `AtollIslandModule` | `defineAngularPolyWorker` — `RendererFactory2`/`Renderer2` → proxy DOM + `createComponent`, zoneless | `setInput` + manual CD |
+
+Per-framework detail: [frameworks/vue.md](frameworks/vue.md),
+[svelte.md](frameworks/svelte.md), [solid.md](frameworks/solid.md),
+[angular.md](frameworks/angular.md), [react.md](frameworks/react.md). The
+worker entries each re-export `emit`/`runInInstance` so a worker bundle needs
+no direct `@atolljs/islands` import.
+
+## Mixed registries
+
+A `definePolyWorker({ apps })` registry accepts React components,
+`{ imperative }` defs, and any framework's adapter output side by side — wrap
+manually with `vueIslandApp`/`svelteIslandApp`/`solidIslandApp`/
+`angularIslandApp` when the app should sit in a shared `definePolyWorker`
+rather than that framework's own `define*PolyWorker` (which wraps plain
+components automatically):
+
+```ts
+import { definePolyWorker } from '@atolljs/islands/worker';
+import { vueIslandApp } from '@atolljs/vue-island/worker';
+import { svelteIslandApp } from '@atolljs/svelte-island/worker';
+
+export const worker = definePolyWorker({
+  apps: {
+    dashboard: DashboardApp,                  // React component
+    notes:     vueIslandApp(VueNotes),        // Vue
+    editor:    svelteIslandApp(Editor),       // Svelte
+    map:       { imperative: buildMap },      // proxy DOM, no framework
+  },
+});
+```
+
+The demo's Vue island runs exactly this way — its own worker entry
+(`examples/react-dom-worker/src/worker/vue.worker.ts`), Vue but no React in
+the bundle.
+
+## Bundle composition — what's in a worker bundle
+
+The `/worker` entry is framework-neutral: `definePolyWorker`, the proxy DOM,
+the op protocol, event dispatch, `emit`/`callbackProp`, instance lifecycle.
+Framework runtimes arrive only through the binding you import:
+
+- **React islands** — `react` + `react-reconciler` + the host config live in
+  `worker/reactInstance.ts`, reached via `await import()` the first time a
+  registered app resolves to a React component. A worker whose registry holds
+  only Vue/Svelte/Solid/Angular/imperative apps never loads it — bundlers put
+  it in a lazily-fetched chunk (or drop it entirely when the worker entry
+  can't reach it statically).
+- **Vue/Svelte/Solid/Angular islands** — each `-island` package statically
+  imports only its own framework. A `defineVuePolyWorker` entry bundles
+  islands core + Vue, and no other framework.
+- **Imperative-only** — islands core alone (plus `htmlparser2`, which the
+  proxy DOM's `innerHTML`/`insertStaticContent` need).
+
+Two caveats: the `Slot` helper is a React component (its JSX pulls in
+`react/jsx-runtime` — a few KB, tree-shaken when unused), and
+`definePolyWorker`'s mount task is `async` because a React first-mount awaits
+the runtime chunk — callers already `await` it, so this is only a
+typing-level detail.
+
+## Real libraries — what works
+
+**Imperative libraries.** The `map` island in `examples/react-dom-worker` runs
+**Leaflet 1.9, unmodified from npm**, entirely worker-side:
+`installDomShim(doc)` then `await import('leaflet')` (dynamic import is
+required — Leaflet reads `document`/`window` at module scope for Browser
+detection). Verified working: tile `<img>` ops, divIcon markers, controls,
+attribution, drag-pan (document-level listeners registered mid-gesture), wheel
+zoom, delegated marker clicks, and `doc.onResize` → `invalidateSize()`.
+
+**React libraries.** The `charts` island runs **recharts 3.x, unmodified**, as
+an ordinary React tree in the worker: `ComposedChart` with
+grid/axes/tooltip/legend/bar/line, `onClick` handlers, and `emit` — verified
+end-to-end with a bar-click round-trip. It exercises the general machinery:
+namespaced SVG ops (host context tracks `<svg>`/`<foreignObject>` boundaries
+so `createElementNS` lands correctly, including through portals),
+`ProxyElement` refs as react-dom `createPortal` containers via
+`getPublicInstance`, instance-resolved `document`/`window` for
+selector/`getComputedStyle` calls, and `currentTarget` synthesis for mouse
+middleware. Use fixed chart dimensions — `ResponsiveContainer` has no layout
+to observe — and prefer `isAnimationActive={false}` to skip
+measurement-feedback render passes that converge but cost op volume.
+
+### Known limits for DOM-heavy libraries
+
+- **Geometry is one box.** Only the island container is measured (pushed);
+  libraries that measure arbitrary elements still get 0 — SVG-specific reads
+  (`getBBox`, `getTotalLength`, `getComputedTextLength`) too, which is why
+  recharts text truncation/animation sizing degrades to stub values.
+- **`preventDefault`/`stopPropagation` are no-ops** — the real event already
+  dispatched on the main thread; the worker can't cancel it.
+- **Async-library callbacks that mutate DOM or emit outside a task** must
+  re-enter via `runInInstance(instance, fn)` — timers and promise
+  continuations have no active instance.
+- **`getContext('2d'/'webgl')` is out of scope** for the op protocol —
+  canvas-based libraries belong on `OffscreenCanvas`, which is a different
+  transport.
+
+## Workload fit
+
+Every event costs one postMessage round trip — `pointermove`, per-keystroke
+input, and scroll handlers re-render on worker latency, and `preventDefault`
+can't work because the real event already dispatched. Keep high-frequency
+input on the main thread (slots exist for exactly this) and put coarse
+interactions — clicks, toggles, form submits — behind the island. On the other
+side of the ledger, main-thread replay scales with op *count*, not tree size:
+fine-grained updates replay in ~1ms while whole-tree rebuilds cost an order of
+magnitude more per frame. `mountIsland`'s `onOps` hook reports the
+worker/main split if you want to measure a workload before committing it to
+an island.
+
+Peer deps `react`/`react-reconciler` are required on `@atolljs/islands` even for
+imperative-only consumers — the package *is* the React-rendering pattern;
+tree-shaking drops the reconciler if you never register React apps.

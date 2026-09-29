@@ -2,14 +2,14 @@
 
 ## Unreleased
 
-- **New package: `@jwhenry123/mesh-react-island`** — the React shell
-  components split out of `@jwhenry123/mesh-islands` (which stays
+- **New package: `@atolljs/react-island`** — the React shell
+  components split out of `@atolljs/islands` (which stays
   React-free on the main thread): `<Island/>` mounts a worker app
   declaratively, `islandComponent<P>('name')` proxies a worker app as a
   local-typed component without importing it, and `lazyIsland(loader)`
   mirrors `React.lazy` — suspends on the dynamic import (a real code-split
   boundary) then mounts the `islandApp`-stamped reference.
-- **New package: `@jwhenry123/mesh-islands`** — the React-in-worker
+- **New package: `@atolljs/islands`** — the React-in-worker
   islands pattern extracted from the react-dom-worker example into an
   opt-in package. `defineIslandWorker({ apps })` is the whole worker entry
   (React realms via a real `react-reconciler@0.34`, or `{ imperative }`
@@ -46,7 +46,7 @@ No API changes — this release fixes what ships and how it ships.
   benchmark-only dependency being installed by consumers.
 - `workerBootstrap` is marked as the package's one side-effectful module so
   bundlers don't drop its `self.onmessage` wiring when pruning.
-- `mesh-node` and `mesh-nestjs` now ship READMEs.
+- `@atolljs/node` and `@atolljs/nestjs` now ship READMEs.
 - Release pipeline: CI **stages** packages with `npm stage publish` —
   versions stay non-installable until maintainer 2FA approval — and supports
   OIDC trusted publishing (`npm trust github … --allow-stage-publish`) so the
@@ -59,7 +59,7 @@ contract: `defineWorker` declares the method surface once, `connectWorker`
 gives the main thread a typed, lazy client — and a shared-memory contract can
 flow live values into UI state without a single `postMessage` copy.
 
-### Core SDK — `@jwhenry123/mesh`
+### Core SDK — `@atolljs/core`
 
 **Worker authoring & clients**
 
@@ -118,32 +118,32 @@ one buffer) shared across tabs/iframes.
 
 | Package | API |
 |---|---|
-| `@jwhenry123/mesh-react` | `useObservable`, `useSharedValue`, `useTask` |
-| `@jwhenry123/mesh-vue` | `useObservable`, `useSharedValue`, `useTask` |
-| `@jwhenry123/mesh-solidjs` | `createObservable`, `createSharedValue`, `createTask` |
-| `@jwhenry123/mesh-svelte` | `observableValue`, `sharedValue`, `taskState` (runes) |
-| `@jwhenry123/mesh-angular` | `observableSignal`, `sharedValue`, `taskState` (signals), `provideMesh`, `injectMeshPool` |
-| `@jwhenry123/mesh-nextjs` | React hooks re-exported for App Router client components |
+| `@atolljs/react` | `useObservable`, `useSharedValue`, `useTask` |
+| `@atolljs/vue` | `useObservable`, `useSharedValue`, `useTask` |
+| `@atolljs/solidjs` | `createObservable`, `createSharedValue`, `createTask` |
+| `@atolljs/svelte` | `observableValue`, `sharedValue`, `taskState` (runes) |
+| `@atolljs/angular` | `observableSignal`, `sharedValue`, `taskState` (signals), `provideAtoll`, `injectAtollPool` |
+| `@atolljs/nextjs` | React hooks re-exported for App Router client components |
 
 Every task binding accepts an `AsyncTask` **or a plain async function** — a
 client method like `useTask(incidents.queryIncidents)` binds directly, with
 per-call-site task state (no module-global latest-wins clobbering).
 
-**Angular** also ships `MeshModule` — the Nest vocabulary for NgModule apps:
+**Angular** also ships `AtollModule` — the Nest vocabulary for NgModule apps:
 `forRoot`/`forRootAsync` at the root, `registerPool`/`registerPoolAsync`
-inside the feature module that owns the worker, `@InjectMeshPool` for
+inside the feature module that owns the worker, `@InjectAtollPool` for
 ctor-param injection. Pools terminate on injector destroy (teardown/HMR).
 
 ### Server side
 
-- `@jwhenry123/mesh-node` — `createNodePool` (auto-adapts
+- `@atolljs/node` — `createNodePool` (auto-adapts
   `node:worker_threads.Worker`), `createNodeWorker`, the `/shim` worker entry
   (`self = parentPort`). No isolation headers needed on Node.
-- `@jwhenry123/mesh-nestjs` — `MeshModule.forRoot/forRootAsync` +
+- `@atolljs/nestjs` — `AtollModule.forRoot/forRootAsync` +
   `registerPool/registerPoolAsync` (feature-module-owned pools, Bull-style);
-  `@MeshService({ pool })` class-level and `@MeshTask` method-level offload —
+  `@AtollService({ pool })` class-level and `@AtollTask` method-level offload —
   bodies run inside the worker's own Nest context on DI-resolved providers;
-  `runMeshWorker(AppModule)` is the entire worker entrypoint; worker-side
+  `runAtollWorker(AppModule)` is the entire worker entrypoint; worker-side
   guard prevents nested pools when feature modules are shared between
   API and worker contexts.
 
@@ -159,7 +159,7 @@ ctor-param injection. Pools terminate on injector destroy (teardown/HMR).
 
 ### Ecosystem in the box
 
-- Docs: `jwhenry3.github.io/mesh/` — `/sdk/` internals site, `/consumer/`
+- Docs: `jwhenry3.github.io/atolljs/` — `/sdk/` internals site, `/consumer/`
   usage site (quickstart, per-framework pages, isolation/hosting guides).
 - Runnable examples for all six frameworks + NestJS + Node, an `incidents`
   domain package as the reference integration, and a `benchmark` example.

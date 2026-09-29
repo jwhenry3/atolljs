@@ -1,6 +1,6 @@
 import { useMemo, useSyncExternalStore } from 'react';
-import { observe, toTask } from '@jwhenry123/mesh/sdk';
-import type { AsyncTask, ObservableValue, PathConnector, SharedMemory, SharedSpec, SpecPath, SliceOptions } from '@jwhenry123/mesh/sdk';
+import { observe, toTask } from '@atolljs/core/sdk';
+import type { AsyncTask, ObservableValue, PathConnector, SharedMemory, SharedSpec, SpecPath, SliceOptions } from '@atolljs/core/sdk';
 
 /**
  * Subscribe to any sdk ObservableValue (task snapshot, field observable).

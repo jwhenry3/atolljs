@@ -9,8 +9,8 @@ interface DemoFrameProps {
 /**
  * Embeds one of the framework example apps. In a docs dev server the examples
  * run on their own ports (npm run dev:all); in the built docs they are mounted
- * at ./<id>/ relative to the site root — works under any base path (serve:docs,
- * serve:all, GitHub Pages). Next.js is server-rendered and always runs on its own port.
+ * at ./<id>/ relative to the site root — works under any base path
+ * (serve:all, GitHub Pages). Next.js is server-rendered and always runs on its own port.
  */
 export function DemoFrame({ id, port, name, path = '' }: DemoFrameProps) {
   const base =

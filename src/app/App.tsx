@@ -12,7 +12,6 @@ interface Demo {
 }
 
 const FRAMEWORKS = [
-  { id: 'sdk', name: 'SDK Docs', port: 4180, detail: 'SDK internals, guides & live playground' },
   { id: 'consumer', name: 'Package Docs', port: 4181, detail: 'npm consumer guide & API reference' },
   { id: 'react', name: 'React', port: 5173, detail: 'useSyncExternalStore hooks + TanStack Table' },
   { id: 'vue', name: 'Vue', port: 5174, detail: 'Composition API refs + watchers' },
@@ -114,7 +113,7 @@ function DemoCard({ demo }: { demo: Demo }) {
 export function App() {
   return (
     <main>
-      <h1>Worker Mesh Demos</h1>
+      <h1>Worker Atoll Demos</h1>
       <p className="subtitle">
         Each demo spawns a worker pool bound to a shared memory contract.
       </p>

@@ -29,7 +29,7 @@ import {
 } from '@angular/core';
 import { AsyncPipe, DatePipe, UpperCasePipe } from '@angular/common';
 import { of } from 'rxjs';
-import { definePolyWorker, emit } from '@jwhenry123/mesh-islands/worker';
+import { definePolyWorker, emit } from '@atolljs/islands/worker';
 import { angularIslandApp } from '../../src/worker';
 
 /* ── 1. Control flow: @if/@else/@for/@empty/trackBy ─────────────────────── */
@@ -41,7 +41,7 @@ interface Row {
 
 @Component({
   standalone: true,
-  selector: 'mesh-flow',
+  selector: 'atoll-flow',
   template: `
     <button class="toggle" (click)="toggle()">toggle</button>
     @if (shown()) {
@@ -88,7 +88,7 @@ class FlowComponent {
 
 @Component({
   standalone: true,
-  selector: 'mesh-slot-child',
+  selector: 'atoll-slot-child',
   template: `
     <div class="head"><ng-content select="[slot-head]" /></div>
     <div class="body"><ng-content /></div>
@@ -98,13 +98,13 @@ class SlotChildComponent {}
 
 @Component({
   standalone: true,
-  selector: 'mesh-projection',
+  selector: 'atoll-projection',
   imports: [SlotChildComponent],
   template: `
-    <mesh-slot-child>
+    <atoll-slot-child>
       <h1 slot-head class="title">{{ title() }}</h1>
       <p class="para" (click)="bump()">projected {{ n() }}</p>
-    </mesh-slot-child>
+    </atoll-slot-child>
   `,
 })
 class ProjectionComponent {
@@ -129,7 +129,7 @@ export const GREETING = new InjectionToken<string>('GREETING');
 
 @Component({
   standalone: true,
-  selector: 'mesh-di-child',
+  selector: 'atoll-di-child',
   template: `<button class="bump" (click)="store.inc()">bump</button>`,
 })
 class DiChildComponent {
@@ -138,10 +138,10 @@ class DiChildComponent {
 
 @Component({
   standalone: true,
-  selector: 'mesh-di',
+  selector: 'atoll-di',
   imports: [DiChildComponent],
   template: `
-    <mesh-di-child />
+    <atoll-di-child />
     <p class="count">{{ store.count() }}</p>
     <p class="greeting">{{ greeting }}</p>
   `,
@@ -158,7 +158,7 @@ export const lifecycleLog: string[] = [];
 
 @Component({
   standalone: true,
-  selector: 'mesh-lifecycle',
+  selector: 'atoll-lifecycle',
   template: `<p class="greeting">{{ greeting() }}</p>`,
 })
 class LifecycleComponent implements OnInit, OnChanges, OnDestroy {
@@ -185,7 +185,7 @@ class LifecycleComponent implements OnInit, OnChanges, OnDestroy {
 
 @Component({
   standalone: true,
-  selector: 'mesh-two-way',
+  selector: 'atoll-two-way',
   template: `<button class="flip" (click)="flip()">{{ checked() ? 'on' : 'off' }}</button>`,
 })
 class TwoWayComponent {
@@ -201,12 +201,12 @@ class TwoWayComponent {
 
 @Component({
   standalone: true,
-  selector: 'mesh-model',
+  selector: 'atoll-model',
   imports: [TwoWayComponent],
   template: `
     <p class="name">{{ name() }}</p>
     <p class="mirror">child: {{ childState() ? 'on' : 'off' }}</p>
-    <mesh-two-way [(checked)]="childState" (flipped)="onFlip($event)" />
+    <atoll-two-way [(checked)]="childState" (flipped)="onFlip($event)" />
   `,
 })
 class ModelComponent {
@@ -223,7 +223,7 @@ class ModelComponent {
 
 @Component({
   standalone: true,
-  selector: 'mesh-bindings',
+  selector: 'atoll-bindings',
   template: `
     <div
       class="box"
@@ -267,7 +267,7 @@ class BindingsComponent {
 
 @Component({
   standalone: true,
-  selector: 'mesh-pipes',
+  selector: 'atoll-pipes',
   imports: [UpperCasePipe, DatePipe, AsyncPipe],
   template: `
     <p class="upper">{{ 'island' | uppercase }}</p>
@@ -284,7 +284,7 @@ class PipesComponent {
 
 @Component({
   standalone: true,
-  selector: 'mesh-host-bind',
+  selector: 'atoll-host-bind',
   host: {
     role: 'button',
     '(click)': 'press()',
@@ -310,7 +310,7 @@ class HostBindComponent {
 
 @Component({
   standalone: true,
-  selector: 'mesh-async',
+  selector: 'atoll-async',
   template: `
     <p class="ticks">{{ ticks() }}</p>
     <button class="schedule" (click)="schedule()">schedule</button>
@@ -342,7 +342,7 @@ class AsyncComponent implements OnDestroy {
 
 @Component({
   standalone: true,
-  selector: 'mesh-defer',
+  selector: 'atoll-defer',
   template: `
     @defer (on immediate) {
       <p class="deferred">deferred</p>

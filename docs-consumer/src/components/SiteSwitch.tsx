@@ -1,9 +1,11 @@
-// Site switcher for the mesh docs family. Dev mode hops between the per-app
+// Site switcher for the atoll docs family. Dev mode hops between the per-app
 // dev-server ports; built output uses relative paths, which works under any
-// mount point (serve-all dist/, GitHub Pages /<repo>/).
+// mount point (serve-all dist/, GitHub Pages /<repo>/). The internals docs
+// are in-repo markdown — the repo-docs entry links to them on GitHub.
+const REPO_DOCS = 'https://github.com/jwhenry3/atolljs/tree/master/docs';
 const SITES = [
   { id: 'home', label: 'demos home', dev: 'http://localhost:4173/', prod: '../' },
-  { id: 'sdk', label: 'sdk docs', dev: 'http://localhost:4180/', prod: '../sdk/' },
+  { id: 'repo', label: 'internals docs (repo)', dev: REPO_DOCS, prod: REPO_DOCS },
   { id: 'consumer', label: 'package docs', dev: 'http://localhost:4181/', prod: '../consumer/' },
 ];
 

@@ -9,12 +9,12 @@
  */
 import '@angular/compiler';
 import { Component, input, signal } from '@angular/core';
-import { defineMonoWorker, emit } from '@jwhenry123/mesh-islands/worker';
+import { defineMonoWorker, emit } from '@atolljs/islands/worker';
 import { angularIslandApp } from '../../src/worker';
 
 @Component({
   standalone: true,
-  selector: 'mesh-counter',
+  selector: 'atoll-counter',
   template: `
     <p class="label">{{ label() }}</p>
     <button class="inc" (click)="increment()">increment</button>

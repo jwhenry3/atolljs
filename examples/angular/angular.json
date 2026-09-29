@@ -22,7 +22,7 @@
           },
           "configurations": {
             "production": {
-              "baseHref": "/angular/"
+              "baseHref": "./"
             }
           },
           "defaultConfiguration": "production"

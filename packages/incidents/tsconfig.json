@@ -9,10 +9,10 @@
     "isolatedModules": true,
     "skipLibCheck": true,
     "paths": {
-      "@jwhenry123/mesh/sdk": ["../../src/sdk/index.ts"],
-      "@jwhenry123/mesh/sdk/*": ["../../src/sdk/*"],
-      "@jwhenry123/mesh-incidents": ["./src/index.ts"],
-      "@jwhenry123/mesh-incidents/*": ["./src/*"]
+      "@atolljs/core/sdk": ["../../src/sdk/index.ts"],
+      "@atolljs/core/sdk/*": ["../../src/sdk/*"],
+      "@atolljs/incidents": ["./src/index.ts"],
+      "@atolljs/incidents/*": ["./src/*"]
     }
   },
   "include": ["src", "test"]

@@ -1,5 +1,5 @@
 /**
- * `@jwhenry123/mesh-solid-island/worker` — the Solid worker renderer.
+ * `@atolljs/solid-island/worker` — the Solid worker renderer.
  *
  * `solidIslandApp(Component)` wraps a plain Solid function component into a
  * `RenderedIslandApp` that `definePolyWorker`/`defineMonoWorker` can
@@ -11,7 +11,7 @@
  * Components are PLAIN FUNCTIONS — there is no JSX transform in this repo.
  * Author them with the same primitives babel-preset-solid emits for
  * `generate: 'universal'` with
- * `moduleName: '@jwhenry123/mesh-solid-island/worker'`
+ * `moduleName: '@atolljs/solid-island/worker'`
  * (`createElement`/`insert`/`setProp`/`createComponent`/`spread`/`effect`/
  * `memo`/`use`/`mergeProps` — all re-exported here), or with the tiny `h()`
  * helper for hand-written trees:
@@ -82,15 +82,15 @@ import {
   type RenderContext,
   type RenderedHandle,
   type RenderedIslandApp,
-} from '@jwhenry123/mesh-islands/worker';
-import type { SharedMemory, WorkerDefinition } from '@jwhenry123/mesh/sdk';
+} from '@atolljs/islands/worker';
+import type { SharedMemory, WorkerDefinition } from '@atolljs/core/sdk';
 
 /** A Solid component the worker renderer can mount — props arrive as the
  *  reactive record the wire serialized. */
 export type SolidComponent<P = Record<string, unknown>> = (props: P) => unknown;
 
 // Apps emit over the island→shell channel often enough to re-export.
-export { emit, runInInstance } from '@jwhenry123/mesh-islands/worker';
+export { emit, runInInstance } from '@atolljs/islands/worker';
 
 /* ── Per-document renderer instances ────────────────────────────────────── */
 
@@ -117,7 +117,7 @@ const currentDoc = (): ProxyDocument => {
   const instance = getActiveInstance() || getLastActiveInstance() || getLastTouchedInstance();
   if (instance !== '') return docForInstance(instance);
   throw new Error(
-    '@jwhenry123/mesh-solid-island: no mounted instance — createElement/createTextNode ' +
+    '@atolljs/solid-island: no mounted instance — createElement/createTextNode ' +
       'was called before any solidIslandApp mounted',
   );
 };
@@ -345,10 +345,10 @@ const assertClientBuild = (): void => {
   bump?.(1);
   if (runs < 2) {
     throw new Error(
-      '[mesh-solid-island] `solid-js` resolved to its server (SSR) build — effects never ' +
+      '[atoll-solid-island] `solid-js` resolved to its server (SSR) build — effects never ' +
         're-run, so this island would mount frozen. Pin the client build in the worker bundle: ' +
         "alias 'solid-js' → 'solid-js/dist/solid.js', or drop 'worker'/'node' from " +
-        'resolve.conditions. See the mesh-solid-island README → "the worker/node exports condition".',
+        'resolve.conditions. See the atoll-solid-island README → "the worker/node exports condition".',
     );
   }
 };
@@ -432,7 +432,7 @@ export function defineSolidMonoWorker(
 /* ── Compiled-JSX / hand-authoring primitives ─────────────────────────────
  *
  * These are the surface `babel-preset-solid` emits calls into for
- * `{ generate: 'universal', moduleName: '@jwhenry123/mesh-solid-island/worker' }`.
+ * `{ generate: 'universal', moduleName: '@atolljs/solid-island/worker' }`.
  * Node-bound calls dispatch by `node.doc` (always the right instance, even
  * outside a task scope); the doc-less factories fall back to the active
  * instance / last-mounted document. */

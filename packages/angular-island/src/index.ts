@@ -1,21 +1,21 @@
 /**
- * `@jwhenry123/mesh-angular-island` — the Angular shell surface for
- * `@jwhenry123/mesh-islands` islands: a worker-hosted React (or
+ * `@atolljs/angular-island` — the Angular shell surface for
+ * `@atolljs/islands` islands: a worker-hosted React (or
  * imperative proxy-DOM) tree mounted as an ordinary element in a
  * main-thread Angular app.
  *
  * ```ts
  * import { Component } from '@angular/core';
- * import { connectIslandWorker } from '@jwhenry123/mesh-islands';
- * import { MeshIslandComponent } from '@jwhenry123/mesh-angular-island';
+ * import { connectIslandWorker } from '@atolljs/islands';
+ * import { AtollIslandComponent } from '@atolljs/angular-island';
  *
  * const chartsWorker = () =>
  *   new Worker(new URL('./render.worker.ts', import.meta.url), { type: 'module' });
  *
  * @Component({
  *   standalone: true,
- *   imports: [MeshIslandComponent],
- *   template: `<mesh-island
+ *   imports: [AtollIslandComponent],
+ *   template: `<atoll-island
  *     [client]="client"
  *     app="charts"
  *     [props]="props"
@@ -28,7 +28,7 @@
  * }
  * ```
  *
- * Semantics (mirroring `@jwhenry123/mesh-react-island`):
+ * Semantics (mirroring `@atolljs/react-island`):
  * - Mounting is async — `ngOnInit` hands the host element to `mountIsland`,
  *   which spawns the worker and replays the first op batch. `onReady`
  *   receives the `IslandHandle` once mounted; failures go to `onError`
@@ -45,9 +45,9 @@
  *   worker; the instance unmounts and the worker dies with the last island
  *   to leave).
  *
- * `MeshIslandDirective` (`[meshIsland]`) carries the same inputs and can be
- * applied to ANY host element (`<div meshIsland [client]="…"/>`);
- * `MeshIslandComponent` (`<mesh-island>`) is the same behavior with the
+ * `AtollIslandDirective` (`[atollIsland]`) carries the same inputs and can be
+ * applied to ANY host element (`<div atollIsland [client]="…"/>`);
+ * `AtollIslandComponent` (`<atoll-island>`) is the same behavior with the
  * dedicated element selector — both inherit from a shared base so their
  * input surface and lifecycle are identical.
  */
@@ -65,22 +65,22 @@ import type {
   OnInit,
   SimpleChanges,
 } from '@angular/core';
-import { mountIsland } from '@jwhenry123/mesh-islands';
-import type { IslandClient, IslandHandle } from '@jwhenry123/mesh-islands';
+import { mountIsland } from '@atolljs/islands';
+import type { IslandClient, IslandHandle } from '@atolljs/islands';
 
 // Re-export the handle types consumers need to name — same courtesy as the
 // React binding, so a second package import is never required.
 export type { IslandClient, IslandHandle };
 
 /**
- * Shared island-mounting behavior for `<mesh-island>` and `[meshIsland]`.
+ * Shared island-mounting behavior for `<atoll-island>` and `[atollIsland]`.
  *
  * Declared as a bare `@Directive()` (no selector) so Angular treats it as a
  * directive base class: its `@Input()` members and lifecycle hooks are
  * inherited by both subclasses, which supply only a selector.
  */
 @Directive()
-export abstract class MeshIslandBase implements OnInit, OnChanges, OnDestroy {
+export abstract class AtollIslandBase implements OnInit, OnChanges, OnDestroy {
   /**
    * How to reach the worker — a pre-connected `IslandClient` from
    * `connectIslandWorker({ worker })`. Required. (Unlike the React binding,
@@ -99,7 +99,7 @@ export abstract class MeshIslandBase implements OnInit, OnChanges, OnDestroy {
   /** Initial + updated root props — serialized to the worker. */
   @Input() props?: Record<string, unknown>;
   /**
-   * Transclusion slots — a worker `<div data-mesh-slot="name">` hands its
+   * Transclusion slots — a worker `<div data-atoll-slot="name">` hands its
    * real element to `slots[name](el)` so the shell can mount main-thread
    * content inside it. Called again with `null` on teardown.
    */
@@ -164,7 +164,7 @@ export abstract class MeshIslandBase implements OnInit, OnChanges, OnDestroy {
     const client = this.client;
     if (client === undefined || client === null) {
       this.report(
-        new Error('[meshIsland] requires a `client` input — see connectIslandWorker'),
+        new Error('[atollIsland] requires a `client` input — see connectIslandWorker'),
       );
       return;
     }
@@ -203,52 +203,52 @@ export abstract class MeshIslandBase implements OnInit, OnChanges, OnDestroy {
     this.sentPropsJson = json;
     this.island?.updateProps(this.props ?? {}).catch((err) => {
       if (this.onError !== undefined) this.onError(err);
-      else console.error('[meshIsland] updateProps failed:', err);
+      else console.error('[atollIsland] updateProps failed:', err);
     });
   }
 
   private report(err: unknown): void {
     if (this.onError !== undefined) this.onError(err);
-    else console.error('[meshIsland] mount failed:', err);
+    else console.error('[atollIsland] mount failed:', err);
   }
 }
 
 /**
- * `<mesh-island [client]="…" app="charts" [props]="…"/>` — a worker island as
- * a standalone element. All inputs are inherited from {@link MeshIslandBase}.
+ * `<atoll-island [client]="…" app="charts" [props]="…"/>` — a worker island as
+ * a standalone element. All inputs are inherited from {@link AtollIslandBase}.
  */
 @Component({
-  selector: 'mesh-island',
+  selector: 'atoll-island',
   standalone: true,
   // No template — the island owns the host element's contents; Angular
   // projects nothing into it.
   template: '',
 })
-export class MeshIslandComponent extends MeshIslandBase {}
+export class AtollIslandComponent extends AtollIslandBase {}
 
 /**
- * `<div meshIsland [client]="…" [props]="…"/>` — the same island lifecycle as
+ * `<div atollIsland [client]="…" [props]="…"/>` — the same island lifecycle as
  * an attribute directive, for hosts that need their own tag/attributes.
  */
 @Directive({
-  selector: '[meshIsland]',
+  selector: '[atollIsland]',
   standalone: true,
 })
-export class MeshIslandDirective extends MeshIslandBase {}
+export class AtollIslandDirective extends AtollIslandBase {}
 
 /**
  * NgModule re-export of the standalone pair for apps still organized around
  * NgModules:
  *
- *   @NgModule({ imports: [MeshIslandModule] })
+ *   @NgModule({ imports: [AtollIslandModule] })
  *   export class AppModule {}
  *
- * Standalone imports (`imports: [MeshIslandComponent]`) remain the primary
+ * Standalone imports (`imports: [AtollIslandComponent]`) remain the primary
  * interface — the module exists purely for NgModule-era codebases, matching
- * `MeshModule` in @jwhenry123/mesh-angular.
+ * `AtollModule` in @atolljs/angular.
  */
 @NgModule({
-  imports: [MeshIslandComponent, MeshIslandDirective],
-  exports: [MeshIslandComponent, MeshIslandDirective],
+  imports: [AtollIslandComponent, AtollIslandDirective],
+  exports: [AtollIslandComponent, AtollIslandDirective],
 })
-export class MeshIslandModule {}
+export class AtollIslandModule {}

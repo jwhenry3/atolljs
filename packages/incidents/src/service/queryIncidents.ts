@@ -1,6 +1,6 @@
 // One task's whole stack: wire schemas → method contract → worker impl.
 import { z } from 'zod';
-import { scoped, serviceMethod } from '@jwhenry123/mesh/sdk';
+import { scoped, serviceMethod } from '@atolljs/core/sdk';
 import { INCIDENT_FIELDS, incidentRowSchema, incidentsMemory, type Incident } from '../contract/memory.contracts';
 
 const log = scoped('incidents');

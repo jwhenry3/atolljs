@@ -1,20 +1,20 @@
-export { MeshModule } from './module';
-export type { MeshModuleAsyncOptions, MeshPoolAsyncOptions } from './module';
-export { MeshService, MeshTask, getMeshTaskMeta } from './decorators';
-export type { MeshTaskMeta } from './decorators';
-export { bindMeshWorkerInstance } from './decorators';
-export { registerMeshHandlers } from './handlers';
-export { InjectMeshPool } from './injectPool';
-export { runMeshWorker } from './worker';
-// Node runtime pieces live in @jwhenry123/mesh-node — re-exported here for
+export { AtollModule } from './module';
+export type { AtollModuleAsyncOptions, AtollPoolAsyncOptions } from './module';
+export { AtollService, AtollTask, getAtollTaskMeta } from './decorators';
+export type { AtollTaskMeta } from './decorators';
+export { bindAtollWorkerInstance } from './decorators';
+export { registerAtollHandlers } from './handlers';
+export { InjectAtollPool } from './injectPool';
+export { runAtollWorker } from './worker';
+// Node runtime pieces live in @atolljs/node — re-exported here for
 // convenience; worker entries should import the shim via
-// '@jwhenry123/mesh-node/shim' (never through a barrel).
-export { NodeWorkerAdapter, createNodeWorker } from '@jwhenry123/mesh-node';
+// '@atolljs/node/shim' (never through a barrel).
+export { NodeWorkerAdapter, createNodeWorker } from '@atolljs/node';
 export {
-  buildMeshPool,
-  getMeshPool,
-  getMeshPoolToken,
-  registerMeshPool,
-  unregisterMeshPool,
+  buildAtollPool,
+  getAtollPool,
+  getAtollPoolToken,
+  registerAtollPool,
+  unregisterAtollPool,
 } from './pools';
-export type { MeshModuleOptions, MeshPoolConfig } from './pools';
+export type { AtollModuleOptions, AtollPoolConfig } from './pools';

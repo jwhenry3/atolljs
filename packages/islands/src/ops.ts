@@ -92,7 +92,7 @@ export type Op =
  * dispatches back into the worker. `children` never crosses — tree structure
  * is expressed entirely by append/remove ops.
  *
- * One prop is NOT a normal attribute: `data-mesh-slot` marks a transclusion
+ * One prop is NOT a normal attribute: `data-atoll-slot` marks a transclusion
  * slot — a leaf element whose box is worker-owned but whose contents the
  * shell mounts main-thread DOM into (the island's `slots` registry). The
  * driver routes it to the slot machinery instead of treating it like any

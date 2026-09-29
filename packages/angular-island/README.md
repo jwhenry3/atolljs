@@ -1,6 +1,6 @@
-# @jwhenry123/mesh-angular-island
+# @atolljs/angular-island
 
-The Angular shell surface for `@jwhenry123/mesh-islands` — mount a
+The Angular shell surface for `@atolljs/islands` — mount a
 worker-hosted tree as an ordinary element in a main-thread Angular app —
 plus the Angular **worker renderer**: `angularIslandApp` bootstraps a
 standalone component via `createComponent` against a `Renderer2`/
@@ -9,24 +9,24 @@ abstraction platform-server uses), so every render call serializes to the
 op stream the shell replays as real DOM.
 
 ```bash
-npm install @jwhenry123/mesh @jwhenry123/mesh-islands @jwhenry123/mesh-angular-island @angular/core @angular/common
+npm install @atolljs/core @atolljs/islands @atolljs/angular-island @angular/core @angular/common
 ```
 
-## `<mesh-island>` / `[meshIsland]`
+## `<atoll-island>` / `[atollIsland]`
 
 ```ts
 import { Component } from '@angular/core';
-import { MeshIslandComponent } from '@jwhenry123/mesh-angular-island';
-import { connectIslandWorker } from '@jwhenry123/mesh-islands';
+import { AtollIslandComponent } from '@atolljs/angular-island';
+import { connectIslandWorker } from '@atolljs/islands';
 
 const renderWorker = () =>
   new Worker(new URL('./render.worker.ts', import.meta.url), { type: 'module' });
 
 @Component({
   standalone: true,
-  imports: [MeshIslandComponent],   // or MeshIslandModule for NgModule apps
+  imports: [AtollIslandComponent],   // or AtollIslandModule for NgModule apps
   template: `
-    <mesh-island
+    <atoll-island
       [client]="client"
       app="charts"
       [props]="{ width: width }"
@@ -45,7 +45,7 @@ export class ShellComponent {
 }
 ```
 
-`[meshIsland]` is the directive form for existing elements; `client` can
+`[atollIsland]` is the directive form for existing elements; `client` can
 be shared across several islands in one worker. All the
 [islands island rules](../islands/README.md#island-rules) apply
 unchanged.
@@ -56,11 +56,11 @@ unchanged.
 // counter.worker.ts — the whole worker entry
 import '@angular/compiler';                     // JIT decorator components only
 import { Component, signal } from '@angular/core';
-import { defineAngularPolyWorker, emit } from '@jwhenry123/mesh-angular-island/worker';
+import { defineAngularPolyWorker, emit } from '@atolljs/angular-island/worker';
 
 @Component({
   standalone: true,
-  selector: 'mesh-counter',
+  selector: 'atoll-counter',
   template: `<button (click)="inc()">{{ label() }}: {{ n() }}</button>`,
 })
 class CounterComponent {

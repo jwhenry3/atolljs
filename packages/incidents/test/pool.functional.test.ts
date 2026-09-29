@@ -1,6 +1,6 @@
 import { afterAll, describe, expect, it, vi } from 'vitest';
-import { toTask } from '@jwhenry123/mesh/sdk';
-import { InProcessWorker } from '@jwhenry123/mesh/sdk/testing/inProcessWorker';
+import { toTask } from '@atolljs/core/sdk';
+import { InProcessWorker } from '@atolljs/core/sdk/testing/inProcessWorker';
 
 /**
  * Full incidents pipeline, everything real except the OS thread: the pool
@@ -9,7 +9,7 @@ import { InProcessWorker } from '@jwhenry123/mesh/sdk/testing/inProcessWorker';
  */
 vi.stubGlobal('Worker', InProcessWorker);
 InProcessWorker.handlerModules = [
-  () => import('@jwhenry123/mesh-incidents/worker/incidents.worker'),
+  () => import('@atolljs/incidents/worker/incidents.worker'),
 ];
 
 // Imports must follow the stub — module side effects create the pool lazily.

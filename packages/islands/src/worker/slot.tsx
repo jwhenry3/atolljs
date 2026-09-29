@@ -1,5 +1,5 @@
 /**
- * A transclusion slot — renders a leaf element marked `data-mesh-slot`.
+ * A transclusion slot — renders a leaf element marked `data-atoll-slot`.
  * The element's BOX belongs to this worker tree (layout/style ops apply as
  * usual); its CONTENTS belong to the shell: when the create op lands on the
  * main thread, the island's `slots[name]` callback gets the real element
@@ -14,5 +14,5 @@
 import type { ReactElement } from 'react';
 
 export function Slot({ name, style }: { name: string; style?: Record<string, unknown> }): ReactElement {
-  return <div data-mesh-slot={name} style={style} />;
+  return <div data-atoll-slot={name} style={style} />;
 }
