@@ -1,0 +1,31 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ESNext", "DOM", "WebWorker"],
+    // vite/client for import.meta.url in the test's worker factory; svelte
+    // for the ambient rune globals ($state) used by src/state.svelte.ts.
+    "types": ["vite/client", "svelte"],
+    "strict": true,
+    "noEmit": true,
+    // The worker fixture's '@jwhenry123/mesh-worker-dom/worker' import chain
+    // reaches worker/slot.tsx — same reason react-island sets this.
+    "jsx": "react-jsx",
+    "isolatedModules": true,
+    "skipLibCheck": true,
+    "paths": {
+      "@jwhenry123/mesh/sdk": ["../../src/sdk/index.ts"],
+      "@jwhenry123/mesh/sdk/*": ["../../src/sdk/*"],
+      "@jwhenry123/mesh-worker-dom": ["../../packages/worker-dom/src/index.ts"],
+      "@jwhenry123/mesh-worker-dom/*": ["../../packages/worker-dom/src/*"]
+    }
+  },
+  "include": [
+    "src",
+    "test",
+    // The test fixture imports the worker entry, which imports
+    // react-reconciler — worker-dom's ambient module declaration.
+    "../../packages/worker-dom/src/react-reconciler.d.ts"
+  ]
+}

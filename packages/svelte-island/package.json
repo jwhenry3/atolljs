@@ -1,0 +1,25 @@
+{
+  "name": "@jwhenry123/mesh-svelte-island",
+  "version": "0.1.0",
+  "description": "Svelte shell bindings for mesh-worker-dom islands — use:island action, createIslandState",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "files": [
+    "src"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "peerDependencies": {
+    "@jwhenry123/mesh": "0.1.0",
+    "@jwhenry123/mesh-worker-dom": "0.1.0",
+    "svelte": "^5.57.1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jwhenry3/mesh",
+    "directory": "packages/svelte-island"
+  }
+}
