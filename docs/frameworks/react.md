@@ -32,7 +32,7 @@ all the island rules apply unchanged.
 
 | Export | Signature | What it does |
 |---|---|---|
-| `lazyIsland` | `lazyIsland(loader: () => Promise<{ default: A } \| A>): FC<IslandAppProps<A> & IslandShellProps>` | React.lazy mirrored — suspends on the dynamic import (a real bundler split point), then mounts the stamped app by reference with props inferred from its signature. |
+| `lazyIsland` | `lazyIsland(loader: () => Promise<{ default: A } \| { app, worker? } \| A>): FC<IslandAppProps<A> & IslandShellProps>` | React.lazy mirrored — suspends on the dynamic import (a real bundler split point), then mounts the resolved app with props inferred from its signature. Contract modules `{ app, worker }` carry their own worker factory. |
 | `islandComponent` | `islandComponent<P>('name')` \| `islandComponent(StampedApp)` | The pure-contract proxy — the shell never imports the implementation; a registry key + a type-only props import is the whole contract. |
 | `Island` | `<Island app={ref\|name} worker props onEvent slots onReady/>` | The underlying building block — declarative `mountIsland` as a component. `props` dedups by serialized identity. |
 | `islandApp` | `islandApp('name', app)` | Stamps an app (component or `{imperative}` def) with its registry name — a data property, so references survive minification. Bare components fall back to `displayName`/`fn.name` — dev convenience; bundlers mangle `fn.name`, which is what the stamp exists for. |
@@ -43,19 +43,22 @@ all the island rules apply unchanged.
 
 Each `lazyIsland` loader returns the `islandApp`-stamped component, so props
 infer from the worker component's own signature and the dynamic import
-code-splits worker dependencies (recharts fetches only when the charts island
-mounts — a static import pulls ~500 kB into the shell chunk eagerly).
+code-splits worker dependencies (a heavy island's deps fetch only when it
+mounts — a static import pulls them into the shell chunk eagerly).
 `<Suspense>` covers the module load; the proxy's `fallback` prop covers the
 worker-mount window — mounting can't suspend because a suspended tree never
 commits and the container must be in the DOM first.
 
-Reference shell: `examples/react-dom-worker/src/shell.tsx` — mounts all seven
-demo islands via `lazyIsland` proxies, with the mediation pattern
-(`onEvent → setState → <Island props>`) replacing hand-wired `updateProps`.
+Reference shell: `examples/react-dom-worker/src/shell.tsx` — mounts four
+framework-native islands (`counter` ×2 on a shared client, `notes` via
+`islandComponent`, the 1M-incident benchmark via `lazyIsland`) with the
+mediation pattern (`onEvent → setState → <Island props>`) replacing
+hand-wired `updateProps`.
 
-`lazyIsland` also accepts the worker module itself as the contract:
-`lazyIsland(() => import('./worker/map.worker'))` resolves `{ app, worker }`
-so the island carries its own worker.
+`lazyIsland` also accepts a contract module carrying its own worker:
+`lazyIsland(() => import('./incidents.island'))` resolves `{ app, worker }`
+(`app` may be a bare registry-key string) so the island is a self-contained
+split point.
 
 ### Notes
 

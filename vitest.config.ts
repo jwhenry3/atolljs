@@ -1,5 +1,6 @@
 import { fileURLToPath } from 'node:url';
 import { svelte } from '@sveltejs/vite-plugin-svelte';
+import vue from '@vitejs/plugin-vue';
 import { defineConfig, mergeConfig } from 'vitest/config';
 import viteConfig from './vite.config';
 
@@ -16,6 +17,10 @@ export default mergeConfig(
       svelte({
         dynamicCompileOptions: () => ({ generate: 'client' }),
       }),
+      // Compiles the example's `*.vue` island components — the demo worker
+      // entries import real SFCs, and InProcessWorker loads them through
+      // the same import-analysis pass.
+      vue(),
     ],
     resolve: {
       alias: [

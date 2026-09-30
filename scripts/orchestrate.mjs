@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process';
+import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import net from 'node:net';
 
 const windows = process.platform === 'win32';
@@ -104,6 +104,71 @@ export async function checkPorts(apps) {
     return false;
   }
   return true;
+}
+
+/** Returns the set of PIDs listening on the given ports (pid → Set<port>). */
+function listenersByPort(ports) {
+  const pids = new Map();
+  const add = (pid, port) => {
+    if (!pids.has(pid)) pids.set(pid, new Set());
+    pids.get(pid).add(port);
+  };
+
+  if (windows) {
+    // netstat -ano: proto  local  foreign  state  pid
+    // NOTE: no -p flag — `-p tcp` on Windows lists IPv4 TCP only, hiding
+    // [::1]:port listeners. Plain -ano covers both families; the LISTENING
+    // filter excludes UDP rows (they carry no state).
+    const out = execFileSync('netstat', ['-ano'], { encoding: 'utf8' });
+    for (const line of out.split('\n')) {
+      if (!line.includes('LISTENING')) continue;
+      const cols = line.trim().split(/\s+/);
+      const local = cols[1];
+      const pid = Number(cols.at(-1));
+      for (const port of ports) {
+        if (local.endsWith(`:${port}`)) add(pid, port);
+      }
+    }
+  } else {
+    for (const port of ports) {
+      try {
+        const out = execFileSync('lsof', ['-ti', `tcp:${port}`, '-sTCP:LISTEN'], {
+          encoding: 'utf8',
+        });
+        for (const pid of out.trim().split('\n')) {
+          if (pid) add(Number(pid), port);
+        }
+      } catch {
+        // lsof exits non-zero when nothing listens on the port.
+      }
+    }
+  }
+  return pids;
+}
+
+/**
+ * Kill whatever is listening on the given ports — the "stop stale servers"
+ * step: orphaned servers from a force-killed orchestrator would otherwise
+ * fail the next serve with EADDRINUSE. Returns true when the ports are
+ * clear (nothing listened, or every listener was killed).
+ */
+export function killStaleServers(ports) {
+  const pids = listenersByPort(ports);
+  if (pids.size === 0) return true;
+  let allKilled = true;
+  for (const [pid, listened] of pids) {
+    const label = [...listened].map((p) => `:${p}`).join(', ');
+    const result = windows
+      ? spawnSync('taskkill', ['/F', '/T', '/PID', String(pid)], { stdio: 'inherit' })
+      : spawnSync('kill', ['-9', String(pid)], { stdio: 'inherit' });
+    console.log(
+      result.status === 0
+        ? `stopped stale server pid ${pid} (${label})`
+        : `failed to kill pid ${pid} (${label})`,
+    );
+    if (result.status !== 0) allKilled = false;
+  }
+  return allKilled;
 }
 
 export function stop(code = 0) {

@@ -1,19 +1,44 @@
+/* Dark-only site — the palette below is the single theme. */
 :root {
   color-scheme: dark;
-  --bg: #0d1117;
-  --panel: #161b22;
-  --border: #30363d;
-  --text: #e6edf3;
-  --muted: #8b949e;
-  --accent: #58a6ff;
+  --bg: #0a1724;
+  --panel: #12273a;
+  --border: #234860;
+  --text: #e4f2fb;
+  --bodytext: #b8d4e4;
+  --muted: #8fb6cd;
+  --accent: #58c0f0;
+  --btn: #1a3148;
+  --lb-light: #e4f2fb;
+  --lb-mid: #94a3b8;
+  --bg-glow-top: #16405e;
+  --bg-glow-bottom: #0d2a3e;
   font-family: 'Segoe UI', system-ui, sans-serif;
 }
 
 * { box-sizing: border-box; }
-body { margin: 0; background: var(--bg); color: var(--text); }
+body {
+  margin: 0; color: var(--text);
+  background:
+    radial-gradient(1200px 700px at 50% -10%, var(--bg-glow-top) 0%, transparent 60%),
+    radial-gradient(900px 600px at 85% 110%, var(--bg-glow-bottom) 0%, transparent 55%),
+    var(--bg);
+  background-attachment: fixed;
+}
 code { font-family: 'Cascadia Code', 'JetBrains Mono', Consolas, monospace; font-size: 0.9em; }
 
 .shell { display: flex; min-height: 100vh; }
+
+.brand-watermark {
+  position: fixed;
+  inset: 0 0 0 240px;
+  margin: auto;
+  width: min(80vmin, 900px);
+  height: auto;
+  opacity: 0.1;
+  pointer-events: none;
+  z-index: -1;
+}
 
 .sidebar {
   width: 240px;
@@ -26,17 +51,19 @@ code { font-family: 'Cascadia Code', 'JetBrains Mono', Consolas, monospace; font
   overflow-y: auto;
 }
 .brand {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-weight: 700;
-  font-size: 1.15rem;
+  display: block;
   color: var(--text);
   text-decoration: none;
-  margin-bottom: 20px;
+  margin-bottom: 6px;
 }
-.brand-mark { width: 34px; height: 34px; flex-shrink: 0; }
-.brand-sub { color: var(--muted); font-weight: 400; margin-left: 6px; font-size: 0.85rem; }
+.brand-mark { display: block; width: 100%; height: auto; }
+.brand-sub {
+  display: block;
+  color: var(--muted);
+  font-weight: 400;
+  font-size: 0.85rem;
+  margin: 4px 0 14px;
+}
 .site-switch {
   width: 100%;
   margin: -10px 0 20px;
@@ -77,7 +104,7 @@ code { font-family: 'Cascadia Code', 'JetBrains Mono', Consolas, monospace; font
 article h1 { margin-top: 0; font-size: 1.9rem; }
 article h2 { margin-top: 36px; border-bottom: 1px solid var(--border); padding-bottom: 6px; }
 article h3 { margin-top: 24px; }
-article p, article li { line-height: 1.65; color: #c9d1d9; }
+article p, article li { line-height: 1.65; color: var(--bodytext); }
 article .lead { font-size: 1.05rem; color: var(--text); }
 article code:not(pre code) {
   background: var(--panel);
@@ -86,7 +113,13 @@ article code:not(pre code) {
   padding: 1px 5px;
 }
 
-.doc-table { border-collapse: collapse; width: 100%; margin: 12px 0; }
+.doc-table {
+  border-collapse: collapse; width: 100%; margin: 12px 0;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--panel) 70%, transparent);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
 .doc-table th, .doc-table td {
   border: 1px solid var(--border);
   padding: 7px 12px;
@@ -94,19 +127,56 @@ article code:not(pre code) {
   font-size: 0.88rem;
   vertical-align: top;
 }
-.doc-table th { background: var(--panel); }
+.doc-table th { background: color-mix(in srgb, var(--panel) 80%, transparent); }
 
-figure.code { margin: 14px 0; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+figure.code {
+  margin: 14px 0; border: 1px solid var(--border); border-radius: 8px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--panel) 70%, transparent);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+figure.code[data-side="backend"] {
+  --side-tint: rgba(46, 160, 110, 0.055);
+  --side-ink: #4cc38a;
+}
+figure.code[data-side="frontend"] {
+  --side-tint: rgba(124, 92, 255, 0.055);
+  --side-ink: #a08bff;
+}
+figure.code[data-side] {
+  background:
+    linear-gradient(var(--side-tint), var(--side-tint)),
+    color-mix(in srgb, var(--panel) 70%, transparent);
+}
 .code-file {
-  background: var(--panel);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  background: color-mix(in srgb, var(--panel) 55%, transparent);
   border-bottom: 1px solid var(--border);
   padding: 6px 14px;
   font-size: 0.78rem;
   color: var(--muted);
   font-family: Consolas, monospace;
 }
+.code-side {
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 999px;
+  color: var(--side-ink);
+  border: 1px solid var(--side-ink);
+  background: var(--side-tint);
+  flex-shrink: 0;
+}
 figure.code pre.hljs {
   margin: 0;
+  background: transparent;
   padding: 14px 16px;
   overflow-x: auto;
   font-size: 0.82rem;
@@ -115,11 +185,40 @@ figure.code pre.hljs {
 }
 
 .demo-frame { margin: 14px 0; }
+
+/* Wide viewports: dock the (single) live demo as a fixed right rail and
+   reserve room for it in the content column. */
+@media (min-width: 1760px) {
+  .demo-frame {
+    position: fixed;
+    top: 24px;
+    right: 24px;
+    bottom: 24px;
+    width: clamp(400px, 32vw, 720px);
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    z-index: 10;
+  }
+  .demo-frame iframe { flex: 1; height: auto; min-height: 0; }
+  .demo-tabs { overflow: hidden; }
+  .demo-panes { flex: 1; display: flex; min-height: 0; }
+  .demo-tabs .demo-pane.active {
+    display: flex; flex-direction: column; flex: 1; min-height: 0;
+  }
+  .demo-pane iframe { flex: 1; height: auto; min-height: 0; }
+  .content {
+    max-width: none;
+    padding-right: calc(clamp(400px, 32vw, 720px) + 72px);
+  }
+}
 .demo-frame-bar {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: var(--panel);
+  background: color-mix(in srgb, var(--panel) 70%, transparent);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
   border: 1px solid var(--border);
   border-bottom: none;
   border-radius: 8px 8px 0 0;
@@ -128,6 +227,38 @@ figure.code pre.hljs {
   color: var(--muted);
 }
 .demo-frame-bar a { color: var(--accent); text-decoration: none; }
+.demo-tablist {
+  display: flex;
+  gap: 2px;
+  overflow-x: auto;
+  align-self: flex-end;
+  /* Drop the strip below the bar's bottom edge so the active tab's bottom
+     border covers the pane's top border — a real attached tab. */
+  margin-bottom: -7px;
+  position: relative;
+  z-index: 1;
+}
+.demo-tab {
+  font: inherit;
+  font-size: 0.76rem;
+  padding: 3px 12px 4px;
+  border: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  border-radius: 6px 6px 0 0;
+  background: color-mix(in srgb, var(--panel) 55%, transparent);
+  color: var(--muted);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.demo-tab:hover { color: var(--text); }
+.demo-tab.active {
+  background: var(--bg);
+  color: var(--text);
+  border-bottom-color: var(--bg);
+}
+.demo-pane { display: none; }
+.demo-pane.active { display: block; }
+.demo-pane .demo-hint { margin-top: 6px; }
 .demo-frame iframe {
   width: 100%;
   height: 480px;
@@ -141,14 +272,16 @@ figure.code pre.hljs {
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 20px;
-  background: var(--panel);
+  background: color-mix(in srgb, var(--panel) 70%, transparent);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
 }
 .playground-stats { display: flex; gap: 24px; margin-bottom: 16px; }
 .metric { display: flex; flex-direction: column; }
 .metric-value { font-size: 1.8rem; font-weight: 700; font-variant-numeric: tabular-nums; }
 .playground-actions { display: flex; gap: 10px; flex-wrap: wrap; }
 .playground-actions button {
-  background: #21262d;
+  background: var(--btn);
   border: 1px solid var(--border);
   border-radius: 6px;
   color: var(--text);
@@ -182,11 +315,11 @@ figure.code pre.hljs {
 .loadbar-main { background: var(--accent); }
 /* Near-white solid — lightness separates the segments even for color-blind
    viewers (blue vs lavender at similar lightness collapsed to one fill). */
-.loadbar-worker { background: #e6edf3; }
+.loadbar-worker { background: var(--lb-light); }
 /* Three-way worker-side split: the app/renderer share keeps the light worker
    tone, the engine's share is a darker mid-tone, replay stays accent. */
-.loadbar-app { background: #e6edf3; }
-.loadbar-proxy { background: #94a3b8; }
+.loadbar-app { background: var(--lb-light); }
+.loadbar-proxy { background: var(--lb-mid); }
 .loadbar-legend {
   display: flex;
   gap: 18px;
@@ -204,6 +337,6 @@ figure.code pre.hljs {
   vertical-align: -1px;
 }
 .swatch-main { background: var(--accent); }
-.swatch-worker { background: #e6edf3; }
-.swatch-app { background: #e6edf3; }
-.swatch-proxy { background: #94a3b8; }
+.swatch-worker { background: var(--lb-light); }
+.swatch-app { background: var(--lb-light); }
+.swatch-proxy { background: var(--lb-mid); }

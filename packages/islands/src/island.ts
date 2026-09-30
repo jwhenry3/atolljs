@@ -299,6 +299,40 @@ const assertCloneableProps = (props: Record<string, unknown>, context: string): 
   );
 };
 
+/* ── Style values ─────────────────────────────────────────────────────────
+ * Style objects cross the wire verbatim (`style={{ height: 24000000 }}`),
+ * so the driver must apply the same unit semantics react-dom does:
+ * a nonzero number on a non-unitless property needs 'px' — assigning the
+ * bare number to el.style silently no-ops on every real browser.
+ * The list is React DOM's isUnitlessNumber set (which is also the CSS spec's
+ * unitless property surface). */
+const UNITLESS_CSS = new Set([
+  'animationIterationCount', 'aspectRatio', 'borderImageOutset',
+  'borderImageSlice', 'borderImageWidth', 'boxFlex', 'boxFlexGroup',
+  'boxOrdinalGroup', 'columnCount', 'columns', 'flex', 'flexGrow',
+  'flexPositive', 'flexShrink', 'flexNegative', 'flexOrder', 'gridArea',
+  'gridRow', 'gridRowEnd', 'gridRowSpan', 'gridRowStart', 'gridColumn',
+  'gridColumnEnd', 'gridColumnSpan', 'gridColumnStart', 'fontWeight',
+  'lineClamp', 'lineHeight', 'opacity', 'order', 'orphans', 'scale',
+  'tabSize', 'widows', 'zIndex', 'zoom', 'fillOpacity', 'floodOpacity',
+  'stopOpacity', 'strokeDasharray', 'strokeDashoffset', 'strokeMiterlimit',
+  'strokeOpacity', 'strokeWidth',
+]);
+
+/** Coerce a wire style value to a CSS string — px-suffixes bare numbers
+ *  on non-unitless keys (custom properties pass verbatim). */
+const cssStyleValue = (key: string, value: unknown): string => {
+  if (
+    typeof value === 'number' &&
+    value !== 0 &&
+    !key.startsWith('--') &&
+    !UNITLESS_CSS.has(key)
+  ) {
+    return `${value}px`;
+  }
+  return String(value);
+};
+
 export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandle> {
   const {
     el, onEvent, onActivity, onOps, slots, mode: initialMode, mountTimeout,
@@ -436,11 +470,17 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
       return;
     }
     if (name === 'style' && typeof value === 'object' && value !== null) {
-      const elStyle = (el as HTMLElement).style as unknown as Record<string, string>;
+      const decl = (el as HTMLElement).style;
+      const elStyle = decl as unknown as Record<string, string>;
       const prevStyle = (prevProps.get(id)?.style ?? {}) as Record<string, string>;
-      const nextStyle = value as Record<string, string>;
+      const nextStyle = value as Record<string, unknown>;
       for (const k of Object.keys(prevStyle)) if (!(k in nextStyle)) elStyle[k] = '';
-      for (const [k, v] of Object.entries(nextStyle)) if (prevStyle[k] !== v) elStyle[k] = v;
+      for (const [k, v] of Object.entries(nextStyle)) {
+        if (prevStyle[k] !== v) {
+          if (k.startsWith('--') || k.includes('-')) decl.setProperty(k, cssStyleValue(k, v));
+          else elStyle[k] = cssStyleValue(k, v);
+        }
+      }
       return;
     }
     if (name === 'className') {
@@ -581,17 +621,18 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
     const prev = prevProps.get(id) ?? {};
     const merged = { ...((prev.style ?? {}) as Record<string, string>) };
     for (const [k, v] of Object.entries(changes)) {
+      const cv = cssStyleValue(k, v);
       if (k.startsWith('--') || k.includes('-')) {
         // Custom properties and kebab-case keys live outside the camelCase
         // property surface — el.style['font-size'] is a silent no-op on real
         // DOM; setProperty accepts kebab-case, and '' clears either kind.
-        elStyle.setProperty(k, v);
-      } else if (v.endsWith('!important')) {
+        elStyle.setProperty(k, cv);
+      } else if (cv.endsWith('!important')) {
         // `style.setProperty(k, v, 'important')` crosses as a suffix — the
         // style op has no separate priority channel.
-        elStyle.setProperty(k, v.replace(/\s*!important$/, ''), 'important');
+        elStyle.setProperty(k, cv.replace(/\s*!important$/, ''), 'important');
       } else {
-        elStyleMap[k] = v;
+        elStyleMap[k] = cv;
       }
       merged[k] = v;
     }

@@ -39,6 +39,7 @@
  *   with the last island to leave).
  */
 import {
+  defineAsyncComponent,
   defineComponent,
   getCurrentScope,
   h,
@@ -48,7 +49,7 @@ import {
   toValue,
   watch,
 } from 'vue';
-import type { MaybeRefOrGetter, PropType, Ref, ShallowRef } from 'vue';
+import type { Component, MaybeRefOrGetter, PropType, Ref, ShallowRef } from 'vue';
 import {
   connectIslandWorker,
   islandAppNameOf,
@@ -56,9 +57,11 @@ import {
 } from '@atolljs/islands';
 import type {
   IslandAppLike,
+  IslandAppProps,
   IslandClient,
   IslandHandle,
   IslandWorkerOptions,
+  Mode,
 } from '@atolljs/islands';
 
 // Re-export the handle type consumers need to name.
@@ -89,6 +92,14 @@ export interface UseIslandOptions {
    * a `reactive()` object — so mutations route through `updateProps`.
    */
   props?: MaybeRefOrGetter<Record<string, unknown> | undefined>;
+  /**
+   * Initial flush mode — 'push' (default) drives op replay off the
+   * shared-memory doorbell (needs cross-origin isolation); 'poll' drains on
+   * a 50ms interval and, for `worker`-shorthand mounts, builds the client
+   * doorbell-free — no SharedArrayBuffer, no COOP/COEP requirement.
+   * Mount-time only; switch later via the handle's `setMode`.
+   */
+  mode?: Mode;
   /** Island → shell channel: every `emit` op lands here. */
   onEvent?: (name: string, payload: unknown) => void;
   /** Fired after each applied op batch — stats hooks. */
@@ -173,6 +184,7 @@ export function useIsland(options: UseIslandOptions): UseIslandReturn {
         el,
         app,
         props: JSON.parse(mountedJson) as Record<string, unknown>,
+        mode: options.mode,
         // Read through `options` so callers passing fresh closures (or
         // wrappers over reactive props) never force a remount.
         onEvent: (name, payload) => options.onEvent?.(name, payload),
@@ -265,6 +277,8 @@ export interface AtollIslandProps {
   app?: string | IslandAppLike;
   /** Root props — may be a `reactive()` object; changes call updateProps. */
   props?: Record<string, unknown>;
+  /** Initial flush mode — see UseIslandOptions.mode. */
+  mode?: Mode;
   /**
    * Worker-DOM transclusion slots — `Record<name, (el | null) => void>`.
    * (These are islands slot anchors, NOT Vue slots: the callback receives
@@ -324,6 +338,11 @@ export const AtollIsland = defineComponent({
       required: false,
       default: undefined,
     },
+    mode: {
+      type: String as PropType<Mode>,
+      required: false,
+      default: undefined,
+    },
     slots: {
       type: Object as PropType<Record<string, (el: HTMLElement | null) => void>>,
       required: false,
@@ -355,6 +374,7 @@ export const AtollIsland = defineComponent({
       workerOptions: props.workerOptions,
       app: props.app,
       props: () => props.props,
+      mode: props.mode,
       slots: props.slots,
       onEvent: (name, payload) => props.onEvent?.(name, payload),
       onActivity: () => props.onActivity?.(),
@@ -367,3 +387,197 @@ export const AtollIsland = defineComponent({
 });
 
 export default AtollIsland;
+
+/* ── Worker-loaded component facades ──────────────────────────────────
+ *
+ * `islandComponent`/`lazyIsland` return components that take a worker app's
+ * props inline — `<ChartsIsland :width="520"/>` — and route every attribute
+ * that isn't a shell concern through as the island's props. Attributes are
+ * undeclared, so they all land in `attrs`; a split by SHELL_PROP_KEYS gives
+ * the two halves. The lazy side wraps Vue's own `defineAsyncComponent` —
+ * the `React.lazy` mirror — resolving `{ default: A }` and the contract
+ * module shape `{ app: A, worker? }` the same way the React facade does.
+ */
+
+/** What `app` accepts: the registry name, or a component/def to resolve. */
+export type IslandAppRef<A> = A | string;
+
+/**
+ * Attributes consumed by a proxy component itself — every other attribute
+ * forwards to the island as its props.
+ */
+export interface IslandShellProps {
+  /** How to reach the worker — see UseIslandOptions.worker/client. */
+  worker?: (() => Worker) | URL;
+  client?: IslandClient;
+  workerOptions?: IslandWorkerOptions;
+  /** Initial flush mode — see UseIslandOptions.mode. */
+  mode?: Mode;
+  /** Island → shell channel: every `emit` op lands here. */
+  onEvent?: (name: string, payload: unknown) => void;
+  /** Fired after each applied op batch. */
+  onActivity?: () => void;
+  /** The mounted handle (pid, updateProps, flush, setMode…) once ready. */
+  onReady?: (island: IslandHandle) => void;
+  /** Mount/update errors surface here instead of an unhandled rejection. */
+  onError?: (err: unknown) => void;
+  /** Worker-DOM transclusion slots — element callbacks, NOT Vue slots
+   *  (see AtollIslandProps.slots). */
+  slots?: Record<string, (el: HTMLElement | null) => void>;
+  /** Attributes for the island's container div (class/id/style/data-*). */
+  containerProps?: Record<string, unknown>;
+}
+
+const SHELL_PROP_KEYS: ReadonlySet<string> = new Set([
+  'worker',
+  'client',
+  'workerOptions',
+  'mode',
+  'onEvent',
+  'onActivity',
+  'onReady',
+  'onError',
+  'slots',
+  'containerProps',
+]);
+
+/**
+ * Vue's fallthrough semantics: `class`/`style`/`id`/`data-*`/`aria-*`
+ * attributes on the proxy belong on the container div, NOT the island
+ * props — a `<ChartsIsland class="box">` should look like any other
+ * component. `key`/`ref` never reach `attrs` (vnode-reserved).
+ */
+const CONTAINER_ATTR = /^(?:class|style|id|data-|aria-)/;
+
+/** Shared implementation for both facades — `resolve` supplies the app (and
+ *  a contract module's worker, when present) at setup time. */
+function createIslandProxy(
+  displayName: string,
+  resolve: () => { app?: IslandAppLike | string; worker?: (() => Worker) | URL },
+): Component {
+  return defineComponent({
+    name: displayName,
+    inheritAttrs: false,
+    setup(_, { attrs, expose }) {
+      const resolved = resolve();
+      const island = useIsland({
+        app: resolved.app,
+        client: attrs.client as IslandClient | undefined,
+        worker: (attrs.worker ?? resolved.worker) as ((() => Worker) | URL) | undefined,
+        workerOptions: attrs.workerOptions as IslandWorkerOptions | undefined,
+        mode: attrs.mode as Mode | undefined,
+        // Non-shell, non-DOM attrs ARE the island's props — rebuilt per
+        // read so the getter's reactive tracking sees attribute updates.
+        props: () => {
+          const p: Record<string, unknown> = {};
+          for (const [key, value] of Object.entries(attrs)) {
+            if (!SHELL_PROP_KEYS.has(key) && !CONTAINER_ATTR.test(key)) p[key] = value;
+          }
+          return p;
+        },
+        slots: attrs.slots as UseIslandOptions['slots'],
+        onEvent: (name, payload) => (attrs.onEvent as UseIslandOptions['onEvent'])?.(name, payload),
+        onActivity: () => (attrs.onActivity as UseIslandOptions['onActivity'])?.(),
+        onReady: (islandHandle) => (attrs.onReady as UseIslandOptions['onReady'])?.(islandHandle),
+        onError: (err) => (attrs.onError as UseIslandOptions['onError'])?.(err),
+      });
+      expose({ handle: island.handle, status: island.status, error: island.error });
+      return () => {
+        // Fallthrough DOM attrs + explicit containerProps → the host div.
+        const container: Record<string, unknown> = {
+          ...(attrs.containerProps as Record<string, unknown> | undefined),
+        };
+        for (const [key, value] of Object.entries(attrs)) {
+          if (CONTAINER_ATTR.test(key)) container[key] = value;
+        }
+        container.class = ['atoll-island', container.class, attrs.class].filter(Boolean);
+        return h('div', { ...container, ref: island.host });
+      };
+    },
+  });
+}
+
+/**
+ * `islandComponent<P>('charts')` — a proxy component for a worker app that
+ * the shell NEVER imports. `P` is the contract (usually an `import type` of
+ * the worker component's props); the string is the registry key. Against a
+ * `defineMonoWorker` (1:1) worker the name can be omitted entirely.
+ *
+ * ```ts
+ * const ChartsIsland = islandComponent<ChartsProps>('charts');
+ * // template: <ChartsIsland :worker="renderWorker" :width="520" />
+ * ```
+ */
+export function islandComponent<P extends object = Record<string, unknown>>(
+  app?: string,
+): Component<P & IslandShellProps>;
+export function islandComponent<A extends IslandAppLike>(
+  app: A,
+): Component<IslandAppProps<A> & IslandShellProps>;
+export function islandComponent(app?: string | IslandAppLike): Component {
+  return createIslandProxy(`IslandComponent(${islandAppNameOf(app) ?? 'main'})`, () => ({
+    app: app as IslandAppLike | undefined,
+  }));
+}
+
+type LazyModule<A> = A | { default: A } | { app: A | string; worker?: (() => Worker) | URL };
+
+/**
+ * The app a lazy module resolves to — unwraps `{ default: A }` and the
+ * contract-module shape `{ app: A, worker? }`, passes bare A through.
+ */
+export type LazyResolvedApp<T extends Promise<unknown>> =
+  Awaited<T> extends { app: infer A }
+    ? A
+    : Awaited<T> extends { default: infer D }
+      ? D
+      : Awaited<T>;
+
+/**
+ * `lazyIsland(() => import('./worker/apps').then(m => ({ default: m.ChartsApp })))`
+ * — the `React.lazy` mirror for worker apps, built on Vue's own
+ * `defineAsyncComponent`: while the module loads it renders the configured
+ * loading state (or nothing), then proxies all attributes to the island.
+ * The dynamic import gives bundlers a split point, so the worker app's
+ * dependencies only load when the island mounts.
+ *
+ * ```ts
+ * const ChartsIsland = lazyIsland(() => import('./worker/apps').then(m => ({ default: m.ChartsApp })));
+ * // template: <ChartsIsland :width="520" :worker="renderWorker" />
+ * ```
+ *
+ * CONTRACT MODULES: for `defineMonoWorker` (1:1) topologies the loader can
+ * resolve `{ app, worker }` — the island then carries its own worker factory
+ * and call sites need no `worker` attribute at all.
+ */
+export function lazyIsland<T extends Promise<LazyModule<IslandAppLike>>>(
+  loader: () => T,
+  options?: {
+    loadingComponent?: Component;
+    errorComponent?: Component;
+    delay?: number;
+    timeout?: number;
+    suspensible?: boolean;
+  },
+): Component<IslandAppProps<LazyResolvedApp<T>> & IslandShellProps> {
+  return defineAsyncComponent({
+    loader: async () => {
+      const mod = await loader();
+      const unwrapped =
+        mod !== null && typeof mod === 'object' && 'default' in mod
+          ? (mod as { default: unknown }).default
+          : mod;
+      const isContract =
+        unwrapped !== null && typeof unwrapped === 'object' && 'app' in unwrapped;
+      return createIslandProxy('LazyIsland', () => ({
+        app: (
+          isContract ? (unwrapped as { app: IslandAppLike | string }).app : unwrapped
+        ) as IslandAppLike | string,
+        worker: isContract
+          ? (unwrapped as { worker?: (() => Worker) | URL }).worker
+          : undefined,
+      }));
+    },
+    ...options,
+  }) as Component<IslandAppProps<LazyResolvedApp<T>> & IslandShellProps>;
+}

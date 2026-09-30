@@ -33,6 +33,12 @@ document.
 |---|---|---|
 | `createIsland` | `createIsland({ worker\|client, app, props: P \| (() => P), onEvent, slots }): { ref, handle, status }` | Headless mount — set `ref` on the container; props may be a plain value, an accessor, or a reactive getter (tracked → `updateProps`). |
 | `Island` | `Island(options): HTMLElement` | No-JSX component form — returns the mounted `div` itself. |
+|| `islandComponent` | `islandComponent<P>('name')` \| `islandComponent(StampedApp)` | The pure-contract proxy — the shell never imports the implementation; a registry key + a type-only props import is the whole contract. |
+|| `lazyIsland` | `lazyIsland(loader: () => Promise<{ default: A } \| A \| { app: A; worker? }>)` | `lazy()` mirrored — suspends under `<Suspense>` on the dynamic import (a real bundler split point), then mounts the stamped app by reference. Contract modules can carry `worker` too. |
+
+The proxies return the same mount as `Island` plus a `fallback` sibling —
+the worker app's props go inline; shell concerns (`worker`/`client`/
+`onEvent`/`slots`/`containerProps`…) split off by name.
 
 ```tsx
 import { createIsland } from '@atolljs/solid-island';
@@ -89,6 +95,12 @@ plugins: [
   solidPlugin({ exclude: [/\.worker\.[tj]sx?$/, /worker\/.*\.[tj]sx?$/] }),
 ]
 ```
+
+Reference shell: `examples/react-dom-worker/src/solid-shell.ts` — mounts
+the registry's Solid worker apps (`counter` ×2 on a shared client, `notes`,
+and the 1M-row `incidents` benchmark) via `Island()` inside `solid-js/html`
+templates (no JSX transform on the shell), with signal mediation replacing
+hand-wired `updateProps`.
 
 ### Caveats
 

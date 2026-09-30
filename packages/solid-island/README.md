@@ -42,6 +42,37 @@ time; `app`/`worker`/`client` are mount-stable — swap via keyed remount.
 `Island(options)` is the no-JSX component form: it returns the mounted `div`
 itself.
 
+## Worker-loaded component proxies
+
+`islandComponent` and `lazyIsland` return a component that takes the **worker
+app's props inline** — the island looks and types like a local component:
+
+```tsx
+import { islandComponent, lazyIsland } from '@atolljs/solid-island';
+import type { TableProps } from './worker/apps'; // type-only: zero bundle cost
+
+// Pure-contract proxy — the shell NEVER imports the implementation.
+const TableIsland = islandComponent<TableProps>('data-table');
+<TableIsland worker={renderWorker} filter={filter()} desc={desc()} />
+
+// lazy() mirror — suspends on the module load (a real split point:
+// the worker component's deps only load when the island mounts), then
+// mounts by stamped reference.
+const ChartsIsland = lazyIsland(() =>
+  import('./worker/apps').then((m) => ({ default: m.ChartsApp })),
+);
+<Suspense fallback="loading…">
+  <ChartsIsland worker={renderWorker} width={520} />
+</Suspense>
+```
+
+`islandComponent` also takes a stamped reference (`islandComponent(StampedApp)`)
+to infer `P` instead of a key + type parameter. `lazyIsland` accepts the
+worker module itself as the contract — `lazyIsland(() =>
+import('./worker/map.worker'))` resolves `{ app, worker }` so the call site
+needs no `worker` prop at all. Both render `fallback` beside the container
+until the island is ready, and forward `containerProps` onto the island's div.
+
 ## The worker renderer
 
 ```ts

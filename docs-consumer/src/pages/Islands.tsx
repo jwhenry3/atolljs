@@ -45,12 +45,15 @@ export function Islands() {
 
       <h2>Live demo</h2>
       <p>
-        Seven islands across three topologies — framework islands on a
-        registry worker (React in this demo, two sharing one client),
-        imperative islands on dedicated workers running real Leaflet 1.9 and
-        a vendored widget, unmodified.
+        Eight islands on a framework-free shell — plain{' '}
+        <code>mountIsland</code> calls, no framework on the main thread at
+        all. The React apps ride the registry worker script (
+        <code>data-table</code> mounts twice — same app, separate workers),{' '}
+        <code>vue-notes</code> runs a real Vue createRenderer, and the
+        imperative islands get dedicated instance workers running a
+        hand-written proxy-DOM app and unmodified Leaflet 1.9.
       </p>
-      <DemoFrame id="react-dom-worker" port={5177} name="react-dom-worker" />
+      <DemoFrame id="react-dom-worker" port={5177} name="vanilla" />
 
       <h2>Which workloads belong in an island</h2>
       <p>

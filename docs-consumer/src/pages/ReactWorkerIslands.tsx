@@ -1,15 +1,17 @@
 // Embedded sources — ?raw inlines the real files so the docs always show
 // the code that ships in this repo.
-import workerEntry from '../../../examples/react-dom-worker/src/worker/render.worker.ts?raw';
-import workerApps from '../../../examples/react-dom-worker/src/worker/apps.tsx?raw';
+import workerEntry from '../../../examples/react-dom-worker/src/worker/react.worker.tsx?raw';
+import contractModule from '../../../examples/react-dom-worker/src/incidents.island.ts?raw';
 import shellSource from '../../../examples/react-dom-worker/src/shell.tsx?raw';
 import { CodeBlock } from '../components/CodeBlock';
 import { DemoFrame } from '../components/DemoFrame';
+import { docHref } from '../link';
 
 /**
  * Worker islands under the React framework — the react-dom-worker example's
- * React shell (`react-shell.html`), where every island mounts through a
- * lazyIsland proxy: the worker-hosted component types like a local one.
+ * React shell (react-shell.html), where React itself runs INSIDE the
+ * workers: the shell mounts worker-hosted components through <Island/>,
+ * islandComponent, and lazyIsland proxies.
  */
 export function ReactWorkerIslands() {
   return (
@@ -22,25 +24,36 @@ export function ReactWorkerIslands() {
         replays them.
       </p>
 
-      <h2>Live demo — React shell</h2>
+      <h2>Live demo — React in the worker</h2>
       <p>
-        Seven islands across three topologies — the React apps ride a registry
-        worker (the two data-tables share ONE client, two mounts in one worker),
-        the imperative islands get dedicated instance workers bundling only their
-        own deps. Every mount below is a <code>lazyIsland</code> proxy wrapped in{' '}
-        <code>&lt;Suspense&gt;</code>.
+        Four islands, React rendered inside the workers: a counter, a second
+        counter instance, a notes composer, and a 1,000,000-record incident
+        benchmark — the two counters share ONE client (both mounts live in a
+        single worker, <code>counter@N</code> keys, one OS thread), notes gets
+        its own client on the same script, and the incidents benchmark carries
+        a third worker through its lazy contract module. The shell is just a
+        thin <code>&lt;Island/&gt;</code> host — worker emits land in{' '}
+        <code>onEvent</code> → React state → the status line.
+      </p>
+      <p>
+        <b>The incident benchmark is the real-world case for offloading a
+        heavy component.</b> One million incidents exist as lazily generated
+        logical rows — the component is a fixed-height virtualized scroller
+        that renders only the ~22 visible rows plus overscan, no matter where
+        you scroll. Each scroll event crosses the island protocol as a
+        structured payload (the driver stamps <code>scrollTop</code>), React
+        re-computes the window worker-side, and the commit rides back as an op
+        batch — the stats line reports the worker-side re-render time, and a{' '}
+        <code>rendered</code> emit updates the shell's status line. The main
+        thread never touches more than a handful of DOM nodes; a million rows
+        of state, generation, and diffing all stay off it.
       </p>
       <DemoFrame
         id="react-dom-worker"
         port={5177}
-        name="react-dom-worker — React shell"
+        name="react"
         path="/react-shell.html"
       />
-      <p className="demo-hint">
-        The same islands under a zero-React shell live at{' '}
-        <code>react-dom-worker/index.html</code> — proof the op protocol doesn't
-        care what the shell is made of.
-      </p>
 
       <h2>The proxy API</h2>
       <table className="doc-table">
@@ -50,11 +63,13 @@ export function ReactWorkerIslands() {
         <tbody>
           <tr>
             <td><code>lazyIsland</code></td>
-            <td><code>lazyIsland(loader: () =&gt; Promise&lt;{'{'} default: A {'}'} | A&gt;): FC&lt;IslandAppProps&lt;A&gt; &amp; IslandShellProps&gt;</code></td>
+            <td><code>lazyIsland(loader: () =&gt; Promise&lt;{'{'} default: A {'}'} | {'{'} app, worker? {'}'} | A&gt;): FC&lt;IslandAppProps&lt;A&gt; &amp; IslandShellProps&gt;</code></td>
             <td>
               React.lazy mirrored — the returned component suspends on the dynamic
-              import (a real bundler split point), then mounts the stamped app by
-              reference with props inferred from its signature.
+              import (a real bundler split point), then mounts the resolved app
+              with props inferred from its signature. Contract modules{' '}
+              <code>{'{'} app, worker {'}'}</code> carry their own worker
+              factory — that's how the incidents island gets a dedicated worker.
             </td>
           </tr>
           <tr>
@@ -67,7 +82,7 @@ export function ReactWorkerIslands() {
           </tr>
           <tr>
             <td><code>Island</code></td>
-            <td><code>&lt;Island app={'{'}ref|name{'}'} worker props onEvent slots onReady/&gt;</code></td>
+            <td><code>&lt;Island app={'{'}ref|name{'}'} client|worker props onEvent slots onReady/&gt;</code></td>
             <td>
               The underlying building block — declarative mountIsland as a
               component. <code>props</code> dedups by serialized identity.
@@ -112,13 +127,15 @@ export function ReactWorkerIslands() {
 
       <h2>Mounting — the proxies make islands look local</h2>
       <p>
-        Each <code>lazyIsland</code> loader returns the <code>islandApp</code>-stamped
-        component, so props infer from the worker component's own signature and the
-        dynamic import code-splits worker dependencies (recharts fetches only when
-        the charts island mounts). <code>&lt;Suspense&gt;</code> covers the module
-        load; the proxy's <code>fallback</code> prop covers the worker-mount window —
-        mounting can't suspend because a suspended tree never commits and the
-        container must be in the DOM first.
+        The counters mount through plain <code>&lt;Island/&gt;</code> elements on
+        a shared <code>connectIslandWorker</code> client; notes mounts through{' '}
+        <code>islandComponent('notes')</code> — a registry key is the whole
+        contract; incidents mounts through <code>lazyIsland</code> with a
+        contract module, so its chunk code-splits and its worker is
+        self-contained. <code>&lt;Suspense&gt;</code> covers the module
+        load; the proxy's <code>fallback</code> prop covers the worker-mount
+        window — mounting can't suspend because a suspended tree never commits
+        and the container must be in the DOM first.
       </p>
       <CodeBlock
         file="examples/react-dom-worker/src/shell.tsx"
@@ -126,37 +143,34 @@ export function ReactWorkerIslands() {
         code={shellSource}
       />
 
-      <h2>The worker side — two topologies</h2>
+      <h2>The worker side — React running in the worker</h2>
       <p>
-        <b>Registry workers</b> (<code>defineReactPolyWorker</code>) serve a whole
-        apps map from one script — the React islands mount by name, and the two
-        data-table islands share ONE client so both mounts live in a single
-        worker (separate reconcilers, op queues, and pids — one OS thread).
-        <b>Instance workers</b> (<code>defineReactMonoWorker</code>) are the 1:1 form —
-        one script per app, mounted namelessly, bundling only that app's
-        dependencies (map/vanilla shed recharts, the other React apps, and the
-        reconciler itself — <code>@atolljs/islands/worker</code> is
-        framework-neutral).
+        The worker bundle carries React itself —{' '}
+        <code>defineReactPolyWorker</code> serves the whole apps map from one
+        script, and a real <code>react-reconciler</code> drives the proxy DOM
+        with state staying worker-side. Components are unremarkable React:
+        hooks, controlled inputs, <code>emit(name, payload)</code> for the
+        island → shell channel. The only rules: no DOM access, serializable
+        props, and handlers receive the plain <code>EventPayload</code> wire
+        object instead of a <code>SyntheticEvent</code> —{' '}
+        <code>handler()</code> in the file adapts it to JSX's event prop
+        types. See the <a href={docHref('islands')}>Islands</a> page for
+        modes, slots, and lifecycle.
       </p>
       <CodeBlock
-        file="examples/react-dom-worker/src/worker/render.worker.ts"
+        file="examples/react-dom-worker/src/worker/react.worker.tsx"
+        language="tsx"
         code={workerEntry}
       />
-
-      <h2>The worker components — ordinary React</h2>
       <p>
-        What goes inside is unremarkable React: hooks, memo, controlled
-        inputs, <code>emit(name, payload)</code> for the island → shell
-        channel, <code>&lt;Slot&gt;</code> for transclusion. The only rules:
-        no DOM access (no <code>document</code>/<code>window</code>/refs —
-        those resolve to the proxy document anyway), serializable props, and
-        handlers receive the plain <code>EventPayload</code> wire object
-        instead of a <code>SyntheticEvent</code> — <code>handler()</code> in
-        the file adapts it to JSX&apos;s event prop types.
+        The incidents island's contract module is the whole lazy story: a
+        shell-safe module that names the registry key AND carries the worker
+        factory — the shell-side <code>lazyIsland</code> resolves both, so the
+        benchmark's worker is a bundler-detectable split point.
       </p>
       <CodeBlock
-        file="examples/react-dom-worker/src/worker/apps.tsx"
-        code={workerApps}
+        file="examples/react-dom-worker/src/incidents.island.ts"
+        code={contractModule}
       />
 
       <h2>Notes</h2>
@@ -169,6 +183,13 @@ export function ReactWorkerIslands() {
         <li>
           <b>Two fallback phases:</b> <code>&lt;Suspense&gt;</code> for the module
           load, the proxy's <code>fallback</code> prop for the worker mount.
+        </li>
+        <li>
+          <b>React commits in the dispatch's sync lane</b> — unlike the other
+          frameworks' async schedulers, <code>useLayoutEffect</code> fires while
+          the task still holds the instance, so commit-phase <code>emit</code>
+          needs no <code>runInInstance</code> re-entry. That's how the incidents
+          benchmark reports its re-render time from a layout effect.
         </li>
         <li>
           <b>Fixed-dimension libs</b> (recharts) get width/height as props —

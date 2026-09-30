@@ -106,8 +106,10 @@ import {
   bumpOpsVersion,
   defineMonoWorker,
   definePolyWorker,
+  emit,
   getActiveInstance,
   islandApp,
+  islandAppNameOf,
   pushOp,
   runInInstance,
 } from '@atolljs/islands/worker';
@@ -606,6 +608,111 @@ export interface AngularIslandAppOptions {
   providers?: Array<Provider | EnvironmentProviders>;
 }
 
+/* ── @AngularIsland — the decorator-driven registry ─────────────────────────
+ *
+ * Angular's component class IS its contract: `input()`/`model()`/`output()`
+ * fields are typed instance members, so `IslandInputs<typeof C>` and
+ * `IslandOutputs<typeof C>` (exported from the shell entry) derive the
+ * island's props/events contract from the class alone. `@AngularIsland`
+ * completes the facade by stamping the class with its registry name and
+ * registering it — `defineAngularPolyWorker()` called with no argument then
+ * collects every decorated component in the worker's module graph, so the
+ * worker entry never repeats a name the decorator already declared.
+ *
+ *   @AngularIsland  ('counter')
+ *   @Component({...})
+ *   export class CounterComponent { count = input(0); }
+ *
+ *   // worker entry — no apps map to keep in sync:
+ *   export const worker = defineAngularPolyWorker();
+ */
+
+/** Options accepted by {@link AngularIsland}. */
+export interface AngularIslandDecoratorOptions extends AngularIslandAppOptions {
+  /**
+   * Registry name — the wire key and `islandAppNameOf` result. Defaults to
+   * the kebab-cased class name minus a trailing `Component`
+   * (`CounterComponent` → 'counter', `Foo` → 'foo').
+   */
+  name?: string;
+}
+
+/** `CounterComponent` → 'counter'; `IncidentList` → 'incident-list'. */
+const defaultAngularIslandName = (t: Type<unknown>): string => {
+  const base = t.name.replace(/Component$/, '');
+  const kebab = base
+    .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
+    .replace(/[\s_]+/g, '-')
+    .toLowerCase();
+  return kebab !== '' ? kebab : base.toLowerCase();
+};
+
+/**
+ * Name → decorated component registry. Populated by `@AngularIsland` at
+ * module-eval time; consumed by `defineAngularPolyWorker()` when called
+ * with no `apps` argument. One module-level map per module graph — an
+ * InProcessWorker test that imports several worker entries sees them all,
+ * which is fine: the entries are the same objects.
+ */
+const angularIslandRegistry = new Map<string, AngularIslandEntry>();
+
+/**
+ * Class decorator marking a standalone Angular component as an island app.
+ * Stamps `islandAppName` (readable by the shell's `islandAppNameOf` and by
+ * `app` inputs that take a `Type`) and registers the component so
+ * `defineAngularPolyWorker()` can collect it without a hand-kept `apps` map.
+ *
+ * ```ts
+ * @AngularIsland('counter')          // explicit registry key
+ * @Component({ standalone: true, ... })
+ * export class CounterComponent { label = input('count'); }
+ *
+ * @AngularIsland                    // 'notes' derived from the class name
+ * @Component({ standalone: true, ... })
+ * export class NotesComponent { ... }
+ * ```
+ *
+ * Decorator order: place ABOVE `@Component` — it stamps and registers only;
+ * it never touches the component def, so it composes with every Angular
+ * decorator and works identically under JIT and AOT.
+ */
+export function AngularIsland(name: string): (target: Type<unknown>) => void;
+export function AngularIsland(
+  options: AngularIslandDecoratorOptions,
+): (target: Type<unknown>) => void;
+export function AngularIsland(target: Type<unknown>): void;
+export function AngularIsland(
+  arg?: string | AngularIslandDecoratorOptions | Type<unknown>,
+): ((target: Type<unknown>) => void) | void {
+  const decorate = (target: Type<unknown>, spec?: string | AngularIslandDecoratorOptions): void => {
+    const name =
+      (typeof spec === 'string' ? spec : spec?.name) ?? defaultAngularIslandName(target);
+    islandApp(name, target);
+    const entry: AngularIslandEntry =
+      typeof spec === 'object' && spec?.providers !== undefined
+        ? { component: target, providers: spec.providers }
+        : target;
+    angularIslandRegistry.set(name, entry);
+  };
+  // Bare-decorator form: `@AngularIsland` used without parens passes the class.
+  if (typeof arg === 'function' && arg.prototype !== undefined) {
+    decorate(arg);
+    return;
+  }
+  return (target) => decorate(target, arg as string | AngularIslandDecoratorOptions | undefined);
+}
+
+/** Read the registered (or stamped-but-unregistered) name of a component —
+ *  what the shell must pass as `app`. Stamp first, then the same kebab
+ *  default the decorator/array forms apply (`CounterComponent` → 'counter'). */
+export const angularIslandNameOf = (component: Type<unknown> | string): string | undefined => {
+  if (typeof component === 'string') return component === '' ? undefined : component;
+  const stamped = (component as unknown as { islandAppName?: string }).islandAppName;
+  if (typeof stamped === 'string' && stamped !== '') return stamped;
+  if (typeof component === 'function') return defaultAngularIslandName(component);
+  return islandAppNameOf(component);
+};
+
 /**
  * Wrap a standalone Angular component as a `RenderedIslandApp` — usable as a
  * `defineMonoWorker`/`definePolyWorker` app alongside React and imperative
@@ -798,6 +905,29 @@ export function angularIslandApp(
       setProps(ctx.props);
       detectChanges();
 
+      // Root-component outputs have no template host to bind to inside an
+      // island — bridge them onto the `emit` channel so the component's
+      // declared output surface IS the island's event contract:
+      // `saved = output<T>()` produces island events named 'saved';
+      // `x = model<T>()` produces 'xChange' events (the same public name
+      // Angular gives the two-way-binding output). Emissions can land while
+      // no task holds the instance (async producers) — re-enter the
+      // instance so the op lands on this island's queue, not the ambient
+      // one, and bump the version so push-mode drivers flush it.
+      const outputSubscriptions: Array<{ unsubscribe(): void }> = [];
+      for (const [publicName, privateName] of Object.entries(componentDef.outputs)) {
+        const member = (componentRef.instance as Record<string, unknown>)[privateName];
+        const sub =
+          member != null && typeof (member as { subscribe?: unknown }).subscribe === 'function'
+            ? (member as { subscribe: (fn: (v: unknown) => void) => { unsubscribe(): void } })
+                .subscribe((value: unknown) => {
+                  runInInstance(ctx.instance, () => emit(publicName, value));
+                  bumpOpsVersion();
+                })
+            : null;
+        if (sub !== null) outputSubscriptions.push(sub);
+      }
+
       return {
         update(props: Record<string, unknown>): void {
           setProps(props);
@@ -806,6 +936,7 @@ export function angularIslandApp(
         dispose(): void {
           const ref = componentRef;
           componentRef = null;
+          for (const sub of outputSubscriptions.splice(0)) sub.unsubscribe();
           ref?.destroy();
           environmentInjector.destroy();
         },
@@ -829,24 +960,70 @@ export const angularIsland = (
 export type AngularIslandEntry = Type<unknown> | ({ component: Type<unknown> } & AngularIslandAppOptions);
 
 export interface AngularPolyWorkerRegistry {
-  /** Name → Angular component (or configured entry) registry. */
-  apps: Record<string, AngularIslandEntry>;
+  /**
+   * Name → component registry — or just the components: an ARRAY resolves
+   * each entry's name from its `islandAppName` stamp (`@AngularIsland`) or,
+   * failing that, the class's kebab-cased name (`CounterComponent` →
+   * 'counter'). Omit `apps` entirely to mount every `@AngularIsland`
+   * component imported into the worker's module graph.
+   */
+  apps?: Record<string, AngularIslandEntry> | readonly AngularIslandEntry[];
   /** Doorbell contract override — forwarded to `definePolyWorker`. */
   sharedMemory?: SharedMemory<DoorbellSpec>;
 }
 
 /**
+ * Resolve an `apps` argument into a name→entry map. Record form passes
+ * through verbatim; array form names each entry by `islandAppNameOf`
+ * (the stamp `@AngularIsland` writes) falling back to the kebab-cased
+ * class name.
+ */
+function resolveAngularApps(
+  apps: AngularPolyWorkerRegistry['apps'],
+): Record<string, AngularIslandEntry> {
+  if (apps === undefined) {
+    // No explicit registry — every @AngularIsland component imported so far.
+    return Object.fromEntries(angularIslandRegistry);
+  }
+  if (!Array.isArray(apps)) return { ...(apps as Record<string, AngularIslandEntry>) };
+  const out: Record<string, AngularIslandEntry> = {};
+  for (const entry of apps) {
+    const component = typeof entry === 'function' ? entry : entry.component;
+    // Stamp first (decorator/`islandApp`), then the same kebab default the
+    // decorator uses — NOT islandAppNameOf's raw-function-name fallback,
+    // which would register 'CounterComponent' while the shell resolves
+    // the same class to 'counter'.
+    const name =
+      (component as unknown as { islandAppName?: string }).islandAppName ??
+      defaultAngularIslandName(component);
+    out[name] = entry;
+  }
+  return out;
+}
+
+/**
  * `definePolyWorker` for Angular apps — maps each component in the
  * registry through `angularIslandApp` and delegates. One worker, many
- * Angular islands. Per-app injector extras pass through the
- * `{ component, providers }` entry form.
+ * Angular islands. Three call shapes:
+ *
+ * ```ts
+ * defineAngularPolyWorker({ apps: { counter: Counter, notes: Notes } }); // explicit
+ * defineAngularPolyWorker({ apps: [Counter, Notes] });                  // named by stamp/class
+ * defineAngularPolyWorker();                                          // every @AngularIsland
+ * ```
+ *
+ * Per-app injector extras pass through the `{ component, providers }`
+ * entry form.
  */
 export function defineAngularPolyWorker(
-  registry: AngularPolyWorkerRegistry,
+  registry: AngularPolyWorkerRegistry | readonly AngularIslandEntry[] = {},
   options?: { sharedMemory?: SharedMemory<DoorbellSpec> },
 ): WorkerDefinition<DoorbellSpec, IslandWorkerMethods> {
+  const reg: AngularPolyWorkerRegistry = Array.isArray(registry)
+    ? { apps: registry as readonly AngularIslandEntry[] }
+    : (registry as AngularPolyWorkerRegistry);
   const apps: Record<string, RenderedIslandApp> = {};
-  for (const [key, entry] of Object.entries(registry.apps)) {
+  for (const [key, entry] of Object.entries(resolveAngularApps(reg.apps))) {
     apps[key] =
       typeof entry === 'function'
         ? angularIslandApp(entry)
@@ -854,7 +1031,7 @@ export function defineAngularPolyWorker(
   }
   return definePolyWorker({
     apps,
-    sharedMemory: registry.sharedMemory ?? options?.sharedMemory,
+    sharedMemory: reg.sharedMemory ?? options?.sharedMemory,
   });
 }
 

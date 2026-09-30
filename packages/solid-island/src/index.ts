@@ -44,9 +44,12 @@
 import {
   createEffect,
   createSignal,
+  lazy,
   onCleanup,
+  splitProps,
   untrack,
   type Accessor,
+  type JSX,
   type Signal,
 } from 'solid-js';
 import {
@@ -346,3 +349,229 @@ export function Island<A = string>(options: IslandProps<A>): HTMLElement {
 }
 
 export default Island;
+
+/* ── Worker-loaded component proxies ──────────────────────────────────────
+ *
+ * `islandComponent`/`lazyIsland` return components that take a worker app's
+ * props inline — `<ChartsIsland width={520}/>` — and route everything that
+ * isn't a shell concern through as the island's props. Mirrors the React
+ * binding's proxies; the implementation is shared (`proxyIsland`) so both
+ * APIs differ only in how the app reference is produced: `islandComponent`
+ * binds it eagerly, `lazyIsland` suspends while a dynamic import resolves
+ * (and can additionally supply a worker factory).
+ */
+
+/**
+ * Props consumed by a proxy component itself — everything else forwards to
+ * the island as its props.
+ */
+export interface IslandShellProps {
+  /** How to reach the worker — see CreateIslandOptions.worker/client. */
+  worker?: (() => Worker) | URL;
+  client?: IslandClient;
+  workerOptions?: IslandWorkerOptions;
+  /** Island → shell channel: every `emit` op lands here. */
+  onEvent?: (name: string, payload: unknown) => void;
+  /** Fired after each applied op batch. */
+  onActivity?: () => void;
+  /** The mounted handle (pid, updateProps, flush, setMode…) once ready. */
+  onReady?: (island: IslandHandle) => void;
+  /** Mount/update errors surface here instead of an unhandled rejection. */
+  onError?: (err: unknown) => void;
+  /** Transclusion slots — see CreateIslandOptions.slots. */
+  slots?: Record<string, (el: HTMLElement | null) => void>;
+  /** Rendered next to the container while the worker mounts. */
+  fallback?: JSX.Element;
+  /**
+   * Attributes for the island's container div (class/className/style/
+   * data-/aria-/…). `on*` function values attach DOM listeners. Tracked —
+   * changing entries update/remove their attributes and listeners.
+   */
+  containerProps?: Record<string, unknown>;
+  /** Document the container is created in — see IslandProps.document. */
+  document?: Document;
+}
+
+const SHELL_PROP_KEYS = [
+  'worker',
+  'client',
+  'workerOptions',
+  'onEvent',
+  'onActivity',
+  'onReady',
+  'onError',
+  'slots',
+  'fallback',
+  'containerProps',
+  'document',
+] as const;
+
+/** Container-attribute proxying — no solid-js/web spread() so the shell
+ *  surface stays renderer-free. Attributes track the prop reactively;
+ *  listeners swap on change; vanished keys clean up. */
+function applyContainerProps(
+  el: HTMLElement,
+  containerProps: Accessor<Record<string, unknown> | undefined>,
+): void {
+  let attrs = new Set<string>();
+  const listeners = new Map<string, EventListener>();
+  createEffect(() => {
+    const cp = containerProps() ?? {};
+    const next = new Set<string>();
+    for (const [key, value] of Object.entries(cp)) {
+      if (key.startsWith('on') && typeof value === 'function') {
+        const name = key.slice(2).toLowerCase();
+        const prev = listeners.get(name);
+        if (prev !== value) {
+          if (prev !== undefined) el.removeEventListener(name, prev);
+          el.addEventListener(name, value as EventListener);
+          listeners.set(name, value as EventListener);
+        }
+        continue;
+      }
+      const attr = key === 'className' ? 'class' : key;
+      if (key === 'style' && value !== null && typeof value === 'object') {
+        Object.assign(el.style, value);
+      } else if (value === undefined || value === null || value === false) {
+        el.removeAttribute(attr);
+      } else {
+        el.setAttribute(attr, value === true ? '' : String(value));
+      }
+      next.add(attr);
+    }
+    for (const attr of attrs) if (!next.has(attr)) el.removeAttribute(attr);
+    attrs = next;
+  });
+  onCleanup(() => {
+    for (const [name, fn] of listeners) el.removeEventListener(name, fn);
+    listeners.clear();
+  });
+}
+
+/** The shared proxy body — mounts the resolved app into an `Island` div and
+ *  returns it beside a `fallback` accessor (alive until onReady). */
+function proxyIsland(
+  source: { app?: IslandAppRef<IslandAppLike>; worker?: (() => Worker) | URL },
+  props: IslandShellProps & Record<string, unknown>,
+): JSX.Element {
+  const [shell, islandProps] = splitProps(props, SHELL_PROP_KEYS);
+  const [ready, setReady] = createSignal(false);
+  const el = Island<IslandAppLike>({
+    app: source.app,
+    worker: shell.worker ?? source.worker,
+    client: shell.client,
+    workerOptions: shell.workerOptions,
+    document: shell.document,
+    // Accessor form — createIsland's props-watch effect tracks the spread's
+    // reads, and spreading materializes the split-props proxy into a plain
+    // (structured-cloneable) object before it crosses the wire.
+    props: () => ({ ...islandProps }),
+    // Read through `shell` at call time — fresh prop identities never force
+    // a remount (mount-stable inputs are resolved once, like `Island`).
+    onEvent: (name, payload) => shell.onEvent?.(name, payload),
+    onActivity: () => shell.onActivity?.(),
+    onError: (err) => shell.onError?.(err),
+    onReady: (island) => {
+      shell.onReady?.(island);
+      setReady(true);
+    },
+    slots: shell.slots,
+  });
+  applyContainerProps(el, () => shell.containerProps);
+  return [el, () => (ready() ? null : shell.fallback)] as unknown as JSX.Element;
+}
+
+type LazyModule<A> = A | { default: A } | { app: A; worker?: (() => Worker) | URL };
+
+/**
+ * The app a lazy module resolves to — unwraps `{ default: A }` and the
+ * contract-module shape `{ app: A, worker? }`, passes bare A through.
+ */
+export type LazyResolvedApp<T extends Promise<unknown>> =
+  Awaited<T> extends { app: infer A }
+    ? A
+    : Awaited<T> extends { default: infer D }
+      ? D
+      : Awaited<T>;
+
+/**
+ * `islandComponent<P>('charts')` — a proxy component for a worker app that
+ * the shell NEVER imports. `P` is the contract (usually an `import type` of
+ * the worker component's props); the string is the registry key. Against a
+ * `defineSolidMonoWorker` (1:1) worker the name can be omitted entirely.
+ *
+ * ```tsx
+ * import type { TableProps } from './worker/apps';
+ * const TableIsland = islandComponent<TableProps>('data-table');
+ * <TableIsland worker={renderWorker} filter={filter()} desc={desc()} />
+ * ```
+ */
+export function islandComponent<P extends object = Record<string, unknown>>(
+  app?: string,
+): (props: P & IslandShellProps) => JSX.Element;
+export function islandComponent<A extends IslandAppLike>(
+  app: A,
+): (props: IslandAppProps<A> & IslandShellProps) => JSX.Element;
+export function islandComponent(
+  app?: string | IslandAppLike,
+): (props: IslandShellProps & Record<string, unknown>) => JSX.Element {
+  return (props) => proxyIsland({ app: app as IslandAppRef<IslandAppLike> | undefined }, props);
+}
+
+/**
+ * `lazyIsland(() => import('./worker/apps').then(m => ({ default: m.ChartsApp })))`
+ * — the `lazy()` mirror for worker apps. The returned component suspends
+ * while the module loads (wrap it in `<Suspense>`), then proxies all props to
+ * the island. The dynamic import gives bundlers a split point, so the worker
+ * component's dependencies only load when the island mounts.
+ *
+ * ```tsx
+ * const ChartsIsland = lazyIsland(() => import('./worker/apps').then(m => ({ default: m.ChartsApp })));
+ * <Suspense fallback="loading…"><ChartsIsland width={w()} worker={renderWorker} /></Suspense>
+ * ```
+ *
+ * CONTRACT MODULES: for `defineSolidMonoWorker` (1:1) topologies the loader
+ * can resolve `{ app, worker }` — the island then carries its own worker
+ * factory and call sites need no `worker` prop at all:
+ *
+ * ```ts
+ * // worker/map.island.ts — shell-safe contract (never the .worker.ts entry
+ * // itself: defining a worker installs instance globals, don't import it)
+ * export { mapApp as app } from './map';
+ * export const worker = () => new Worker(new URL('./map.worker.ts', import.meta.url), { type: 'module' });
+ *
+ * // shell.tsx
+ * const MapIsland = lazyIsland(() => import('./worker/map.island'));
+ * <MapIsland />  // app + worker both from the contract
+ * ```
+ */
+export function lazyIsland<T extends Promise<LazyModule<IslandAppLike>>>(
+  loader: () => T,
+): (props: IslandAppProps<LazyResolvedApp<T>> & IslandShellProps) => JSX.Element {
+  const Component = lazy(
+    () =>
+      Promise.resolve()
+        .then(loader)
+        .then((mod) => {
+        const unwrapped =
+          mod !== null && typeof mod === 'object' && 'default' in mod
+            ? (mod as { default: unknown }).default
+            : mod;
+        const isContract =
+          unwrapped !== null && typeof unwrapped === 'object' && 'app' in unwrapped;
+        const app = (
+          isContract ? (unwrapped as { app: IslandAppLike }).app : unwrapped
+        ) as IslandAppLike;
+        const worker = isContract
+          ? (unwrapped as { worker?: (() => Worker) | URL }).worker
+          : undefined;
+        return {
+          default: (props: Record<string, unknown>): JSX.Element =>
+            proxyIsland({ app, worker }, props as IslandShellProps & Record<string, unknown>),
+        };
+        }) as Promise<{
+          default: (props: Record<string, unknown>) => JSX.Element;
+        }>,
+  );
+  return Component as (props: IslandAppProps<LazyResolvedApp<T>> & IslandShellProps) => JSX.Element;
+}

@@ -9,19 +9,32 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@angular/common": "file:../../node_modules/@angular/common",
+    "@angular/compiler": "file:../../node_modules/@angular/compiler",
+    "@angular/core": "file:../../node_modules/@angular/core",
+    "@angular/platform-browser": "file:../../node_modules/@angular/platform-browser",
+    "@atolljs/angular-island": "file:../../packages/angular-island",
     "@atolljs/islands": "file:../../packages/islands",
     "@atolljs/react-island": "file:../../packages/react-island",
+    "@atolljs/solid-island": "file:../../packages/solid-island",
+    "@atolljs/svelte-island": "file:../../packages/svelte-island",
     "@atolljs/vue-island": "file:../../packages/vue-island",
-    "vue": "file:../../node_modules/vue",
     "leaflet": "^1.9.4",
     "react": "file:../../node_modules/react",
     "react-dom": "file:../../node_modules/react-dom",
     "react-reconciler": "^0.34.0",
-    "recharts": "^3.10.1"
+    "recharts": "^3.10.1",
+    "rxjs": "file:../../node_modules/rxjs",
+    "solid-js": "file:../../node_modules/solid-js",
+    "svelte": "file:../../node_modules/svelte",
+    "tslib": "file:../../node_modules/tslib",
+    "vue": "file:../../node_modules/vue"
   },
   "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "file:../../node_modules/@sveltejs/vite-plugin-svelte",
     "@types/leaflet": "^1.9.22",
     "@types/react": "^19.3.0",
+    "@vitejs/plugin-vue": "^6.0.9",
     "typescript": "^7.0.2",
     "vite": "^8.3.1"
   }

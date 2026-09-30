@@ -30,8 +30,8 @@ export function DemoFrame({ id, port, name, path = '' }: DemoFrameProps) {
   return (
     <div className="demo-frame">
       <div className="demo-frame-bar">
-        <span>
-          live demo — <code>{name}</code>
+        <span className="demo-label">
+          <code>{name}</code>
         </span>
         <a href={src} target="_blank" rel="noreferrer">
           {label} ↗

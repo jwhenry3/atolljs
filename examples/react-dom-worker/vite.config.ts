@@ -1,4 +1,6 @@
 import { fileURLToPath } from 'node:url';
+import { svelte } from '@sveltejs/vite-plugin-svelte';
+import vue from '@vitejs/plugin-vue';
 import { defineConfig } from 'vite';
 
 // The sdk and the islands package live in the workspace root — alias the
@@ -8,6 +10,9 @@ import { defineConfig } from 'vite';
 const coreRoot = fileURLToPath(new URL('../../src/', import.meta.url)).replace(/\\/g, '/');
 const islandsRoot = fileURLToPath(new URL('../../packages/islands/src/', import.meta.url)).replace(/\\/g, '/');
 const vueIslandRoot = fileURLToPath(new URL('../../packages/vue-island/src/', import.meta.url)).replace(/\\/g, '/');
+const solidIslandRoot = fileURLToPath(new URL('../../packages/solid-island/src/', import.meta.url)).replace(/\\/g, '/');
+const svelteIslandRoot = fileURLToPath(new URL('../../packages/svelte-island/src/', import.meta.url)).replace(/\\/g, '/');
+const angularIslandRoot = fileURLToPath(new URL('../../packages/angular-island/src/', import.meta.url)).replace(/\\/g, '/');
 
 export default defineConfig(({ command }) => ({
   // Relative base — the built output works at any mount depth (serve-all /<name>/, Pages /consumer/<name>/); dev serves /.
@@ -35,16 +40,47 @@ export default defineConfig(({ command }) => ({
       // install (the file: dep), one copy shared with nothing else here.
       { find: /^@atolljs\/vue-island$/, replacement: `${vueIslandRoot}index.ts` },
       { find: /^@atolljs\/vue-island\/worker$/, replacement: `${vueIslandRoot}worker.ts` },
+      { find: /^@atolljs\/solid-island$/, replacement: `${solidIslandRoot}index.ts` },
+      { find: /^@atolljs\/solid-island\/worker$/, replacement: `${solidIslandRoot}worker.ts` },
+      { find: /^@atolljs\/svelte-island$/, replacement: `${svelteIslandRoot}index.ts` },
+      { find: /^@atolljs\/svelte-island\/worker$/, replacement: `${svelteIslandRoot}worker.ts` },
+      { find: /^@atolljs\/angular-island$/, replacement: `${angularIslandRoot}index.ts` },
+      { find: /^@atolljs\/angular-island\/worker$/, replacement: `${angularIslandRoot}worker.ts` },
+      // The Solid worker apps compile solid-js/universal, which does a bare
+      // `import 'solid-js'` — under `worker`/`node` export conditions that
+      // resolves to dist/server.js whose effects never run (the adapter
+      // probes and throws). EXACT match only: a prefix alias would rewrite
+      // deep specifiers like solid-js/html onto dist/solid.js/<subpath>.
+      {
+        find: /^solid-js$/,
+        replacement: `${fileURLToPath(new URL('../../node_modules/', import.meta.url)).replace(/\\/g, '/')}solid-js/dist/solid.js`,
+      },
     ],
   },
-  // Two entry pages: index.html is the framework-free shell (src/main.ts),
-  // react-shell.html is the same islands mounted by a React shell through
-  // <Island/> (src/shell.tsx).
+  // The Vue/Svelte shells are real SFCs — @vitejs/plugin-vue compiles
+  // .vue files (worker/vue/*.vue too), vite-plugin-svelte compiles
+  // .svelte files (and svelte-island's .svelte.ts rune module). Both only
+  // process their own flavored ids, so the React/TSX entries are untouched.
+  plugins: [vue(), svelte()],
+  // Worker bundles build in their own rolldown pass — worker.plugins must
+  // carry FRESH plugin instances so worker/vue.worker.ts and
+  // worker/svelte.worker.ts can import .vue/.svelte components (the
+  // frameworks' islands run INSIDE the workers).
+  worker: {
+    plugins: () => [vue(), svelte()],
+  },
+  // Entry pages: index.html is the framework-free shell (src/main.ts);
+  // each <fw>-shell.html mounts the same islands through that framework's
+  // @atolljs/<fw>-island shell surface.
   build: {
     rollupOptions: {
       input: {
         main: fileURLToPath(new URL('./index.html', import.meta.url)),
         'react-shell': fileURLToPath(new URL('./react-shell.html', import.meta.url)),
+        'vue-shell': fileURLToPath(new URL('./vue-shell.html', import.meta.url)),
+        'solid-shell': fileURLToPath(new URL('./solid-shell.html', import.meta.url)),
+        'svelte-shell': fileURLToPath(new URL('./svelte-shell.html', import.meta.url)),
+        'angular-shell': fileURLToPath(new URL('./angular-shell.html', import.meta.url)),
       },
     },
   },

@@ -8,8 +8,8 @@
     "strict": true,
     "noEmit": true,
     "isolatedModules": true,
-    // No JSX in this package — required only so the worker test fixture's
-    // imports (islands's slot.tsx) typecheck like other packages.
+    // No JSX in this package — set only so any transitively-included .tsx
+    // typechecks like other packages.
     "jsx": "react-jsx",
     "skipLibCheck": true,
     "paths": {
@@ -19,11 +19,5 @@
       "@atolljs/islands/*": ["../../packages/islands/src/*"]
     }
   },
-  "include": [
-    "src",
-    "test",
-    // The test fixture imports the worker entry, which imports
-    // react-reconciler — islands's ambient module declaration.
-    "../../packages/islands/src/react-reconciler.d.ts"
-  ]
+  "include": ["src", "test"]
 }

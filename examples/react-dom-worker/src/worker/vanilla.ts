@@ -45,7 +45,7 @@ const MAX_LOG_LINES = 5;
 
 export function buildVanilla(doc: ProxyDocument, props: Record<string, unknown>): void {
   const title =
-    typeof props.title === 'string' ? props.title : 'vanilla island — proxy DOM only, no React';
+    typeof props.title === 'string' ? props.title : 'vanilla island — proxy DOM only';
 
   const section = doc.createElement('section');
   section.id = 'vanilla-root'; // id setter → attr op + the doc's id map

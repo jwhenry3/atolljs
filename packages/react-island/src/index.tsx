@@ -82,8 +82,13 @@ export interface IslandProps<A = string>
    */
   worker?: (() => Worker) | URL;
   client?: IslandClient;
-  /** Extra pool options — concurrency, taskTimeout, respawn… (poolSize stays 1). */
-  workerOptions?: IslandWorkerOptions;
+  /**
+   * Extra pool options — concurrency, taskTimeout, respawn… (poolSize stays
+   * 1). `doorbell: false` builds the shorthand client message-only — no
+   * SharedArrayBuffer, no COOP/COEP requirement (same as `mode: 'poll'` on
+   * a direct `mountIsland` shorthand mount).
+   */
+  workerOptions?: IslandWorkerOptions & { doorbell?: boolean };
   /**
    * Initial flush mode — 'push' (default) drives op replay off the
    * shared-memory doorbell (needs cross-origin isolation); 'poll' drains on
@@ -272,7 +277,8 @@ export interface IslandShellProps {
   /** How to reach the worker — see IslandProps.worker/client. */
   worker?: (() => Worker) | URL;
   client?: IslandClient;
-  workerOptions?: IslandWorkerOptions;
+  /** See IslandProps.workerOptions — `doorbell` included. */
+  workerOptions?: IslandWorkerOptions & { doorbell?: boolean };
   /** Initial flush mode — see IslandProps.mode. */
   mode?: Mode;
   /** Island → shell channel: every `emit` op lands here. */
@@ -323,12 +329,14 @@ const splitProxyProps = (
 
 /* ── Shared proxy implementation ─────────────────────────────────────────── */
 
-type LazyModule<A> = A | { default: A } | { app: A; worker?: (() => Worker) | URL };
+type LazyModule<A> = A | { default: A } | { app: A | string; worker?: (() => Worker) | URL };
 
 /** Cached state for a lazy loader. One cache entry per loader function. */
 interface LazyState {
   promise: Promise<unknown>;
-  value?: IslandAppLike;
+  // Contract modules may carry a registry-key string instead of the app —
+  // `Island`'s `app` prop accepts `IslandAppRef` (name or reference).
+  value?: IslandAppLike | string;
   worker?: (() => Worker) | URL;
   error?: unknown;
 }
@@ -337,7 +345,7 @@ const lazyCache = new WeakMap<() => Promise<LazyModule<IslandAppLike>>, LazyStat
 
 /** Resolve a lazy module through Suspense; reused across re-renders. */
 function useLazyApp(loader: () => Promise<LazyModule<IslandAppLike>>): {
-  app?: IslandAppLike;
+  app?: IslandAppLike | string;
   worker?: (() => Worker) | URL;
 } {
   let state = lazyCache.get(loader);

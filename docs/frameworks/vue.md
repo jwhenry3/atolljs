@@ -30,8 +30,10 @@ shell replays as real DOM.
 
 | Export | Signature | What it does |
 |---|---|---|
-| `useIsland` | `useIsland({ worker\|client, app, props: () => P, onEvent, slots }): { host, handle, status }` | Headless mount — assign `host` in a template ref; the props getter is tracked, so reactive reads push `updateProps` automatically. |
-| `AtollIsland` | `<AtollIsland app worker\|client :props @ready @error />` | Component form — same options as props plus lifecycle emits; renders the island container div itself. |
+| `useIsland` | `useIsland({ worker\|client, app, props: () => P, mode, onEvent, slots }): { host, handle, status }` | Headless mount — assign `host` in a template ref; the props getter is tracked, so reactive reads push `updateProps` automatically. |
+| `AtollIsland` | `<AtollIsland app worker\|client :props mode @ready @error />` | Component form — same options as props plus lifecycle emits; renders the island container div itself. |
+| `islandComponent` | `islandComponent<P>(app?): Component<P & IslandShellProps>` | Facade — proxy component for a worker app the shell never imports; every attribute that isn't a shell key (`worker`/`client`/`mode`/`on*`/`slots`/`containerProps`) forwards as island props: `<ChartsIsland :worker="w" :width="520"/>`. |
+| `lazyIsland` | `lazyIsland(() => import('./worker/apps'), asyncOptions?): Component` | `defineAsyncComponent`-based lazy facade — a bundle split point; resolves `{ default: app }` and contract modules `{ app, worker }` (the island then carries its own worker factory). |
 
 ```vue
 <script setup lang="ts">
@@ -59,7 +61,17 @@ const { host, handle, status } = useIsland({
 | `emit` / `runInInstance` | re-exported from `@atolljs/islands` | The worker entry needs no direct islands import. |
 
 Reference: `examples/react-dom-worker/src/worker/vue.worker.ts` — a real Vue
-island worker entry (Vue but no React in its bundle).
+island worker entry serving `.vue` SFCs (`worker/vue/Counter.vue`,
+`worker/vue/Notes.vue`, `worker/vue/Incidents.vue` — the 1M-row virtualized
+benchmark) — Vue but no React in its bundle.
+Reference shell: `examples/react-dom-worker/src/vue/Shell.vue` — an SFC
+mounting the islands via `<AtollIsland v-bind="…"/>` over
+`connectIslandWorker` clients (counters share one), plus the
+`islandComponent`/`lazyIsland` facades — the incidents island resolves
+`{ app, worker }` from `src/vue/incidents.island.ts`. Mediation is
+`reactive()` state, replacing hand-wired `updateProps`. The example's vite
+config runs `@vitejs/plugin-vue` in BOTH the page build and
+`worker.plugins` so SFCs compile inside worker bundles too.
 
 ### Semantics & notes
 

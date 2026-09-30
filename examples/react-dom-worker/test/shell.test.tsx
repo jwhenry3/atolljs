@@ -1,12 +1,16 @@
 // @vitest-environment happy-dom
 /**
- * React-shell E2E — <Shell/> mounts all seven islands through <Island/>
- * components instead of imperative mountIsland() calls. Proves:
- *   - the shell mounts via the component API against the REAL worker entry,
- *   - the charts island resolves its name from the stamped component ref,
- *   - mediation works declaratively: a controls emit becomes a state change
- *     that flows back in as props (filter → table rows), and
- *   - badges/status/stats land in ordinary React-rendered DOM.
+ * React-shell E2E — <Shell/> mounts the framework-native islands through
+ * @atolljs/react-island components instead of imperative mountIsland()
+ * calls. Proves:
+ *   - the shell mounts via <Island/>, islandComponent, and lazyIsland
+ *     (contract module) against the REAL worker entry,
+ *   - both counters share ONE client — two 'counter@N' mounts in one
+ *     worker,
+ *   - worker emits (incremented / noteAdded / rendered) land as React
+ *     state on the status line, and
+ *   - the 1M-incidents island virtualizes: ~22 DOM rows, a scroll event
+ *     round-trips and re-renders the window worker-side.
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { InProcessWorker } from '@atolljs/core/testing/inProcessWorker';
@@ -30,13 +34,9 @@ vi.mock('react-dom/client', async () => {
 });
 
 vi.stubGlobal('Worker', InProcessWorker);
-// The shell mounts the registry worker AND the two instance workers — all
-// entries register into the shared in-process module graph.
-InProcessWorker.handlerModules = [
-  () => import('../src/worker/render.worker'),
-  () => import('../src/worker/vanilla.worker'),
-  () => import('../src/worker/map.worker'),
-];
+// In-process workers share one module graph — the registry worker entry
+// registers its counter/notes/incidents apps into it.
+InProcessWorker.handlerModules = [() => import('../src/worker/react.worker')];
 
 const waitFor = async (fn: () => unknown, timeoutMs = 15_000): Promise<void> => {
   const start = Date.now();
@@ -62,24 +62,8 @@ describe('React shell', () => {
   // before rendering; real browsers never share globals across threads.
   let realDoc: Document;
 
-  /** Spy 2d context — happy-dom's getContext returns null, which would leave
-      the Sparkline's rAF tick body dead. A stub lets the loop run for real. */
-  const ctx2d = {
-    clearRect: vi.fn(),
-    beginPath: vi.fn(),
-    moveTo: vi.fn(),
-    lineTo: vi.fn(),
-    stroke: vi.fn(),
-    strokeStyle: '',
-    lineWidth: 0,
-  };
-
   beforeAll(async () => {
     realDoc = document;
-    vi.spyOn(
-      realDoc.createElement('canvas').constructor.prototype as object,
-      'getContext',
-    ).mockReturnValue(ctx2d);
     const { createRoot } = await import('react-dom/client');
     const { Shell } = await import('../src/shell');
     const host = realDoc.createElement('div');
@@ -87,125 +71,68 @@ describe('React shell', () => {
     createRoot(host).render(<Shell />);
   });
 
-  it('mounts every island through <Island/> components', async () => {
-    await waitFor(() => realDoc.querySelectorAll('.island-root').length === 7);
-    await waitFor(() => realDoc.querySelectorAll('.island-head .badge').length === 7);
+  it('mounts all four islands through the component APIs', async () => {
+    await waitFor(() => realDoc.querySelectorAll('.island-root').length === 4);
+    await waitFor(() => realDoc.querySelectorAll('.island-head .badge').length === 4);
     await waitFor(() =>
       [...realDoc.querySelectorAll('.island-head .badge')].every((b) =>
         /^worker w-/.test(b.textContent ?? ''),
       ),
     );
     // Real DOM landed via op replay inside the component-rendered divs.
-    await waitFor(() => realDoc.querySelector('#island-table tbody tr'), 60_000);
-    await waitFor(() => realDoc.querySelector('.vanilla-log'), 60_000);
-    await waitFor(() => realDoc.querySelector('.recharts-surface'), 60_000);
+    await waitFor(() => realDoc.querySelector('.react-counter'), 60_000);
+    await waitFor(() => realDoc.querySelector('.react-notes'), 60_000);
+    await waitFor(() => realDoc.querySelector('.inc-row'), 60_000);
   }, 120_000);
 
-  it('mediates controls → table declaratively via props', async () => {
-    const status = realDoc.getElementById('status-line')!;
-    const rowsBefore = realDoc.querySelectorAll('#island-table tbody tr').length;
-    expect(rowsBefore).toBeGreaterThan(0);
-
-    // Type into the controls island's filter input — the emit becomes shell
-    // state, which flows back as the table island's props.
-    const input = realDoc.querySelector('.island-root input') as HTMLInputElement;
-    input.value = 'eu-central';
-    input.dispatchEvent(new Event('input', { bubbles: true }));
-
-    await waitFor(() => /filterChanged/.test(status.textContent ?? ''));
-    await waitFor(() => {
-      const cells = realDoc.querySelectorAll('#island-table tbody tr td:first-child');
-      return cells.length > 0 && cells.length < rowsBefore;
-    });
-  }, 45_000);
-
-  it('transport stats aggregate in React-rendered DOM', async () => {
-    const stats = realDoc.getElementById('transport-stats')!;
-    await waitFor(() => /ops applied: [1-9]/.test(stats.textContent ?? ''));
-    expect(stats.textContent).toContain('sync: push');
-  });
-
-  /* Every island's onEvent prop lands as a status-line update — clicking
-     real DOM inside each island exercises the inline handlers in shell.tsx. */
   const status = () => realDoc.getElementById('status-line')!.textContent ?? '';
   const click = (el: Element) =>
     el.dispatchEvent(new MouseEvent('click', { bubbles: true }));
   const findButton = (re: RegExp) =>
     [...realDoc.querySelectorAll('button')].find((b) => re.test(b.textContent ?? ''));
 
-  it('controls sort/count emits reach the shell status line', async () => {
-    const statusEl = realDoc.getElementById('status-line')!;
-
-    click(findButton(/sort:/)!);
-    await waitFor(() => /sortChanged → table props\.desc=true/.test(statusEl.textContent ?? ''));
-
-    click(findButton(/^count:/)!);
-    await waitFor(() => /controls island counter → 1/.test(statusEl.textContent ?? ''));
+  it('counter islands emit incremented to the shell status line', async () => {
+    const heads = [...realDoc.querySelectorAll('.island-head')];
+    const counterHead = heads.find((h) => /counter \(react-reconciler/.test(h.textContent ?? ''))!;
+    click(counterHead.parentElement!.querySelector('.mw-btn')!);
+    await waitFor(() => /alpha counter → 1/.test(status()));
   }, 30_000);
 
-  it('both data-table instances emit rowSelected to their own handlers', async () => {
-    click(realDoc.querySelector('#island-table tbody tr')!);
-    await waitFor(() => /table island emitted rowSelected → shell \(row #\d+\)/.test(status()));
-
-    click(realDoc.querySelector('#island-table-2 tbody tr')!);
-    await waitFor(() =>
-      /second data-table instance emitted rowSelected \(row #\d+\)/.test(status()),
+  it('the notes island round-trips input + emits noteAdded', async () => {
+    const notesRoot = [...realDoc.querySelectorAll('.react-notes')][0]!;
+    const input = notesRoot.querySelector('input') as HTMLInputElement;
+    input.value = 'ship it';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    click(notesRoot.querySelector('.atoll-map-place-btn')!);
+    await waitFor(() => /notes island emitted noteAdded → "ship it" \(1 total\)/.test(status()));
+    await vi.waitFor(() =>
+      expect(notesRoot.textContent).toContain('1 note(s) — state lives in the worker'),
     );
   }, 30_000);
 
-  it('vanilla island colorPicked emit reaches the shell', async () => {
-    await waitFor(() => realDoc.querySelector('.swatch'));
-    const swatch = realDoc.querySelector('.swatch')!;
-    click(swatch);
-    await waitFor(() => /vanilla island emitted colorPicked → #2d6cdf/.test(status()));
-  }, 30_000);
+  it('the incidents island virtualizes 1M rows and scrolls worker-side', async () => {
+    const viewport = realDoc.querySelector('.inc-viewport') as HTMLElement;
+    expect(viewport).not.toBeNull();
+    // ~22 rows rendered — never a million.
+    await waitFor(() => realDoc.querySelectorAll('.inc-row').length === 22);
 
-  it('charts island chartClicked emit reaches the shell', async () => {
+    // A scroll is a dispatch round-trip: scrollTop rides the event payload,
+    // the worker re-renders the window and emits 'rendered' with timings.
+    Object.defineProperty(viewport, 'scrollTop', { value: 24 * 500_000, configurable: true });
+    viewport.dispatchEvent(new Event('scroll'));
+    await waitFor(() => /incidents island rendered rows 499,9\d\d–500,0\d\d/.test(status()), 30_000);
     await waitFor(() =>
-      realDoc.querySelector('.recharts-bar-rectangle path, .recharts-rectangle'),
+      /rows 499,9\d\d–500,0\d\d/.test(
+        realDoc.querySelector('.inc-stats')!.textContent ?? '',
+      ),
     );
-    click(realDoc.querySelector('.recharts-bar-rectangle path, .recharts-rectangle')!);
-    await waitFor(() =>
-      /charts island emitted chartClicked → us-east \(418 incidents\)/.test(status()),
-    );
-  }, 30_000);
+  }, 60_000);
 
-  it('map island emits markerClicked / placeSelected / zoomChanged', async () => {
-    const mapEl = realDoc.getElementById('island-map')!;
-    await waitFor(() => mapEl.querySelector('.atoll-map-pin'), 60_000);
-
-    click(mapEl.querySelector('.atoll-map-pin')!);
-    await waitFor(() => /map island emitted markerClicked → Paris/.test(status()));
-
-    click(mapEl.querySelector('.atoll-map-place-btn')!);
-    await waitFor(() => /map island emitted placeSelected → Lisbon/.test(status()));
-
-    const pane = mapEl.querySelector('.leaflet-map-pane')!;
-    for (const type of ['wheel', 'mousewheel']) {
-      pane.dispatchEvent(new WheelEvent(type, { bubbles: true, deltaY: -240 }));
-    }
-    await waitFor(() => /map island emitted zoomChanged → zoom \d+/.test(status()), 15_000);
-  }, 90_000);
-
-  it('sparkline transclusion slot runs its canvas tick loop', async () => {
-    // The worker stats island renders a data-atoll-slot div; the shell portals
-    // a real <canvas> into it and drives a rAF trace on the 2d context.
-    await waitFor(() => realDoc.querySelector('canvas'));
-    const canvas = realDoc.querySelector('canvas')!;
-    await waitFor(() => ctx2d.stroke.mock.calls.length > 0);
-
-    // happy-dom reports 0 box sizes — give the canvas parent a width so the
-    // trace grows past a single point and lineTo runs too.
-    Object.defineProperty(canvas.parentElement, 'clientWidth', {
-      value: 200,
-      configurable: true,
-    });
-    Object.defineProperty(canvas.parentElement, 'clientHeight', {
-      value: 56,
-      configurable: true,
-    });
-    await waitFor(() => ctx2d.lineTo.mock.calls.length > 0);
-  }, 30_000);
+  it('transport stats aggregate in React-rendered DOM', async () => {
+    const stats = realDoc.getElementById('transport-stats')!;
+    await waitFor(() => /ops applied: [1-9]/.test(stats.textContent ?? ''));
+    expect(stats.textContent).toContain('sync: push');
+  });
 
   it('transport buttons switch mode across all mounted island handles', async () => {
     const stats = realDoc.getElementById('transport-stats')!;

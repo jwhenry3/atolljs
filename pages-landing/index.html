@@ -3,21 +3,24 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Atoll — the Worker Atoll</title>
-  <link rel="icon" type="image/svg+xml" href="atoll-icon.svg" />
-  <link rel="icon" type="image/png" href="atoll-icon.png" />
-  <link rel="apple-touch-icon" href="atoll-icon.png" />
+  <title>Atoll — The Worker Atoll</title>
+  <link rel="icon" type="image/svg+xml" media="(prefers-color-scheme: light)" href="atoll-icon-light.svg" />
+  <link rel="icon" type="image/svg+xml" media="(prefers-color-scheme: dark)" href="atoll-icon-dark.svg" />
+  <link rel="icon" type="image/x-icon" media="(prefers-color-scheme: light)" href="atoll-favicon-light.ico" />
+  <link rel="icon" type="image/x-icon" media="(prefers-color-scheme: dark)" href="atoll-favicon-dark.ico" />
+  <link rel="icon" type="image/x-icon" href="favicon.ico" />
+  <link rel="apple-touch-icon" href="atoll-icon-light.png" />
   <meta name="description" content="Atoll — typed worker pools, SharedArrayBuffer contracts, and worker-rendered UI islands for JavaScript. Live demos and npm package documentation." />
   <link rel="canonical" href="https://jwhenry3.github.io/atolljs/" />
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="Atoll" />
-  <meta property="og:title" content="Atoll — the Worker Atoll" />
+  <meta property="og:title" content="Atoll — The Worker Atoll" />
   <meta property="og:description" content="Typed worker pools, shared-memory contracts, and worker-rendered islands — with live framework demos." />
   <meta property="og:url" content="https://jwhenry3.github.io/atolljs/" />
   <meta name="twitter:card" content="summary" />
   <meta property="og:image" content="https://jwhenry3.github.io/atolljs/atoll-compact-dark.png" />
   <meta name="twitter:image" content="https://jwhenry3.github.io/atolljs/atoll-compact-dark.png" />
-  <meta name="twitter:title" content="Atoll — the Worker Atoll" />
+  <meta name="twitter:title" content="Atoll — The Worker Atoll" />
   <meta name="twitter:description" content="Typed worker pools, shared-memory contracts, and worker-rendered islands — with live framework demos." />
   <script>
     // GitHub Pages can't send COOP/COEP headers — coi-sw.js injects them
@@ -42,55 +45,80 @@
   <style>
     :root {
       color-scheme: dark;
-      --bg: #0d1117;
-      --panel: #161b22;
-      --border: #30363d;
-      --text: #e6edf3;
-      --muted: #8b949e;
-      --accent: #58a6ff;
+      --bg: #081420;
+      --panel: #10232f;
+      --border: #1e425a;
+      --text: #e4f2fb;
+      --muted: #8fb6cd;
+      --accent: #58c0f0;
       font-family: 'Segoe UI', system-ui, sans-serif;
     }
     * { box-sizing: border-box; }
     body {
-      margin: 0; background: var(--bg); color: var(--text);
+      margin: 0; color: var(--text);
       min-height: 100vh; display: flex; align-items: center; justify-content: center;
+      background:
+        radial-gradient(1200px 700px at 50% -10%, #16405e 0%, transparent 60%),
+        radial-gradient(900px 600px at 85% 110%, #0d2a3e 0%, transparent 55%),
+        var(--bg);
     }
-    main { max-width: 760px; padding: 48px 24px; width: 100%; }
-    .logo { display: block; width: 180px; height: 180px; margin: 0 0 20px; }
-    h1 { font-size: 2.2rem; margin: 0 0 8px; }
+    main { max-width: 780px; padding: 56px 24px; width: 100%; position: relative; z-index: 1; }
+    .brand-bg {
+      position: fixed; inset: 0; display: grid; place-items: center;
+      pointer-events: none; z-index: 0;
+    }
+    .brand-lockup { width: min(96vmin, 1100px); height: auto; opacity: 0.2; }
+    h1 { font-size: 2.1rem; margin: 0 0 10px; }
     h1 .accent { color: var(--accent); }
     .lead { color: var(--muted); font-size: 1.05rem; line-height: 1.6; margin: 0 0 40px; }
     .cards { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
     @media (max-width: 640px) { .cards { grid-template-columns: 1fr; } }
     .card {
-      display: block; background: var(--panel); border: 1px solid var(--border);
-      border-radius: 10px; padding: 24px; color: var(--text); text-decoration: none;
-      transition: border-color 0.15s ease;
+      display: block; background: rgba(16, 35, 47, 0.65); border: 1px solid var(--border);
+      -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+      border-radius: 12px; padding: 24px; color: var(--text); text-decoration: none;
+      transition: border-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
     }
-    .card:hover { border-color: var(--accent); }
+    .card:hover {
+      border-color: var(--accent);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 28px rgba(24, 122, 178, 0.18);
+    }
     .card h2 { margin: 0 0 8px; font-size: 1.15rem; }
     .card h2 .path { color: var(--accent); font-weight: 400; font-size: 0.85rem; margin-left: 8px; }
     .card p { margin: 0; color: var(--muted); font-size: 0.9rem; line-height: 1.5; }
     .note {
-      margin-top: 32px; padding: 14px 16px; border: 1px solid var(--border);
+      margin: 0 0 24px; padding: 14px 16px; border: 1px solid var(--border);
+      border-left: 3px solid var(--accent);
       border-radius: 8px; color: var(--muted); font-size: 0.85rem; line-height: 1.6;
+      background: rgba(88, 192, 240, 0.05);
     }
     .note code { font-family: 'Cascadia Code', 'JetBrains Mono', Consolas, monospace; font-size: 0.9em; }
   </style>
 </head>
 <body>
   <main>
-    <picture>
-      <source media="(prefers-color-scheme: light)" srcset="atoll-light.svg" />
-      <img class="logo" src="atoll-dark.svg" alt="Atoll — islands of framework workers around a shared core" />
+    <picture class="brand-bg" aria-hidden="true">
+      <source media="(prefers-color-scheme: light)" srcset="atoll-light-t.svg" />
+      <img class="brand-lockup" src="atoll-dark-t.svg" alt="" />
     </picture>
-    <h1>atoll<span class="accent"> — the Worker Atoll</span></h1>
+    <h1>The Worker Atoll</h1>
     <p class="lead">
       Worker pools and shared workers joined to your app through one
       shared-memory fabric. Contracts share fixed-layout
       <code>SharedArrayBuffer</code> state across threads; work is offloaded via
       task commands and state reactivity.
     </p>
+
+    <div class="note">
+      <b>Mission — Make multithreaded JavaScript feel like single-threaded
+      JavaScript.</b> Atoll turns the worker boundary into a typed contract:
+      pools, task dispatch, reactivity, and worker-rendered UI islands all
+      speak one fixed-layout shared-memory fabric. Heavy work leaves the main
+      thread without leaving your framework's idioms — no bespoke
+      <code>postMessage</code> plumbing, no serialization guesswork. Declare
+      the contract once, and both threads speak it.
+    </div>
 
     <div class="cards">
       <a class="card" href="./consumer/">
@@ -109,16 +137,6 @@
           shared workers, the islands engine, and cross-origin isolation.
         </p>
       </a>
-    </div>
-
-    <div class="note">
-      GitHub Pages can't send cross-origin isolation headers itself, so the
-      demos get them from <code>coi-sw.js</code> — a service worker that
-      injects COOP/COEP into every response (the first visit reloads once to
-      pick it up). Where isolation still isn't available the worker-islands
-      demo runs on its poll transport, and the shared-memory demos show a
-      notice — run <code>npm run dev:all</code> or
-      <code>npm run serve:all</code> locally for the guaranteed-live version.
     </div>
   </main>
 </body>

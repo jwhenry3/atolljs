@@ -17,7 +17,7 @@ const DIAGRAM = `main thread                                    worker(s)
 export function Overview() {
   return (
     <article>
-      <h1>Atoll — the Worker Atoll</h1>
+      <h1>Overview</h1>
       <p className="lead">
         A worker atoll: pools and shared workers joined to your app through one
         shared-memory fabric. Threads share a fixed-layout{' '}
@@ -97,7 +97,7 @@ export function Overview() {
           </tr>
           <tr>
             <td><code>@atolljs/*-island</code></td>
-            <td>Shell components + worker renderers for islands — <code>react-island</code> (<code>&lt;Island&gt;</code>, <code>lazyIsland</code>, <code>islandComponent</code>), <code>vue-island</code> (<code>AtollIsland</code>, <code>useIsland</code>), <code>svelte-island</code> (<code>island</code> action), <code>solid-island</code> (<code>&lt;Island&gt;</code>, <code>createIsland</code>), <code>angular-island</code> (<code>atollIsland</code> directive)</td>
+            <td>Shell components + worker renderers for islands — <code>react-island</code> (<code>&lt;Island&gt;</code>, <code>lazyIsland</code>, <code>islandComponent</code>), <code>vue-island</code> (<code>AtollIsland</code>, <code>useIsland</code>), <code>svelte-island</code> (<code>island</code> action), <code>solid-island</code> (<code>&lt;Island&gt;</code>, <code>createIsland</code>, <code>islandComponent</code>, <code>lazyIsland</code>), <code>angular-island</code> (<code>atollIsland</code> directive)</td>
           </tr>
         </tbody>
       </table>

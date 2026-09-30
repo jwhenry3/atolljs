@@ -223,7 +223,7 @@ async function main(): Promise<void> {
     client: connectIslandWorker({ worker: vanillaWorker, doorbell: isolated }),
     el: $('island-vanilla'),
     app: 'vanilla',
-    props: { title: 'vanilla island — imperative proxy DOM, zero React in this worker' },
+    props: { title: 'vanilla island — imperative proxy DOM' },
     onEvent: (name, payload) => {
       const p = payload as { color?: string; x?: number; y?: number };
       if (name === 'colorPicked') {
@@ -244,7 +244,7 @@ async function main(): Promise<void> {
     mode: initialMode,
     el: $('island-vue'),
     app: 'vue-notes',
-    props: { title: 'vue-notes — Vue createRenderer on the proxy DOM, zero React in this worker' },
+    props: { title: 'vue-notes — Vue createRenderer on the proxy DOM' },
     onEvent: (name, payload) => {
       const p = payload as { text?: string; total?: number };
       if (name === 'noteAdded')

@@ -35,6 +35,29 @@ const { host, handle, status } = useIsland({
 `<AtollIsland>` is the component form — same options as props plus
 `@ready`/`@error` emits.
 
+## Facades — `islandComponent` / `lazyIsland`
+
+Mount a worker app the shell never imports — like React's
+`islandComponent`/`lazyIsland`. Every attribute that isn't a shell key
+(`worker`/`client`/`workerOptions`/`mode`/`on*`/`slots`/`containerProps`)
+forwards to the island as its props:
+
+```ts
+import { islandComponent, lazyIsland } from '@atolljs/vue-island';
+
+// eager — the string is the registry key; P is the props contract
+const ChartsIsland = islandComponent<ChartsProps>('charts');
+// <ChartsIsland :worker="renderWorker" :width="520" />
+
+// lazy — defineAsyncComponent under the hood, so the worker app's
+// module only loads when the island mounts (a real split point)
+const LazyIsland = lazyIsland(() => import('./worker/map.island'));
+// contract modules can carry the worker too:
+//   export { mapApp as app } from './map';
+//   export const worker = () => new Worker(new URL('./map.worker.ts', import.meta.url));
+// <LazyIsland /> — app + worker both from the module
+```
+
 ## The worker renderer
 
 ```ts

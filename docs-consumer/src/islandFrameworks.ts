@@ -157,6 +157,7 @@ const worker = () =>
       'Configure your bundler to compile worker JSX for the universal renderer (solid-js/universal), not dom-expressions.',
       'Worker props arrive as getters — Solid props are signal-shaped; updates re-run derivations fine-grained.',
       'defineSolidMonoWorker(app) / defineSolidPolyWorker({ apps }) for the two topologies.',
+      'islandComponent<P>(\'name\') / lazyIsland(loader) proxy a worker app as a local-typed component — inline props, Suspense code-splitting, { app, worker } contract modules.',
     ],
   },
   angular: {
@@ -164,13 +165,16 @@ const worker = () =>
     name: 'Angular islands',
     pkg: '@atolljs/angular-island',
     intro:
-      'Angular\'s official Renderer2/RendererFactory2 extension point, implemented against the proxy DOM — worker components bootstrap through createApplication with a custom platform. Zoneless change detection keeps the tree updated; shell side is a <atoll-island> standalone directive. Works with JIT or AOT-compiled components.',
+      'Angular\'s official Renderer2/RendererFactory2 extension point, implemented against the proxy DOM — worker components bootstrap through createComponent with a custom renderer. Zoneless change detection keeps the tree updated; shell side is a generated islandComponent facade typed off the worker component\'s own signal fields. Works with JIT or AOT-compiled components.',
     componentCodeFile: 'counter.component.ts (worker component)',
-    componentCode: `import { Component, input, signal } from '@angular/core';
-import { emit } from '@atolljs/islands/worker';
+    componentCode: `import { Component, input, output, signal } from '@angular/core';
+import { AngularIsland } from '@atolljs/angular-island/worker';
 
-// Ordinary standalone component — signal inputs receive wire props,
-// signal writes emit ops. JIT entries need import '@angular/compiler'.
+// @AngularIsland stamps the registry name ('counter' from the class name)
+// and registers the component for defineAngularPolyWorker(). Its signal
+// fields ARE the island contract: input()/model() → props keys,
+// output()/model() → island events bridged to the shell.
+@AngularIsland
 @Component({
   standalone: true,
   selector: 'atoll-counter',
@@ -182,43 +186,54 @@ import { emit } from '@atolljs/islands/worker';
 export class CounterComponent {
   readonly label = input('counter');
   readonly count = signal(0);
+  readonly incremented = output<number>();
   increment(): void {
     this.count.update((n) => n + 1);
-    emit('incremented', { n: this.count() });
+    this.incremented.emit(this.count());
   }
 }`,
     workerCodeFile: 'angular.worker.ts (worker entry)',
     workerCode: `import '@angular/compiler';  // JIT only — AOT-compiled components skip this
 import { defineAngularPolyWorker } from '@atolljs/angular-island/worker';
-import { CounterComponent } from './counter.component';
+import './counter.component'; // registers via @AngularIsland
 
-export const angularWorker = defineAngularPolyWorker({
-  apps: { counter: CounterComponent },
-});`,
+// No apps map — every decorated component in the module graph is served.
+export const angularWorker = defineAngularPolyWorker();`,
     shellCodeFile: 'Angular shell',
     shellCode: `import { Component } from '@angular/core';
-import { AtollIsland } from '@atolljs/angular-island';
+import { islandComponent, type IslandEventHandler } from '@atolljs/angular-island';
+import type { CounterComponent } from './counter.component'; // type-only!
+
+// A real standalone component — [props] types as { label?: string },
+// onEvent narrows to ('incremented', number). The worker module itself
+// never enters this bundle.
+const CounterIsland = islandComponent<CounterComponent>({
+  app: 'counter',
+  worker: () => new Worker(
+    new URL('./angular.worker.ts', import.meta.url), { type: 'module' }),
+  selector: 'counter-island',
+});
 
 @Component({
   standalone: true,
-  imports: [AtollIsland],
+  imports: [CounterIsland],
   template: \`
-    <div atollIsland
-         [worker]="worker"
-         app="counter"
-         [props]="{ start: 0 }"
-         (islandEvent)="onIslandEvent($event)"></div>
+    <counter-island [props]="{ label: 'alpha' }" [onEvent]="onEvent" />
   \`,
 })
 export class AppComponent {
-  worker = () =>
-    new Worker(new URL('./angular.worker.ts', import.meta.url), { type: 'module' });
+  onEvent: IslandEventHandler<CounterComponent> = (name, payload) => {
+    if (name === 'incremented') console.log(payload); // payload: number
+  };
 }`,
     notes: [
-      'JIT components need import \'@angular/compiler\' once in the worker entry — the JIT decorators compile at bootstrap. AOT-compiled components skip it.',
+      '@AngularIsland also takes an explicit name or { name, providers } — and undecorated components register via the apps array/record forms of defineAngularPolyWorker.',
+      'Root output()/model() fields bridge onto the emit channel under their public names (x = model() → \'xChange\') — the adapter handles island-instance re-entry, so afterEveryRender-style emits just work.',
+      'JIT components need import \'@angular/compiler\' once in the worker entry — the JIT decorators compile at bootstrap. AOT-compiled components skip it; the generated facade carries a hand-authored ɵcmp so it resolves under both.',
+      'The low-level surface stays available: <atoll-island>/<div atollIsland> with [client] (shared) or [worker] (island-owned), [app] accepting a registry name or the stamped component class.',
       'The worker renderer is a Renderer2 — @DomSanitizer flows through as passthrough; anything Angular sanitizes is already declared safe in a worker.',
       'Forms and animations are untested/explored territory — (click)/(input) bindings work; TemplateRef renders into the proxy tree.',
-      'defineAngularMonoWorker(component) / defineAngularPolyWorker({ apps }) for the two topologies.',
+      'defineAngularMonoWorker(component) for the 1:1 topology.',
     ],
   },
 };

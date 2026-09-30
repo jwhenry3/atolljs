@@ -106,6 +106,13 @@ is released when its last island destroys.
 | `mode` | `'push'` (default — SAB doorbell) or `'poll'` (50ms drain). With the `worker` shorthand, `'poll'` also builds a doorbell-free client — no SharedArrayBuffer, no isolation headers. |
 | `mountTimeout` | Bounds the mount handshake — default 15s, `0` disables. A worker entry that loads but never answers rejects with a named error instead of pending forever; hard failures reject immediately. A failed mount releases the instance and terminates an island-owned client. |
 
+Driver-side prop application follows DOM conventions: `class`/`className`
+write the property, `onX` refs become real listeners, and `style` objects
+merge key-by-key with React-DOM unit semantics — numbers on non-unitless
+properties gain a `px` suffix (`style={{ height: 24000000 }}` works;
+unitless keys like `opacity`/`zIndex` pass through verbatim), custom
+properties and kebab-case keys go through `setProperty`.
+
 ## `IslandHandle`
 
 | Member | Notes |
@@ -126,9 +133,10 @@ and pids — one OS thread). **Instance workers** (`defineMonoWorker`) are the
 1:1 form — one script per app, mounted namelessly, bundling only that app's
 dependencies.
 
-References: `examples/react-dom-worker/src/worker/render.worker.ts`
-(registry), `…/vanilla.worker.ts`, `…/map.worker.ts` (mono),
-`…/vue.worker.ts` (Vue island).
+References: `examples/react-dom-worker/src/worker/react.worker.tsx`
+(React registry — counter/notes/incidents), `…/render.worker.ts`
+(the seven-island showcase registry), `…/vanilla.worker.ts`,
+`…/map.worker.ts` (mono), `…/vue.worker.ts` (Vue island).
 
 Pool discipline: `connectIslandWorker` pins `poolSize: 1` — one tree lives in
 one worker's memory, so scale out with more islands, not wider pools.

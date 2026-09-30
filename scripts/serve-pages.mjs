@@ -4,7 +4,7 @@
 // is static hosting, so they're excluded by design.
 // Usage: node scripts/serve-pages.mjs [--no-build]
 import { fileURLToPath } from 'node:url';
-import { checkPorts, launch, runStep, stop } from './orchestrate.mjs';
+import { checkPorts, killStaleServers, launch, runStep, stop } from './orchestrate.mjs';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const buildPages = fileURLToPath(new URL('build-pages.mjs', import.meta.url));
@@ -19,6 +19,10 @@ try {
   console.error(error.message);
   stop(1);
 }
+
+// Stop stale servers before serving — a previous serve-pages (or any stray
+// process) still holding :4174 would fail the launch with EADDRINUSE.
+killStaleServers([4174]);
 
 if (!(await checkPorts([['pages', 4174]]))) {
   process.exit(1);

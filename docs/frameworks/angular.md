@@ -48,73 +48,91 @@ Angular **worker renderer**: `angularIslandApp` bootstraps a standalone
 component via `createComponent` against a `Renderer2`/`RendererFactory2` bound
 to the instance's proxy document (the same abstraction platform-server uses).
 
+### The facade — `@AngularIsland` + `islandComponent`
+
+The decorator-driven pairing is the primary interface: the worker's
+top-level component IS the contract. `@AngularIsland` stamps the registry
+name (`@AngularIsland`, `@AngularIsland('name')`, or
+`@AngularIsland({ name, providers })` — default `CounterComponent` →
+'counter') and registers the class so `defineAngularPolyWorker()` collects
+it; `islandComponent<C>` generates a standalone shell component whose
+`props`/`onEvent` are typed from the class's `input()`/`model()`/`output()`
+fields (`IslandInputs<C>`/`IslandEvents<C>`) via `import type`.
+
+```ts
+// worker entry
+@AngularIsland
+@Component({ standalone: true, selector: 'atoll-counter', template: `…` })
+export class CounterComponent {
+  readonly label = input('count');      // → props key
+  readonly bumped = output<number>();   // → island event 'bumped'
+}
+export const worker = defineAngularPolyWorker(); // collects every @AngularIsland
+
+// shell — `import type` keeps the worker module out of the bundle
+const CounterIsland = islandComponent<CounterComponent>({
+  app: 'counter', worker: renderWorker, selector: 'counter-island',
+});
+// <counter-island [props]="{ label: 'alpha' }" [onEvent]="onBumped" />
+```
+
+Root-component `output()`/`model()` fields bridge onto the island's emit
+channel under their public names (`x = model()` → `'xChange'`), with the
+adapter handling instance re-entry — the component's declared API is the
+island's event contract, and manual `emit()` remains for non-output paths.
+`islandComponent`'s generated class carries a hand-authored `ɵcmp`
+(`ɵɵdefineComponent` + `ɵɵInheritDefinitionFeature`), so it resolves under
+AOT and JIT without shell-side compiler requirements.
+
 ### Shell surface
 
 | Export | Signature | What it does |
 |---|---|---|
-| `AtollIslandComponent` | `<atoll-island [client\|worker] app [props] [onEvent] [slots] (ready) (error) />` | Standalone component — renders the island container; inputs forward to `mountIsland`, outputs report lifecycle. |
-| `AtollIslandDirective` | `<div atollIsland [client\|worker] app … />` | Directive form for elements you already render. |
+| `islandComponent` | `islandComponent<C>({ app?, selector?, client? \| worker?, workerOptions?, mode? })` | Generates a standalone facade component typed against the worker component class — `<counter-island [props]/>`. |
+| `IslandInputs<C>` / `IslandEvents<C>` / `IslandEventHandler<C>` | mapped types over the component class | Props/event inference from `input()`/`model()`/`output()` fields — type-only, zero bundle cost. |
+| `AtollIslandComponent<C>` | `<atoll-island [client\|worker] [app] [props] [mode] [onEvent] [slots] />` | Low-level standalone component — generic over the worker component type for inference; `app` accepts the class itself (stamp-resolved). |
+| `AtollIslandDirective<C>` | `<div atollIsland [client\|worker] … />` | Directive form for elements you already render. |
 | `AtollIslandModule` | `imports: [AtollIslandModule]` | NgModule re-export of the standalone pair. |
 
-```ts
-import { Component } from '@angular/core';
-import { AtollIslandComponent } from '@atolljs/angular-island';
-import { connectIslandWorker } from '@atolljs/islands';
-
-const renderWorker = () =>
-  new Worker(new URL('./render.worker.ts', import.meta.url), { type: 'module' });
-
-@Component({
-  standalone: true,
-  imports: [AtollIslandComponent],   // or AtollIslandModule for NgModule apps
-  template: `
-    <atoll-island
-      [client]="client"
-      app="charts"
-      [props]="{ width: width }"
-      (ready)="onReady($event)"
-      (error)="onError($event)"
-      [onEvent]="onIslandEvent"
-      class="island-box" />
-  `,
-})
-export class ShellComponent {
-  client = connectIslandWorker({ worker: renderWorker });  // shareable across islands
-  width = 640;
-  onIslandEvent = (name: string, payload: unknown) => { ... };
-}
-```
+Either `client` (shared `connectIslandWorker` handle) or `worker`
+(`() => new Worker(...)`, island-owned) is required. Reference shell:
+`examples/react-dom-worker/src/angular-shell.ts` — three facades
+(`<counter-island>` ×2 sharing one client, `<notes-island>`,
+`<incidents-island>` with a `worker` shorthand) mounted in a standalone JIT
+component, `[mode]` bound to a signal, events typed via
+`IslandEventHandler<C>`.
 
 ### Worker renderer
 
 | Export | Signature | What it does |
 |---|---|---|
-| `defineAngularPolyWorker` | `defineAngularPolyWorker({ apps: { name: Component \| { component, providers } } })` | Registry worker — components wrapped automatically; per-app DI providers supported. |
+| `@AngularIsland` | `@AngularIsland \| @AngularIsland('name') \| @AngularIsland({ name?, providers? })` | Class decorator — stamps `islandAppName` (default: kebab-cased class name minus `Component`) and registers the component for the no-arg worker form. |
+| `defineAngularPolyWorker` | `()` \| `({ apps: [C, …] })` \| `({ apps: { name: C \| { component, providers } } })` | Registry worker — no-arg collects decorated components; array names by stamp/class name; record form unchanged. |
 | `defineAngularMonoWorker` | `defineAngularMonoWorker(Component, options?)` | 1:1 instance worker — mounted namelessly. |
 | `angularIslandApp` / `angularIsland` | `angularIslandApp(Component, { providers? }): RenderedIslandApp` | The adapter — mounts in a bare environment injector; `providedIn: 'root'` services and `options.providers` resolve. |
-| `emit` / `runInInstance` | re-exported | The worker entry needs no direct islands import. |
+| `angularIslandNameOf` | `angularIslandNameOf(Component \| string)` | Resolves the registry name a shell `[app]`/worker registry would use for the class. |
+| `emit` / `runInInstance` | re-exported | Manual emit for non-output paths; the worker entry needs no direct islands import. |
 
 ```ts
 // counter.worker.ts — the whole worker entry
 import '@angular/compiler';                     // JIT decorator components only
-import { Component, input, signal } from '@angular/core';
-import { defineAngularPolyWorker, emit } from '@atolljs/angular-island/worker';
+import { Component, input, output, signal } from '@angular/core';
+import { AngularIsland, defineAngularPolyWorker } from '@atolljs/angular-island/worker';
 
+@AngularIsland
 @Component({
   standalone: true,
   selector: 'atoll-counter',
   template: `<button (click)="inc()">{{ label() }}: {{ n() }}</button>`,
 })
-class CounterComponent {
+export class CounterComponent {
   readonly label = input('count');
   readonly n = signal(0);
-  inc() { this.n.update((v) => v + 1); emit('bumped', this.n()); }
+  readonly bumped = output<number>();
+  inc() { this.n.update((v) => v + 1); this.bumped.emit(this.n()); }
 }
 
-export const worker = defineAngularPolyWorker({
-  apps: { counter: CounterComponent },
-  // per-app DI: { counter: { component: CounterComponent, providers: [...] } }
-});
+export const worker = defineAngularPolyWorker();
 ```
 
 ### Semantics & limits

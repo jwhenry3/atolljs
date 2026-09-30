@@ -14,10 +14,10 @@ worker can mix them freely.
 | Package | Shell surface | Worker renderer | updateProps |
 |---|---|---|---|
 | `@atolljs/react-island` | `<Island/>`, `islandComponent`, `lazyIsland` | `defineReactPolyWorker` — `react-reconciler@0.34` host config → instance records | reconciler re-render |
-| `@atolljs/vue-island` | `useIsland`, `<AtollIsland>` | `defineVuePolyWorker` — Vue `createRenderer` → proxy DOM | fine-grained (`cloneVNode` + `render`) |
+| `@atolljs/vue-island` | `useIsland`, `<AtollIsland>`, `islandComponent`, `lazyIsland` | `defineVuePolyWorker` — Vue `createRenderer` → proxy DOM | fine-grained (`cloneVNode` + `render`) |
 | `@atolljs/svelte-island` | `use:island` action, `createIslandState` | `defineSveltePolyWorker` — Svelte 5 `mount()` into `doc.body`, `$state` props box | fine-grained (props box mutation) |
-| `@atolljs/solid-island` | `createIsland`, `Island` | `defineSolidPolyWorker` — `solid-js/universal` `createRenderer` | fine-grained (per-key signal props) |
-| `@atolljs/angular-island` | `<atoll-island>`, `[atollIsland]`, `AtollIslandModule` | `defineAngularPolyWorker` — `RendererFactory2`/`Renderer2` → proxy DOM + `createComponent`, zoneless | `setInput` + manual CD |
+| `@atolljs/solid-island` | `createIsland`, `Island`, `islandComponent`, `lazyIsland` | `defineSolidPolyWorker` — `solid-js/universal` `createRenderer` | fine-grained (per-key signal props) |
+| `@atolljs/angular-island` | `islandComponent` facades, `<atoll-island>`, `[atollIsland]`, `AtollIslandModule` | `@AngularIsland` decorator + `defineAngularPolyWorker` — `RendererFactory2`/`Renderer2` → proxy DOM + `createComponent`, zoneless, root `output()`/`model()` → `emit` bridging | `setInput` + manual CD |
 
 Per-framework detail: [frameworks/vue.md](frameworks/vue.md),
 [svelte.md](frameworks/svelte.md), [solid.md](frameworks/solid.md),

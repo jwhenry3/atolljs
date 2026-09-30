@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>React Worker Islands — React shell</title>
+    <title>React Worker Islands — React in the worker</title>
     <script>
       // GitHub Pages can't send COOP/COEP headers — coi-sw.js injects them
       // via a service worker so SharedArrayBuffer exists there (push-mode
@@ -25,10 +25,11 @@
       })();
     </script>
     <!--
-      Same islands as index.html, but the SHELL itself is a React app
-      (src/shell.tsx): each island-root is an <Island/> component from
-      @atolljs/react-island. Op replay is identical — only the
-      mounting style differs.
+      React islands running INSIDE workers (src/shell.tsx): each island
+      mounts through @atolljs/react-island onto apps served by
+      src/worker/react.worker.tsx — ordinary React components whose render
+      loop lives off the main thread. The seven-island showcase stays on
+      index.html (src/main.ts).
     -->
     <style>
       body { font-family: system-ui, sans-serif; margin: 0; background: #101418; color: #e6edf3; }
@@ -65,6 +66,8 @@
       .swatch.active { outline: 2px solid #e6edf3; outline-offset: 1px; }
       .vanilla-log { margin-top: 8px; font: 11px/1.7 monospace; color: #7d8a9c; }
       .vanilla-log-line { border-left: 2px solid #2a3340; padding-left: 8px; }
+      .mw-btn { padding: 3px 10px; background: #22354f; font-size: 12px; }
+      .mw-btn:hover { background: #2d4365; }
       /* the vendored MiniWidget — markup built via innerHTML inside the
          worker shim; these rules are shell-side styling of op-applied DOM */
       .mini-widget { margin-top: 12px; border-top: 1px dashed #2a3340; padding-top: 10px; }
@@ -93,6 +96,25 @@
         border: 0; border-radius: 4px; cursor: pointer;
       }
       .atoll-map-place-btn:hover { background: #2d4365; }
+      /* the 1M-incidents island — a virtualized scroller rendered worker-side */
+      .inc-stats { font: 12px monospace; color: #9aa4b2; margin-bottom: 6px; }
+      .inc-viewport { height: 320px; overflow-y: auto; border: 1px solid #2a3340; border-radius: 6px; }
+      .inc-spacer { position: relative; }
+      .inc-row {
+        position: absolute; left: 0; right: 0; height: 24px;
+        display: flex; gap: 10px; align-items: center; padding: 0 10px;
+        font: 12px/24px monospace; color: #c9d4e0; box-sizing: border-box; white-space: nowrap;
+      }
+      .inc-row:nth-child(odd) { background: #141a22; }
+      .inc-id { color: #7d8a9c; width: 80px; }
+      .inc-site { width: 110px; }
+      .inc-region { width: 90px; color: #9aa4b2; }
+      .inc-sev { padding: 0 8px; border-radius: 8px; font-size: 11px; }
+      .inc-sev.sev-p1 { background: #7d2b2b; color: #ffd6d6; }
+      .inc-sev.sev-p2 { background: #6f5a1e; color: #ffe9b3; }
+      .inc-sev.sev-p3 { background: #1f4d2e; color: #a9e5c3; }
+      .inc-sev.sev-p4 { background: #22354f; color: #bcd4f0; }
+      .inc-dur { margin-left: auto; color: #7d8a9c; }
     </style>
   </head>
   <body>

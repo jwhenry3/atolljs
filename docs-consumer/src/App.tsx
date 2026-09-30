@@ -1,4 +1,5 @@
 import { useEffect, type ReactNode } from 'react';
+import { CodeSideContext } from './components/CodeBlock';
 import { SiteSwitch } from './components/SiteSwitch';
 import { FRAMEWORKS } from './frameworks';
 import { consumerRootHref, docHref, setRouteDepth } from './link';
@@ -45,12 +46,14 @@ interface Route {
 const SECTIONS: { label: string; routes: Route[] }[] = [
   {
     label: 'Getting started',
-    routes: [{ id: 'quickstart', label: 'Quickstart', page: () => <Quickstart /> }],
+    routes: [
+      { id: 'overview', label: 'Overview', page: () => <Overview /> },
+      { id: 'quickstart', label: 'Quickstart', page: () => <Quickstart /> },
+    ],
   },
   {
     label: 'Core concepts',
     routes: [
-      { id: 'overview', label: 'Overview', page: () => <Overview /> },
       { id: 'shared-memory', label: 'Shared memory', page: () => <SharedMemoryApi /> },
       { id: 'tasks', label: 'Worker pool & tasks', page: () => <TasksAndPool /> },
       { id: 'reactivity', label: 'Reactivity', page: () => <Reactivity /> },
@@ -180,12 +183,20 @@ export function App({ route }: { route?: string }) {
 
   return (
     <div className="shell">
+      <img
+        className="brand-watermark"
+        aria-hidden="true"
+        src={`${consumerRootHref()}atoll-dark-t.svg`}
+        alt=""
+      />
       <aside className="sidebar">
         <a className="brand" href={docHref('overview')}>
-          <img className="brand-mark" src={`${consumerRootHref()}atoll-icon.svg`} alt="" />
-          <span className="brand-name">
-            atoll<span className="brand-sub">package docs</span>
-          </span>
+          <img
+            className="brand-mark"
+            src={`${consumerRootHref()}atoll-brand-dark.svg`}
+            alt="AtollJS"
+          />
+          <span className="brand-sub">package docs</span>
         </a>
         <SiteSwitch current="consumer" />
         {SECTIONS.map((section) => (
@@ -217,7 +228,20 @@ export function App({ route }: { route?: string }) {
           </nav>
         ))}
       </aside>
-      <main className="content">{active.page()}</main>
+      <main className="content">
+        <CodeSideContext.Provider value={sideFor(active.id)}>
+          {active.page()}
+        </CodeSideContext.Provider>
+      </main>
     </div>
   );
 }
+
+const sideFor = (id: string) => {
+  const section = SECTIONS.find((s) =>
+    s.routes.some((r) => r.id === id || r.children?.some((c) => c.id === id)),
+  );
+  if (section?.label === 'Backend') return 'backend' as const;
+  if (section?.label === 'Frontend') return 'frontend' as const;
+  return undefined;
+};

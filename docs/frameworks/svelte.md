@@ -48,6 +48,13 @@ A Svelte action + headless state factory on the shell side, plus the Svelte 5
 
 `worker`/`client`/`app` are mount-stable — swap them through `{#key}`.
 
+Reference shell: `examples/react-dom-worker/src/svelte/Shell.svelte` —
+mounts the registry's Svelte worker apps (`counter` ×2, `notes`, and the
+1M-row `incidents` benchmark) via `use:island`, with `$state` mediation
+replacing hand-wired `updateProps`. Each island gets its own client —
+Svelte schedules render work through ambient `document` resolution, so
+two mounts sharing one worker can route ops to the wrong instance.
+
 ### Worker renderer
 
 | Export | Signature | What it does |

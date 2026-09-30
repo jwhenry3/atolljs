@@ -35,7 +35,8 @@
     "stats:islands": "node scripts/island-perf.mjs",
     "build:pages": "node scripts/build-pages.mjs",
     "assemble:pages": "node scripts/assemble-pages.mjs",
-    "serve:pages": "node scripts/serve-pages.mjs"
+    "serve:pages": "node scripts/serve-pages.mjs",
+    "serve:static": "node scripts/serve-static.mjs"
   },
   "devDependencies": {
     "@angular/core": "^22.2.0",
@@ -46,6 +47,7 @@
     "@sveltejs/vite-plugin-svelte": "^7.3.1",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-vue": "^6.0.9",
     "@vitest/coverage-v8": "^4.1.11",
     "fast-json-stringify": "^7.0.1",
     "happy-dom": "^20.14.5",

@@ -123,8 +123,8 @@ install only what you use.
 | React | [`@atolljs/react-island`](https://www.npmjs.com/package/@atolljs/react-island) | `<Island/>`, `islandComponent`, `lazyIsland` | [React islands](https://jwhenry3.github.io/atolljs/consumer/fw-react/worker-islands/) |
 | Vue | [`@atolljs/vue-island`](https://www.npmjs.com/package/@atolljs/vue-island) | `useIsland`, `<AtollIsland>` + Vue worker renderer | [Vue islands](https://jwhenry3.github.io/atolljs/consumer/fw-vue/worker-islands/) |
 | Svelte | [`@atolljs/svelte-island`](https://www.npmjs.com/package/@atolljs/svelte-island) | `use:island`, `createIslandState` + Svelte 5 worker renderer | [Svelte islands](https://jwhenry3.github.io/atolljs/consumer/fw-svelte/worker-islands/) |
-| SolidJS | [`@atolljs/solid-island`](https://www.npmjs.com/package/@atolljs/solid-island) | `createIsland`, `Island` + `solid-js/universal` worker renderer | [Solid islands](https://jwhenry3.github.io/atolljs/consumer/fw-solid/worker-islands/) |
-| Angular | [`@atolljs/angular-island`](https://www.npmjs.com/package/@atolljs/angular-island) | `<atoll-island>`, `[atollIsland]` + `Renderer2` worker renderer | [Angular islands](https://jwhenry3.github.io/atolljs/consumer/fw-angular/worker-islands/) |
+| SolidJS | [`@atolljs/solid-island`](https://www.npmjs.com/package/@atolljs/solid-island) | `createIsland`, `Island`, `islandComponent`, `lazyIsland` + `solid-js/universal` worker renderer | [Solid islands](https://jwhenry3.github.io/atolljs/consumer/fw-solid/worker-islands/) |
+| Angular | [`@atolljs/angular-island`](https://www.npmjs.com/package/@atolljs/angular-island) | `islandComponent` facades typed off `@AngularIsland` worker components, `<atoll-island>`/`[atollIsland]` + `Renderer2` worker renderer | [Angular islands](https://jwhenry3.github.io/atolljs/consumer/fw-angular/worker-islands/) |
 
 ### Runtimes
 

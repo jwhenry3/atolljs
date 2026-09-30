@@ -32,6 +32,14 @@ if (!ssgEntry) {
 const ssg = await import(pathToFileURL(join(ssgDir, ssgEntry)).href);
 
 const template = readFileSync(join(dist, 'index.html'), 'utf8');
+// The overview route OVERWRITES dist/index.html — rerunning this script
+// without a fresh `vite build` would read the emitted page as the template
+// (markers gone, root div filled) and stamp the overview body into every
+// route. Fail loudly instead of corrupting the site.
+if (!template.includes('<!--ssg:head-->') || !template.includes('<div id="root"></div>')) {
+  console.error('prerender: dist/index.html is an emitted page, not the vite template — run `vite build` first');
+  process.exit(1);
+}
 const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
 
 function headBlock(route) {
@@ -88,6 +96,15 @@ const DOCS_JS = `(function () {
     location.replace('../'.repeat(depth) + (id === 'overview' ? '' : id + '/'));
     return;
   }
+  // Sidebar scroll persists across page loads — the section you were
+  // browsing stays put instead of snapping back to the top.
+  var sidebar = document.querySelector('.sidebar');
+  if (sidebar) {
+    sidebar.scrollTop = +(sessionStorage.getItem('docs:sidebar-scroll') || 0);
+    sidebar.addEventListener('scroll', function () {
+      sessionStorage.setItem('docs:sidebar-scroll', sidebar.scrollTop);
+    });
+  }
   document.addEventListener('change', function (e) {
     var sel = e.target && e.target.closest ? e.target.closest('select.site-switch') : null;
     if (!sel) return;
@@ -102,6 +119,70 @@ const DOCS_JS = `(function () {
     var code = a.querySelector('code');
     if (code) code.textContent = code.textContent.replace(/^https?:\\/\\/localhost:\\d+/, base);
   });
+  // Multiple live demos on one page merge into a single tabbed dock — the
+  // first frame's bar becomes the tab strip and every other frame folds in
+  // as a pane. Inactive iframes keep their src in data-src so heavy demos
+  // only load when their tab is opened.
+  var frames = Array.prototype.slice.call(
+    document.querySelectorAll('.content .demo-frame')
+  );
+  if (frames.length > 1) {
+    var dock = frames[0];
+    dock.classList.add('demo-tabs');
+    // Snapshot per-demo labels before any DOM surgery — the merges below
+    // rewrite the bars these come from.
+    var names = frames.map(function (frame, idx) {
+      var code = frame.querySelector('.demo-frame-bar code');
+      return code && code.textContent ? code.textContent : 'demo ' + (idx + 1);
+    });
+    var bar = dock.querySelector('.demo-frame-bar');
+    var tablist = document.createElement('div');
+    tablist.className = 'demo-tablist';
+    // Tabs take over the bar's left side — the per-demo label span goes away.
+    var labelSpan = bar.querySelector('.demo-label');
+    if (labelSpan) labelSpan.remove();
+    bar.insertBefore(tablist, bar.children[0] || null);
+    var panes = document.createElement('div');
+    panes.className = 'demo-panes';
+    dock.insertBefore(panes, dock.children[1]);
+    frames.forEach(function (frame, idx) {
+      var name = names[idx];
+      var link = frame.querySelector('.demo-frame-bar a');
+      var pane = document.createElement('div');
+      pane.className = 'demo-pane' + (idx === 0 ? ' active' : '');
+      var iframe = frame.querySelector('iframe');
+      var hint = frame.querySelector('.demo-hint');
+      if (idx > 0 && iframe) {
+        iframe.dataset.src = iframe.src;
+        iframe.removeAttribute('src');
+      }
+      if (iframe) pane.appendChild(iframe);
+      if (hint) pane.appendChild(hint);
+      panes.appendChild(pane);
+      var tab = document.createElement('button');
+      tab.type = 'button';
+      tab.className = 'demo-tab' + (idx === 0 ? ' active' : '');
+      tab.textContent = name;
+      tab.addEventListener('click', function () {
+        dock.querySelectorAll('.demo-tab, .demo-pane').forEach(function (el) {
+          el.classList.remove('active');
+        });
+        tab.classList.add('active');
+        pane.classList.add('active');
+        if (iframe && iframe.dataset.src) {
+          iframe.src = iframe.dataset.src;
+          delete iframe.dataset.src;
+        }
+        if (link) dockLink.href = link.href;
+      });
+      tablist.appendChild(tab);
+    });
+    // Keep the bar's external link pointed at the active demo.
+    var dockLink = bar.querySelector('a');
+    var firstLink = frames[0].querySelector('.demo-frame-bar a');
+    if (firstLink && dockLink) dockLink.href = firstLink.href;
+    frames.slice(1).forEach(function (frame) { frame.remove(); });
+  }
 })();
 `;
 

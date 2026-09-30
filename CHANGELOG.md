@@ -81,6 +81,26 @@ Two ways to push real HTTP work into `node:worker_threads` pools:
   structural counts (retained nodes, handlers, queue depth). Off by
   default; production pays one predictable branch. Powers the generated
   per-framework benchmark table in the consumer docs.
+- **Angular facade — `@AngularIsland` + `islandComponent`** —
+  `@atolljs/angular-island` now centers on the worker component class as
+  the island contract. The `@AngularIsland` class decorator stamps the
+  registry name (default `CounterComponent` → `'counter'`) and registers
+  the component, so `defineAngularPolyWorker()` collects every decorated
+  component with no `apps` map (an `apps` array form names undecorated
+  entries the same way; the record form is unchanged). Root
+  `output()`/`model()` fields bridge onto the island emit channel under
+  their public names (`x = model()` → `'xChange'`) with the adapter
+  handling instance re-entry — the component's declared API is the event
+  contract. Shell-side, `islandComponent<C>({ app, client|worker,
+  selector? })` generates a standalone component (hand-authored `ɵcmp` —
+  AOT and JIT safe) whose `[props]`/`onEvent` are typed via
+  `IslandInputs<C>`/`IslandEvents<C>`/`IslandEventHandler<C>` off the
+  class's `input()`/`model()`/`output()` fields — `import type` keeps the
+  worker module out of the bundle. The low-level
+  `<atoll-island>`/`[atollIsland]` surface is unchanged except new
+  `worker`/`workerOptions`/`mode` inputs (a `connectIslandWorker` call is
+  no longer mandatory) and generic typing — `[app]` accepts the stamped
+  component class directly.
 
 ### Core packaging
 
@@ -204,7 +224,7 @@ helpers (`define<Fw>PolyWorker` / `define<Fw>MonoWorker`):
 | `@atolljs/react-island` | `<Island/>`, `islandComponent`, `lazyIsland` (Suspense code-splitting) |
 | `@atolljs/vue-island` | `<AtollIsland/>`, `useIsland`, `vueIsland` |
 | `@atolljs/svelte-island` | `<AtollIsland/>` component, `svelteIsland` |
-| `@atolljs/solid-island` | `<AtollIsland/>`, `solidIsland` |
+| `@atolljs/solid-island` | `createIsland`, `Island`, `islandComponent`, `lazyIsland` |
 | `@atolljs/angular-island` | `<atoll-island>` component + `[atollIsland]` directive |
 
 ### Framework bindings — independently published

@@ -9,10 +9,10 @@ import { FRAMEWORKS } from './frameworks';
 import { FrameworkAdvanced } from './pages/FrameworkAdvanced';
 import { FrameworkExamples } from './pages/FrameworkExamples';
 import { FrameworkQuickstart } from './pages/FrameworkQuickstart';
-import { FrameworkIslands } from './pages/FrameworkIslands';
 import { Nextjs } from './pages/Nextjs';
 import { NextjsIslands } from './pages/NextjsIslands';
 import { ReactWorkerIslands } from './pages/ReactWorkerIslands';
+import { FrameworkWorkerIslands } from './pages/FrameworkWorkerIslands';
 
 export interface FrameworkSubPage {
   id: string;
@@ -68,7 +68,7 @@ export const FRAMEWORK_PAGES: Record<string, FrameworkSubPage[]> = {
     {
       id: 'worker-islands',
       label: 'Islands',
-      page: () => <FrameworkIslands id="vue" />,
+      page: () => <FrameworkWorkerIslands id="vue" />,
     },
   ],
   svelte: [
@@ -78,7 +78,7 @@ export const FRAMEWORK_PAGES: Record<string, FrameworkSubPage[]> = {
     {
       id: 'worker-islands',
       label: 'Islands',
-      page: () => <FrameworkIslands id="svelte" />,
+      page: () => <FrameworkWorkerIslands id="svelte" />,
     },
   ],
   solid: [
@@ -88,7 +88,7 @@ export const FRAMEWORK_PAGES: Record<string, FrameworkSubPage[]> = {
     {
       id: 'worker-islands',
       label: 'Islands',
-      page: () => <FrameworkIslands id="solid" />,
+      page: () => <FrameworkWorkerIslands id="solid" />,
     },
   ],
   angular: [
@@ -98,7 +98,7 @@ export const FRAMEWORK_PAGES: Record<string, FrameworkSubPage[]> = {
     {
       id: 'worker-islands',
       label: 'Islands',
-      page: () => <FrameworkIslands id="angular" />,
+      page: () => <FrameworkWorkerIslands id="angular" />,
     },
   ],
   nextjs: [
@@ -107,7 +107,7 @@ export const FRAMEWORK_PAGES: Record<string, FrameworkSubPage[]> = {
     advanced('nextjs'),
     {
       id: 'worker-islands',
-      label: 'Islands',
+      label: 'Islands (No Demo)',
       page: () => <NextjsIslands />,
     },
   ],

@@ -17,7 +17,7 @@ interface Site {
 
 const SITES: Site[] = [
   // Home lives one level above the consumer root.
-  { id: 'home', label: 'demos home', dev: 'http://localhost:4173/', prod: (r) => `${r}../` },
+  { id: 'home', label: 'landing page', dev: 'http://localhost:4173/', prod: (r) => `${r}../` },
   { id: 'repo', label: 'internals docs (repo)', dev: REPO_DOCS, prod: REPO_DOCS },
   { id: 'consumer', label: 'package docs', dev: 'http://localhost:4181/', prod: (r) => r },
 ];
