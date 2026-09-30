@@ -121,7 +121,7 @@ describe('<Island/> edge paths', () => {
     await act(async () => {
       root.render(
         <>
-          <Island worker={reactWorker} app={echoApp} props={{ text: 'fn' }} ref={(n) => (fnEl = n)} />
+          <Island worker={reactWorker} app={echoApp} props={{ text: 'fn' }} ref={(n) => { fnEl = n; }} />
           <Island worker={reactWorker} app={echoApp} props={{ text: 'obj' }} ref={objRef} />
         </>,
       );
@@ -166,7 +166,7 @@ describe('<Island/> edge paths', () => {
         <Island
           worker={reactWorker}
           app={{} as never}
-          props={{ text: 'x' }}
+          props={{ text: 'x' } as never}
           onError={(e) => errors.push(e)}
         />,
       );

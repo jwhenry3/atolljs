@@ -97,9 +97,10 @@ export interface ReactPolyWorkerRegistry {
   /**
    * Name → React component (or `{ imperative }` app) registry, mirroring
    * `definePolyWorker({ apps })`. Components pass through `reactIslandApp`;
-   * imperative defs register as-is.
+   * imperative defs and already-wrapped apps (e.g. `reactIsland()` results)
+   * register as-is.
    */
-  apps: Record<string, AnyComponent | ImperativeIslandApp>;
+  apps: Record<string, AnyComponent | ImperativeIslandApp | RenderedIslandApp>;
   /** Doorbell contract override — forwarded to `definePolyWorker`. */
   sharedMemory?: SharedMemory<DoorbellSpec>;
 }
@@ -129,7 +130,7 @@ export function defineReactPolyWorker(
  * component (or `{ imperative }` app), the isolated-bundle host shape.
  */
 export function defineReactMonoWorker(
-  app: AnyComponent | ImperativeIslandApp,
+  app: AnyComponent | ImperativeIslandApp | RenderedIslandApp,
   options?: { sharedMemory?: SharedMemory<DoorbellSpec> },
 ): WorkerDefinition<DoorbellSpec, IslandWorkerMethods> {
   return typeof app === 'function'
