@@ -1,5 +1,153 @@
 # Changelog
 
+## 0.1.2
+
+Decorator-driven islands facades (Angular, Vue), framework-native demo shells
+with a shared 1M-record benchmark, a split housed-API topology for NestJS,
+deeper framework docs, and a broad test/coverage hardening pass. No breaking
+changes to the 0.1.1 API.
+
+### Angular islands facade — `@AngularIsland` + `islandComponent`
+
+`@atolljs/angular-island` now centers on the worker component class as the
+island contract:
+
+- **`@AngularIsland`** — a class decorator that stamps the registry name
+  (default `CounterComponent` → `'counter'`) and registers the component, so
+  `defineAngularPolyWorker()` collects every decorated component with no
+  `apps` map. An `apps` array form names undecorated entries the same way;
+  the record form is unchanged.
+- **Root outputs bridge to `emit`** — a root component's `output()`/
+  `model()` fields forward onto the island emit channel under their public
+  names (`x = model()` → `'xChange'`), with the adapter handling island
+  instance re-entry — the component's declared API is the event contract.
+- **`islandComponent<C>({ app, client|worker, selector? })`** — generates a
+  standalone shell component (hand-authored `ɵcmp` — AOT and JIT safe) whose
+  `[props]`/`onEvent` are typed via `IslandInputs<C>`/`IslandEvents<C>`/
+  `IslandEventHandler<C>` off the class's `input()`/`model()`/`output()`
+  fields; `import type` keeps the worker module out of the shell bundle.
+- **Low-level surface gains** — `<atoll-island>`/`[atollIsland]` are now
+  generic (`AtollIslandComponent<C>`), accept `worker`/`workerOptions`/
+  `mode` inputs (a `connectIslandWorker` call is no longer mandatory), and
+  `[app]` accepts the stamped component class directly.
+
+### Vue islands facade — `islandComponent` + `lazyIsland`
+
+`@atolljs/vue-island` gains the proxy-component pair the React binding
+introduced — worker apps mount typed like local components:
+
+- **`islandComponent<P>(app?)`** — every attribute that isn't a shell key
+  (`worker`/`client`/`workerOptions`/`mode`/`on*`/`slots`/`containerProps`)
+  forwards as the island's props, tracked through the reactive props getter
+  so attribute updates push `updateProps` automatically. Vue fallthrough
+  semantics are honored: `class`/`style`/`id`/`data-*`/`aria-*` land on the
+  island's container div, not in props.
+- **`lazyIsland(loader, asyncOptions?)`** — built on Vue's own
+  `defineAsyncComponent` (loading/error states pass through as options, no
+  thrown-promise Suspense needed); resolves `{ default: app }`, bare
+  components, and contract modules `{ app, worker }` — including
+  registry-key strings — so a lazy island can carry its own worker factory.
+- `useIsland`/`AtollIsland` gained a `mode` input (`'push'`/`'poll'`),
+  forwarded to `mountIsland`.
+
+### NestJS — housed APIs on a dedicated pool
+
+`examples/nestjs` restructures the housed-API demo so each worker entry is
+single-purpose and lives beside the module that spawns it:
+
+- Worker entries moved into their feature directories —
+  `digest/digest.worker.ts`, `shared/incidents.worker.ts`,
+  `housed/housed.worker.ts` — every `new Worker(new URL('./x.worker.ts'))`
+  stays inside its own directory (webpack chunk detection unchanged).
+- The `/api/housed` routes run on their **own pool** (`'housed'`,
+  `poolSize: 2`): message-only, with `withSharedBuffer` feeding each spawned
+  worker the incidents pool's `sharedBuffer` and `bindSharedBuffer` binding
+  contracts before `NestFactory.create(HousedApiModule)` boots — two pools,
+  one shared buffer, no second allocation.
+- `main.ts` mounts `proxyToWorker({ pool, tracker, to, worker })` for the
+  prefix with `workerHttpPorts` tracking announcements; the
+  `HTTP_PORT_QUERY` handshake covers announcements that race the tracker,
+  and respawned workers reclaim their prefixes on re-announce.
+
+### Bug fixes
+
+- `island.ts` — the `clear` op now tears down slot anchors
+  (`unmountSlotSubtree` before `replaceChildren`); presence-form boolean
+  attributes (`checked`, `disabled`) map to their live DOM property instead
+  of being dropped; `destroy()` no longer terminates a shared client while a
+  remount is mid-handshake.
+- `island.ts` — driver-side `style` objects now get React-DOM unit
+  semantics: numbers on non-unitless properties gain `px` (a bare
+  `height: 24000000` was silently dropped by the browser, breaking
+  virtualized scrollers), custom properties and kebab-case keys route
+  through `setProperty` in both the prop-object and `style`-op paths.
+- `react-island` — `lazyIsland` contract modules may carry a registry-key
+  string (`{ app: 'incidents', worker }`), so a lazy island's worker factory
+  travels with the contract; `workerOptions.doorbell` is now typed (the
+  runtime already forwarded it).
+- `vue-island` — `insertStaticContent` mirrors real Vue DOM: intact cached
+  bounds are cloned along the sibling chain, detached bounds fall back to
+  re-parsing (re-mounted static ranges no longer lose all but their head
+  node); `useIsland` status/error semantics match the other bindings
+  (`'idle'`/`'destroyed'` states, `updateProps` failures surface through
+  `error`).
+- `solid-island` — the props proxy's `has`/`ownKeys`/descriptor traps are
+  reactive (`mergeProps`, spreads, `'x' in props` now work); imperative
+  `updateProps` before mount respects last-write-wins against reactive
+  emissions.
+- `packages/node` — `bindSharedBuffer`'s timeout removes its `parentPort`
+  listener; `persistSharedMemory().stop()` before `ready` no longer leaks
+  the flush timer, and a failing final flush warns instead of rejecting.
+- `examples/nextjs` — `GET /api/incidents/:id` returns 503 until the seed
+  completes (a valid id no longer serves a zeroed record), and a failed
+  seed run can actually be retried (the cached promise is cleared on
+  rejection).
+
+### Examples & docs
+
+- `examples/nextjs` — real job-queue (`/api/jobs`) and read-model
+  (`/api/incidents`, incl. `GET /:id` over `readAt`) routes, a
+  `globalThis`-cached pool/memory seam per route dir, and
+  `src/instrumentation.ts` boot warmup that seeds data and computes
+  aggregates before the first request.
+- `examples/react-dom-worker` — every framework shell (`react-shell.html`,
+  `angular-shell.ts`, `solid-shell.ts`, `vue/Shell.vue`,
+  `svelte/Shell.svelte`) now mounts the same framework-native island set —
+  counter ×2 on a shared client, a notes composer, and a 1,000,000-record
+  incident benchmark virtualized inside the target framework running in the
+  worker (the heavy-component offload case). Real `.vue`/`.svelte`
+  components in the worker entries, a React registry worker
+  (`react.worker.tsx`) plus a `lazyIsland` contract module
+  (`incidents.island.ts`) — all validated by per-shell e2e tests.
+- `examples/react-dom-worker` Vue shell demonstrates all three mount
+  styles — `<AtollIsland>` (counters on a shared client),
+  `islandComponent` (notes — attrs as props), `lazyIsland` over a contract
+  module (incidents — `src/vue/incidents.island.ts` carries its own
+  worker; the dynamic import emits a real split chunk).
+- Docs — the Angular/Vue/Solid/Svelte worker-islands pages now embed the
+  real shells and workers, the Next.js section gained job-queue /
+  read-model / warmup / custom-server sub-pages, a new "Server-side
+  workers" page (`#/node-servers`) documents `@atolljs/node` end to end
+  (pool + client, socket transfer, gateway routing, `workerHttpPorts`/
+  `proxyToWorker`, `withSharedBuffer`/`bindSharedBuffer`), the NestJS page
+  gained the housed-API section, and the islands docs document driver-side
+  style/prop semantics.
+- `examples/react-dom-worker` — dropped the per-island "no React in this
+  worker" badges; the island heads now just name the renderer.
+- Consumer docs — core topics group under a "Core concepts" sidebar
+  section, the site is dark-only, and each page embeds a single live demo:
+  the framework-free shell (`index.html`) is the canonical demo on the
+  Islands overview rather than a stacked set per page.
+
+### Tooling
+
+- `serve-pages` now stops stale servers on :4174 instead of failing on a
+  busy port; `kill-all` shares the same port-listener logic.
+- Vitest coverage is enforced (`statements: 95, branches: 85, functions:
+  93, lines: 96`) — current suite: 98 files / 725 tests at ~96% statements;
+  `@vitejs/plugin-vue` was added so `.vue` SFC worker entries load under
+  InProcessWorker.
+
 ## 0.1.1
 
 HTTP offload topologies for Node, Redis-backed shared-memory persistence, a
@@ -81,26 +229,6 @@ Two ways to push real HTTP work into `node:worker_threads` pools:
   structural counts (retained nodes, handlers, queue depth). Off by
   default; production pays one predictable branch. Powers the generated
   per-framework benchmark table in the consumer docs.
-- **Angular facade — `@AngularIsland` + `islandComponent`** —
-  `@atolljs/angular-island` now centers on the worker component class as
-  the island contract. The `@AngularIsland` class decorator stamps the
-  registry name (default `CounterComponent` → `'counter'`) and registers
-  the component, so `defineAngularPolyWorker()` collects every decorated
-  component with no `apps` map (an `apps` array form names undecorated
-  entries the same way; the record form is unchanged). Root
-  `output()`/`model()` fields bridge onto the island emit channel under
-  their public names (`x = model()` → `'xChange'`) with the adapter
-  handling instance re-entry — the component's declared API is the event
-  contract. Shell-side, `islandComponent<C>({ app, client|worker,
-  selector? })` generates a standalone component (hand-authored `ɵcmp` —
-  AOT and JIT safe) whose `[props]`/`onEvent` are typed via
-  `IslandInputs<C>`/`IslandEvents<C>`/`IslandEventHandler<C>` off the
-  class's `input()`/`model()`/`output()` fields — `import type` keeps the
-  worker module out of the bundle. The low-level
-  `<atoll-island>`/`[atollIsland]` surface is unchanged except new
-  `worker`/`workerOptions`/`mode` inputs (a `connectIslandWorker` call is
-  no longer mandatory) and generic typing — `[app]` accepts the stamped
-  component class directly.
 
 ### Core packaging
 
@@ -222,7 +350,7 @@ helpers (`define<Fw>PolyWorker` / `define<Fw>MonoWorker`):
 | Package | Host API |
 |---|---|
 | `@atolljs/react-island` | `<Island/>`, `islandComponent`, `lazyIsland` (Suspense code-splitting) |
-| `@atolljs/vue-island` | `<AtollIsland/>`, `useIsland`, `vueIsland` |
+| `@atolljs/vue-island` | `<AtollIsland/>`, `useIsland`, `islandComponent`, `lazyIsland` |
 | `@atolljs/svelte-island` | `<AtollIsland/>` component, `svelteIsland` |
 | `@atolljs/solid-island` | `createIsland`, `Island`, `islandComponent`, `lazyIsland` |
 | `@atolljs/angular-island` | `<atoll-island>` component + `[atollIsland]` directive |
@@ -272,6 +400,27 @@ ctor-param injection. Pools terminate on injector destroy (teardown/HMR).
   (`npm trust github … --allow-stage-publish`), so the workflow can run
   secretless and stage-only.
 
+### Requirements & caveats
+
+- Browser `Worker` (or `node:worker_threads`); `SharedArrayBuffer` +
+  `crossOriginIsolated` only when `sharedMemory` is used (islands run
+  headerless in `poll` mode).
+- Safari lacks `SharedWorker` — feature-detect before `connectSharedWorker`.
+- Bindings ship TypeScript source; your bundler compiles them. Works with
+  TypeScript 6 and 7.
+- Single-writer field semantics — multi-writer coordination is on you
+  (`Atomics.compareExchange` or a designated writer).
+
+### Ecosystem in the box
+
+- Consumer docs + live demos at `jwhenry3.github.io/atolljs/consumer/` —
+  a `coi-sw.js` service worker injects COOP/COEP on headerless hosts so the
+  demos run in `push` mode, with automatic `poll` fallback; in-repo agent/
+  developer docs live under `docs/`.
+- Runnable examples for all six frameworks + NestJS + Node, an `incidents`
+  domain package as the reference integration, and a worker-DOM islands demo
+  (React + Vue + imperative islands in one page).
+- 66 test files / 478 tests including a real `nest build` → boot → HTTP e2e.
 ### Requirements & caveats
 
 - Browser `Worker` (or `node:worker_threads`); `SharedArrayBuffer` +

@@ -6,6 +6,10 @@
 // it through their installed dependency. Map it onto the repo's built core
 // bundle so plain workers can import the real sharedBuffer.ts, which itself
 // imports '@atolljs/core'.
+//
+// Requires `vite build` (lib) to have run — CI builds dist/ before vitest.
+// (The src/ graph uses non-erasable TS — runtime namespaces, parameter
+// properties — so Node's type-stripping can't load it directly.)
 import { registerHooks } from 'node:module';
 
 const CORE = new URL('../../../../dist/index.js', import.meta.url).href;

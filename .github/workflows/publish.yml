@@ -51,11 +51,17 @@ jobs:
       - name: Install dependencies
         run: node scripts/ci-install.mjs
 
+      # packages/node's sharedBuffer.functional.test spawns REAL
+      # worker_threads that import '@atolljs/core' via a loader hook that
+      # maps to dist/index.js — the built lib bundle must exist BEFORE tests.
+      - name: Build core bundle (dist/index.js — needed by worker_threads tests)
+        run: npx vite build
+
       - name: Test — all suites (don't publish a red tree)
         run: npx vitest run
 
-      - name: Build core package (dist/index.js + index.d.ts)
-        run: npx vite build && npx tsc -p tsconfig.build.json
+      - name: Build core package types (index.d.ts)
+        run: npx tsc -p tsconfig.build.json
 
       - name: Stamp versions + stage all packages
         env:

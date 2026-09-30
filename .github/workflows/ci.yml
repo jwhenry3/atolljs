@@ -52,6 +52,12 @@ jobs:
             npx tsc -p "packages/$pkg/tsconfig.json"
           done
 
+      # packages/node's sharedBuffer.functional.test spawns REAL
+      # worker_threads that import '@atolljs/core' via a loader hook that
+      # maps to dist/index.js — the built lib bundle must exist.
+      - name: Build — core SDK lib (needed by real worker_threads tests)
+        run: npx vite build
+
       - name: Test — all suites (vitest, with coverage)
         run: npx vitest run --coverage
 
