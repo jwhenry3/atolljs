@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
-import { listSchema } from './listSchema';
+import * as zm from 'zod/mini';
+import { listSchema, memberToSpec } from './listSchema';
 
 const fullSpec = {
   i8v: 'i8', u8v: 'u8', i16v: 'i16', u16v: 'u16', i32v: 'i32', u32v: 'u32',
@@ -46,5 +47,22 @@ describe('listSchema', () => {
     type Row = z.infer<typeof schema>;
     const row: Row = schema.parse(valid);
     expect(row.u8v).toBe(255);
+  });
+
+  it('accepts raw zod-mini members, enforcing their declared bounds', () => {
+    // real mini schemas introspect via _zod.def like ours do
+    const mini = listSchema({ n: zm.uint32(), f: zm.float64() });
+    expect(mini.parse({ n: 4294967295, f: 0.5 })).toEqual({ n: 4294967295, f: 0.5 });
+    expect(() => mini.parse({ n: -1, f: 0 })).toThrow();
+    expect(() => mini.parse({ n: 0, f: 'x' })).toThrow();
+  });
+
+  it('reads the byte budget from classic .meta(); mini strings can\'t carry it', () => {
+    // classic zod's .meta() is readable; mini has no .meta — reef.string is
+    // the byte-budgeted spelling there, a bare mini string rejects at layout.
+    const classic = listSchema({ tag: z.string().meta({ bytes: 4 }) });
+    expect(classic.parse({ tag: '€' }).tag).toBe('€');
+    expect(() => classic.parse({ tag: 'abcde' })).toThrow();
+    expect(() => memberToSpec(zm.string(), 'tag')).toThrow(/meta\(\{ bytes: n \}\)/);
   });
 });

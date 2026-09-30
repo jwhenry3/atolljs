@@ -1,4 +1,5 @@
 import { CodeBlock } from '../components/CodeBlock';
+import { PkgLink } from '../components/PkgLink';
 import { docHref } from '../link';
 
 const DIAGRAM = `main thread                                    worker(s)
@@ -56,48 +57,64 @@ export function Overview() {
         </thead>
         <tbody>
           <tr>
-            <td><code>@atolljs/core</code></td>
+            <td><PkgLink name="@atolljs/core" /></td>
             <td>Shared-memory contracts, worker pool, worker bootstrap, observables, tasks, codecs, logging</td>
           </tr>
           <tr>
-            <td><code>@atolljs/react</code></td>
+            <td><PkgLink name="@atolljs/react" /></td>
             <td><code>useObservable</code>, <code>useSharedValue</code>, <code>useTask</code> — React hooks</td>
           </tr>
           <tr>
-            <td><code>@atolljs/vue</code></td>
+            <td><PkgLink name="@atolljs/vue" /></td>
             <td><code>useObservable</code>, <code>useSharedValue</code>, <code>useTask</code> — Ref-producing composables</td>
           </tr>
           <tr>
-            <td><code>@atolljs/solidjs</code></td>
+            <td><PkgLink name="@atolljs/solidjs" /></td>
             <td><code>createObservable</code>, <code>createSharedValue</code>, <code>createTask</code> — Accessors</td>
           </tr>
           <tr>
-            <td><code>@atolljs/svelte</code></td>
+            <td><PkgLink name="@atolljs/svelte" /></td>
             <td><code>observableValue</code>, <code>sharedValue</code>, <code>taskState</code> — rune-backed state</td>
           </tr>
           <tr>
-            <td><code>@atolljs/angular</code></td>
+            <td><PkgLink name="@atolljs/angular" /></td>
             <td><code>observableSignal</code>, <code>sharedValue</code>, <code>taskState</code> — Signals</td>
           </tr>
           <tr>
-            <td><code>@atolljs/nextjs</code></td>
+            <td><PkgLink name="@atolljs/nextjs" /></td>
             <td>Re-exports the React binding — App Router safe, SSR-ready</td>
           </tr>
           <tr>
-            <td><code>@atolljs/node</code></td>
+            <td><PkgLink name="@atolljs/node" /></td>
             <td><code>createNodePool</code>, <code>createNodeWorker</code>, <code>/shim</code>, <code>withSharedBuffer</code>/<code>bindSharedBuffer</code>; <code>/http</code> adds <code>createHttpCluster</code>, <code>serveHttp</code>, <code>routeHttpGateway</code>, <code>proxyToWorker</code> — HTTP served from inside workers</td>
           </tr>
           <tr>
-            <td><code>@atolljs/nestjs</code></td>
+            <td><PkgLink name="@atolljs/nestjs" /></td>
             <td><code>AtollModule</code>, <code>@AtollService</code>, <code>@AtollTask</code>, <code>runAtollWorker</code> — pools and housed APIs on <code>node:worker_threads</code></td>
           </tr>
           <tr>
-            <td><code>@atolljs/islands</code></td>
+            <td><PkgLink name="@atolljs/islands" /></td>
             <td><code>mountIsland</code>, <code>connectIslandWorker</code>, <code>callbackProp</code>, <code>islandApp</code> — main-thread mounting; <code>/worker</code> exports <code>definePolyWorker</code>/<code>defineMonoWorker</code>, the proxy DOM, <code>emit</code> — framework-neutral, no renderer built in</td>
           </tr>
           <tr>
-            <td><code>@atolljs/*-island</code></td>
-            <td>Shell components + worker renderers for islands — <code>react-island</code> (<code>&lt;Island&gt;</code>, <code>lazyIsland</code>, <code>islandComponent</code>), <code>vue-island</code> (<code>AtollIsland</code>, <code>useIsland</code>), <code>svelte-island</code> (<code>island</code> action), <code>solid-island</code> (<code>&lt;Island&gt;</code>, <code>createIsland</code>, <code>islandComponent</code>, <code>lazyIsland</code>), <code>angular-island</code> (<code>atollIsland</code> directive)</td>
+            <td><PkgLink name="@atolljs/react-island" /></td>
+            <td>React island shell — <code>&lt;Island&gt;</code>, <code>islandComponent</code>, <code>lazyIsland</code> + <code>react-reconciler</code> worker renderer</td>
+          </tr>
+          <tr>
+            <td><PkgLink name="@atolljs/vue-island" /></td>
+            <td>Vue island shell — <code>AtollIsland</code>, <code>useIsland</code> + <code>createRenderer</code> worker renderer</td>
+          </tr>
+          <tr>
+            <td><PkgLink name="@atolljs/svelte-island" /></td>
+            <td>Svelte island shell — <code>island</code> action, <code>createIslandState</code> + Svelte 5 worker renderer</td>
+          </tr>
+          <tr>
+            <td><PkgLink name="@atolljs/solid-island" /></td>
+            <td>SolidJS island shell — <code>&lt;Island&gt;</code>, <code>createIsland</code>, <code>islandComponent</code>, <code>lazyIsland</code> + <code>solid-js/universal</code> worker renderer</td>
+          </tr>
+          <tr>
+            <td><PkgLink name="@atolljs/angular-island" /></td>
+            <td>Angular island shell — <code>islandComponent</code> facades, <code>atollIsland</code> directive + <code>Renderer2</code> worker renderer</td>
           </tr>
         </tbody>
       </table>

@@ -19,9 +19,11 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      # Actions are pinned to commit SHAs — a hijacked major tag can't move
+      # the pin. Dependabot still bumps SHAs (see .github/dependabot.yml).
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
 
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: 26
           cache: npm
@@ -47,7 +49,7 @@ jobs:
       - name: Typecheck — publishable packages
         run: |
           set -e
-          for pkg in react vue solidjs svelte angular nextjs node nestjs incidents islands react-island vue-island svelte-island solid-island angular-island; do
+          for pkg in react vue solidjs svelte angular nextjs node nestjs incidents islands react-island vue-island svelte-island solid-island angular-island cli; do
             echo "--- packages/$pkg"
             npx tsc -p "packages/$pkg/tsconfig.json"
           done
@@ -62,9 +64,31 @@ jobs:
         run: npx vitest run --coverage
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@0fb7174895f61a3b6b78fc075e0cd60383518dac # v5.5.5
         with:
           files: ./coverage/lcov.info
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: false
+
+  # Advisory audit — `npm audit` reads each lockfile, no install needed.
+  # Fails on high/critical findings; a red audit job means a disclosed
+  # vuln exists in a pinned tree even though `npm ci` output is unchanged.
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: 26
+
+      - name: Audit all lockfiles
+        run: |
+          set -e
+          for d in . docs-consumer examples/*; do
+            if [ -f "$d/package-lock.json" ]; then
+              echo "=== npm audit: $d ==="
+              (cd "$d" && npm audit --audit-level=high)
+            fi
+          done
 

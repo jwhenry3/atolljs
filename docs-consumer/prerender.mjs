@@ -104,6 +104,17 @@ const DOCS_JS = `(function () {
     sidebar.addEventListener('scroll', function () {
       sessionStorage.setItem('docs:sidebar-scroll', sidebar.scrollTop);
     });
+    // If the active link is outside the persisted view, reveal it — landing
+    // on a page whose section sits at the far end of the nav (e.g. Blog)
+    // should never leave the current page invisible in the sidebar.
+    var activeLink = sidebar.querySelector('.nav-link.active');
+    if (activeLink) {
+      var sb = sidebar.getBoundingClientRect();
+      var ar = activeLink.getBoundingClientRect();
+      if (ar.top < sb.top || ar.bottom > sb.bottom) {
+        sidebar.scrollTop += ar.top - sb.top - sb.height / 3;
+      }
+    }
   }
   document.addEventListener('change', function (e) {
     var sel = e.target && e.target.closest ? e.target.closest('select.site-switch') : null;

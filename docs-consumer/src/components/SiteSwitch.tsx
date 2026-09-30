@@ -3,7 +3,9 @@ import { consumerRootHref } from '../link';
 // Site switcher for the atoll docs family. Dev mode hops between the per-app
 // dev-server ports; built output uses relative paths, which works under any
 // mount point (serve-all dist/, GitHub Pages /<repo>/). The internals docs
-// are in-repo markdown — the repo-docs entry links to them on GitHub.
+// are in-repo markdown — the repo-docs entry links to them on GitHub. Blog
+// posts are in-repo markdown compiled into this site, so blog is an
+// internal route like package docs.
 const REPO_DOCS = 'https://github.com/jwhenry3/atolljs/tree/main/docs';
 
 interface Site {
@@ -20,6 +22,7 @@ const SITES: Site[] = [
   { id: 'home', label: 'landing page', dev: 'http://localhost:4173/', prod: (r) => `${r}../` },
   { id: 'repo', label: 'internals docs (repo)', dev: REPO_DOCS, prod: REPO_DOCS },
   { id: 'consumer', label: 'package docs', dev: 'http://localhost:4181/', prod: (r) => r },
+  { id: 'blog', label: 'blog', dev: 'http://localhost:4181/blog/', prod: (r) => `${r}blog/` },
 ];
 
 function href(site: Site): string {

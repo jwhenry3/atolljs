@@ -1,4 +1,4 @@
-import { z } from './zod';
+import { z, fluent, type Fluent } from './zod';
 import type {
   ScalarKind,
   ListFieldSpec,
@@ -8,26 +8,30 @@ import type {
 
 const utf8 = new TextEncoder();
 
-/** Storage-bounded zod schemas per scalar kind — validation catches
+/** Storage-bounded schemas per scalar kind — validation catches
  *  out-of-range values at the contract boundary instead of silently
  *  truncating at write time. */
+const boundedInt = (min: number, max: number) =>
+  fluent(z.number().check(z.int(), z.gte(min), z.lte(max)));
+
 const SCALAR_SCHEMAS: Record<ScalarKind, z.ZodTypeAny> = {
-  i8: z.number().int().min(-128).max(127),
-  u8: z.number().int().min(0).max(255),
-  i16: z.number().int().min(-32768).max(32767),
-  u16: z.number().int().min(0).max(65535),
-  i32: z.number().int().min(-2147483648).max(2147483647),
-  u32: z.number().int().min(0).max(4294967295),
-  f32: z.number(),
-  f64: z.number(),
-  i64: z.bigint(),
-  u64: z.bigint().nonnegative(),
+  i8: boundedInt(-128, 127),
+  u8: boundedInt(0, 255),
+  i16: boundedInt(-32768, 32767),
+  u16: boundedInt(0, 65535),
+  i32: fluent(z.int32()),
+  u32: fluent(z.uint32()),
+  f32: fluent(z.number()),
+  f64: fluent(z.number()),
+  i64: fluent(z.bigint()),
+  u64: fluent(z.bigint().check(z.nonnegative())),
 };
 
 const byteBounded = (bytes: number) =>
-  z.string().refine(
-    (s) => utf8.encode(s).byteLength <= bytes,
-    `exceeds ${bytes} UTF-8 bytes`
+  fluent(
+    z.string().check(
+      z.refine((s: string) => utf8.encode(s).byteLength <= bytes, `exceeds ${bytes} UTF-8 bytes`)
+    )
   );
 
 /** Maps a list member to the zod shape whose inferred output type is
@@ -47,7 +51,7 @@ export type ListZodShape<F extends ListFields> = {
 
 /**
  * Builds a zod object schema from a member map — the shape you would pass
- * to `mz.object(...)` for `field.list({ schema, count })`. Members may be
+ * to `reef.object(...)` for `field.list({ schema, count })`. Members may be
  * spec tokens or zod schemas; the result's `z.infer` is the record type:
  *
  * ```ts
@@ -60,21 +64,35 @@ export type ListZodShape<F extends ListFields> = {
  * capacity the connector enforces; zod `z.string().meta({ bytes: n })`
  * members get the same bound attached to the declared schema.
  */
-export function listSchema<F extends ListFields>(fields: F): z.ZodObject<ListZodShape<F>> {
+export function listSchema<F extends ListFields>(fields: F): Fluent<z.ZodMiniObject<ListZodShape<F>>> {
   const shape: Record<string, z.ZodTypeAny> = {};
   for (const key of Object.keys(fields)) {
     shape[key] = memberToSchema(fields[key]);
   }
-  return z.object(shape) as unknown as z.ZodObject<ListZodShape<F>>;
+  return fluent(z.object(shape)) as unknown as Fluent<z.ZodMiniObject<ListZodShape<F>>>;
+}
+
+/** Duck-typed `$Zod*`-style detection — covers atoll-minted, classic zod,
+ *  and zod/mini schemas: they all carry `_zod.def`. */
+function isZodSchema(value: unknown): value is z.ZodTypeAny {
+  return (
+    typeof value === 'object' && value !== null &&
+    typeof (value as { _zod?: { def?: unknown } })._zod?.def === 'object'
+  );
 }
 
 function memberToSchema(member: ListMember): z.ZodTypeAny {
-  if (member instanceof z.ZodType) {
+  if (isZodSchema(member)) {
     const bytes =
       member._zod.def?.type === 'string' ? zodMetaBytes(member) : undefined;
-    return typeof bytes === 'number'
-      ? member.refine((s) => utf8.encode(s as string).byteLength <= bytes, `exceeds ${bytes} UTF-8 bytes`)
-      : member;
+    if (typeof bytes !== 'number') return member;
+    const fits = (s: unknown) => utf8.encode(s as string).byteLength <= bytes;
+    const message = `exceeds ${bytes} UTF-8 bytes`;
+    // classic + fluent-augmented members carry `.refine`; a raw mini schema
+    // takes the same check through `.check` — both keep def.type 'string'.
+    return typeof (member as { refine?: unknown }).refine === 'function'
+      ? (member as unknown as { refine: (fn: typeof fits, msg: string) => z.ZodTypeAny }).refine(fits, message)
+      : (member as unknown as { check: (c: unknown) => z.ZodTypeAny }).check(z.refine(fits, message));
   }
   return typeof member === 'string'
     ? SCALAR_SCHEMAS[member]
@@ -155,7 +173,7 @@ function numberMemberToSpec(def: ZodMemberDef): ListFieldSpec {
  */
 export function memberToSpec(member: ListMember, name: string): ListFieldSpec {
   if (typeof member === 'string') return member;
-  if (!(member instanceof z.ZodType)) {
+  if (!isZodSchema(member)) {
     if (typeof (member as { string?: unknown }).string === 'number') return member as { string: number };
     if ((member as { bool?: unknown }).bool === true) return member as { bool: true };
     throw new TypeError(`member "${name}": expected a scalar token, { string: n }, { bool: true }, or a zod schema`);
@@ -182,7 +200,7 @@ export function memberToSpec(member: ListMember, name: string): ListFieldSpec {
 
 /** The declared member map of a zod object, or null when `schema` isn't one. */
 export function zodObjectShape(schema: unknown): ListFields | null {
-  if (!(schema instanceof z.ZodObject)) return null;
+  if (!isZodSchema(schema) || schema._zod.def.type !== 'object') return null;
   return (schema._zod.def as unknown as { shape: ListFields }).shape;
 }
 
@@ -192,7 +210,7 @@ export function zodObjectShape(schema: unknown): ListFields | null {
  * schemas; `capacity` is null for unbounded arrays.
  */
 export function zodArrayInfo(schema: unknown): { element: z.ZodTypeAny; capacity: number | null } | null {
-  if (!(schema instanceof z.ZodArray)) return null;
+  if (!isZodSchema(schema) || schema._zod.def.type !== 'array') return null;
   const def = schema._zod.def as unknown as ZodMemberDef & { element: z.ZodTypeAny };
   let capacity: number | null = null;
   for (const c of def.checks ?? []) {
@@ -203,14 +221,18 @@ export function zodArrayInfo(schema: unknown): { element: z.ZodTypeAny; capacity
   return { element: def.element, capacity };
 }
 
-/** `.meta()?.bytes` — optional-call: mini schemas ($ZodString too) have no `.meta` method. */
+/** Byte budget carried in the schema's meta — atoll-minted schemas register
+ *  into the local `globalRegistry`; classic zod's `.meta()` reads its own
+ *  registry, so the `.meta?.()` call doubles as the consumer-zod channel. */
 function zodMetaBytes(schema: unknown): number | null {
-  const meta = (schema as { meta?: () => { bytes?: unknown } }).meta?.();
+  const meta =
+    (z.globalRegistry.get(schema as z.ZodTypeAny) as { bytes?: unknown } | undefined) ??
+    (schema as { meta?: () => { bytes?: unknown } }).meta?.();
   return typeof meta?.bytes === 'number' ? meta.bytes : null;
 }
 
-/** The byte budget carried by `mz.string(n)` / `z.string().meta({ bytes: n })` — null otherwise. */
+/** The byte budget carried by `reef.string(n)` / `z.string().meta({ bytes: n })` — null otherwise. */
 export function zodStringBytes(schema: unknown): number | null {
-  if (!(schema instanceof z.ZodString)) return null;
+  if (!isZodSchema(schema) || schema._zod.def.type !== 'string') return null;
   return zodMetaBytes(schema);
 }

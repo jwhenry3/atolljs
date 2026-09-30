@@ -1,6 +1,6 @@
 // One task's whole stack: wire schemas → method contract → worker impl.
 import { z } from 'zod';
-import { scoped, serviceMethod } from '@atolljs/core';
+import { reef, scoped, serviceMethod } from '@atolljs/core';
 import { INCIDENT_FIELDS, incidentRowSchema, incidentsMemory, type Incident } from '../contract/memory.contracts';
 
 const log = scoped('incidents');
@@ -21,12 +21,14 @@ export const queryArgsSchema = z.object({
   search: z.string(),
 });
 
-export const queryResultSchema = z.object({
-  rows: z.array(incidentRowSchema),
-  total: z.number(),
-  filtered: z.number(),
-  scanMs: z.number(),
-  sortMs: z.number(),
+// reef members nest — a real z.array can't parse an atoll-minted element
+// (it dispatches through zod internals), so the result schema is reef too.
+export const queryResultSchema = reef.object({
+  rows: reef.array(incidentRowSchema),
+  total: reef.f64(),
+  filtered: reef.f64(),
+  scanMs: reef.f64(),
+  sortMs: reef.f64(),
 });
 
 export type QueryArgs = z.infer<typeof queryArgsSchema>;

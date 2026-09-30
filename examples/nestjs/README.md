@@ -20,6 +20,9 @@ application context** — one module, symmetric boundaries, RPC-style calls.
 | `POST` | `/api/digest/hash` `{input, rounds}` | **`@AtollTask` — SHA-256 chain on the second (`digest`) pool** |
 | `GET`  | `/api/digest/status` | API thread — reads the digest pool's own shared counter |
 | `GET`  | `/api/digest/worker` | **`@AtollTask` — the answering worker's `threadId` + its own telemetry** |
+| `GET`  | `/api/reports/overview` | **`@AtollService` facade — a main-thread service composing two worker dispatches** |
+| `GET`  | `/api/reports/region/:region` | **`@AtollService` facade — parameterized dispatch (west, northeast, …)** |
+| `GET`  | `/api/reports/worker` | **`@AtollService` facade — the answering reports worker's threadId + telemetry** |
 | `GET`  | `/api/housed/incidents/whoami` | **housed in workers** — proxied; no main-thread controller at all |
 | `GET`  | `/api/housed/incidents/stats` | housed in workers — `computeMetrics` inside the worker |
 | `GET`  | `/api/housed/incidents/query` | housed in workers — filtered/paged scan inside the worker |
@@ -96,6 +99,37 @@ app's. The worker side needs no change — `serveHttp` accepts transferred
 sockets
 alongside its internal `listen: 0` port.
 
+## The service-level facade — `src/facade/`
+
+`@AtollService` at class level makes the service class itself the interop
+surface — the backend analog of the frontend `islandComponent` facade.
+`ReportService` carries **no method decorators and no dispatch code**: one
+`@AtollService({ pool: 'reports' })` marks every method for offload under
+`ReportService.<method>` task ids. Callers inject it like any provider:
+
+```ts
+@Injectable()
+export class DashboardService {
+  constructor(@Inject(ReportService) private readonly reports: ReportService) {}
+  async overview() {
+    // Ordinary async calls — two EXECUTE_TASK dispatches under the hood.
+    const [summary, worker] = await Promise.all([
+      this.reports.execSummary(),
+      this.reports.workerInfo(),
+    ]);
+    return { ...summary, generatedBy: worker };
+  }
+}
+```
+
+`DashboardService` has **zero atoll imports** — service→service interop
+where the consumer can't tell the callee runs in a worker. The `reports`
+pool is message-only and shares the incidents buffer via
+`withSharedBuffer` (same pattern as housed): two pools, one 1M-record
+buffer. `GET /api/reports/worker` returns `threadId` 27/28 — hit it
+repeatedly to watch the two reports workers alternate, each reporting its
+own injected telemetry.
+
 ## A second pool is nearly free — `src/digest/`
 
 The `digest` pool demonstrates the marginal cost of adding another worker to
@@ -168,6 +202,9 @@ the worker only ever sees plain method arguments.
   `runAtollWorker(IncidentsAtollModule)`
 - `src/digest/` — second pool: contract + service + module + controller
 - `src/digest/digest.worker.ts` — digest worker entry: `runAtollWorker(DigestAtollModule)`
+- `src/facade/` — service-level facade: `@AtollService` class (`report.service.ts`),
+  a plain service consumer (`dashboard.service.ts`), controller, module, and
+  a worker entry that binds the incidents buffer (`facade.worker.ts`)
 - `nest-cli.json` — `"webpack": true`, plain `nest build`. Worker chunks are
   detected from `new Worker(new URL('./x.worker.ts', import.meta.url))` in
   the pool configs — no webpack configuration needed. (`webpack.config.js`

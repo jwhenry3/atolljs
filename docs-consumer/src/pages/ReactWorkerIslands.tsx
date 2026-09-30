@@ -5,6 +5,7 @@ import contractModule from '../../../examples/react-dom-worker/src/incidents.isl
 import shellSource from '../../../examples/react-dom-worker/src/shell.tsx?raw';
 import { CodeBlock } from '../components/CodeBlock';
 import { DemoFrame } from '../components/DemoFrame';
+import { PkgLink } from '../components/PkgLink';
 import { docHref } from '../link';
 
 /**
@@ -18,7 +19,7 @@ export function ReactWorkerIslands() {
     <article>
       <h1>React — islands</h1>
       <p className="lead">
-        <code>@atolljs/react-island</code> — a worker-hosted React (or
+        <PkgLink name="@atolljs/react-island" /> — a worker-hosted React (or
         imperative proxy-DOM) tree mounted as an ordinary element in a React shell.
         The worker's render loop produces serialized DOM ops; the main thread just
         replays them.

@@ -1,4 +1,5 @@
 import { CodeBlock } from '../components/CodeBlock';
+import { docHref } from '../link';
 
 export function SharedMemoryApi() {
   return (
@@ -12,7 +13,7 @@ export function SharedMemoryApi() {
 
       <CodeBlock
         file="memory.contract.ts"
-        code={`import { defineSharedMemory, field, mz } from '@atolljs/core';
+        code={`import { defineSharedMemory, field, reef } from '@atolljs/core';
 
 // Fields may group by intent — lists / state / signals nest one level and
 // every surface mirrors it: memory.signals.count, spec.signals.count, …
@@ -22,15 +23,15 @@ export const memory = defineSharedMemory({
     running: field.boolean(),                  // flag byte
   },
   state: {
-    label:   field.string({ schema: mz.string(128) }),        // budget derives from the schema
-    metrics: field.object({ schema: metricsSchema }),         // mz.object → inline record, no maxBytes
+    label:   field.string({ schema: reef.string(128) }),        // budget derives from the schema
+    metrics: field.object({ schema: metricsSchema }),         // reef.object → inline record, no maxBytes
     payload: field.object({ maxBytes: 2048 }),                // codec blob — the escape hatch for dynamic data
     samples: field.float64Array({ length: 1024 }),            // typed view, zero-copy
   },
   lists: {
-    // mz members are zod schemas that ARE the layout: mz.u32() → 'u32',
-    // mz.int(0, 3) → 'u8', mz.string(10) → 10 inline bytes
-    records: field.list({ schema: mz.object({ id: mz.u32(), score: mz.f64(), tag: mz.string(8) }), count: 1_000_000 }),
+    // reef members are schemas that ARE the layout: reef.u32() → 'u32',
+    // reef.int(0, 3) → 'u8', reef.string(10) → 10 inline bytes
+    records: field.list({ schema: reef.object({ id: reef.u32(), score: reef.f64(), tag: reef.string(8) }), count: 1_000_000 }),
   },
 });`}
       />
@@ -52,10 +53,11 @@ export const memory = defineSharedMemory({
       </table>
       <p>
         List scalar kinds: <code>i8 u8 i16 u16 i32 u32 f32 f64 i64 u64</code> — or
-        declare members as <code>mz</code>/zod schemas (<code>mz.u32()</code>,{' '}
-        <code>mz.int(0, 3)</code> → narrowest covering kind,{' '}
-        <code>mz.string(10)</code>) and the same declaration becomes both layout
-        and validation schema.
+        declare members as <code>reef</code>/zod schemas (<code>reef.u32()</code>,{' '}
+        <code>reef.int(0, 3)</code> → narrowest covering kind,{' '}
+        <code>reef.string(10)</code>) and the same declaration becomes both layout
+        and validation schema — full vocabulary on{' '}
+        <a href={docHref('reef')}>Reef schemas</a>.
         A field is accessed on the contract object —{' '}
         <code>memory.state.metrics.read()</code> — identical API on both threads,
         and observers address fields by path:{' '}
@@ -68,7 +70,7 @@ export const memory = defineSharedMemory({
         <code>string</code>) encode through the contract's codec. The default is{' '}
         <code>msgpackrCodec</code> — MessagePack with structure sharing, the
         fastest option for uniform records. Alternatives:{' '}
-        <code>msgpackCodec</code>, <code>jsonCodec</code>, or any{' '}
+        <code>jsonCodec</code> or any{' '}
         <code>{'{ encode, decode }'}</code> object:
       </p>
       <CodeBlock

@@ -1,5 +1,9 @@
 # @atolljs/svelte-island
 
+[![CI](https://github.com/jwhenry3/atolljs/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/jwhenry3/atolljs/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/jwhenry3/atolljs/graph/badge.svg?branch=main)](https://codecov.io/gh/jwhenry3/atolljs)
+[![Socket Badge](https://badge.socket.dev/npm/package/@atolljs/svelte-island)](https://badge.socket.dev/npm/package/@atolljs/svelte-island)
+
 The Svelte shell surface for `@atolljs/islands` — mount a worker-hosted tree
 as an ordinary element in a main-thread Svelte app — plus the Svelte 5
 **worker renderer**: a compiled component runs with the real

@@ -1,4 +1,5 @@
 import { CodeBlock } from '../components/CodeBlock';
+import { PkgLink } from '../components/PkgLink';
 import { docHref } from '../link';
 import { FRAMEWORKS } from '../frameworks';
 
@@ -70,7 +71,7 @@ export function Nextjs() {
     <article>
       <h1>Next.js</h1>
       <p className="lead">
-        <code>{fw.pkg}</code> — the React hooks re-exported for App Router
+        <PkgLink name={fw.pkg} /> — the React hooks re-exported for App Router
         client components. The server-side surface —{' '}
         <code>node:worker_threads</code> pools inside route handlers via{' '}
         <code>@atolljs/node</code> — is documented under{' '}

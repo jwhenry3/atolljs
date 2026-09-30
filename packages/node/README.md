@@ -1,5 +1,9 @@
 # @atolljs/node
 
+[![CI](https://github.com/jwhenry3/atolljs/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/jwhenry3/atolljs/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/jwhenry3/atolljs/graph/badge.svg?branch=main)](https://codecov.io/gh/jwhenry3/atolljs)
+[![Socket Badge](https://badge.socket.dev/npm/package/@atolljs/node)](https://badge.socket.dev/npm/package/@atolljs/node)
+
 `node:worker_threads` runtime adapter for `@atolljs/core` — lets `WorkerPool`
 and `connectWorker` run on Node's `Worker` (an `EventEmitter`) instead of the
 DOM surface they expect. No framework required.

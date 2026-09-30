@@ -1,5 +1,9 @@
 # @atolljs/nextjs
 
+[![CI](https://github.com/jwhenry3/atolljs/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/jwhenry3/atolljs/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/jwhenry3/atolljs/graph/badge.svg?branch=main)](https://codecov.io/gh/jwhenry3/atolljs)
+[![Socket Badge](https://badge.socket.dev/npm/package/@atolljs/nextjs)](https://badge.socket.dev/npm/package/@atolljs/nextjs)
+
 Next.js bindings for `@atolljs/core` — the `@atolljs/react` hooks re-exported
 for App Router apps. Same signatures, imported by client components under a
 `'use client'` boundary. SSR-safe: field reads return `undefined` until the

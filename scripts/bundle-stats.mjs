@@ -46,8 +46,8 @@ const isBare = (id) =>
 async function measure(entry, opts = {}) {
   const bundle = await rolldown({
     input: entry,
-    // `internal` ids stay bundled even though they're bare — used to measure
-    // how much of a dependency a given surface actually pulls (zod facade).
+    // `internal` ids stay bundled even though they're bare — used when a
+    // measured entry is meant to include a dependency's code.
     external: (id) => isBare(id) && !(opts.internal ?? []).some((re) => re.test(id)),
     platform: 'browser',
     resolve: { extensions: ['.tsx', '.ts', '.mjs', '.js', '.jsx', '.json'] },
@@ -71,8 +71,7 @@ const pkg = (p, f) => path.join(ROOT, 'packages', p, 'src', f);
 const CORE_SHARED = [
   src('contract/sharedMemory.ts'),
   src('contract/listSchema.ts'),
-  src('contract/mz.ts'),
-  src('contract/msgpackCodec.ts'),
+  src('contract/reef.ts'),
   src('contract/msgpackrCodec.ts'),
   src('service.ts'),
   src('reactive.ts'),
@@ -121,19 +120,9 @@ const PACKAGES = [
 // Entries pin the browser/ESM build a consumer's bundler would pick.
 const nm = (p) => path.join(ROOT, 'node_modules', p);
 const DEPENDENCIES = [
-  // zod as atoll pulls it: bundle our narrowed facade (named imports +
-  // $Zod* core classes) with zod kept internal, so rolldown tree-shakes the
-  // locales/JSON-schema machinery the `z` namespace object would drag in.
-  // The full `z` namespace object measures ~395 kB min — app code doing
-  // `import { z } from 'zod'` pays that, not this.
-  {
-    id: 'zod',
-    entry: src('contract/zod.ts'),
-    internal: [/^zod(\/|$)/],
-    note: 'mz() / listSchema() — atoll pulls a narrowed surface',
-  },
+  // No zod row — the contract schema engine is vendored in
+  // src/contract/zod.ts, so reef/listSchema pull zero external bytes.
   { id: 'msgpackr', entry: nm('msgpackr/index.js'), note: 'msgpackrCodec' },
-  { id: '@msgpack/msgpack', entry: nm('@msgpack/msgpack/dist.esm/index.mjs'), note: 'msgpackCodec' },
   { id: 'solid-js', entry: nm('solid-js/dist/solid.js'), note: 'core deps; solidjs/solid-island peers' },
   { id: 'htmlparser2', entry: nm('htmlparser2/dist/index.js'), note: 'islands worker' },
   { id: 'react-reconciler', entry: nm('react-reconciler/cjs/react-reconciler.production.js'), note: 'react-island worker (React apps)' },

@@ -118,6 +118,26 @@ describe('nestjs example e2e', () => {
     expect(new Set(hits.map((h) => h.worker)).size).toBeGreaterThan(1);
   });
 
+  it('dispatches @AtollService facade calls into the reports pool', async () => {
+    // The facade: ReportService methods are proxies on the API thread —
+    // DashboardService (plain injectable, zero atoll imports) composes two
+    // worker dispatches into one response.
+    const overview = await (await fetch(`${base}/reports/overview`)).json();
+    expect(overview.total).toBe(1_000_000);
+    expect(overview.generatedBy.threadId).toBeGreaterThan(0);
+
+    // Parameterized dispatch — args cross postMessage, the scan runs in-worker.
+    const region = await (await fetch(`${base}/reports/region/west`)).json();
+    expect(region.region).toBe('west');
+    expect(region.total).toBeGreaterThan(0);
+    expect(region.total).toBeLessThan(1_000_000);
+    expect(typeof region.topService).toBe('string');
+
+    // Per-worker injected state proves DI resolved inside the pool worker.
+    const worker = await (await fetch(`${base}/reports/worker`)).json();
+    expect(worker.threadId).toBeGreaterThan(0);
+  });
+
   it('runs the second (digest) pool on its own workers', async () => {
     const res = await fetch(`${base}/digest/hash`, {
       method: 'POST',

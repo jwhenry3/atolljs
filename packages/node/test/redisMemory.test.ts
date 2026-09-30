@@ -4,7 +4,7 @@
  * as ioredis/node-redis (hset/hgetall on base64 strings, subscribe(cb)).
  */
 import { describe, expect, it } from 'vitest';
-import { defineSharedMemory, field, mz } from '@atolljs/core';
+import { defineSharedMemory, field, reef } from '@atolljs/core';
 import { persistSharedMemory, redisMemoryAdapter } from '../src/redis';
 
 const makeMemory = () =>
@@ -13,7 +13,7 @@ const makeMemory = () =>
     label: field.string({ maxBytes: 64 }),
     counts: field.int32Array({ length: 4 }),
     rows: field.list({
-      schema: mz.object({ id: mz.u32(), open: mz.boolean() }),
+      schema: reef.object({ id: reef.u32(), open: reef.boolean() }),
       count: 8,
     }),
   });

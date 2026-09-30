@@ -1,5 +1,6 @@
 import { CodeBlock } from '../components/CodeBlock';
 import { DemoFrame } from '../components/DemoFrame';
+import { PkgLink } from '../components/PkgLink';
 import type { FrameworkDoc } from '../frameworks';
 
 export function FrameworkPage({ fw }: { fw: FrameworkDoc }) {
@@ -7,7 +8,7 @@ export function FrameworkPage({ fw }: { fw: FrameworkDoc }) {
     <article>
       <h1>{fw.name}</h1>
       <p className="lead">
-        <code>{fw.pkg}</code> — {fw.summary}
+        <PkgLink name={fw.pkg} /> — {fw.summary}
       </p>
 
       <h2>Install</h2>

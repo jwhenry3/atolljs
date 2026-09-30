@@ -1,4 +1,5 @@
 import { CodeBlock } from '../components/CodeBlock';
+import { PkgLink } from '../components/PkgLink';
 import { docHref } from '../link';
 
 // SSR-safe: bakes http://localhost in the prerender; data-port anchors get
@@ -172,7 +173,7 @@ export function NodeBackends() {
     <article>
       <h1>Node.js backends — Express, Fastify, Hono, Koa</h1>
       <p className="lead">
-        <code>@atolljs/node</code> puts the worker atoll on any Node HTTP
+        <PkgLink name="@atolljs/node" /> puts the worker atoll on any Node HTTP
         framework, no adapter package needed: a{' '}
         <code>WorkerPool</code> of <code>node:worker_threads</code> workers
         shares one buffer with the API thread, heavy scans dispatch to the

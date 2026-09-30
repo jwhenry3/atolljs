@@ -1,5 +1,9 @@
 # @atolljs/svelte
 
+[![CI](https://github.com/jwhenry3/atolljs/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/jwhenry3/atolljs/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/jwhenry3/atolljs/graph/badge.svg?branch=main)](https://codecov.io/gh/jwhenry3/atolljs)
+[![Socket Badge](https://badge.socket.dev/npm/package/@atolljs/svelte)](https://badge.socket.dev/npm/package/@atolljs/svelte)
+
 Svelte 5 bindings for `@atolljs/core` — shared-memory fields and worker tasks
 as rune-backed state. Call the factories during component init (or in a
 `.svelte.ts` module); teardown happens in an `$effect` cleanup.

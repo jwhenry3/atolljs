@@ -1,13 +1,12 @@
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="assets/atoll-dark.svg" />
-  <source media="(prefers-color-scheme: light)" srcset="assets/atoll-light.svg" />
-  <img src="assets/atoll-light.svg" alt="Atoll — islands of framework workers around a shared core" width="280" />
+  <source media="(prefers-color-scheme: dark)" srcset="assets/atoll-horizontal-dark.svg" />
+  <source media="(prefers-color-scheme: light)" srcset="assets/atoll-horizontal-light.svg" />
+  <img src="assets/atoll-horizontal-light.svg" alt="Atoll — islands of framework workers around a shared core" width="420" />
 </picture>
-
-# AtollJS
 
 [![CI](https://github.com/jwhenry3/atolljs/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/jwhenry3/atolljs/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/jwhenry3/atolljs/graph/badge.svg?branch=main)](https://codecov.io/gh/jwhenry3/atolljs)
+[![Socket Badge](https://badge.socket.dev/npm/package/@atolljs/core)](https://badge.socket.dev/npm/package/@atolljs/core)
 
 Typed shared-memory worker pools for TypeScript — deterministic `SharedArrayBuffer`
 layouts, first-class task methods, and cross-thread reactive state. A worker

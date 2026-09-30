@@ -1,5 +1,37 @@
 # Changelog
 
+## Unreleased
+
+### `@atolljs/cli` — the `atoll` scaffold/doctor bin
+
+New package shipping a source-level TypeScript CLI (Node ≥ 22.18 type
+stripping — no build step):
+
+- **`atoll new <dir>`** — scaffold a fresh app: Vite shell + worker-rendered
+  island for `react`/`vue`/`solid`/`svelte`, or a tsx Node service with a
+  pooled worker (`--framework node`). Bootstrap install passes an explicit
+  one-time `--min-release-age=0` so freshly published `@atolljs/*` releases
+  aren't blocked by the generated project's own 7-day cooldown.
+- **`atoll init`** — wire Atoll into an existing project: hardened `.npmrc`,
+  dependency install, and a contract + worker + client spine under
+  `src/atoll/`.
+- **`atoll add worker|memory|island <name>`** — generate pieces into an
+  existing project; workers co-located with a `*.memory.ts` contract pick it
+  up automatically.
+- **`atoll doctor [--fix]`** — checks deps, lockfile, `.npmrc` policy,
+  bundler-detectable worker entries (`new Worker(new URL(...))` inline), and
+  COOP/COEP headers; `--fix` writes the hardened `.npmrc`.
+- Generated code preserves the bundler-detection and shared-contract
+  invariants out of the box; the Node template demonstrates a real
+  worker→main shared-memory write.
+
+### `@atolljs/react-island` — ambient reconciler types reach consumers
+
+`reactInstance.ts` now carries `/// <reference path="./react-reconciler.d.ts" />`
+so the bundled ambient declaration for `react-reconciler` (which ships no
+types) enters the consumer's program — previously `tsc --noEmit` in a project
+importing `@atolljs/react-island` failed with TS7016.
+
 ## 0.1.2
 
 Decorator-driven islands facades (Angular, Vue), framework-native demo shells
@@ -124,6 +156,18 @@ single-purpose and lives beside the module that spawns it:
   `islandComponent` (notes — attrs as props), `lazyIsland` over a contract
   module (incidents — `src/vue/incidents.island.ts` carries its own
   worker; the dynamic import emits a real split chunk).
+- Docs — a Blog section joins the consumer site: posts are authored as
+  markdown in `docs/blog/` (optional `date:`/`series:`/`title:` front
+  matter) and compiled into statically prerendered pages — one route per
+  post, site-styled code blocks and tables. Eleven posts ship initially,
+  grouped into series covering the framework's major discussion points:
+  "Facades", "Inside Atoll" (shared memory, worker pools, reactivity,
+  shared workers), "Islands" (worker rendering, the proxy DOM), and
+  "Server-side Atoll" (Node backends, clustering/persistence, NestJS DI),
+  plus a standalone deployment post. The sidebar swaps the docs tree for
+  the post list on blog pages — series subheads, newest-first — and the
+  site switcher and landing page link the internal blog rather than the
+  repo file.
 - Docs — the Angular/Vue/Solid/Svelte worker-islands pages now embed the
   real shells and workers, the Next.js section gained job-queue /
   read-model / warmup / custom-server sub-pages, a new "Server-side
@@ -134,6 +178,16 @@ single-purpose and lives beside the module that spawns it:
   style/prop semantics.
 - `examples/react-dom-worker` — dropped the per-island "no React in this
   worker" badges; the island heads now just name the renderer.
+- `examples/nestjs` — a dedicated service-facade feature (`src/facade/`):
+  `ReportService` demonstrates class-level `@AtollService` (every method
+  dispatches, zero dispatch code in the class) consumed by a plain
+  `DashboardService` — service→service interop with no atoll imports at
+  the consumer. The `reports` pool is message-only and shares the
+  incidents buffer via `withSharedBuffer`; routes at `/api/reports/*`.
+- Consumer docs — new "Service facades" page under NestJS documenting the
+  class-level facade pattern (the backend `islandComponent` analog), with
+  the two `@AtollService` forms, a dispatch trace, and an interop-style
+  chooser.
 - Consumer docs — core topics group under a "Core concepts" sidebar
   section, the site is dark-only, and each page embeds a single live demo:
   the framework-free shell (`index.html`) is the canonical demo on the

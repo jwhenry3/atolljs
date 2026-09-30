@@ -1,5 +1,9 @@
 # @atolljs/islands
 
+[![CI](https://github.com/jwhenry3/atolljs/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/jwhenry3/atolljs/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/jwhenry3/atolljs/graph/badge.svg?branch=main)](https://codecov.io/gh/jwhenry3/atolljs)
+[![Socket Badge](https://badge.socket.dev/npm/package/@atolljs/islands)](https://badge.socket.dev/npm/package/@atolljs/islands)
+
 Framework islands inside Atoll workers — opt-in DOM rendering off the main
 thread. A real framework renderer commits against a DOM-free host surface in
 the worker; every commit serializes to an op stream the main thread replays as

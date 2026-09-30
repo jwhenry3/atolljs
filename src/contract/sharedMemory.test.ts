@@ -1,9 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
-import { msgpackCodec } from './msgpackCodec';
+import { $ZodType } from 'zod/v4/core';
+import { msgpackrCodec } from './msgpackrCodec';
 import { Codec, Connector, SharedMemory, SharedSpec, defineSharedMemory, field, registerConnectorFactory } from './sharedMemory';
 import { listSchema } from './listSchema';
-import { mz } from './mz';
+import { reef } from './reef';
 
 function bound<S extends SharedSpec>(spec: S) {
   const mem = defineSharedMemory(spec);
@@ -136,7 +137,7 @@ describe('codecs', () => {
   it('round-trips values through msgpack, including types JSON cannot express', () => {
     const mem = new SharedMemory(
       { blob: field.object<{ bytes: Uint8Array; nested: { ok: boolean } }>({ maxBytes: 256 }) },
-      { codec: msgpackCodec }
+      { codec: msgpackrCodec }
     );
     mem.bind(new SharedArrayBuffer(mem.totalBytes));
     const c = mem.connector('blob');
@@ -157,19 +158,19 @@ describe('codecs', () => {
       active: i % 2 === 0,
     }));
     const jsonBytes = new TextEncoder().encode(JSON.stringify(entities));
-    const packed = msgpackCodec.encode(entities);
+    const packed = msgpackrCodec.encode(entities);
     expect(packed.byteLength).toBeLessThan(jsonBytes.byteLength);
   });
 
   it('still validates msgpack-decoded values against the field schema', () => {
     const mem = new SharedMemory(
       { o: field.object({ maxBytes: 128, schema: z.object({ n: z.number() }) }) },
-      { codec: msgpackCodec }
+      { codec: msgpackrCodec }
     );
     const buf = new SharedArrayBuffer(mem.totalBytes);
     mem.bind(buf);
     const c = mem.connector('o');
-    const bad = msgpackCodec.encode({ n: 'corrupt' });
+    const bad = msgpackrCodec.encode({ n: 'corrupt' });
     new Uint32Array(buf, c.byteOffset, 1)[0] = bad.byteLength;
     new Uint8Array(buf, c.byteOffset + 4, bad.byteLength).set(bad);
     expect(() => c.read()).toThrow();
@@ -236,12 +237,12 @@ describe('defineSharedMemory', () => {
 });
 
 describe('list fields (fixed-layout records)', () => {
-  const recordSchema = mz.object({
-    id: mz.u32(),
-    price: mz.f64(),
-    quantity: mz.u16(),
-    active: mz.u8(),
-    tag: mz.string(12),
+  const recordSchema = reef.object({
+    id: reef.u32(),
+    price: reef.f64(),
+    quantity: reef.u16(),
+    active: reef.u8(),
+    tag: reef.string(12),
   });
 
   it('computes a deterministic, naturally-aligned record layout', () => {
@@ -264,13 +265,13 @@ describe('list fields (fixed-layout records)', () => {
   });
 
   it('supports bigint via i64/u64 fields', () => {
-    const mem = bound({ recs: field.list({ schema: mz.object({ ts: mz.u64(), delta: mz.i64() }), count: 2 }) });
+    const mem = bound({ recs: field.list({ schema: reef.object({ ts: reef.u64(), delta: reef.i64() }), count: 2 }) });
     mem.recs.writeAt(0, { ts: 1764000000000000000n, delta: -5n });
     expect(mem.recs.readAt(0)).toEqual({ ts: 1764000000000000000n, delta: -5n });
   });
 
   it('readAt can reuse an output object for allocation-free scans', () => {
-    const mem = bound({ recs: field.list({ schema: mz.object({ v: mz.i32() }), count: 3 }) });
+    const mem = bound({ recs: field.list({ schema: reef.object({ v: reef.i32() }), count: 3 }) });
     mem.recs.writeAt(0, { v: 10 });
     mem.recs.writeAt(2, { v: 30 });
     const out = { v: 0 };
@@ -288,14 +289,14 @@ describe('list fields (fixed-layout records)', () => {
   });
 
   it('write() persists a whole array and rejects overflow', () => {
-    const mem = bound({ recs: field.list({ schema: mz.object({ v: mz.i32() }), count: 2 }) });
+    const mem = bound({ recs: field.list({ schema: reef.object({ v: reef.i32() }), count: 2 }) });
     mem.recs.write([{ v: 1 }, { v: 2 }]);
     expect(mem.recs.read()).toEqual([{ v: 1 }, { v: 2 }]);
     expect(() => mem.recs.write([{ v: 1 }, { v: 2 }, { v: 3 }])).toThrow(/capacity/);
   });
 
   it('is visible across separately bound instances on the same buffer', () => {
-    const spec = { recs: field.list({ schema: mz.object({ v: mz.i32(), flag: mz.u8() }), count: 4 }) };
+    const spec = { recs: field.list({ schema: reef.object({ v: reef.i32(), flag: reef.u8() }), count: 4 }) };
     const buf = new SharedArrayBuffer(new SharedMemory(spec).totalBytes);
     const a = new SharedMemory(spec);
     const b = new SharedMemory(spec);
@@ -306,7 +307,7 @@ describe('list fields (fixed-layout records)', () => {
   });
 
   it('writeAt is pure memory access; commit() bumps the version counter', () => {
-    const mem = bound({ recs: field.list({ schema: mz.object({ v: mz.i32() }), count: 2 }) });
+    const mem = bound({ recs: field.list({ schema: reef.object({ v: reef.i32() }), count: 2 }) });
     const { view, index } = mem.recs._version!;
     const before = view[index];
     mem.recs.writeAt(0, { v: 1 });
@@ -331,13 +332,13 @@ describe('list fields (fixed-layout records)', () => {
 
   it('compiles zod list members to the same layout as tokens', () => {
     const d = field.list({
-      schema: mz.object({
+      schema: reef.object({
         id: z.uint32(),                          // format → 'u32'
         delta: z.int64(),                        // bigint format → 'i64'
         ratio: z.float32(),                      // 'f32'
         level: z.number().int().min(0).max(3),   // bounds → narrowest int
         code: z.string().meta({ bytes: 8 }),     // meta → inline string
-        legacy: mz.u16(),
+        legacy: reef.u16(),
       }),
       count: 2,
     });
@@ -345,14 +346,14 @@ describe('list fields (fixed-layout records)', () => {
       id: 'u32', delta: 'i64', ratio: 'f32', level: 'u8', code: { string: 8 }, legacy: 'u16',
     });
     // the declared schema keeps the zod members; layout holds the compiled tokens
-    expect(d.schema.shape.id).toBeInstanceOf(z.ZodType);
+    expect(d.schema.shape.id).toBeInstanceOf($ZodType);
     expect(d.recordSize).toBe(32); // 4 + 8 + 4 + 1 + 8 + 2 → align8
   });
 
   it('zod members read/write through the connector identically to tokens', () => {
     const mem = bound({
       recs: field.list({
-        schema: mz.object({ id: z.uint32(), tag: z.string().meta({ bytes: 6 }), n: mz.u8() }),
+        schema: reef.object({ id: z.uint32(), tag: z.string().meta({ bytes: 6 }), n: reef.u8() }),
         count: 2,
       }),
     });
@@ -360,14 +361,14 @@ describe('list fields (fixed-layout records)', () => {
     expect(mem.recs.readAt(0)).toEqual({ id: 42, tag: 'abc', n: 7 });
   });
 
-  it('mz helpers compile every scalar width with one spelling', () => {
+  it('reef helpers compile every scalar width with one spelling', () => {
     const d = field.list({
-      schema: mz.object({
-        a: mz.i8(), b: mz.u8(), c: mz.i16(), d: mz.u16(),
-        e: mz.i32(), f: mz.u32(), g: mz.f32(), h: mz.f64(),
-        i: mz.i64(), j: mz.u64(),
-        bounded: mz.int(0, 3),
-        tag: mz.string(6),
+      schema: reef.object({
+        a: reef.i8(), b: reef.u8(), c: reef.i16(), d: reef.u16(),
+        e: reef.i32(), f: reef.u32(), g: reef.f32(), h: reef.f64(),
+        i: reef.i64(), j: reef.u64(),
+        bounded: reef.int(0, 3),
+        tag: reef.string(6),
       }),
       count: 1,
     });
@@ -377,14 +378,14 @@ describe('list fields (fixed-layout records)', () => {
       i: 'i64', j: 'u64',
       bounded: 'u8', tag: { string: 6 },
     });
-    // mz members are real zod schemas — validation comes with the declaration
+    // reef members are real zod schemas — validation comes with the declaration
     expect(() => d.schema.shape.b.parse(300)).toThrow();
     expect(d.schema.shape.b.parse(200)).toBe(200);
   });
 
   it('schemas keep declared domain bounds — stricter than the storage width', () => {
     const mem = bound({
-      recs: field.list({ schema: mz.object({ level: z.number().int().min(0).max(3) }), count: 1 }),
+      recs: field.list({ schema: reef.object({ level: z.number().int().min(0).max(3) }), count: 1 }),
     });
     expect(mem.schemas.recs.parse({ level: 2 })).toEqual({ level: 2 });
     expect(() => mem.schemas.recs.parse({ level: 9 })).toThrow(); // 9 fits u8, not 0..3
@@ -392,10 +393,10 @@ describe('list fields (fixed-layout records)', () => {
 
   it('rejects zod members that cannot express a fixed-width layout', () => {
     expect(() => field.list({
-      schema: mz.object({ when: z.date() }), count: 1,
+      schema: reef.object({ when: z.date() }), count: 1,
     })).toThrow(/can't lay out/);
     expect(() => field.list({
-      schema: mz.object({ s: z.string() }), count: 1, // no .meta({ bytes }) — capacity unknown
+      schema: reef.object({ s: z.string() }), count: 1, // no .meta({ bytes }) — capacity unknown
     })).toThrow(/meta\(\{ bytes: n \}\)/);
   });
 
@@ -419,7 +420,7 @@ describe('list fields (fixed-layout records)', () => {
 describe('schema-derived fixed layouts', () => {
   it('field.object derives byteLength from the schema — no maxBytes', () => {
     const d = field.object({
-      schema: mz.object({ total: mz.f64(), open: mz.u32(), flag: mz.boolean(), tag: mz.string(8) }),
+      schema: reef.object({ total: reef.f64(), open: reef.u32(), flag: reef.boolean(), tag: reef.string(8) }),
     });
     expect(d.kind).toBe('object');
     expect(d.layout).toEqual({ total: 'f64', open: 'u32', flag: { bool: true }, tag: { string: 8 } });
@@ -429,13 +430,13 @@ describe('schema-derived fixed layouts', () => {
 
   it('fixed objects round-trip inline — no codec, undefined until written', () => {
     const mem = bound({
-      snapshot: field.object({ schema: mz.object({ total: mz.f64(), open: mz.u32(), flag: mz.boolean(), tag: mz.string(8) }) }),
+      snapshot: field.object({ schema: reef.object({ total: reef.f64(), open: reef.u32(), flag: reef.boolean(), tag: reef.string(8) }) }),
     });
     expect(mem.snapshot.read()).toBeUndefined();
     mem.snapshot.write({ total: 1.5, open: 7, flag: true, tag: 'hi' });
     expect(mem.snapshot.read()).toEqual({ total: 1.5, open: 7, flag: true, tag: 'hi' });
     // identical memory on a second binding sees the same value
-    const spec = { snapshot: field.object({ schema: mz.object({ total: mz.f64(), open: mz.u32() }) }) };
+    const spec = { snapshot: field.object({ schema: reef.object({ total: reef.f64(), open: reef.u32() }) }) };
     const buf = new SharedArrayBuffer(new SharedMemory(spec).totalBytes);
     const a = new SharedMemory(spec);
     const b = new SharedMemory(spec);
@@ -446,21 +447,21 @@ describe('schema-derived fixed layouts', () => {
   });
 
   it('fixed object writes validate against the declared schema', () => {
-    const mem = bound({ s: field.object({ schema: mz.object({ n: mz.u8() }) }) });
+    const mem = bound({ s: field.object({ schema: reef.object({ n: reef.u8() }) }) });
     expect(() => mem.s.write({ n: 300 })).toThrow(); // u8 domain bound
     mem.s.write({ n: 3 });
     expect(mem.s.read()).toEqual({ n: 3 });
   });
 
   it('field.array derives capacity from .max(n) / .length(n)', () => {
-    const bounded = field.array({ schema: mz.array(mz.u32()).max(4) });
+    const bounded = field.array({ schema: reef.array(reef.u32()).max(4) });
     expect(bounded.element).toBe('u32');
     expect(bounded.capacity).toBe(4);
     expect(bounded.byteLength).toBe(8 + 4 * 4);
-    const exact = field.array({ schema: mz.array(mz.string(6)).length(3) });
+    const exact = field.array({ schema: reef.array(reef.string(6)).length(3) });
     expect(exact.capacity).toBe(3);
 
-    const mem = bound({ tags: field.array({ schema: mz.array(mz.u8()).max(4) }) });
+    const mem = bound({ tags: field.array({ schema: reef.array(reef.u8()).max(4) }) });
     expect(mem.tags.read()).toBeUndefined();
     mem.tags.write([1, 2]);
     expect(mem.tags.read()).toEqual([1, 2]);
@@ -469,18 +470,37 @@ describe('schema-derived fixed layouts', () => {
     expect(() => mem.tags.write([1, 2, 3, 4, 5])).toThrow(/<=4 items|capacity of 4/);
   });
 
-  it('field.string derives its budget from mz.string(n)', () => {
-    const d = field.string({ schema: mz.string(10) });
+  it('field.string derives its budget from reef.string(n)', () => {
+    const d = field.string({ schema: reef.string(10) });
     expect(d.byteLength).toBe(14); // 4-byte length header + 10
-    const mem = bound({ label: field.string({ schema: mz.string(10) }) });
+    const mem = bound({ label: field.string({ schema: reef.string(10) }) });
     mem.label.write('within');
     expect(mem.label.read()).toBe('within');
     expect(() => mem.label.write('exceeds ten bytes')).toThrow();
   });
 
+  it('fluent schema methods attach checks, meta, and bounds', () => {
+    expect(reef.u8().parse(7)).toBe(7);
+    expect(() => reef.u8().parse(256)).toThrow();
+
+    // .refine keeps def.type — the schema still introspects as a string
+    const tagged = reef.string(4).refine((v) => v.startsWith('x')).meta({ bytes: 4 });
+    expect(tagged.meta()).toEqual({ bytes: 4 });
+    expect(tagged.parse('xy')).toBe('xy');
+    expect(() => tagged.parse('ab')).toThrow();
+
+    // .min/.max dispatch — numeric bounds on numbers, length bounds on arrays
+    expect(() => reef.i32().min(0).parse(-1)).toThrow();
+    expect(() => reef.i32().int().parse(1.5)).toThrow();
+    const arr = reef.array(reef.u8()).min(1).max(2);
+    expect(() => arr.parse([])).toThrow();
+    expect(() => arr.parse([1, 2, 3])).toThrow();
+    expect(arr.parse([1])).toEqual([1]);
+  });
+
   it('rejects schemas with no derivable width when maxBytes is absent', () => {
     expect(() => field.object({ schema: z.string() as never })).toThrow(/maxBytes/);
-    expect(() => field.object({ schema: mz.object({ note: z.string() }) })).toThrow(/bytes/);
+    expect(() => field.object({ schema: reef.object({ note: z.string() }) })).toThrow(/bytes/);
     expect(() => field.array({ schema: z.array(z.number()) })).toThrow(/\.max\(n\) or \.length\(n\)/);
     expect(() => field.array({ schema: z.array(z.date()).max(2) })).toThrow(/fixed-width|field\.list/);
     expect(() => field.string({ schema: z.string() })).toThrow(/bytes|maxBytes/);
@@ -554,19 +574,19 @@ describe('edge coverage', () => {
   });
 
   it('list connector reads and writes i8, i16, and f32 scalars', () => {
-    const mem = bound({ r: field.list({ schema: mz.object({ a: mz.i8(), b: mz.i16(), c: mz.f32() }), count: 2 }) });
+    const mem = bound({ r: field.list({ schema: reef.object({ a: reef.i8(), b: reef.i16(), c: reef.f32() }), count: 2 }) });
     mem.r.writeAt(0, { a: -8, b: -300, c: 1.5 });
     expect(mem.r.readAt(0)).toEqual({ a: -8, b: -300, c: 1.5 });
   });
 
   it('list readString uses max length when the field is exactly full', () => {
-    const mem = bound({ r: field.list({ schema: mz.object({ tag: mz.string(8) }), count: 1 }) });
+    const mem = bound({ r: field.list({ schema: reef.object({ tag: reef.string(8) }), count: 1 }) });
     mem.r.writeAt(0, { tag: '12345678' }); // fills the field — no zero byte inside max
     expect(mem.r.readAt(0)).toEqual({ tag: '12345678' });
   });
 
   it('readAt rejects negative indexes', () => {
-    const mem = bound({ r: field.list({ schema: mz.object({ v: mz.i32() }), count: 2 }) });
+    const mem = bound({ r: field.list({ schema: reef.object({ v: reef.i32() }), count: 2 }) });
     expect(() => mem.r.readAt(-1)).toThrow(RangeError);
   });
 

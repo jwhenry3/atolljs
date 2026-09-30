@@ -1,5 +1,9 @@
 # @atolljs/react
 
+[![CI](https://github.com/jwhenry3/atolljs/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/jwhenry3/atolljs/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/jwhenry3/atolljs/graph/badge.svg?branch=main)](https://codecov.io/gh/jwhenry3/atolljs)
+[![Socket Badge](https://badge.socket.dev/npm/package/@atolljs/react)](https://badge.socket.dev/npm/package/@atolljs/react)
+
 React bindings for `@atolljs/core` — hooks that bind shared-memory fields and
 worker tasks to component state over `useSyncExternalStore`. SSR-safe: field
 reads return `undefined` until the contract binds on the client.

@@ -7,6 +7,8 @@ import { IncidentsAtollModule } from './shared/incidents-atoll.module';
 import { DigestAtollModule } from './digest/digest.module';
 import { DigestController } from './digest/digest.controller';
 import { HousedAtollModule } from './housed/housed-atoll.module';
+import { FacadeAtollModule } from './facade/facade.module';
+import { ReportController } from './facade/report.controller';
 
 /**
  * The shared buffer lives in process memory — every restart (including
@@ -31,9 +33,11 @@ class SeedOnBootstrap implements OnApplicationBootstrap {
     // 'incidents' pool's sharedBuffer via getAtollPool — it must register first.
     IncidentsAtollModule,
     HousedAtollModule,
+    // Also reads the 'incidents' buffer via getAtollPool — same ordering need.
+    FacadeAtollModule,
     DigestAtollModule,
   ],
-  controllers: [IncidentsController, DigestController],
+  controllers: [IncidentsController, DigestController, ReportController],
   providers: [SeedOnBootstrap],
 })
 export class AppModule {}

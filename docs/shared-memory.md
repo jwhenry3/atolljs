@@ -15,13 +15,13 @@ identical memory on both sides. Reference contract:
 |---|---|---|
 | `field.number()` | `number` | 8 bytes (f64) |
 | `field.boolean()` | `boolean` | 1 byte stored, descriptor reserves 8 |
-| `field.string({ maxBytes })` · `field.string({ schema })` | `string` | 4-byte length + inline UTF-8 — budget derives from `mz.string(n)` |
-| `field.object({ schema })` | `T` | inline fixed record — width derives from `mz.object(...)` members |
+| `field.string({ maxBytes })` · `field.string({ schema })` | `string` | 4-byte length + inline UTF-8 — budget derives from `reef.string(n)` |
+| `field.object({ schema })` | `T` | inline fixed record — width derives from `reef.object(...)` members |
 | `field.object({ maxBytes, schema? })` | `T` | 4-byte length + codec-encoded payload |
 | `field.array({ schema })` | `T[]` | count header + bounded inline elements — from `z.array(el).max(n)` |
 | `field.array({ maxBytes, schema? })` | `T[]` | same, codec-encoded |
 | `field.int32Array({ length })` / `float64Array` / `bigInt64Array` / `uint8Array` | typed array | raw view — `read()` is zero-copy |
-| `field.list({ schema, count })` | record array | fixed-layout records — `schema` is an `mz.object` of fixed-width members (`mz.u32()`, `mz.string(10)`) |
+| `field.list({ schema, count })` | record array | fixed-layout records — `schema` is a `reef.object` of fixed-width members (`reef.u32()`, `reef.string(10)`) |
 
 ## Intent groups
 
@@ -33,22 +33,22 @@ allocation is a flat layout underneath, and every surface mirrors the nesting �
 `memory.schemas.state.metrics`, and observers addressed by path
 (`observe(memory, 'signals.seedProgress')`).
 
-## The `mz` datatype wrapper
+## The `reef` datatype wrapper
 
 Every shared-memory value is fixed-width — a `SharedArrayBuffer` cannot
 resize, so strings and encoded objects declare byte budgets and list members
-compile to scalar widths. `mz` is the curated fixed-width vocabulary — only
-helpers whose schemas derive a byte width exist: `mz.u8()`–`mz.u64()`,
-`mz.f32()`/`mz.f64()`, `mz.int(min, max)` (bounds pick the narrowest covering
-kind), `mz.boolean()` (flag byte), `mz.string(bytes)` (inline capacity), and
-the `mz.object`/`mz.array` composers. Each is a real zod schema — layout and
-validation come from the same declaration.
+compile to scalar widths. `reef` is the curated fixed-width vocabulary —
+`reef.u8()`–`reef.u64()`, `reef.f32()`/`reef.f64()`, `reef.int(min, max)`,
+`reef.boolean()`, `reef.string(bytes)`, and the `reef.object`/`reef.array`
+composers. Each mints a schema — layout and validation come from
+the same declaration (see [reef.md](reef.md) for the vendored engine and
+consumer-zod interop).
 
-Fixed width composes upward: `field.object({ schema })` with an `mz.object`
+Fixed width composes upward: `field.object({ schema })` with a `reef.object`
 stores one inline record (byteLength is derived — there is no `maxBytes` to
 guess), `field.array({ schema })` with a bounded `z.array(el).max(n)` stores a
 count + inline elements, and `field.string({ schema })` reads its budget from
-`mz.string(n)`. `maxBytes` remains the escape hatch for payloads no fixed
+`reef.string(n)`. `maxBytes` remains the escape hatch for payloads no fixed
 width can describe — its presence selects the codec path.
 
 ## Connectors
@@ -66,7 +66,7 @@ a field list), and `commit()` to bump the version counter after a batch —
 
 Structured fields encode through the contract's codec — `msgpackrCodec` (the
 default: MessagePack with structure sharing, the fastest option for uniform
-records), `msgpackCodec`, or `jsonCodec`. Optional zod schemas (`listSchema`,
+records) or `jsonCodec`. Optional zod schemas (`listSchema`,
 object/array `schema` options) validate values at the boundary. Every field
 also surfaces its schema on `memory.schemas.<name>` and its descriptor on
 `memory.spec.<name>` — list members may be zod schemas directly

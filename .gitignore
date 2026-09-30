@@ -5,9 +5,15 @@ dist-pages
 nul
 *.tsbuildinfo
 coverage/
+coverage-driver/
+*.log
 
 .playwright-mcp/
 .tmp/
 .tmp-*/
 docs.zip
 docs-consumer.zip
+
+# screenshot artifacts — real assets live in assets/, docs-consumer/public/, pages-landing/
+/*.png
+*-check.png

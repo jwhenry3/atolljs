@@ -1,5 +1,9 @@
 # @atolljs/angular
 
+[![CI](https://github.com/jwhenry3/atolljs/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/jwhenry3/atolljs/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/jwhenry3/atolljs/graph/badge.svg?branch=main)](https://codecov.io/gh/jwhenry3/atolljs)
+[![Socket Badge](https://badge.socket.dev/npm/package/@atolljs/angular)](https://badge.socket.dev/npm/package/@atolljs/angular)
+
 Angular bindings for `@atolljs/core` — shared-memory fields and worker tasks as
 `Signal`s, plus DI registration for pools/clients. Zoneless-friendly; call the
 signal factories in an injection context (field initializer or constructor) so

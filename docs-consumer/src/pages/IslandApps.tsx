@@ -1,4 +1,5 @@
 import { CodeBlock } from '../components/CodeBlock';
+import { PkgLink } from '../components/PkgLink';
 import { docHref } from '../link';
 
 export function IslandApps() {
@@ -40,11 +41,11 @@ export const renderWorker = definePolyWorker({
           <tr><th>Framework</th><th>Worker helper</th><th>Package</th></tr>
         </thead>
         <tbody>
-          <tr><td>React</td><td><code>reactIslandApp</code> / <code>defineReactPolyWorker</code></td><td><code>@atolljs/react-island</code></td></tr>
-          <tr><td>Vue</td><td><code>vueIslandApp</code> / <code>defineVuePolyWorker</code></td><td><code>@atolljs/vue-island</code></td></tr>
-          <tr><td>Svelte</td><td><code>svelteIslandApp</code></td><td><code>@atolljs/svelte-island</code></td></tr>
-          <tr><td>SolidJS</td><td><code>solidIslandApp</code></td><td><code>@atolljs/solid-island</code></td></tr>
-          <tr><td>Angular</td><td><code>angularIslandApp</code></td><td><code>@atolljs/angular-island</code></td></tr>
+          <tr><td>React</td><td><code>reactIslandApp</code> / <code>defineReactPolyWorker</code></td><td><PkgLink name="@atolljs/react-island" /></td></tr>
+          <tr><td>Vue</td><td><code>vueIslandApp</code> / <code>defineVuePolyWorker</code></td><td><PkgLink name="@atolljs/vue-island" /></td></tr>
+          <tr><td>Svelte</td><td><code>svelteIslandApp</code></td><td><PkgLink name="@atolljs/svelte-island" /></td></tr>
+          <tr><td>SolidJS</td><td><code>solidIslandApp</code></td><td><PkgLink name="@atolljs/solid-island" /></td></tr>
+          <tr><td>Angular</td><td><code>angularIslandApp</code></td><td><PkgLink name="@atolljs/angular-island" /></td></tr>
         </tbody>
       </table>
       <CodeBlock

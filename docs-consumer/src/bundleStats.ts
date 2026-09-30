@@ -6,12 +6,12 @@ export const bundleStats = {
       "id": "@atolljs/core",
       "label": "core",
       "main": {
-        "min": 31144,
-        "gzip": 10432
+        "min": 34538,
+        "gzip": 11511
       },
       "worker": {
-        "min": 24521,
-        "gzip": 8466
+        "min": 27915,
+        "gzip": 9556
       }
     },
     {
@@ -90,8 +90,8 @@ export const bundleStats = {
       "id": "@atolljs/islands",
       "label": "islands",
       "main": {
-        "min": 9744,
-        "gzip": 3916
+        "min": 10487,
+        "gzip": 4225
       },
       "worker": {
         "min": 33832,
@@ -150,33 +150,21 @@ export const bundleStats = {
       "id": "@atolljs/angular-island",
       "label": "angular-island",
       "main": {
-        "min": 2210,
-        "gzip": 938
+        "min": 3659,
+        "gzip": 1482
       },
       "worker": {
-        "min": 6424,
-        "gzip": 2794
+        "min": 7544,
+        "gzip": 3182
       }
     }
   ],
   "dependencies": [
     {
-      "id": "zod",
-      "note": "mz() / listSchema() — atoll pulls a narrowed surface",
-      "min": 92598,
-      "gzip": 24605
-    },
-    {
       "id": "msgpackr",
       "note": "msgpackrCodec",
       "min": 29699,
       "gzip": 10852
-    },
-    {
-      "id": "@msgpack/msgpack",
-      "note": "msgpackCodec",
-      "min": 21923,
-      "gzip": 6097
     },
     {
       "id": "solid-js",

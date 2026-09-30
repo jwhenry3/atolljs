@@ -6,6 +6,8 @@
  * listed falls back to `metaFor`'s generic description.
  */
 
+import { postBySlug } from './blog';
+
 const FRAMEWORK_LABELS: Record<string, string> = {
   'fw-react': 'React',
   'fw-vue': 'Vue',
@@ -30,6 +32,8 @@ const ROUTE_DESC: Record<string, string> = {
     'Atoll is a TypeScript toolkit for real multithreading in JavaScript: typed worker pools, SharedArrayBuffer contracts, Atomics-based reactivity, and worker-rendered UI islands.',
   'shared-memory':
     'defineSharedMemory — deterministic schema layouts over SharedArrayBuffer, versioned fields, and transactional writes shared by every thread.',
+  reef:
+    'reef — the fixed-width schema vocabulary for atoll shared memory: every schema is both the validator and the binary layout spec.',
   tasks:
     'Typed worker pools with cancellation, timeouts, backpressure, progress, and crash respawn — postMessage for calls, shared memory for state.',
   reactivity:
@@ -58,6 +62,8 @@ const ROUTE_DESC: Record<string, string> = {
     'Redis-backed shared-memory persistence — persistSharedMemory mirrors versioned fields into Redis hashes and replays ops across processes.',
   'fw-nestjs':
     '@atolljs/nestjs — host atoll pools inside NestJS: injected worker clients, clustering, WebSocket tunneling, and Redis persistence.',
+  'fw-nestjs/facades':
+    'Service facades — @AtollService makes a provider class the interop surface: inject normally on the API thread, every method dispatches to the pool.',
   'fw-nestjs/housed':
     'Housed APIs — registerPool exposes worker services as injected NestJS providers and serves worker-held HTTP routes.',
   'fw-nestjs/clustering':
@@ -82,6 +88,8 @@ const ROUTE_DESC: Record<string, string> = {
     'Custom island renderers — implement the worker-side renderer contract and drive the proxy DOM protocol from any framework.',
   hosting:
     'Hosting requirements — COOP/COEP headers for SharedArrayBuffer, fallback poll mode, and static deploy notes.',
+  blog:
+    'AtollJS blog — long-form writing on what the framework is for and how its facades make worker interop feel like ordinary code.',
 };
 
 export interface RouteMeta {
@@ -90,10 +98,21 @@ export interface RouteMeta {
 }
 
 export function metaFor(id: string, label: string): RouteMeta {
-  const title = `Atoll docs — ${label}`;
+  const title = id === 'blog' ? 'Atoll blog' : `Atoll docs — ${label}`;
 
   const desc = ROUTE_DESC[id];
   if (desc) return { title, description: desc };
+
+  // Blog posts: description from the post's subtitle or first paragraph.
+  if (id.startsWith('blog/')) {
+    const post = postBySlug(id.slice(5));
+    if (post) {
+      return {
+        title: `Atoll blog — ${post.title}`,
+        description: post.subtitle ?? post.excerpt,
+      };
+    }
+  }
 
   // Framework pages: synthesize from the route shape — fw-<name>,
   // fw-<name>/<sub>. Avoids hand-writing ~24 near-identical entries.

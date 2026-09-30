@@ -1,8 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { z } from 'zod';
 import { incidentRowSchema, incidentsMemory } from '../src/contract/memory.contracts';
 import { queryArgsSchema, queryIncidents } from '../src/service/queryIncidents';
 import { computeMetrics } from '../src/service/computeMetrics';
+
+// Contract schemas are atoll-minted — they carry the zod-style `_zod.def`
+// layout descriptors and a `.parse`, without being instances of zod classes.
+const isSchema = (v: unknown) =>
+  typeof v === 'object' && v !== null &&
+  typeof (v as { parse?: unknown }).parse === 'function' &&
+  typeof (v as { _zod?: { def?: unknown } })._zod?.def === 'object';
 
 const validQuery = {
   offset: 0, limit: 50, sortBy: null, sortDesc: false,
@@ -35,26 +41,26 @@ describe('incidentsMemory', () => {
     expect(spec.lists.incidents.kind).toBe('list');
     expect(spec.state.metrics.kind).toBe('object');
     expect(spec.signals.seedProgress.kind).toBe('number');
-    // metrics declares no maxBytes — its width derives from the mz schema:
+    // metrics declares no maxBytes — its width derives from the reef schema:
     // 8 f64 members → 64-byte record + 8-byte header
     expect(spec.state.metrics.recordSize).toBe(64);
     expect(spec.state.metrics.byteLength).toBe(72);
     // schemas nest where the spec nests them
-    expect(schemas.lists.incidents).toBeInstanceOf(z.ZodType);
-    expect(schemas.state.metrics).toBeInstanceOf(z.ZodType);
-    expect(schemas.signals.seedProgress).toBeInstanceOf(z.ZodType);
+    expect(isSchema(schemas.lists.incidents)).toBe(true);
+    expect(isSchema(schemas.state.metrics)).toBe(true);
+    expect(isSchema(schemas.signals.seedProgress)).toBe(true);
   });
 
   it('carries the inline spec back out via .spec', () => {
     const spec = incidentsMemory.spec.lists.incidents;
     expect(spec.count).toBe(1_000_000);
-    // `schema` is the declared mz.object record schema; `layout`
+    // `schema` is the declared reef.object record schema; `layout`
     // holds the compiled binary spec its members map to.
-    expect(spec.schema.shape.site).toBeInstanceOf(z.ZodType);
+    expect(isSchema(spec.schema.shape.site)).toBe(true);
     expect(spec.layout.site).toEqual({ string: 10 });
-    expect(spec.layout.id).toBe('u32');      // mz.u32() → u32
-    expect(spec.layout.alarms).toBe('u16');  // mz.u16() → u16
-    expect(spec.layout.severity).toBe('u8'); // mz.int(0,3) → u8
+    expect(spec.layout.id).toBe('u32');      // reef.u32() → u32
+    expect(spec.layout.alarms).toBe('u16');  // reef.u16() → u16
+    expect(spec.layout.severity).toBe('u8'); // reef.int(0,3) → u8
   });
 
   it('re-exports field schemas via .schemas', () => {

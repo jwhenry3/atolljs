@@ -1,6 +1,7 @@
 import { bundleStats } from '../bundleStats';
 import { docHref } from '../link';
 import { islandPerfStats } from '../islandPerfStats';
+import { PkgLink } from '../components/PkgLink';
 import { SplitBar, workerShare } from '../components/SplitBar';
 
 const kb = (bytes: number) => (bytes / 1024).toFixed(1);
@@ -98,7 +99,7 @@ export function BundleSize() {
         <tbody>
           {pkgs.map((pkg) => (
             <tr key={pkg.id}>
-              <td><code>{pkg.id}</code></td>
+              <td><PkgLink name={pkg.id} /></td>
               <td className="num">
                 {kb(pkg.main.min)} kB <span className="muted">({kb(pkg.main.gzip)} gz)</span>
               </td>
@@ -281,7 +282,7 @@ export function BundleSize() {
         These install alongside the packages above — same measurement, browser
         builds, minified. All are only pulled when your bundler sees them
         imported: unused connectors tree-shake away (e.g. no{' '}
-        <code>mz</code>/<code>listSchema</code> → no zod).
+        <code>msgpackrCodec</code> import → no msgpackr).
       </p>
       <table className="doc-table">
         <thead>
@@ -295,7 +296,7 @@ export function BundleSize() {
         <tbody>
           {bundleStats.dependencies.map((d) => (
             <tr key={d.id}>
-              <td><code>{d.id}</code></td>
+              <td><PkgLink name={d.id} /></td>
               <td className="num">{kb(d.min)} kB</td>
               <td className="num">{kb(d.gzip)} kB</td>
               <td>{d.note}</td>
@@ -305,13 +306,12 @@ export function BundleSize() {
       </table>
       <ul>
         <li>
-          <strong>zod is fully opt-in</strong> — it backs <code>mz()</code> and{' '}
-          <code>listSchema()</code> only; plain <code>field.*</code> contracts
-          never import it. Atoll imports a narrowed surface (named
-          constructors + core classes), so ~90 kB lands instead of the full{' '}
-          <code>z</code> namespace (~395 kB). Your own{' '}
-          <code>import {'{ z }'} from 'zod'</code> pulls the full barrel — prefer
-          named imports or <code>zod/mini</code> in app code.
+          <strong>zod isn't a dependency at all</strong> — <code>reef()</code>{' '}
+          and <code>listSchema()</code> run on a vendored schema engine that
+          speaks zod's <code>_zod.def</code> vocabulary, so the table has no
+          zod row. Your own <code>import {'{ z }'} from 'zod'</code> still
+          works wherever a schema is accepted — the compiler introspects it
+          the same way — but installing zod is now your choice, not ours.
         </li>
         <li>
           <strong>react-reconciler is worker-side only</strong> — React island

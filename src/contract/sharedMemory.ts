@@ -2,7 +2,7 @@ import type { Prettify, Schema } from './types';
 import { msgpackrCodec } from './msgpackrCodec';
 import { memberToSpec, zodArrayInfo, zodObjectShape, zodStringBytes } from './listSchema';
 import { fmtBytes, scoped } from '../log';
-import { z } from './zod';
+import { z, fluent } from './zod';
 
 const memLog = scoped('memory');
 
@@ -156,7 +156,7 @@ export type ListSpec = Record<string, ListFieldSpec>;
 /**
  * A fixed-width member inside a record or element position — a binary spec
  * token (`'u32'`, `{ string: n }`, `{ bool: true }`) or a zod schema that
- * expresses the same thing (`mz.u32()`, `mz.int(0, 3)`, `mz.string(n)`).
+ * expresses the same thing (`reef.u32()`, `reef.int(0, 3)`, `reef.string(n)`).
  * Schemas are compiled to tokens for layout and kept as the field's
  * validation schema — one declaration.
  */
@@ -170,7 +170,7 @@ export interface ListDescriptor<S extends z.ZodObject<z.ZodRawShape> = z.ZodObje
   extends Omit<FieldDescriptor<ListRecord<S>[]>, 'schema'> {
   readonly kind: 'list';
   /**
-   * The declared record schema — an `mz.object` of fixed-width members. It
+   * The declared record schema — a `reef.object` of fixed-width members. It
    * IS the layout source AND the record validator (`schemas.lists.x` is this
    * same object). Note it parses one record, not the whole array.
    */
@@ -290,7 +290,7 @@ export interface FixedArrayDescriptor<T = unknown> extends FieldDescriptor<T[]> 
 interface ObjectFieldFactory {
   /**
    * Inline fixed layout — the schema is a zod object of fixed-width members
-   * (`mz` helpers, `z.uint32()`, bounded ints, `mz.string(n)`, `z.boolean()`);
+   * (`reef` helpers, `z.uint32()`, bounded ints, `reef.string(n)`, `z.boolean()`);
    * `byteLength` derives from the member widths. Compile fails loudly for
    * members with no fixed width (unbounded strings, nested objects).
    */
@@ -322,9 +322,9 @@ const objectFieldImpl: ObjectFieldFactory = (options: { schema?: Schema<unknown>
 interface ArrayFieldFactory {
   /**
    * Inline fixed layout — the schema is a bounded zod array
-   * (`mz.array(mz.u32()).max(n)`, `.length(n)`); `byteLength` derives from
+   * (`reef.array(reef.u32()).max(n)`, `.length(n)`); `byteLength` derives from
    * the element width × the bound. Elements must be fixed-width members
-   * (scalars, `mz.string(n)`, booleans) — use `field.list` for record arrays.
+   * (scalars, `reef.string(n)`, booleans) — use `field.list` for record arrays.
    */
   <S extends z.ZodArray>(options: { schema: S }): FixedArrayDescriptor<S extends z.ZodArray<infer E> ? z.output<E> : unknown>;
   /** Codec-encoded blob — explicit byte budget for arbitrary payloads. */
@@ -363,7 +363,7 @@ const arrayFieldImpl: ArrayFieldFactory = (options: { schema?: Schema<unknown>; 
 interface StringFieldFactory {
   /** Explicit byte budget — 4-byte length header + up to `maxBytes` of UTF-8. */
   (options: { maxBytes: number; schema?: Schema<string> }): FieldDescriptor<string>;
-  /** Budget derived from the schema — `mz.string(n)` / `z.string().meta({ bytes: n })`. */
+  /** Budget derived from the schema — `reef.string(n)` / `z.string().meta({ bytes: n })`. */
   (options: { schema: Schema<string> }): FieldDescriptor<string>;
 }
 
@@ -373,7 +373,7 @@ const stringFieldImpl: StringFieldFactory = (options: { schema?: Schema<string>;
   const bytes = schema ? zodStringBytes(schema) : null;
   if (bytes !== null) return { kind: 'string', byteLength: 4 + bytes, schema };
   throw new TypeError(
-    `field.string: pass { maxBytes } or a schema carrying a byte budget — mz.string(n) / z.string().meta({ bytes: n })`
+    `field.string: pass { maxBytes } or a schema carrying a byte budget — reef.string(n) / z.string().meta({ bytes: n })`
   );
 };
 
@@ -391,16 +391,16 @@ export const field = {
   bigInt64Array: ({ length }: { length: number }): FieldDescriptor<BigInt64Array> => ({ kind: 'BigInt64', byteLength: length * 8 }),
   uint8Array: ({ length }: { length: number }): FieldDescriptor<Uint8Array> => ({ kind: 'Uint8', byteLength: length }),
   /**
-   * A fixed-layout array of `count` records. `schema` is an `mz.object` of
-   * fixed-width members (`mz.u32()`, `mz.int(0, 3)`, `mz.string(n)`,
-   * `mz.boolean()`) — the same schema `field.object` takes, repeated `count`
+   * A fixed-layout array of `count` records. `schema` is a `reef.object` of
+   * fixed-width members (`reef.u32()`, `reef.int(0, 3)`, `reef.string(n)`,
+   * `reef.boolean()`) — the same schema `field.object` takes, repeated `count`
    * times. Every record occupies `recordSize` bytes at a computable offset:
    * reads and writes are direct memory access, no serialization.
    */
   list: <S extends z.ZodObject<z.ZodRawShape>>({ schema, count }: { schema: S; count: number }): ListDescriptor<S> => {
     const shape = zodObjectShape(schema);
     if (!shape) {
-      throw new TypeError(`field.list: schema must be an mz.object() of fixed-width members`);
+      throw new TypeError(`field.list: schema must be a reef.object() of fixed-width members`);
     }
     const { layout, offsets, recordSize } = compileListLayout(shape);
     return {
@@ -640,7 +640,7 @@ registerConnectorFactory('object', structuredFactory);
 registerConnectorFactory('array', structuredFactory);
 
 function listFactory(d: FieldDescriptor, ctx: ConnectorContext, byteOffset: number): ListConnector<any> {
-  const info = d as ListDescriptor;
+  const info = d as unknown as ListDescriptor;
   const { offsets, recordSize, count } = info;
   // `layout` is the compiled token map; `schema` stays the validation schema.
   const record = makeIO(ctx).compile(info.layout, offsets);
@@ -694,7 +694,7 @@ registerConnectorFactory('list', listFactory);
 const definedSharedMemories: SharedMemory<any>[] = [];
 
 /**
- * The zod schema for a field's logical unit: the declared `schema` for
+ * The schema for a field's logical unit: the declared `schema` for
  * object/array/list fields (for lists, the record schema), and a derived
  * scalar/typed-array schema for everything else.
  */
@@ -704,7 +704,7 @@ export type FieldSchema<D> =
     : z.ZodType<InferField<D>>;
 
 /**
- * A zod schema per field — `memory.schemas.<field>` re-exports what the spec
+ * A schema per field — `memory.schemas.<field>` re-exports what the spec
  * declared inline. Intent groups mirror their spec shape:
  * `memory.schemas.lists.incidents` is the record schema.
  */
@@ -733,14 +733,14 @@ function buildSchemas<S extends SharedSpec>(spec: S): SpecSchemas<S> {
 function fieldSchemaOf(descriptor: FieldDescriptor): Schema<unknown> {
   if (descriptor.schema) return descriptor.schema;
   switch (descriptor.kind) {
-    case 'number': return z.number();
-    case 'boolean': return z.boolean();
-    case 'string': return z.string();
-    case 'Int32': return z.instanceof(Int32Array);
-    case 'Float64': return z.instanceof(Float64Array);
-    case 'BigInt64': return z.instanceof(BigInt64Array);
-    case 'Uint8': return z.instanceof(Uint8Array);
-    default: return z.unknown();
+    case 'number': return fluent(z.number());
+    case 'boolean': return fluent(z.boolean());
+    case 'string': return fluent(z.string());
+    case 'Int32': return fluent(z.instanceof(Int32Array));
+    case 'Float64': return fluent(z.instanceof(Float64Array));
+    case 'BigInt64': return fluent(z.instanceof(BigInt64Array));
+    case 'Uint8': return fluent(z.instanceof(Uint8Array));
+    default: return fluent(z.unknown());
   }
 }
 
@@ -755,9 +755,9 @@ export class SharedMemory<S extends SharedSpec = SharedSpec> {
   /** The field descriptors the contract was defined with — the inline spec. */
   public readonly spec: S;
   /**
-   * One zod schema per field, derived from the spec: declared schemas on
+   * One schema per field, derived from the spec: declared schemas on
    * object/array fields, the record schema on list fields, and derived
-   * scalar schemas (z.number(), z.string(), …) elsewhere.
+   * scalar schemas elsewhere.
    */
   public readonly schemas: SpecSchemas<S>;
   private readonly codec: Codec;

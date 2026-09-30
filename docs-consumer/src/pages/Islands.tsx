@@ -1,4 +1,5 @@
 import { DemoFrame } from '../components/DemoFrame';
+import { PkgLink } from '../components/PkgLink';
 import { docHref } from '../link';
 
 export function Islands() {
@@ -6,7 +7,7 @@ export function Islands() {
     <article>
       <h1>Islands — overview</h1>
       <p className="lead">
-        <code>@atolljs/islands</code> renders a framework tree{' '}
+        <PkgLink name="@atolljs/islands" /> renders a framework tree{' '}
         <em>inside</em> a Atoll worker: the worker owns the render loop and every
         commit serializes to an op stream the main thread replays as real DOM
         mutations into your element. Opt-in DOM rendering off the main thread —

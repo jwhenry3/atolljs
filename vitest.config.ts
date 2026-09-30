@@ -97,8 +97,10 @@ export default mergeConfig(
         provider: 'v8',
         reporter: ['text', 'lcov'],
         // The publishable surface: core sdk + every atoll-* binding package.
+        // packages/cli is tooling, not runtime — its interactive shell
+        // (readline, process.argv guard) isn't meaningfully coverable.
         include: ['src/**', 'packages/*/src/**'],
-        exclude: ['**/*.test.*', '**/test/**', '**/testing/**'],
+        exclude: ['**/*.test.*', '**/test/**', '**/testing/**', 'packages/cli/**'],
         // Floor slightly below the current ~96/88 baseline — regresses fail CI.
         thresholds: { statements: 95, branches: 85, functions: 93, lines: 96 },
       },

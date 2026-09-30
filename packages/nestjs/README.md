@@ -1,5 +1,9 @@
 # @atolljs/nestjs
 
+[![CI](https://github.com/jwhenry3/atolljs/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/jwhenry3/atolljs/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/jwhenry3/atolljs/graph/badge.svg?branch=main)](https://codecov.io/gh/jwhenry3/atolljs)
+[![Socket Badge](https://badge.socket.dev/npm/package/@atolljs/nestjs)](https://badge.socket.dev/npm/package/@atolljs/nestjs)
+
 NestJS bindings for `@atolljs/core` — worker pools as DI providers on
 `node:worker_threads`, with decorator-based method offload. Named pools share
 memory with the API thread, and `@AtollService`/`@AtollTask` move a service

@@ -1,0 +1,32 @@
+{
+  "name": "@atolljs/cli",
+  "version": "0.1.0",
+  "description": "atoll — scaffold worker pools, shared-memory contracts, and framework islands",
+  "homepage": "https://jwhenry3.github.io/atolljs/consumer/quickstart/",
+  "type": "module",
+  "bin": {
+    "atoll": "./src/cli.ts"
+  },
+  "exports": {
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "src"
+  ],
+  "engines": {
+    "node": ">=22.18"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jwhenry3/atolljs",
+    "directory": "packages/cli"
+  },
+  "bugs": {
+    "url": "https://github.com/jwhenry3/atolljs/issues"
+  },
+  "license": "MIT"
+}

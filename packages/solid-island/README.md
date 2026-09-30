@@ -1,5 +1,9 @@
 # @atolljs/solid-island
 
+[![CI](https://github.com/jwhenry3/atolljs/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/jwhenry3/atolljs/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/jwhenry3/atolljs/graph/badge.svg?branch=main)](https://codecov.io/gh/jwhenry3/atolljs)
+[![Socket Badge](https://badge.socket.dev/npm/package/@atolljs/solid-island)](https://badge.socket.dev/npm/package/@atolljs/solid-island)
+
 The Solid shell surface for `@atolljs/islands` — mount a worker-hosted Solid
 (or imperative proxy-DOM) tree as an ordinary element in a main-thread Solid
 app — plus the Solid **worker renderer**: a plain Solid component runs against

@@ -1,7 +1,7 @@
 /* ── Contract — shared memory declarations (both threads) ───────────────── */
 
 export { bindSharedMemories, defineSharedMemory, field, getDefinedSharedMemoryCount, jsonCodec, registerConnectorFactory } from './contract/sharedMemory';
-export { mz } from './contract/mz';
+export { reef } from './contract/reef';
 export type {
   Codec,
   Connector,
@@ -30,7 +30,6 @@ export type {
   ListRecord,
   ListSpec,
 } from './contract/sharedMemory';
-export { msgpackCodec } from './contract/msgpackCodec';
 export { msgpackrCodec } from './contract/msgpackrCodec';
 export { listSchema } from './contract/listSchema';
 export type { ListZodShape } from './contract/listSchema';

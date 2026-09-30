@@ -1,4 +1,5 @@
 import { CodeBlock } from '../components/CodeBlock';
+import { PkgLink } from '../components/PkgLink';
 import { docHref } from '../link';
 import { ISLAND_FRAMEWORKS } from '../islandFrameworks';
 
@@ -10,7 +11,7 @@ export function FrameworkIslands({ id }: { id: string }) {
       <h1>{fw.name}</h1>
       <p className="lead">
         {fw.intro}{' '}
-        Install <code>{fw.pkg}</code> for the shell bindings and the worker-side
+        Install <PkgLink name={fw.pkg} /> for the shell bindings and the worker-side
         renderer.
       </p>
       {fw.componentCode && (

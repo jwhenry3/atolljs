@@ -5,6 +5,8 @@ import { FRAMEWORKS } from './frameworks';
 import { consumerRootHref, docHref, setRouteDepth } from './link';
 import { metaFor } from './routeMeta';
 import { FRAMEWORK_PAGE_COMPONENTS, FRAMEWORK_PAGES } from './frameworkPages';
+import { BLOG_NAV } from './blog';
+import { BlogIndex, BlogPost } from './pages/Blog';
 import { BundleSize } from './pages/BundleSize';
 import { CustomBindings } from './pages/CustomBindings';
 import { CustomIslandRenderer } from './pages/CustomIslandRenderer';
@@ -14,6 +16,7 @@ import { IslandApps } from './pages/IslandApps';
 import { Islands } from './pages/Islands';
 import { Nestjs } from './pages/Nestjs';
 import { NestjsClustering } from './pages/NestjsClustering';
+import { NestjsFacades } from './pages/NestjsFacades';
 import { NestjsHoused } from './pages/NestjsHoused';
 import { NestjsPersistence } from './pages/NestjsPersistence';
 import { NestjsWebsockets } from './pages/NestjsWebsockets';
@@ -31,6 +34,7 @@ import { Overview } from './pages/Overview';
 import { ProxyDocument } from './pages/ProxyDocument';
 import { Quickstart } from './pages/Quickstart';
 import { Reactivity } from './pages/Reactivity';
+import { Reef } from './pages/Reef';
 import { SharedMemoryApi } from './pages/SharedMemoryApi';
 import { SharedWorker } from './pages/SharedWorker';
 import { TasksAndPool } from './pages/TasksAndPool';
@@ -40,8 +44,18 @@ interface Route {
   label: string;
   page: () => ReactNode;
   /** Sub-pages — rendered indented under this link in the sidebar. */
-  children?: Route[];
+  children?: RouteChild[];
 }
+
+/** A named group of sub-pages — renders a subhead in the sidebar (blog series). */
+interface RouteGroup {
+  group: string;
+  children: Route[];
+}
+
+type RouteChild = Route | RouteGroup;
+
+const isGroup = (c: RouteChild): c is RouteGroup => 'group' in c;
 
 const SECTIONS: { label: string; routes: Route[] }[] = [
   {
@@ -55,6 +69,7 @@ const SECTIONS: { label: string; routes: Route[] }[] = [
     label: 'Core concepts',
     routes: [
       { id: 'shared-memory', label: 'Shared memory', page: () => <SharedMemoryApi /> },
+      { id: 'reef', label: 'Reef schemas', page: () => <Reef /> },
       { id: 'tasks', label: 'Worker pool & tasks', page: () => <TasksAndPool /> },
       { id: 'reactivity', label: 'Reactivity', page: () => <Reactivity /> },
       { id: 'shared-worker', label: 'Shared worker', page: () => <SharedWorker /> },
@@ -89,6 +104,7 @@ const SECTIONS: { label: string; routes: Route[] }[] = [
         label: 'NestJS',
         page: () => <Nestjs />,
         children: [
+          { id: 'fw-nestjs/facades', label: 'Service facades', page: () => <NestjsFacades /> },
           { id: 'fw-nestjs/housed', label: 'Housed APIs', page: () => <NestjsHoused /> },
           { id: 'fw-nestjs/clustering', label: 'Clustering', page: () => <NestjsClustering /> },
           { id: 'fw-nestjs/websockets', label: 'WebSockets', page: () => <NestjsWebsockets /> },
@@ -137,8 +153,42 @@ const SECTIONS: { label: string; routes: Route[] }[] = [
   },
 ];
 
-export const allRoutes = SECTIONS.flatMap((s) =>
-  s.routes.flatMap((r) => [r, ...(r.children ?? [])])
+/**
+ * The blog is a separate menu tree — on blog pages the sidebar swaps the
+ * package-docs sections for the post list (series groups, newest first).
+ */
+const BLOG_SECTION: { label: string; routes: Route[] } = {
+  label: 'Posts',
+  routes: [
+    {
+      id: 'blog',
+      label: 'All posts',
+      page: () => <BlogIndex />,
+      children: BLOG_NAV.map((e) =>
+        e.type === 'post'
+          ? {
+              id: `blog/${e.post.slug}`,
+              label: e.post.title,
+              page: () => <BlogPost slug={e.post.slug} />,
+            }
+          : {
+              group: e.series,
+              children: e.posts.map((p) => ({
+                id: `blog/${p.slug}`,
+                label: p.title,
+                page: () => <BlogPost slug={p.slug} />,
+              })),
+            }
+      ),
+    },
+  ],
+};
+
+export const allRoutes = [...SECTIONS, BLOG_SECTION].flatMap((s) =>
+  s.routes.flatMap((r) => [
+    r,
+    ...(r.children ?? []).flatMap((c) => (isGroup(c) ? c.children : [c])),
+  ])
 );
 export { SECTIONS };
 
@@ -165,6 +215,8 @@ export function App({ route }: { route?: string }) {
     allRoutes.find((r) => r.id === routeFromPathname(window.location.pathname)) ??
     allRoutes.find((r) => r.id === 'overview')!;
 
+  const isBlog = active.id === 'blog' || active.id.startsWith('blog/');
+
   // Links, iframe srcs, and the site switcher are relative to the page's own
   // depth under the consumer root — publish it for the whole render. The
   // overview page lives AT the root (dist/index.html), so depth 0.
@@ -178,6 +230,17 @@ export function App({ route }: { route?: string }) {
     const legacy = window.location.hash.slice(2);
     if (legacy && routeIds.has(legacy)) {
       window.location.replace(docHref(legacy));
+    }
+    // Keep the active section in view — mirrors the same reveal in docs.js
+    // for the prerendered site (which runs no React).
+    const sidebar = document.querySelector('.sidebar');
+    const activeLink = sidebar?.querySelector<HTMLElement>('.nav-link.active');
+    if (sidebar && activeLink) {
+      const sb = sidebar.getBoundingClientRect();
+      const ar = activeLink.getBoundingClientRect();
+      if (ar.top < sb.top || ar.bottom > sb.bottom) {
+        sidebar.scrollTop += ar.top - sb.top - sb.height / 3;
+      }
     }
   }, [active.id, active.label]);
 
@@ -196,10 +259,10 @@ export function App({ route }: { route?: string }) {
             src={`${consumerRootHref()}atoll-brand-dark.svg`}
             alt="AtollJS"
           />
-          <span className="brand-sub">package docs</span>
         </a>
-        <SiteSwitch current="consumer" />
-        {SECTIONS.map((section) => (
+        <SiteSwitch current={isBlog ? 'blog' : 'consumer'} />
+        {/* Blog pages get the post list instead of the docs tree. */}
+        {(isBlog ? [BLOG_SECTION] : SECTIONS).map((section) => (
           <nav key={section.label} className="nav-section">
             <h3>{section.label}</h3>
             {section.routes.map((r) => (
@@ -210,19 +273,38 @@ export function App({ route }: { route?: string }) {
                 >
                   {r.label}
                 </a>
-                {r.children?.map((sub) => (
-                  <a
-                    key={sub.id}
-                    href={docHref(sub.id)}
-                    className={
-                      sub.id === active.id
-                        ? 'nav-link nav-sublink active'
-                        : 'nav-link nav-sublink'
-                    }
-                  >
-                    {sub.label}
-                  </a>
-                ))}
+                {r.children?.map((sub) =>
+                  isGroup(sub) ? (
+                    <span key={sub.group} style={{ display: 'contents' }}>
+                      <span className="nav-group">{sub.group}</span>
+                      {sub.children.map((post) => (
+                        <a
+                          key={post.id}
+                          href={docHref(post.id)}
+                          className={
+                            post.id === active.id
+                              ? 'nav-link nav-sublink active'
+                              : 'nav-link nav-sublink'
+                          }
+                        >
+                          {post.label}
+                        </a>
+                      ))}
+                    </span>
+                  ) : (
+                    <a
+                      key={sub.id}
+                      href={docHref(sub.id)}
+                      className={
+                        sub.id === active.id
+                          ? 'nav-link nav-sublink active'
+                          : 'nav-link nav-sublink'
+                      }
+                    >
+                      {sub.label}
+                    </a>
+                  )
+                )}
               </span>
             ))}
           </nav>
@@ -239,7 +321,13 @@ export function App({ route }: { route?: string }) {
 
 const sideFor = (id: string) => {
   const section = SECTIONS.find((s) =>
-    s.routes.some((r) => r.id === id || r.children?.some((c) => c.id === id)),
+    s.routes.some(
+      (r) =>
+        r.id === id ||
+        r.children?.some((c) =>
+          isGroup(c) ? c.children.some((p) => p.id === id) : c.id === id,
+        ),
+    ),
   );
   if (section?.label === 'Backend') return 'backend' as const;
   if (section?.label === 'Frontend') return 'frontend' as const;

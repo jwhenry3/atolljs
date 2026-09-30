@@ -1,3 +1,4 @@
+/// <reference path="./react-reconciler.d.ts" />
 /**
  * The React-runtime half of a React island — `react`, `react-reconciler`
  * and the host config live HERE so a worker bundle whose registry holds only

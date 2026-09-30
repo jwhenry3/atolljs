@@ -14,6 +14,7 @@ import workerSvelteIncidents from '../../../examples/react-dom-worker/src/worker
 import workerAngular from '../../../examples/react-dom-worker/src/worker/angular.worker.ts?raw';
 import { CodeBlock } from '../components/CodeBlock';
 import { DemoFrame } from '../components/DemoFrame';
+import { PkgLink } from '../components/PkgLink';
 import { docHref } from '../link';
 import type { ReactNode } from 'react';
 
@@ -326,7 +327,7 @@ export function FrameworkWorkerIslands({ id }: { id: string }) {
     <article>
       <h1>{fw.name} — islands</h1>
       <p className="lead">
-        <code>{fw.pkg}</code> — a worker-hosted tree mounted as an ordinary
+        <PkgLink name={fw.pkg} /> — a worker-hosted tree mounted as an ordinary
         element in a {fw.name} shell. The worker&apos;s render loop produces
         serialized DOM ops; the main thread just replays them.
       </p>
@@ -336,7 +337,7 @@ export function FrameworkWorkerIslands({ id }: { id: string }) {
         Four islands, {fw.name} rendered inside the workers: a counter, a
         second counter instance, a notes composer, and a 1,000,000-record
         incident benchmark — {fw.topology}. The shell is just a thin{' '}
-        {fw.surface} host from <code>{fw.pkg}</code> that replays their ops.
+        {fw.surface} host from <PkgLink name={fw.pkg} /> that replays their ops.
       </p>
       <p>
         <b>The incident benchmark is the real-world case for offloading a

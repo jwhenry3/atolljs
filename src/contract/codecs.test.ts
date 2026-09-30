@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import { jsonCodec, type Codec } from './sharedMemory';
-import { msgpackCodec } from './msgpackCodec';
 import { msgpackrCodec } from './msgpackrCodec';
 
 const sample = {
@@ -15,7 +14,6 @@ const roundTrip = (codec: Codec, value: unknown) => codec.decode(codec.encode(va
 
 const ALL_CODECS: Array<[string, Codec]> = [
   ['json', jsonCodec],
-  ['msgpack', msgpackCodec],
   ['msgpackr', msgpackrCodec],
 ];
 
@@ -36,27 +34,24 @@ describe.each(ALL_CODECS)('%s codec', (_name, codec) => {
   });
 });
 
-describe('msgpack codecs (binary)', () => {
-  for (const [name, codec] of ALL_CODECS.slice(1)) {
-    it(`${name} preserves binary payloads`, () => {
-      const bytes = new Uint8Array([1, 2, 3, 255]);
-      const decoded = roundTrip(codec, { bytes }) as { bytes: ArrayLike<number> };
-      expect(Array.from(decoded.bytes)).toEqual([1, 2, 3, 255]);
-    });
-
-    it(`${name} is byte-compact vs JSON for uniform records`, () => {
-      const rows = Array.from({ length: 50 }, (_, i) => ({ id: i, sym: 'AAPL', px: i }));
-      const json = jsonCodec.encode(rows).byteLength;
-      expect(codec.encode(rows).byteLength).toBeLessThan(json);
-    });
-  }
-
-  it('msgpackr preserves bigint; @msgpack/msgpack rejects it', () => {
-    expect(roundTrip(msgpackrCodec, { big: 9007199254740993n })).toEqual({ big: 9007199254740993n });
-    expect(() => msgpackCodec.encode({ big: 1n })).toThrow();
+describe('msgpackr codec (binary)', () => {
+  it('preserves binary payloads', () => {
+    const bytes = new Uint8Array([1, 2, 3, 255]);
+    const decoded = roundTrip(msgpackrCodec, { bytes }) as { bytes: ArrayLike<number> };
+    expect(Array.from(decoded.bytes)).toEqual([1, 2, 3, 255]);
   });
 
-  it('msgpackr record-sharing survives many same-shape objects', () => {
+  it('is byte-compact vs JSON for uniform records', () => {
+    const rows = Array.from({ length: 50 }, (_, i) => ({ id: i, sym: 'AAPL', px: i }));
+    const json = jsonCodec.encode(rows).byteLength;
+    expect(msgpackrCodec.encode(rows).byteLength).toBeLessThan(json);
+  });
+
+  it('preserves bigint', () => {
+    expect(roundTrip(msgpackrCodec, { big: 9007199254740993n })).toEqual({ big: 9007199254740993n });
+  });
+
+  it('record-sharing survives many same-shape objects', () => {
     const rows = Array.from({ length: 200 }, (_, i) => ({ sym: 'MSFT', px: i, qty: i * 2 }));
     const out = roundTrip(msgpackrCodec, rows) as typeof rows;
     expect(out[199]).toEqual({ sym: 'MSFT', px: 199, qty: 398 });
@@ -69,9 +64,8 @@ describe('codec failure modes', () => {
     expect(() => jsonCodec.decode(new TextEncoder().encode('{nope'))).toThrow();
   });
 
-  it('msgpack codecs throw on garbage bytes', () => {
+  it('msgpackrCodec throws on garbage bytes', () => {
     const junk = new Uint8Array([0xff, 0xfe, 0xfd, 0xfc]);
-    expect(() => msgpackCodec.decode(junk)).toThrow();
     expect(() => msgpackrCodec.decode(junk)).toThrow();
   });
 });

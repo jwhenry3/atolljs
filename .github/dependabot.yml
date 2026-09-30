@@ -1,0 +1,167 @@
+# Dependency updates. Every installable project has its own lockfile (the
+# examples are NOT npm workspaces), so each gets its own npm ecosystem entry.
+#
+# `cooldown` delays PRs until a release has been public for 7 days —
+# complements `min-release-age` in each project's .npmrc so a compromised
+# just-published version can't reach the tree through automation either.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      actions:
+        patterns: ["*"]
+
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      minor-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: npm
+    directory: /docs-consumer
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      minor-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: npm
+    directory: /examples/angular
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      minor-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: npm
+    directory: /examples/express
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      minor-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: npm
+    directory: /examples/fastify
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      minor-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: npm
+    directory: /examples/hono
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      minor-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: npm
+    directory: /examples/http-offload
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      minor-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: npm
+    directory: /examples/koa
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      minor-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: npm
+    directory: /examples/nestjs
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      minor-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: npm
+    directory: /examples/nextjs
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      minor-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: npm
+    directory: /examples/react
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      minor-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: npm
+    directory: /examples/react-dom-worker
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      minor-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: npm
+    directory: /examples/solid
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      minor-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: npm
+    directory: /examples/svelte
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      minor-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: npm
+    directory: /examples/vue
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      minor-patch:
+        update-types: [minor, patch]

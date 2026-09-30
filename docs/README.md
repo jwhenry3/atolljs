@@ -16,6 +16,7 @@ repository — internals, contracts, and conventions.
 |---|---|
 | Anything (first contact) | [overview.md](overview.md) — architecture, repo layout, how to run |
 | `src/contract/` — memory layout, fields, codecs | [shared-memory.md](shared-memory.md) |
+| `src/contract/reef.ts`, `listSchema.ts` — schema vocabulary, layout compilation | [reef.md](reef.md) |
 | `src/pool/`, `src/worker/`, task dispatch | [tasks-and-pool.md](tasks-and-pool.md) |
 | `src/reactive.ts`, `observable.ts`, `task.ts`, `log.ts` | [reactivity.md](reactivity.md) |
 | `src/shared/` — SharedWorker host/client | [shared-worker.md](shared-worker.md) |
@@ -24,6 +25,7 @@ repository — internals, contracts, and conventions.
 | `packages/islands/src/worker/` — proxy DOM, instances, worker entries | [islands-worker.md](islands-worker.md) |
 | `packages/*-island/` — Vue/Svelte/Solid/Angular worker renderers | [islands-frameworks.md](islands-frameworks.md) |
 | Writing a new `packages/<fw>` binding or `<fw>-island` renderer | [porting.md](porting.md) |
+| `packages/cli` — the `atoll` scaffold/doctor bin | `packages/cli/README.md` |
 
 Framework bindings — **frontend**:
 
@@ -48,7 +50,9 @@ Framework bindings — **backend**:
 ## Core concepts (read in order)
 
 1. [overview.md](overview.md) — the three layers: contracts, worker pair, reactivity
-2. [shared-memory.md](shared-memory.md) — `defineSharedMemory`, `field.*`, `mz`, connectors
+2. [shared-memory.md](shared-memory.md) — `defineSharedMemory`, `field.*`, connectors
+   · [reef.md](reef.md) — the fixed-width schema vocabulary (`reef.*`), layout
+   compilation, zod interop
 3. [tasks-and-pool.md](tasks-and-pool.md) — `defineWorker`/`connectWorker`, services, pool config
 4. [reactivity.md](reactivity.md) — `observe`/`watch`/`reactive`, `defineTask`, logging
 5. [shared-worker.md](shared-worker.md) — one worker + buffer across tabs/iframes

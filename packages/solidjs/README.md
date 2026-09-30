@@ -1,5 +1,9 @@
 # @atolljs/solidjs
 
+[![CI](https://github.com/jwhenry3/atolljs/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/jwhenry3/atolljs/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/jwhenry3/atolljs/graph/badge.svg?branch=main)](https://codecov.io/gh/jwhenry3/atolljs)
+[![Socket Badge](https://badge.socket.dev/npm/package/@atolljs/solidjs)](https://badge.socket.dev/npm/package/@atolljs/solidjs)
+
 SolidJS bindings for `@atolljs/core` — shared-memory fields and worker tasks as
 natively tracked `Accessor`s (the SDK uses `solid-js` internally for its
 reactive core). Subscriptions auto-dispose via `onCleanup` when the owner is

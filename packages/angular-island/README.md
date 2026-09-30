@@ -1,5 +1,9 @@
 # @atolljs/angular-island
 
+[![CI](https://github.com/jwhenry3/atolljs/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/jwhenry3/atolljs/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/jwhenry3/atolljs/graph/badge.svg?branch=main)](https://codecov.io/gh/jwhenry3/atolljs)
+[![Socket Badge](https://badge.socket.dev/npm/package/@atolljs/angular-island)](https://badge.socket.dev/npm/package/@atolljs/angular-island)
+
 The Angular shell surface for `@atolljs/islands` — mount a worker-hosted tree
 as an ordinary element in a main-thread Angular app — plus the Angular
 **worker renderer**: a standalone component bootstraps via `createComponent`

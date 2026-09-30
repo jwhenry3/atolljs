@@ -35,6 +35,15 @@ body to the DI-created instance. `@AtollService({ pool })` applies that
 dispatch to every method on the class; `@AtollTask` remains for per-method
 control. Source: `packages/nestjs/src/decorators.ts`.
 
+**The service-level facade.** `@AtollService` at class level is the backend
+analog of the frontend `islandComponent` facade: the service class IS the
+interop surface — inject it anywhere (controllers *or other services*) and
+every call dispatches, with zero atoll imports at the consumer. See
+`examples/nestjs/src/facade/`: `report.service.ts` (the facade),
+`dashboard.service.ts` (a plain service composing worker calls), and
+`facade.worker.ts` — the `reports` pool is message-only and shares the
+incidents buffer via `withSharedBuffer`, like `housed`.
+
 `runAtollWorker` — the worker boots its own application context and discovers
 decorated providers, so injected dependencies resolve inside worker-run
 bodies. Source: `packages/nestjs/src/worker.ts`.

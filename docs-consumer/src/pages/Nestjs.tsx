@@ -1,4 +1,5 @@
 import { CodeBlock } from '../components/CodeBlock';
+import { PkgLink } from '../components/PkgLink';
 import { docHref } from '../link';
 
 const port = 3100;
@@ -119,7 +120,7 @@ export function Nestjs() {
     <article>
       <h1>NestJS</h1>
       <p className="lead">
-        <code>@atolljs/nestjs</code> — the worker atoll on the server.
+        <PkgLink name="@atolljs/nestjs" /> — the worker atoll on the server.
         Named pools of <code>node:worker_threads</code> workers share memory
         with the API thread, and <code>@AtollService</code>/<code>@AtollTask</code>{' '}
         move a service method's body into a worker — with real dependency
@@ -134,6 +135,13 @@ export function Nestjs() {
 
       <h2>Service — the decorator picks the thread</h2>
       <CodeBlock code={USAGE_SERVICE} file="digest.service.ts" />
+      <p>
+        <code>@AtollService</code> at class level is the service-level
+        facade: inject the provider normally and every method dispatches —
+        consumers stay plain DI clients with zero atoll imports.{' '}
+        <a href={docHref('fw-nestjs/facades')}>Service facades</a> walks a
+        full example including service→service composition.
+      </p>
 
       <h2>Controller — the pool wrapped as a typed client</h2>
       <CodeBlock code={USAGE_CONTROLLER} file="incidents.controller.ts" />

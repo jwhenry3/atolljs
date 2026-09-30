@@ -50,6 +50,11 @@ behavior is exercised via `InProcessWorker`
   in messages.
 - When you change a documented API or invariant, update `docs/` in the same
   change.
+- **Every installable project carries the same `.npmrc`**
+  (`min-release-age=7`, `ignore-scripts=true`, `save-exact=true`) — copy it
+  into any new project directory. See `SECURITY.md` for the full
+  supply-chain policy and the `npm rebuild --ignore-scripts=false` escape
+  hatch.
 
 ## Repo shape
 
@@ -59,6 +64,9 @@ packages/incidents/   demo domain package
 packages/<fw>/        framework bindings (react, vue, solidjs, svelte, angular, nextjs)
 packages/islands/     island engine — driver, op protocol, proxy DOM
 packages/<fw>-island/ per-framework island shell + worker renderer
+packages/cli/         the `atoll` bin — init/add/new/doctor scaffolder
+                      (ships TS source; Node ≥22.18 type stripping — keep
+                      `.ts` import extensions and erasable syntax)
 packages/node/        node:worker_threads adapter (+ ./http socket routing)
 packages/nestjs/      NestJS module + decorators
 examples/<fw>/        demo apps; examples/react-dom-worker/ is the islands demo;
