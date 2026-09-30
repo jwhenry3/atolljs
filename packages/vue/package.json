@@ -2,7 +2,7 @@
   "name": "@atolljs/vue",
   "version": "0.1.0",
   "description": "Vue bindings — useObservable, useSharedValue, useTask",
-  "homepage": "https://jwhenry3.github.io/atolljs/consumer/#/quickstart",
+  "homepage": "https://jwhenry3.github.io/atolljs/consumer/quickstart/",
   "type": "module",
   "exports": {
     ".": "./src/index.ts"

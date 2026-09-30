@@ -6,7 +6,7 @@ renderer**: a plain Vue component runs through Vue's own `createRenderer` with
 host ops bound to the instance's proxy document, so every mutation serializes
 to the op stream the shell replays as real DOM.
 
-**[Atoll — package documentation](https://jwhenry3.github.io/atolljs/consumer/#/quickstart)**
+**[Atoll — package documentation](https://jwhenry3.github.io/atolljs/consumer/quickstart/)**
 
 ## Install
 
@@ -75,9 +75,9 @@ and re-renders, so Vue patches in place (same DOM elements survive).
 
 ## Documentation
 
-- [Atoll — package documentation](https://jwhenry3.github.io/atolljs/consumer/#/quickstart)
-- [Worker islands for Vue](https://jwhenry3.github.io/atolljs/consumer/#/fw-vue/worker-islands)
-- [Worker islands](https://jwhenry3.github.io/atolljs/consumer/#/islands) —
+- [Atoll — package documentation](https://jwhenry3.github.io/atolljs/consumer/quickstart/)
+- [Worker islands for Vue](https://jwhenry3.github.io/atolljs/consumer/fw-vue/worker-islands/)
+- [Worker islands](https://jwhenry3.github.io/atolljs/consumer/islands/) —
   `mountIsland` options, `IslandHandle`, island rules
 - In-repo internals: [`docs/islands.md`](../../docs/islands.md),
   [`docs/islands-worker.md`](../../docs/islands-worker.md)

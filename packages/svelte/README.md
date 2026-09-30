@@ -4,7 +4,7 @@ Svelte 5 bindings for `@atolljs/core` — shared-memory fields and worker tasks
 as rune-backed state. Call the factories during component init (or in a
 `.svelte.ts` module); teardown happens in an `$effect` cleanup.
 
-**[Atoll — package documentation](https://jwhenry3.github.io/atolljs/consumer/#/quickstart)**
+**[Atoll — package documentation](https://jwhenry3.github.io/atolljs/consumer/quickstart/)**
 
 ## Install
 
@@ -46,6 +46,6 @@ npm install @atolljs/core @atolljs/svelte
 
 ## Documentation
 
-- [Atoll — package documentation](https://jwhenry3.github.io/atolljs/consumer/#/quickstart)
-- [Svelte guide](https://jwhenry3.github.io/atolljs/consumer/#/fw-svelte)
-- [Worker islands for Svelte](https://jwhenry3.github.io/atolljs/consumer/#/fw-svelte/worker-islands)
+- [Atoll — package documentation](https://jwhenry3.github.io/atolljs/consumer/quickstart/)
+- [Svelte guide](https://jwhenry3.github.io/atolljs/consumer/fw-svelte/)
+- [Worker islands for Svelte](https://jwhenry3.github.io/atolljs/consumer/fw-svelte/worker-islands/)

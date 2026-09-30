@@ -1,4 +1,5 @@
 import { CodeBlock } from '../components/CodeBlock';
+import { docHref } from '../link';
 
 export function Reactivity() {
   return (
@@ -51,7 +52,7 @@ const sig = reactive(memory.connector('metrics'));  // sig.get() in effects`}
 
       <h2>defineTask — async work as observable state</h2>
       <p>
-        See <a href="#/tasks">Worker pool &amp; tasks</a>. Each{' '}
+        See <a href={docHref('tasks')}>Worker pool &amp; tasks</a>. Each{' '}
         <code>AsyncTask</code> is an <code>ObservableValue</code> of{' '}
         <code>{'{ data, pending, settled, elapsedMs, error }'}</code> — the same
         shape every binding's task adapter consumes.

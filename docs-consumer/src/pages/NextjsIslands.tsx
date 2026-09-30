@@ -1,4 +1,5 @@
 import { CodeBlock } from '../components/CodeBlock';
+import { docHref } from '../link';
 
 const ISLAND = `// src/app/dashboard/ChartsIsland.tsx — a client component is the boundary
 'use client';
@@ -20,6 +21,32 @@ export function ChartsIsland() {
     />
   );
 }`;
+
+const WORKER = `// src/app/dashboard/charts.worker.ts — the worker entry + what goes inside
+import { useEffect, useState } from 'react';
+import { defineReactPolyWorker } from '@atolljs/react-island/worker';
+import { emit } from '@atolljs/islands/worker';
+
+// Ordinary React — hooks, state, effects all run in the worker. No DOM
+// access, serializable props, emit() is the island → shell channel.
+export function ChartsApp({ width = 480 }: { width?: number }) {
+  const [points, setPoints] = useState<number[]>([]);
+  useEffect(() => {
+    const id = setInterval(() =>
+      setPoints((p) => [...p.slice(-59), Math.random() * 100]), 250);
+    return () => clearInterval(id);
+  }, []);
+  return (
+    <div className="chart" style={{ width }}>
+      <h3>live series — {points.length} pts</h3>
+      <button onClick={() => emit('reset', { at: Date.now() })}>reset</button>
+    </div>
+  );
+}
+
+export const chartsWorker = defineReactPolyWorker({
+  apps: { charts: ChartsApp },
+});`;
 
 const PAGE = `// src/app/dashboard/page.tsx — a plain server component composes it
 import { ChartsIsland } from './ChartsIsland';
@@ -57,6 +84,7 @@ export function NextjsIslands() {
       </p>
 
       <h2>What runs where</h2>
+      <CodeBlock code={WORKER} file="charts.worker.ts" />
       <p>
         The worker entry — <code>definePolyWorker</code>/<code>islandApp</code>{' '}
         plus a proxy-DOM document — owns the React reconciler; ops stream to
@@ -65,8 +93,8 @@ export function NextjsIslands() {
         <code>slots</code> are the escape hatch back to the main thread —
         portals into <code>data-atoll-slot</code> anchors for things workers
         can&apos;t do (canvas libraries, maps, Monaco, third-party widgets).
-        Full contract: <a href="#/islands">Islands</a> and{' '}
-        <a href="#/fw-react/worker-islands">React → Islands</a>.
+        Full contract: <a href={docHref('islands')}>Islands</a> and{' '}
+        <a href={docHref('fw-react/worker-islands')}>React → Islands</a>.
       </p>
 
       <h2>Why it matters under Next.js</h2>

@@ -5,7 +5,7 @@ thread. A real framework renderer commits against a DOM-free host surface in
 the worker; every commit serializes to an op stream the main thread replays as
 DOM mutations.
 
-**[Atoll — package documentation](https://jwhenry3.github.io/atolljs/consumer/#/quickstart)**
+**[Atoll — package documentation](https://jwhenry3.github.io/atolljs/consumer/quickstart/)**
 
 The vocabulary:
 
@@ -140,10 +140,10 @@ const island = await mountIsland({ worker: () => new Worker(url, { type: 'module
 
 ## Documentation
 
-- [Atoll — package documentation](https://jwhenry3.github.io/atolljs/consumer/#/quickstart)
-- [Worker islands](https://jwhenry3.github.io/atolljs/consumer/#/islands) —
+- [Atoll — package documentation](https://jwhenry3.github.io/atolljs/consumer/quickstart/)
+- [Worker islands](https://jwhenry3.github.io/atolljs/consumer/islands/) —
   mountIsland options, `IslandHandle`, transport modes
-- [Writing island apps](https://jwhenry3.github.io/atolljs/consumer/#/island-apps) —
+- [Writing island apps](https://jwhenry3.github.io/atolljs/consumer/island-apps/) —
   emit/callbackProp/slots, instance discipline
 - In-repo internals: [`docs/islands.md`](../../docs/islands.md),
   [`docs/islands-worker.md`](../../docs/islands-worker.md),

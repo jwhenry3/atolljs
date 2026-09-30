@@ -62,8 +62,24 @@ describe('React shell', () => {
   // before rendering; real browsers never share globals across threads.
   let realDoc: Document;
 
+  /** Spy 2d context — happy-dom's getContext returns null, which would leave
+      the Sparkline's rAF tick body dead. A stub lets the loop run for real. */
+  const ctx2d = {
+    clearRect: vi.fn(),
+    beginPath: vi.fn(),
+    moveTo: vi.fn(),
+    lineTo: vi.fn(),
+    stroke: vi.fn(),
+    strokeStyle: '',
+    lineWidth: 0,
+  };
+
   beforeAll(async () => {
     realDoc = document;
+    vi.spyOn(
+      realDoc.createElement('canvas').constructor.prototype as object,
+      'getContext',
+    ).mockReturnValue(ctx2d);
     const { createRoot } = await import('react-dom/client');
     const { Shell } = await import('../src/shell');
     const host = realDoc.createElement('div');
@@ -108,6 +124,96 @@ describe('React shell', () => {
     await waitFor(() => /ops applied: [1-9]/.test(stats.textContent ?? ''));
     expect(stats.textContent).toContain('sync: push');
   });
+
+  /* Every island's onEvent prop lands as a status-line update — clicking
+     real DOM inside each island exercises the inline handlers in shell.tsx. */
+  const status = () => realDoc.getElementById('status-line')!.textContent ?? '';
+  const click = (el: Element) =>
+    el.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  const findButton = (re: RegExp) =>
+    [...realDoc.querySelectorAll('button')].find((b) => re.test(b.textContent ?? ''));
+
+  it('controls sort/count emits reach the shell status line', async () => {
+    const statusEl = realDoc.getElementById('status-line')!;
+
+    click(findButton(/sort:/)!);
+    await waitFor(() => /sortChanged → table props\.desc=true/.test(statusEl.textContent ?? ''));
+
+    click(findButton(/^count:/)!);
+    await waitFor(() => /controls island counter → 1/.test(statusEl.textContent ?? ''));
+  }, 30_000);
+
+  it('both data-table instances emit rowSelected to their own handlers', async () => {
+    click(realDoc.querySelector('#island-table tbody tr')!);
+    await waitFor(() => /table island emitted rowSelected → shell \(row #\d+\)/.test(status()));
+
+    click(realDoc.querySelector('#island-table-2 tbody tr')!);
+    await waitFor(() =>
+      /second data-table instance emitted rowSelected \(row #\d+\)/.test(status()),
+    );
+  }, 30_000);
+
+  it('vanilla island colorPicked emit reaches the shell', async () => {
+    await waitFor(() => realDoc.querySelector('.swatch'));
+    const swatch = realDoc.querySelector('.swatch')!;
+    click(swatch);
+    await waitFor(() => /vanilla island emitted colorPicked → #2d6cdf/.test(status()));
+  }, 30_000);
+
+  it('charts island chartClicked emit reaches the shell', async () => {
+    await waitFor(() =>
+      realDoc.querySelector('.recharts-bar-rectangle path, .recharts-rectangle'),
+    );
+    click(realDoc.querySelector('.recharts-bar-rectangle path, .recharts-rectangle')!);
+    await waitFor(() =>
+      /charts island emitted chartClicked → us-east \(418 incidents\)/.test(status()),
+    );
+  }, 30_000);
+
+  it('map island emits markerClicked / placeSelected / zoomChanged', async () => {
+    const mapEl = realDoc.getElementById('island-map')!;
+    await waitFor(() => mapEl.querySelector('.atoll-map-pin'), 60_000);
+
+    click(mapEl.querySelector('.atoll-map-pin')!);
+    await waitFor(() => /map island emitted markerClicked → Paris/.test(status()));
+
+    click(mapEl.querySelector('.atoll-map-place-btn')!);
+    await waitFor(() => /map island emitted placeSelected → Lisbon/.test(status()));
+
+    const pane = mapEl.querySelector('.leaflet-map-pane')!;
+    for (const type of ['wheel', 'mousewheel']) {
+      pane.dispatchEvent(new WheelEvent(type, { bubbles: true, deltaY: -240 }));
+    }
+    await waitFor(() => /map island emitted zoomChanged → zoom \d+/.test(status()), 15_000);
+  }, 90_000);
+
+  it('sparkline transclusion slot runs its canvas tick loop', async () => {
+    // The worker stats island renders a data-atoll-slot div; the shell portals
+    // a real <canvas> into it and drives a rAF trace on the 2d context.
+    await waitFor(() => realDoc.querySelector('canvas'));
+    const canvas = realDoc.querySelector('canvas')!;
+    await waitFor(() => ctx2d.stroke.mock.calls.length > 0);
+
+    // happy-dom reports 0 box sizes — give the canvas parent a width so the
+    // trace grows past a single point and lineTo runs too.
+    Object.defineProperty(canvas.parentElement, 'clientWidth', {
+      value: 200,
+      configurable: true,
+    });
+    Object.defineProperty(canvas.parentElement, 'clientHeight', {
+      value: 56,
+      configurable: true,
+    });
+    await waitFor(() => ctx2d.lineTo.mock.calls.length > 0);
+  }, 30_000);
+
+  it('transport buttons switch mode across all mounted island handles', async () => {
+    const stats = realDoc.getElementById('transport-stats')!;
+    (realDoc.getElementById('poll-btn') as HTMLButtonElement).click();
+    await waitFor(() => /sync: poll/.test(stats.textContent ?? ''));
+    (realDoc.getElementById('push-btn') as HTMLButtonElement).click();
+    await waitFor(() => /sync: push/.test(stats.textContent ?? ''));
+  }, 30_000);
 
   afterAll(() => {
     InProcessWorker.handlerModules = [];

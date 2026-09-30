@@ -277,27 +277,34 @@ const { render, createApp } = createRenderer<ProxyNode, ProxyElement>({
    * v-once / hoisted static subtrees arrive as an HTML string — parse it
    * once through a `<template>` (its `.content` emits real ops now) and
    * move the children in. Vue caches the returned [first, last] bounds and
-   * hands them back on re-insert to move the block — collect the inclusive
-   * sibling range first since insertion mutates the links being walked.
+   * hands them back on re-insert to move the block. Mirrors real Vue DOM:
+   * a cached range is followed only while its sibling chain is intact
+   * (cloning each node, so KeepAlive storage copies stay valid); cached
+   * bounds that detached on removal fall back to re-parsing the content
+   * instead of orphaning the unreachable tail nodes.
    */
   insertStaticContent(content, parent, anchor, _namespace, start, end) {
-    if (start !== null && start !== undefined && end !== null && end !== undefined) {
-      const moving: ProxyNode[] = [];
+    const before = anchor ? anchor.previousSibling : parent.lastChild;
+    if (start !== null && start !== undefined && (start === end || start.nextSibling !== null)) {
       let n: ProxyNode | null = start;
       while (n !== null) {
-        moving.push(n);
+        parent.insertBefore(n.cloneNode(true), anchor ?? null);
         if (n === end) break;
         n = n.nextSibling;
       }
-      for (const node of moving) parent.insertBefore(node, anchor ?? null);
-      return [start, end];
+    } else {
+      const doc = docForRender();
+      const tpl = doc.createElement('template');
+      tpl.innerHTML = content;
+      const nodes = tpl.content?.childNodes.slice() ?? [];
+      for (const n of nodes) parent.insertBefore(n, anchor ?? null);
     }
-    const doc = docForRender();
-    const tpl = doc.createElement('template');
-    tpl.innerHTML = content;
-    const nodes = tpl.content?.childNodes.slice() ?? [];
-    for (const n of nodes) parent.insertBefore(n, anchor ?? null);
-    return [nodes[0]!, nodes[nodes.length - 1]!];
+    // Bounds of what was just inserted — not the passed-in refs, which may
+    // be dead copies.
+    return [
+      (before?.nextSibling ?? parent.firstChild)!,
+      (anchor?.previousSibling ?? parent.lastChild)!,
+    ];
   },
 });
 

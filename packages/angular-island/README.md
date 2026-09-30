@@ -7,7 +7,7 @@ against a `Renderer2`/`RendererFactory2` bound to the instance's proxy
 document (the same abstraction platform-server uses), so every render call
 serializes to the op stream the shell replays as real DOM.
 
-**[Atoll — package documentation](https://jwhenry3.github.io/atolljs/consumer/#/quickstart)**
+**[Atoll — package documentation](https://jwhenry3.github.io/atolljs/consumer/quickstart/)**
 
 ## Install
 
@@ -102,9 +102,9 @@ continuations queue a microtask tick inside the instance.
 
 ## Documentation
 
-- [Atoll — package documentation](https://jwhenry3.github.io/atolljs/consumer/#/quickstart)
-- [Worker islands for Angular](https://jwhenry3.github.io/atolljs/consumer/#/fw-angular/worker-islands)
-- [Worker islands](https://jwhenry3.github.io/atolljs/consumer/#/islands) —
+- [Atoll — package documentation](https://jwhenry3.github.io/atolljs/consumer/quickstart/)
+- [Worker islands for Angular](https://jwhenry3.github.io/atolljs/consumer/fw-angular/worker-islands/)
+- [Worker islands](https://jwhenry3.github.io/atolljs/consumer/islands/) —
   `mountIsland` options, `IslandHandle`, island rules
 - In-repo internals: [`docs/islands.md`](../../docs/islands.md),
   [`docs/islands-worker.md`](../../docs/islands-worker.md)

@@ -1,4 +1,5 @@
 import { CodeBlock } from '../components/CodeBlock';
+import { docHref } from '../link';
 
 export function SharedWorker() {
   return (
@@ -115,7 +116,7 @@ observe(memory, 'metrics').subscribe(render);`}
         </li>
         <li>
           <strong>Same cross-origin isolation rules</strong> — it's still
-          SharedArrayBuffer; see <a href="#/hosting">Hosting &amp; headers</a>.
+          SharedArrayBuffer; see <a href={docHref('hosting')}>Hosting &amp; headers</a>.
           Iframed clients need the full embedding chain there.
         </li>
         <li>

@@ -1,4 +1,5 @@
 import { CodeBlock } from '../components/CodeBlock';
+import { docHref } from '../link';
 import { SHARED_CONNECT, SHARED_MEMORY, SHARED_WORKER } from '../snippets';
 
 export function Quickstart() {
@@ -44,7 +45,7 @@ export function App() {
         re-renders on the next field write. No serialization of the value itself.
         Need validation at the boundary? Swap the plain function for a{' '}
         <code>serviceMethod({'{ def: { argsSchema, resultSchema }, run }'})</code> unit —
-        see <a href="#/tasks">Worker pool &amp; tasks</a>.
+        see <a href={docHref('tasks')}>Worker pool &amp; tasks</a>.
       </p>
 
       <h2>Shared memory is opt-in</h2>
@@ -74,7 +75,7 @@ export function App() {
       />
       <p>
         Production hosting needs the same headers — see{' '}
-        <a href="#/hosting">Hosting &amp; headers</a>.
+        <a href={docHref('hosting')}>Hosting &amp; headers</a>.
       </p>
     </article>
   );

@@ -1,4 +1,5 @@
 import { CodeBlock } from '../components/CodeBlock';
+import { docHref } from '../link';
 
 const REGISTER = `// shared-memory persistence — the Redis adapter as a pool option
 import { AtollModule } from '@atolljs/nestjs';
@@ -92,7 +93,7 @@ export function NestjsPersistence() {
       </ul>
       <p>
         The adapter itself is framework-free —{' '}
-        <a href="#/fw-node/persistence">Node.js → Persistence</a> covers{' '}
+        <a href={docHref('fw-node/persistence')}>Node.js → Persistence</a> covers{' '}
         <code>createNodePool</code> usage and the client interface.
       </p>
     </article>

@@ -3,12 +3,22 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Atoll — typed worker pools, SharedArrayBuffer contracts, Atomics reactivity, and worker-rendered UI islands for JavaScript."
+    />
     <title>Atoll — package documentation</title>
+    <link rel="icon" type="image/svg+xml" href="./atoll-icon.svg" />
+    <link rel="icon" type="image/png" href="./atoll-icon.png" />
+    <link rel="apple-touch-icon" href="./atoll-icon.png" />
+    <!--ssg:head-->
     <script>
       // GitHub Pages can't send COOP/COEP headers — coi-sw.js injects them
       // via a service worker so SharedArrayBuffer exists there. The first
       // visit reloads once so the document becomes controlled; no-ops when
       // already isolated (dev servers, serve:all) or SWs are unsupported.
+      // The registration path is depth-relative — prerender.mjs rewrites it
+      // per page so the worker covers the whole /consumer/ scope.
       (function () {
         var flag = 'coi-reload:' + location.pathname;
         if (window.crossOriginIsolated) { sessionStorage.removeItem(flag); return; }
@@ -28,5 +38,6 @@
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+    <!--ssg:script-->
   </body>
 </html>

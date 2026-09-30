@@ -2,7 +2,7 @@
   "name": "@atolljs/react-island",
   "version": "0.1.0",
   "description": "React shell components for atoll-islands islands — <Island/>, islandComponent, lazyIsland",
-  "homepage": "https://jwhenry3.github.io/atolljs/consumer/#/quickstart",
+  "homepage": "https://jwhenry3.github.io/atolljs/consumer/quickstart/",
   "type": "module",
   "exports": {
     ".": "./src/index.tsx",

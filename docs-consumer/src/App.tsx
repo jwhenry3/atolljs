@@ -1,6 +1,8 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import { SiteSwitch } from './components/SiteSwitch';
 import { FRAMEWORKS } from './frameworks';
+import { consumerRootHref, docHref, setRouteDepth } from './link';
+import { metaFor } from './routeMeta';
 import { FRAMEWORK_PAGE_COMPONENTS, FRAMEWORK_PAGES } from './frameworkPages';
 import { BundleSize } from './pages/BundleSize';
 import { CustomBindings } from './pages/CustomBindings';
@@ -132,29 +134,58 @@ const SECTIONS: { label: string; routes: Route[] }[] = [
   },
 ];
 
-const allRoutes = SECTIONS.flatMap((s) => s.routes.flatMap((r) => [r, ...(r.children ?? [])]));
+export const allRoutes = SECTIONS.flatMap((s) =>
+  s.routes.flatMap((r) => [r, ...(r.children ?? [])])
+);
+export { SECTIONS };
 
-function useHashRoute() {
-  const [route, setRoute] = useState(() => window.location.hash.slice(2) || 'overview');
-  useEffect(() => {
-    const onChange = () => setRoute(window.location.hash.slice(2) || 'overview');
-    window.addEventListener('hashchange', onChange);
-    return () => window.removeEventListener('hashchange', onChange);
-  }, []);
-  return route;
+const routeIds = new Set(allRoutes.map((r) => r.id));
+
+/**
+ * Resolve the active route from `location.pathname`. Routes are emitted as
+ * `<id>/index.html`, so the route id is always the trailing path segment(s)
+ * under whatever mount point the site lives at (`/` in dev, `/consumer/` in
+ * production) — match the longest trailing suffix that is a known id.
+ */
+function routeFromPathname(pathname: string): string {
+  const segs = pathname.split('/').filter(Boolean);
+  for (let take = Math.min(2, segs.length); take > 0; take--) {
+    const candidate = segs.slice(-take).join('/');
+    if (routeIds.has(candidate)) return candidate;
+  }
+  return 'overview';
 }
 
-export function App() {
-  const route = useHashRoute();
+export function App({ route }: { route?: string }) {
   const active =
     allRoutes.find((r) => r.id === route) ??
+    allRoutes.find((r) => r.id === routeFromPathname(window.location.pathname)) ??
     allRoutes.find((r) => r.id === 'overview')!;
+
+  // Links, iframe srcs, and the site switcher are relative to the page's own
+  // depth under the consumer root — publish it for the whole render. The
+  // overview page lives AT the root (dist/index.html), so depth 0.
+  setRouteDepth(active.id === 'overview' ? 0 : active.id.split('/').length);
+
+  useEffect(() => {
+    document.title = metaFor(active.id, active.label).title;
+    // Legacy `#/route` URLs (old npm homepages, bookmarks) — bounce to the
+    // real path. docs.js does the same in the prerendered site; this covers
+    // the dev server where docs.js isn't loaded.
+    const legacy = window.location.hash.slice(2);
+    if (legacy && routeIds.has(legacy)) {
+      window.location.replace(docHref(legacy));
+    }
+  }, [active.id, active.label]);
 
   return (
     <div className="shell">
       <aside className="sidebar">
-        <a className="brand" href="#/overview">
-          atoll<span className="brand-sub">package docs</span>
+        <a className="brand" href={docHref('overview')}>
+          <img className="brand-mark" src={`${consumerRootHref()}atoll-icon.svg`} alt="" />
+          <span className="brand-name">
+            atoll<span className="brand-sub">package docs</span>
+          </span>
         </a>
         <SiteSwitch current="consumer" />
         {SECTIONS.map((section) => (
@@ -163,7 +194,7 @@ export function App() {
             {section.routes.map((r) => (
               <span key={r.id} style={{ display: 'contents' }}>
                 <a
-                  href={`#/${r.id}`}
+                  href={docHref(r.id)}
                   className={r.id === active.id ? 'nav-link active' : 'nav-link'}
                 >
                   {r.label}
@@ -171,7 +202,7 @@ export function App() {
                 {r.children?.map((sub) => (
                   <a
                     key={sub.id}
-                    href={`#/${sub.id}`}
+                    href={docHref(sub.id)}
                     className={
                       sub.id === active.id
                         ? 'nav-link nav-sublink active'

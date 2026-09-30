@@ -2,7 +2,7 @@
   "name": "@atolljs/svelte-island",
   "version": "0.1.0",
   "description": "Svelte shell bindings for atoll-islands islands — use:island action, createIslandState",
-  "homepage": "https://jwhenry3.github.io/atolljs/consumer/#/quickstart",
+  "homepage": "https://jwhenry3.github.io/atolljs/consumer/quickstart/",
   "type": "module",
   "exports": {
     ".": "./src/index.ts",

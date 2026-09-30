@@ -227,7 +227,13 @@ export function createIsland<A = string>(
     }
 
     setStatus('mounting');
-    const initialProps = pendingProps ?? resolveProps();
+    // A folded imperative update wins only if it was the LAST write —
+    // updateProps() moves sentJson to its own payload, so a reactive
+    // emission that came after leaves sentJson diverged and wins.
+    const initialProps =
+      pendingProps !== undefined && JSON.stringify(pendingProps) === sentJson
+        ? pendingProps
+        : resolveProps();
     pendingProps = undefined;
     mountedJson = JSON.stringify(initialProps);
     sentJson = mountedJson;
@@ -258,8 +264,12 @@ export function createIsland<A = string>(
 
     // Catch-up — props moved (or updateProps ran) while the mount was in
     // flight. Compared against what mountIsland actually received, not the
-    // dedupe cursor: a dropped in-flight send still lands here.
-    const latest = pendingProps ?? resolveProps();
+    // dedupe cursor: a dropped in-flight send still lands here. Same
+    // last-write-wins rule as the mount payload.
+    const latest =
+      pendingProps !== undefined && JSON.stringify(pendingProps) === sentJson
+        ? pendingProps
+        : resolveProps();
     pendingProps = undefined;
     if (JSON.stringify(latest) !== mountedJson) {
       sentJson = JSON.stringify(latest);

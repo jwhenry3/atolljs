@@ -94,6 +94,8 @@ export default mergeConfig(
         // The publishable surface: core sdk + every atoll-* binding package.
         include: ['src/**', 'packages/*/src/**'],
         exclude: ['**/*.test.*', '**/test/**', '**/testing/**'],
+        // Floor slightly below the current ~96/88 baseline — regresses fail CI.
+        thresholds: { statements: 95, branches: 85, functions: 93, lines: 96 },
       },
     },
   })

@@ -1,7 +1,11 @@
 import { CodeBlock } from '../components/CodeBlock';
+import { docHref } from '../link';
 
 const port = 3204;
-const apiBase = `${window.location.protocol}//${window.location.hostname}:${port}`;
+const apiBase = () =>
+  typeof window === 'undefined'
+    ? `http://localhost:${port}`
+    : `${window.location.protocol}//${window.location.hostname}:${port}`;
 
 const GATEWAY = `// :3204 — gateway: split one listener by route prefix (any Node)
 import { routeHttpGateway } from '@atolljs/node/http';
@@ -73,7 +77,7 @@ export function NodeGateway() {
         <li><code>worker:</code> is a slot index into the live <code>pool.workers</code> snapshot (or a selector fn) — a respawned worker re-announces its port and takes over its routes automatically.</li>
         <li><code>to:</code> rewrites the prefix — <code>/api/a/incidents/query</code> reaches the worker as <code>/api/incidents/query</code>; the prefix only names the owner.</li>
         <li>A route whose worker hasn&apos;t announced yet gets a 503.</li>
-        <li>WebSocket upgrades match the same prefix table and tunnel end-to-end — see <a href="#/fw-node/websockets">WebSockets</a>.</li>
+        <li>WebSocket upgrades match the same prefix table and tunnel end-to-end — see <a href={docHref('fw-node/websockets')}>WebSockets</a>.</li>
       </ul>
 
       <h2>Embedding in a host framework</h2>
@@ -89,7 +93,7 @@ export function NodeGateway() {
       <CodeBlock code={EMBED} file="main.ts" />
       <p>
         The NestJS version of this pattern — a whole Nest application housed
-        inside workers — is <a href="#/fw-nestjs/housed">Backend → NestJS →
+        inside workers — is <a href={docHref('fw-nestjs/housed')}>Backend → NestJS →
         Housed APIs</a>.
       </p>
 
@@ -109,14 +113,14 @@ export function NodeGateway() {
         Start it via <code>npm run serve:all</code>, then hit:
       </p>
       <ul>
-        <li><a href={`${apiBase}/api/whoami`} target="_blank" rel="noreferrer"><code>{apiBase}/api/whoami</code></a> — answered by the API thread</li>
-        <li><a href={`${apiBase}/api/a/whoami`} target="_blank" rel="noreferrer"><code>{apiBase}/api/a/whoami</code></a> — always worker A</li>
-        <li><a href={`${apiBase}/api/b/incidents/stats`} target="_blank" rel="noreferrer"><code>{apiBase}/api/b/incidents/stats</code></a> — worker-computed aggregates inside worker B</li>
-        <li><a href={`${apiBase}/api/incidents/42`} target="_blank" rel="noreferrer"><code>{apiBase}/api/incidents/42</code></a> — direct shared-memory read, zero dispatch</li>
+        <li><a href={`${apiBase()}/api/whoami`} target="_blank" rel="noreferrer" data-port={port}><code>{apiBase()}/api/whoami</code></a> — answered by the API thread</li>
+        <li><a href={`${apiBase()}/api/a/whoami`} target="_blank" rel="noreferrer" data-port={port}><code>{apiBase()}/api/a/whoami</code></a> — always worker A</li>
+        <li><a href={`${apiBase()}/api/b/incidents/stats`} target="_blank" rel="noreferrer" data-port={port}><code>{apiBase()}/api/b/incidents/stats</code></a> — worker-computed aggregates inside worker B</li>
+        <li><a href={`${apiBase()}/api/incidents/42`} target="_blank" rel="noreferrer" data-port={port}><code>{apiBase()}/api/incidents/42</code></a> — direct shared-memory read, zero dispatch</li>
       </ul>
       <p>
         For zero main-thread parsing on Node ≥ 26, see{' '}
-        <a href="#/fw-node/clustering">Clustering</a>.
+        <a href={docHref('fw-node/clustering')}>Clustering</a>.
       </p>
     </article>
   );

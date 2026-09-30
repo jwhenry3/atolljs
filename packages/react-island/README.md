@@ -5,7 +5,7 @@ The React shell surface for `@atolljs/islands` — mount a worker-hosted React
 app. The worker's render loop produces a serialized op stream; this package's
 components own the mount lifecycle and replay it onto a real `div`.
 
-**[Atoll — package documentation](https://jwhenry3.github.io/atolljs/consumer/#/quickstart)**
+**[Atoll — package documentation](https://jwhenry3.github.io/atolljs/consumer/quickstart/)**
 
 ## Install
 
@@ -111,9 +111,9 @@ the SAME worker (separate reconcilers, op queues, and pids — one OS thread).
 
 ## Documentation
 
-- [Atoll — package documentation](https://jwhenry3.github.io/atolljs/consumer/#/quickstart)
-- [Worker islands for React](https://jwhenry3.github.io/atolljs/consumer/#/fw-react/worker-islands)
-- [Worker islands](https://jwhenry3.github.io/atolljs/consumer/#/islands) —
+- [Atoll — package documentation](https://jwhenry3.github.io/atolljs/consumer/quickstart/)
+- [Worker islands for React](https://jwhenry3.github.io/atolljs/consumer/fw-react/worker-islands/)
+- [Worker islands](https://jwhenry3.github.io/atolljs/consumer/islands/) —
   `mountIsland` options, `IslandHandle`, island rules
 - In-repo internals: [`docs/islands.md`](../../docs/islands.md),
   [`docs/islands-worker.md`](../../docs/islands-worker.md)

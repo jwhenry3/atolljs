@@ -1,4 +1,5 @@
 import { DemoFrame } from '../components/DemoFrame';
+import { docHref } from '../link';
 
 export function Islands() {
   return (
@@ -39,7 +40,7 @@ export function Islands() {
 
       <p>
         Install, mounting, and the mount API live under{' '}
-        <a href="#/island-apps">Quickstart</a>.
+        <a href={docHref('island-apps')}>Quickstart</a>.
       </p>
 
       <h2>Live demo</h2>

@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.0.0",
   "description": "Demo domain package — incident contract, worker, pool, tasks",
-  "homepage": "https://jwhenry3.github.io/atolljs/consumer/#/quickstart",
+  "homepage": "https://jwhenry3.github.io/atolljs/consumer/quickstart/",
   "type": "module",
   "exports": {
     ".": "./src/index.ts",

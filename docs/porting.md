@@ -117,6 +117,6 @@ op stream, real shared-memory binding; only the thread is faked.
 
 ## Consumer docs
 
-The docs site's "Extending" section (`#/custom-bindings`,
-`#/custom-islands`) is the end-user version of this page — keep the two in
-sync when contracts change.
+The docs site's "Extending" section (`/consumer/custom-bindings/`,
+`/consumer/custom-islands/`) is the end-user version of this page — keep the
+two in sync when contracts change.

@@ -1,4 +1,5 @@
 import { bundleStats } from '../bundleStats';
+import { docHref } from '../link';
 import { islandPerfStats } from '../islandPerfStats';
 import { SplitBar, workerShare } from '../components/SplitBar';
 
@@ -199,7 +200,7 @@ export function BundleSize() {
         time is the task call itself (framework render/diff, proxy-DOM
         bookkeeping, op serialization); <strong>main</strong> time is the op
         replay into real DOM. The protocol these numbers measure is detailed
-        on <a href="#/island-proxy">Islands → Proxy document</a>.
+        on <a href={docHref('island-proxy')}>Islands → Proxy document</a>.
       </p>
       <table className="doc-table">
         <thead>

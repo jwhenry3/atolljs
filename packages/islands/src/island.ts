@@ -555,7 +555,12 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
     }
     if (name in node) {
       try {
-        (node as unknown as Record<string, unknown>)[name] = value;
+        // Presence-attr semantics: the proxy emits attr{name,''} for boolean
+        // attributes (checked, disabled…) — assigning '' would read falsy.
+        // A boolean live property takes true whenever the attr is present.
+        const cur = (node as unknown as Record<string, unknown>)[name];
+        (node as unknown as Record<string, unknown>)[name] =
+          typeof cur === 'boolean' ? true : value;
         return;
       } catch {
         /* read-only property — use the attribute */
@@ -707,6 +712,10 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
         // node maps must survive this op: the following `append` still needs
         // the ids it just created. Stale ids are never reused; the only cost
         // is a few dead map entries on remount.
+        // Slot anchors inside get no remove op of their own — unmount them
+        // like a `remove` op would so slots callbacks see null and
+        // slotNodes doesn't leak.
+        unmountSlotSubtree(el);
         el.replaceChildren();
         break;
       }
@@ -897,7 +906,12 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
         void client
           .unmount(instance)
           .catch(() => {})
-          .finally(() => client.terminate());
+          .finally(() => {
+            // A remount may have registered while teardown was in flight
+            // (app/client input swap does destroy → mount back-to-back) —
+            // terminate only when the client is still truly idle.
+            if ((clientMounts.get(client) ?? 0) === 0) client.terminate();
+          });
       }
     },
   };

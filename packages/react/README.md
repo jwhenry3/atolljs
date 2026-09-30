@@ -4,7 +4,7 @@ React bindings for `@atolljs/core` — hooks that bind shared-memory fields and
 worker tasks to component state over `useSyncExternalStore`. SSR-safe: field
 reads return `undefined` until the contract binds on the client.
 
-**[Atoll — package documentation](https://jwhenry3.github.io/atolljs/consumer/#/quickstart)**
+**[Atoll — package documentation](https://jwhenry3.github.io/atolljs/consumer/quickstart/)**
 
 ## Install
 
@@ -50,6 +50,6 @@ export function App() {
 
 ## Documentation
 
-- [Atoll — package documentation](https://jwhenry3.github.io/atolljs/consumer/#/quickstart)
-- [React guide](https://jwhenry3.github.io/atolljs/consumer/#/fw-react)
-- [Worker islands for React](https://jwhenry3.github.io/atolljs/consumer/#/fw-react/worker-islands)
+- [Atoll — package documentation](https://jwhenry3.github.io/atolljs/consumer/quickstart/)
+- [React guide](https://jwhenry3.github.io/atolljs/consumer/fw-react/)
+- [Worker islands for React](https://jwhenry3.github.io/atolljs/consumer/fw-react/worker-islands/)

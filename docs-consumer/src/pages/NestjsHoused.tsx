@@ -1,7 +1,11 @@
 import { CodeBlock } from '../components/CodeBlock';
+import { docHref } from '../link';
 
 const port = 3100;
-const apiBase = `${window.location.protocol}//${window.location.hostname}:${port}`;
+const apiBase = () =>
+  typeof window === 'undefined'
+    ? `http://localhost:${port}`
+    : `${window.location.protocol}//${window.location.hostname}:${port}`;
 
 const HOUSED_MODULE = `// src/housed/housed-atoll.module.ts — the 'housed' pool is
 // MESSAGE-ONLY: a sharedMemory here would allocate a SECOND buffer, so
@@ -114,8 +118,8 @@ export function NestjsHoused() {
         listener hands each connection to a worker unparsed, but
         per-connection routing can&apos;t share the app port by URL path, so
         it lives on <code>PORT + 1</code>. See{' '}
-        <a href="#/fw-nestjs/clustering">Clustering</a> and{' '}
-        <a href="#/fw-nestjs/websockets">WebSockets</a> for the other two
+        <a href={docHref('fw-nestjs/clustering')}>Clustering</a> and{' '}
+        <a href={docHref('fw-nestjs/websockets')}>WebSockets</a> for the other two
         entry points.
       </p>
 
@@ -192,8 +196,8 @@ export function NestjsHoused() {
         it via <code>npm run serve:all</code>, then:
       </p>
       <ul>
-        <li><a href={`${apiBase}/api/housed/incidents/whoami`} target="_blank" rel="noreferrer"><code>{apiBase}/api/housed/incidents/whoami</code></a> — proxied on the app port; the response stamps the owning worker&apos;s threadId</li>
-        <li><a href={`${apiBase}/api/housed/incidents/worker-telemetry`} target="_blank" rel="noreferrer"><code>{apiBase}/api/housed/incidents/worker-telemetry</code></a> — per-worker state from the housed Nest app</li>
+        <li><a href={`${apiBase()}/api/housed/incidents/whoami`} target="_blank" rel="noreferrer" data-port={port}><code>{apiBase()}/api/housed/incidents/whoami</code></a> — proxied on the app port; the response stamps the owning worker&apos;s threadId</li>
+        <li><a href={`${apiBase()}/api/housed/incidents/worker-telemetry`} target="_blank" rel="noreferrer" data-port={port}><code>{apiBase()}/api/housed/incidents/worker-telemetry</code></a> — per-worker state from the housed Nest app</li>
         <li><code>:{port + 1}</code> — the clustered listener (Node ≥ 26): same routes, reached without the proxy hop</li>
       </ul>
     </article>

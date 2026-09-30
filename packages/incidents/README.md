@@ -13,4 +13,4 @@ The package is consumed from source through each example's bundler and
 TypeScript aliases so `new Worker(new URL(..., import.meta.url))` remains visible
 to Vite, Angular, and Next.js worker transforms.
 
-[Atoll — package documentation](https://jwhenry3.github.io/atolljs/consumer/#/quickstart)
+[Atoll — package documentation](https://jwhenry3.github.io/atolljs/consumer/quickstart/)

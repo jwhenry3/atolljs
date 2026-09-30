@@ -1,4 +1,5 @@
 import { CodeBlock } from '../components/CodeBlock';
+import { docHref } from '../link';
 
 const POOL = `// src/app/api/incidents/pool.ts — one pool, bound to the 1M-record buffer
 import { Worker } from 'node:worker_threads';
@@ -40,10 +41,15 @@ export async function POST() {
 
 const RECORD = `// src/app/api/incidents/[id]/route.ts — indexed record read, no dispatch
 export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
+  const { memory } = getIncidentsApi();
   const id = Number((await ctx.params).id);
-  const conn = getIncidentsApi().memory.lists.incidents;
+  const conn = memory.lists.incidents;
   if (!Number.isInteger(id) || id < 0 || id >= conn.recordCount)
     return NextResponse.json({ error: 'incident not found' }, { status: 404 });
+  // recordCount is the declared CAPACITY — a fixed-width buffer can't tell
+  // written rows from zeroed ones, so refuse reads until the seed lands.
+  if (memory.signals.seedProgress.read() < 100)
+    return NextResponse.json({ error: 'seed not complete' }, { status: 503 });
   return NextResponse.json(conn.readAt(id, {} as Incident));
 }`;
 
@@ -102,9 +108,9 @@ import '@atolljs/incidents/worker/incidents.worker';`}
         Dashboards, leaderboards, feature flags, session state, read-heavy
         reference data — anywhere reads dwarf writes and the dataset fits a
         fixed-width buffer. Writes stay on workers (task dispatch or{' '}
-        <a href="#/fw-nextjs-server/jobs">queue drain</a>), so consistency is
+        <a href={docHref('fw-nextjs-server/jobs')}>queue drain</a>), so consistency is
         &ldquo;eventually visible&rdquo; at memory speed. Seed at boot via{' '}
-        <a href="#/fw-nextjs-server/warmup">instrumentation</a> so the first
+        <a href={docHref('fw-nextjs-server/warmup')}>instrumentation</a> so the first
         request doesn&apos;t pay it.
       </p>
       <p>

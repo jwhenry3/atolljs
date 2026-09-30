@@ -7,7 +7,7 @@ app — plus the Solid **worker renderer**: a plain Solid component runs against
 document, so every node mutation serializes to the op stream the shell replays
 as real DOM.
 
-**[Atoll — package documentation](https://jwhenry3.github.io/atolljs/consumer/#/quickstart)**
+**[Atoll — package documentation](https://jwhenry3.github.io/atolljs/consumer/quickstart/)**
 
 ## Install
 
@@ -116,9 +116,9 @@ compile scope. Core reactive primitives (`createSignal`, `createEffect`,
 
 ## Documentation
 
-- [Atoll — package documentation](https://jwhenry3.github.io/atolljs/consumer/#/quickstart)
-- [Worker islands for Solid](https://jwhenry3.github.io/atolljs/consumer/#/fw-solid/worker-islands)
-- [Worker islands](https://jwhenry3.github.io/atolljs/consumer/#/islands) —
+- [Atoll — package documentation](https://jwhenry3.github.io/atolljs/consumer/quickstart/)
+- [Worker islands for Solid](https://jwhenry3.github.io/atolljs/consumer/fw-solid/worker-islands/)
+- [Worker islands](https://jwhenry3.github.io/atolljs/consumer/islands/) —
   `mountIsland` options, `IslandHandle`, island rules
 - In-repo internals: [`docs/islands.md`](../../docs/islands.md),
   [`docs/islands-worker.md`](../../docs/islands-worker.md)

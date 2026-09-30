@@ -1,4 +1,5 @@
 import { CodeBlock } from '../components/CodeBlock';
+import { docHref } from '../link';
 
 const POOL = `// persistence as a pool option — attaches after bind, stops on terminate()
 import { createNodePool } from '@atolljs/node';
@@ -75,7 +76,7 @@ export function NodePersistence() {
       <p>
         NestJS usage — including injecting the client via{' '}
         <code>registerPoolAsync</code> — is under{' '}
-        <a href="#/fw-nestjs/persistence">NestJS → Persistence</a>.
+        <a href={docHref('fw-nestjs/persistence')}>NestJS → Persistence</a>.
       </p>
     </article>
   );

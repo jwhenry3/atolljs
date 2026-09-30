@@ -1,4 +1,5 @@
 import { CodeBlock } from '../components/CodeBlock';
+import { docHref } from '../link';
 import type { FrameworkDoc } from '../frameworks';
 import { SHARED_CONNECT, SHARED_MEMORY, SHARED_WORKER } from '../snippets';
 
@@ -38,7 +39,7 @@ export function FrameworkQuickstart({ fw }: { fw: FrameworkDoc }) {
       <h2>With shared memory: cross-origin isolation</h2>
       <p>
         <code>SharedArrayBuffer</code> only exists when the page is
-        cross-origin isolated — see <a href="#/hosting">Hosting &amp; headers</a>{' '}
+        cross-origin isolated — see <a href={docHref('hosting')}>Hosting &amp; headers</a>{' '}
         for the COOP/COEP setup. Leave <code>sharedMemory</code> out of both{' '}
         <code>defineWorker</code> and <code>connectWorker</code> and you have a
         typed, pooled worker RPC that needs neither header.

@@ -1,3 +1,5 @@
+import { consumerRootHref } from '../link';
+
 interface DemoFrameProps {
   id: string;
   port: number;
@@ -16,13 +18,15 @@ interface DemoFrameProps {
 export function DemoFrame({ id, port, name, path = '' }: DemoFrameProps) {
   const base = import.meta.env.DEV
     ? `${window.location.protocol}//${window.location.hostname}:${port}`
-    : `./${id}/`;
+    // Routes are emitted as `<route>/index.html`, so demos mount relative to
+    // the consumer root — climb back out of this page's directory first.
+    : `${consumerRootHref()}${id}/`;
   // ?v=<build stamp> — index.html keeps a stable name, so a fresh stamp per
   // build forces browsers past aggressively cached documents.
   const src = `${base}${path.replace(/^\//, '')}?v=${__BUILD_ID__}`;
-  const label = src.startsWith('./')
-    ? `${id}/${path.replace(/^\//, '')}`
-    : `${window.location.hostname}:${port}${path}`;
+  const label = import.meta.env.DEV
+    ? `${window.location.hostname}:${port}${path}`
+    : `${id}/${path.replace(/^\//, '')}`;
   return (
     <div className="demo-frame">
       <div className="demo-frame-bar">

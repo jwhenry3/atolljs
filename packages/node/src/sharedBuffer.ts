@@ -58,19 +58,22 @@ export function bindSharedBuffer(timeoutMs = 10_000): Promise<SharedArrayBuffer>
   }
   const port = parentPort;
   return new Promise((resolve, reject) => {
-    const timer = setTimeout(
-      () => reject(new Error(`bindSharedBuffer(): no shared buffer arrived within ${timeoutMs}ms`)),
-      timeoutMs,
-    );
-    port.on('message', (msg: { type?: string; buffer?: SharedArrayBuffer }) => {
+    const onMessage = (msg: { type?: string; buffer?: SharedArrayBuffer }) => {
       if (msg?.type !== SHARED_BUFFER) return;
       clearTimeout(timer);
+      port.off('message', onMessage);
       if (!msg.buffer) {
         reject(new Error('bindSharedBuffer(): the producing side sent an empty buffer'));
         return;
       }
       bindSharedMemories(msg.buffer);
       resolve(msg.buffer);
-    });
+    };
+    const timer = setTimeout(() => {
+      // Detach — a late SHARED_BUFFER must not bind after the rejection.
+      port.off('message', onMessage);
+      reject(new Error(`bindSharedBuffer(): no shared buffer arrived within ${timeoutMs}ms`));
+    }, timeoutMs);
+    port.on('message', onMessage);
   });
 }

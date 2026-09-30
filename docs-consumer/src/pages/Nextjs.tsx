@@ -1,4 +1,5 @@
 import { CodeBlock } from '../components/CodeBlock';
+import { docHref } from '../link';
 import { FRAMEWORKS } from '../frameworks';
 
 // Two pages share this file: Nextjs (Frontend — the @atolljs/nextjs hooks
@@ -73,7 +74,7 @@ export function Nextjs() {
         client components. The server-side surface —{' '}
         <code>node:worker_threads</code> pools inside route handlers via{' '}
         <code>@atolljs/node</code> — is documented under{' '}
-        <a href="#/fw-nextjs-server">Backend → Next.js</a>.
+        <a href={docHref('fw-nextjs-server')}>Backend → Next.js</a>.
       </p>
 
       <h2>Install</h2>
@@ -149,7 +150,7 @@ export function NextjsServer() {
         pool — dispatch CPU-bound tasks without blocking the request thread,
         and read the pool's shared memory directly on the API thread for
         zero-dispatch responses. The client-side hooks are documented under{' '}
-        <a href="#/fw-nextjs">Frontend → Next.js</a>.
+        <a href={docHref('fw-nextjs')}>Frontend → Next.js</a>.
       </p>
 
       <h2>Install</h2>
@@ -173,13 +174,13 @@ export function NextjsServer() {
       <p>
         The example builds three more use cases on this pattern, each with a
         dedicated page: a{' '}
-        <a href="#/fw-nextjs-server/jobs">job queue</a> whose progress
+        <a href={docHref('fw-nextjs-server/jobs')}>job queue</a> whose progress
         counters live in shared memory, a{' '}
-        <a href="#/fw-nextjs-server/read-model">read-model API</a> serving a
+        <a href={docHref('fw-nextjs-server/read-model')}>read-model API</a> serving a
         1M-record buffer with zero dispatch,{' '}
-        <a href="#/fw-nextjs-server/warmup">boot warmup</a> via Next&apos;s
+        <a href={docHref('fw-nextjs-server/warmup')}>boot warmup</a> via Next&apos;s
         instrumentation hook, and the{' '}
-        <a href="#/fw-nextjs-server/custom-server">custom-server</a> topology
+        <a href={docHref('fw-nextjs-server/custom-server')}>custom-server</a> topology
         for clustering and WebSockets.
       </p>
 

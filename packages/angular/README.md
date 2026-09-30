@@ -5,7 +5,7 @@ Angular bindings for `@atolljs/core` — shared-memory fields and worker tasks a
 signal factories in an injection context (field initializer or constructor) so
 subscriptions release on destroy.
 
-**[Atoll — package documentation](https://jwhenry3.github.io/atolljs/consumer/#/quickstart)**
+**[Atoll — package documentation](https://jwhenry3.github.io/atolljs/consumer/quickstart/)**
 
 ## Install
 
@@ -75,6 +75,6 @@ export class AppComponent {
 
 ## Documentation
 
-- [Atoll — package documentation](https://jwhenry3.github.io/atolljs/consumer/#/quickstart)
-- [Angular guide](https://jwhenry3.github.io/atolljs/consumer/#/fw-angular)
-- [Worker islands for Angular](https://jwhenry3.github.io/atolljs/consumer/#/fw-angular/worker-islands)
+- [Atoll — package documentation](https://jwhenry3.github.io/atolljs/consumer/quickstart/)
+- [Angular guide](https://jwhenry3.github.io/atolljs/consumer/fw-angular/)
+- [Worker islands for Angular](https://jwhenry3.github.io/atolljs/consumer/fw-angular/worker-islands/)

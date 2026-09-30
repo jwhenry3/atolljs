@@ -2,7 +2,7 @@
   "name": "@atolljs/nestjs",
   "version": "0.1.0",
   "description": "NestJS integration — AtollModule, AtollTask, InjectAtollPool",
-  "homepage": "https://jwhenry3.github.io/atolljs/consumer/#/quickstart",
+  "homepage": "https://jwhenry3.github.io/atolljs/consumer/quickstart/",
   "type": "module",
   "exports": {
     ".": "./src/index.ts",

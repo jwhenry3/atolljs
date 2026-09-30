@@ -1,4 +1,5 @@
 import { CodeBlock } from '../components/CodeBlock';
+import { docHref } from '../link';
 
 const CLUSTER_WS = `// worker entry — the clustered listener needs no WS-specific code:
 // the upgrade handshake rides inside the transferred socket, so attaching
@@ -94,7 +95,7 @@ export function NodeWebsockets() {
         Unlike <code>proxyToWorker</code>, the URL here is the original —
         nothing stripped it — so <code>to</code> acts as a rewrite prefix and
         is usually omitted. The NestJS mounting point is{' '}
-        <a href="#/fw-nestjs/websockets">Backend → NestJS → WebSockets</a>.
+        <a href={docHref('fw-nestjs/websockets')}>Backend → NestJS → WebSockets</a>.
       </p>
     </article>
   );

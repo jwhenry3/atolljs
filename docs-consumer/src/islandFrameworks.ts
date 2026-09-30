@@ -1,8 +1,12 @@
+import svelteCounter from '../../packages/svelte-island/test/fixtures/Counter.svelte?raw';
+
 export interface IslandFramework {
   id: string;
   name: string;
   pkg: string;
   intro: string;
+  componentCode?: string;
+  componentCodeFile?: string;
   workerCode?: string;
   workerCodeFile?: string;
   shellCode?: string;
@@ -17,34 +21,36 @@ export const ISLAND_FRAMEWORKS: Record<string, IslandFramework> = {
     pkg: '@atolljs/vue-island',
     intro:
       'A Vue 3 renderer running in the worker — a real RuntimeRenderer backed by the proxy DOM, with v-model emit equivalence, Teleport, transition stubs, and Vue\'s own scheduler (microtask queue + post queue). Shell side: a <AtollIsland> component or a useIsland() composable.',
-    workerCodeFile: 'vue.worker.ts (worker entry)',
-    workerCode: `import { createApp, defineComponent, h, ref } from 'vue';
-import {
-  defineVuePolyWorker,
-  vueIslandApp,
-} from '@atolljs/vue-island/worker';
-import { bumpOpsVersion, installDomShim, runInInstance } from '@atolljs/islands/worker';
+    componentCodeFile: 'Counter.vue (worker component)',
+    componentCode: `<script setup lang="ts">
+// Ordinary Vue SFC — compiled for the worker bundle, mounted in the proxy
+// document. No DOM access; props must be serializable; emit() is the
+// island → shell channel.
+import { ref } from 'vue';
+import { emit } from '@atolljs/vue-island/worker';
 
-// Composition or Options API — anything runtime-only Vue compiles.
-const CounterApp = defineComponent({
-  props: { start: { type: Number, default: 0 } },
-  setup(props) {
-    const count = ref(props.start);
-    return () =>
-      h('div', { class: 'card' }, [
-        h('button', { onClick: () => count.value++ }, 'increment'),
-        h('span', 'count: ' + count.value),
-      ]);
-  },
-});
+const props = withDefaults(defineProps<{ start?: number }>(), { start: 0 });
+const count = ref(props.start);
+</script>
+
+<template>
+  <div class="card">
+    <button @click="count++; emit('incremented', { count })">
+      count: {{ count }}
+    </button>
+  </div>
+</template>`,
+    workerCodeFile: 'vue.worker.ts (worker entry)',
+    workerCode: `import { defineVuePolyWorker, vueIslandApp } from '@atolljs/vue-island/worker';
+import { installDomShim } from '@atolljs/islands/worker';
+import Counter from './Counter.vue';  // SFC — needs @vitejs/plugin-vue in the worker build
 
 export const vueWorker = defineVuePolyWorker({
-  apps: { counter: CounterApp },
+  apps: { counter: Counter },
 });
 
-// Or an imperative proxy-DOM app alongside — the .value Map() call
-// registers every keyed DOM node it builds for getElementById:
-const hello = vueIslandApp('hello', {
+// Or an imperative proxy-DOM app alongside — no Vue involved:
+vueIslandApp('hello', {
   imperative: (doc) => {
     installDomShim(doc);
     const btn = doc.createElement('button');
@@ -81,6 +87,10 @@ const worker = () =>
     pkg: '@atolljs/svelte-island',
     intro:
       'Svelte 5 components mounting inside the worker through real mount()/unmount() against a proxy-DOM target — rune-compiled components only. Shell side: an island action or createIslandState() for rune-friendly wiring.',
+    // The real fixture the svelte-island suite runs — props are wire-driven,
+    // $state mutates through delegated handlers, emit() reaches the shell.
+    componentCodeFile: 'packages/svelte-island/test/fixtures/Counter.svelte',
+    componentCode: svelteCounter,
     workerCodeFile: 'svelte.worker.ts (worker entry)',
     workerCode: `import { defineSveltePolyWorker } from '@atolljs/svelte-island/worker';
 import Counter from './Counter.svelte';  // rune-compiled Svelte 5 component
@@ -110,19 +120,26 @@ export const svelteWorker = defineSveltePolyWorker({
     pkg: '@atolljs/solid-island',
     intro:
       'Solid JSX rendering through the official solid-js/universal renderer — the same API surface frameworks like Three.js renderers use — so the worker keeps Solid\'s fine-grained reactivity: each signal update produces a minimal op batch. Shell side: a <Island> component or a createIsland() primitive.',
-    workerCodeFile: 'solid.worker.ts (worker entry)',
-    workerCode: `import { createSignal } from 'solid-js';
-import { defineSolidPolyWorker } from '@atolljs/solid-island/worker';
+    componentCodeFile: 'Counter.tsx (worker component)',
+    componentCode: `import { createSignal } from 'solid-js';
+import { emit } from '@atolljs/islands/worker';
 
-function Counter(props: { start: number }) {
-  const [count, setCount] = createSignal(props.start);
+// Ordinary Solid JSX — compiled for solid-js/universal, so each signal
+// write produces a minimal op batch. Serializable props; emit() talks
+// back to the shell.
+export function Counter(props: { start?: number }) {
+  const [count, setCount] = createSignal(props.start ?? 0);
   return (
     <div class="card">
-      <button onClick={() => setCount(count() + 1)}>increment</button>
-      <span>count: {count()}</span>
+      <button onClick={() => { const n = count() + 1; setCount(n); emit('incremented', { count: n }); }}>
+        count: {count()}
+      </button>
     </div>
   );
-}
+}`,
+    workerCodeFile: 'solid.worker.ts (worker entry)',
+    workerCode: `import { defineSolidPolyWorker } from '@atolljs/solid-island/worker';
+import { Counter } from './Counter';
 
 export const solidWorker = defineSolidPolyWorker({
   apps: { counter: Counter },
@@ -148,16 +165,32 @@ const worker = () =>
     pkg: '@atolljs/angular-island',
     intro:
       'Angular\'s official Renderer2/RendererFactory2 extension point, implemented against the proxy DOM — worker components bootstrap through createApplication with a custom platform. Zoneless change detection keeps the tree updated; shell side is a <atoll-island> standalone directive. Works with JIT or AOT-compiled components.',
-    workerCodeFile: 'angular.worker.ts (worker entry)',
-    workerCode: `import { Component } from '@angular/core';
-import { defineAngularPolyWorker } from '@atolljs/angular-island/worker';
+    componentCodeFile: 'counter.component.ts (worker component)',
+    componentCode: `import { Component, input, signal } from '@angular/core';
+import { emit } from '@atolljs/islands/worker';
 
+// Ordinary standalone component — signal inputs receive wire props,
+// signal writes emit ops. JIT entries need import '@angular/compiler'.
 @Component({
   standalone: true,
   selector: 'atoll-counter',
-  template: \`<button (click)="count = count + 1">count: {{ count }}</button>\`,
+  template: \`
+    <p class="label">{{ label() }}</p>
+    <button (click)="increment()">count: {{ count() }}</button>
+  \`,
 })
-class CounterComponent { count = 0; }
+export class CounterComponent {
+  readonly label = input('counter');
+  readonly count = signal(0);
+  increment(): void {
+    this.count.update((n) => n + 1);
+    emit('incremented', { n: this.count() });
+  }
+}`,
+    workerCodeFile: 'angular.worker.ts (worker entry)',
+    workerCode: `import '@angular/compiler';  // JIT only — AOT-compiled components skip this
+import { defineAngularPolyWorker } from '@atolljs/angular-island/worker';
+import { CounterComponent } from './counter.component';
 
 export const angularWorker = defineAngularPolyWorker({
   apps: { counter: CounterComponent },

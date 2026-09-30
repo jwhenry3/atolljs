@@ -1,4 +1,5 @@
 import { CodeBlock } from '../components/CodeBlock';
+import { docHref } from '../link';
 
 const SERVER = `// server.mjs — self-hosted Next with a worker-thread front door (Node ≥ 26)
 // Topology sketch: the clustered listener hands each TCP connection to a
@@ -75,7 +76,7 @@ export function NextjsCustomServer() {
         can&apos;t route by URL path. If you need per-path routing (e.g.{' '}
         <code>/api/*</code> to workers, pages to main), keep Next on the
         main thread and put a parsing gateway in front; see{' '}
-        <a href="#/fw-node/gateway">Node.js → Gateway routing</a> for the
+        <a href={docHref('fw-node/gateway')}>Node.js → Gateway routing</a> for the
         trade-off.
       </p>
 
@@ -86,7 +87,7 @@ export function NextjsCustomServer() {
         ws requires a custom server regardless of atoll. Once you have one,
         the worker-side placement keeps frame encode/decode and fan-out off
         the API thread. Full semantics:{' '}
-        <a href="#/fw-node/websockets">Node.js → WebSockets</a>.
+        <a href={docHref('fw-node/websockets')}>Node.js → WebSockets</a>.
       </p>
 
       <h2>When it&apos;s worth it</h2>
@@ -94,7 +95,7 @@ export function NextjsCustomServer() {
         Long-lived self-hosted deployments where the Node event loop is the
         bottleneck — heavy RSC serialization, high connection counts, or
         realtime fan-out sharing memory with a{' '}
-        <a href="#/fw-nextjs-server/read-model">read-model pool</a>. For most
+        <a href={docHref('fw-nextjs-server/read-model')}>read-model pool</a>. For most
         apps the simpler wins are upstream: a pooled task API plus direct
         shared-memory reads cover the common cases without a custom server.
       </p>

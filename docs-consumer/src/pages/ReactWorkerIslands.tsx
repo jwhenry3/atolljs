@@ -1,6 +1,7 @@
 // Embedded sources — ?raw inlines the real files so the docs always show
 // the code that ships in this repo.
 import workerEntry from '../../../examples/react-dom-worker/src/worker/render.worker.ts?raw';
+import workerApps from '../../../examples/react-dom-worker/src/worker/apps.tsx?raw';
 import shellSource from '../../../examples/react-dom-worker/src/shell.tsx?raw';
 import { CodeBlock } from '../components/CodeBlock';
 import { DemoFrame } from '../components/DemoFrame';
@@ -140,6 +141,22 @@ export function ReactWorkerIslands() {
       <CodeBlock
         file="examples/react-dom-worker/src/worker/render.worker.ts"
         code={workerEntry}
+      />
+
+      <h2>The worker components — ordinary React</h2>
+      <p>
+        What goes inside is unremarkable React: hooks, memo, controlled
+        inputs, <code>emit(name, payload)</code> for the island → shell
+        channel, <code>&lt;Slot&gt;</code> for transclusion. The only rules:
+        no DOM access (no <code>document</code>/<code>window</code>/refs —
+        those resolve to the proxy document anyway), serializable props, and
+        handlers receive the plain <code>EventPayload</code> wire object
+        instead of a <code>SyntheticEvent</code> — <code>handler()</code> in
+        the file adapts it to JSX&apos;s event prop types.
+      </p>
+      <CodeBlock
+        file="examples/react-dom-worker/src/worker/apps.tsx"
+        code={workerApps}
       />
 
       <h2>Notes</h2>

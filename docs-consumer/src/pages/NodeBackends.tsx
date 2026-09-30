@@ -1,6 +1,12 @@
 import { CodeBlock } from '../components/CodeBlock';
+import { docHref } from '../link';
 
-const host = `${window.location.protocol}//${window.location.hostname}`;
+// SSR-safe: bakes http://localhost in the prerender; data-port anchors get
+// their host rewritten by docs.js when the page is served elsewhere.
+const host = () =>
+  typeof window === 'undefined'
+    ? 'http://localhost'
+    : `${window.location.protocol}//${window.location.hostname}`;
 const examples = [
   { id: 'express', name: 'Express', port: 3200, pkg: 'express' },
   { id: 'fastify', name: 'Fastify', port: 3201, pkg: 'fastify' },
@@ -172,7 +178,7 @@ export function NodeBackends() {
         shares one buffer with the API thread, heavy scans dispatch to the
         pool, and record reads hit shared memory directly for zero-dispatch
         responses. Nest apps get decorators and DI on top (
-        <a href="#/fw-nestjs">Backend → NestJS</a>); these examples show the
+        <a href={docHref('fw-nestjs')}>Backend → NestJS</a>); these examples show the
         plain-Node surface underneath.
       </p>
 
@@ -192,10 +198,10 @@ export function NodeBackends() {
       <CodeBlock code={USAGE_WORKER} file="src/incidents.worker.ts" />
       <p>
         The same pool drives any HTTP framework — see{' '}
-        <a href="#/fw-node/adapters">Framework adapters</a> for
+        <a href={docHref('fw-node/adapters')}>Framework adapters</a> for
         Express/Fastify/Hono/Koa, and{' '}
-        <a href="#/fw-node/clustering">Clustering</a> /{' '}
-        <a href="#/fw-node/gateway">Gateway routing</a> to move request
+        <a href={docHref('fw-node/clustering')}>Clustering</a> /{' '}
+        <a href={docHref('fw-node/gateway')}>Gateway routing</a> to move request
         handling itself into workers.
       </p>
 
@@ -258,7 +264,7 @@ export function NodeAdapters() {
         <code>GET /seed-progress</code>, <code>GET /stats</code>,{' '}
         <code>GET /query?severity=critical&amp;status=open</code>,{' '}
         <code>GET /:id</code>. Only the route syntax differs — the pool and
-        worker files (<a href="#/fw-node">Node.js</a>) are identical across
+        worker files (<a href={docHref('fw-node')}>Node.js</a>) are identical across
         all four.
       </p>
 
@@ -281,8 +287,8 @@ export function NodeAdapters() {
         {examples.map((ex) => (
           <li key={ex.id}>
             <strong>{ex.name}</strong> (
-            <a href={`${host}:${ex.port}/api/incidents/stats`} target="_blank" rel="noreferrer">
-              <code>{host}:{ex.port}/api/incidents/stats</code>
+            <a href={`${host()}:${ex.port}/api/incidents/stats`} target="_blank" rel="noreferrer" data-port={ex.port}>
+              <code>{host()}:{ex.port}/api/incidents/stats</code>
             </a>
             ) — <code>examples/{ex.id}</code>, dep: <code>{ex.pkg}</code>
           </li>

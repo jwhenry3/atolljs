@@ -1,4 +1,5 @@
 import { CodeBlock } from '../components/CodeBlock';
+import { docHref } from '../link';
 
 const WS_MAIN = `// src/main.ts — upgrades bypass app.use, so the proxy mounts on the
 // server's 'upgrade' event instead:
@@ -61,11 +62,11 @@ export function NestjsWebsockets() {
 
       <h2>Clustered listeners</h2>
       <p>
-        On the <a href="#/fw-nestjs/clustering">clustered</a> port nothing is
+        On the <a href={docHref('fw-nestjs/clustering')}>clustered</a> port nothing is
         needed at all — the upgrade rides inside the transferred socket, so
         the worker&apos;s ws adapter handles it in-worker. The plumbing is
         documented under{' '}
-        <a href="#/fw-node/websockets">Backend → Node.js → WebSockets</a>.
+        <a href={docHref('fw-node/websockets')}>Backend → Node.js → WebSockets</a>.
       </p>
     </article>
   );

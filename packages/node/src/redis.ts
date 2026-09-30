@@ -205,6 +205,9 @@ export function persistSharedMemory<S extends SharedSpec>(
             }
           });
         }
+        // stop() may have run before ready resolved — don't start a poll
+        // loop that nothing will ever clear.
+        if (stopped) return;
         timer = setInterval(() => {
           flushing = flushing.then(flush).catch((e) => {
             log.warn('flush failed', e);
@@ -228,9 +231,13 @@ export function persistSharedMemory<S extends SharedSpec>(
       await subscriber?.unsubscribe?.(channel);
       await flushing.catch(() => 0);
       // One last flush — durability on shutdown — bypass the stopped guard.
+      // A Redis outage here must not reject stop(): teardown is done either
+      // way, the flush is best-effort persistence.
       stopped = false;
       try {
         await flush();
+      } catch (e) {
+        log.warn('final flush failed', e);
       } finally {
         stopped = true;
       }

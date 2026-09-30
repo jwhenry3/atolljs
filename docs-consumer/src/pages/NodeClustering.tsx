@@ -1,4 +1,5 @@
 import { CodeBlock } from '../components/CodeBlock';
+import { docHref } from '../link';
 
 const TRANSFER = `// main thread — pure connection offload (Node ≥ 26)
 import { createHttpCluster } from '@atolljs/node/http';
@@ -52,12 +53,12 @@ export function NodeClustering() {
 
       <h2>Semantics</h2>
       <ul>
-        <li><strong>Per-connection routing</strong> — the acceptor never parses HTTP, so it can&apos;t split a port by URL path. Path-level ownership needs the <a href="#/fw-node/gateway">gateway</a> instead.</li>
+        <li><strong>Per-connection routing</strong> — the acceptor never parses HTTP, so it can&apos;t split a port by URL path. Path-level ownership needs the <a href={docHref('fw-node/gateway')}>gateway</a> instead.</li>
         <li><strong>Round-robin by default</strong> — a <code>route(socket, workers)</code> option picks the worker per connection (e.g. hash on remote address). Returning <code>undefined</code> drops the connection.</li>
         <li><strong>Stickiness</strong> — one transferred socket pins for life, so a bare WS connection needs nothing. Multi-connection sessions (socket.io polling→upgrade, HTTP↔WS pairs) need <code>route: stickyByAddress()</code> — rendezvous hashing on the client address; removing a worker only remaps its own clients.</li>
         <li><strong>Self-gating</strong> — <code>net.Socket</code>/<code>net.Server</code> transfer landed in Node 26. Below it, <code>createHttpCluster</code> logs a notice and returns <code>null</code> — no caller-side check. (<code>SOCKET_TRANSFER_SUPPORTED</code> stays exported for tests/feature detection.)</li>
         <li><strong>Plain HTTP only</strong> — a TLS handshake would consume bytes on the accepting thread. Terminate TLS upstream or serve behind a proxy.</li>
-        <li><strong>WebSockets ride along</strong> — the upgrade handshake lives inside the transferred socket, so a <code>WebSocketServer</code> attached to the worker&apos;s server works unchanged. See <a href="#/fw-node/websockets">WebSockets</a>.</li>
+        <li><strong>WebSockets ride along</strong> — the upgrade handshake lives inside the transferred socket, so a <code>WebSocketServer</code> attached to the worker&apos;s server works unchanged. See <a href={docHref('fw-node/websockets')}>WebSockets</a>.</li>
         <li><strong>Multiplexed workers</strong> — the same workers still answer <code>EXECUTE_TASK</code> dispatch; sockets queue behind whatever a worker is doing.</li>
       </ul>
 
@@ -66,7 +67,7 @@ export function NodeClustering() {
         <code>examples/http-offload</code> serves the clustered listener on{' '}
         <code>:3205</code> (Node ≥ 26) next to the gateway on{' '}
         <code>:3204</code> — same workers, same app. The NestJS variant is{' '}
-        <a href="#/fw-nestjs/clustering">Backend → NestJS → Clustering</a>.
+        <a href={docHref('fw-nestjs/clustering')}>Backend → NestJS → Clustering</a>.
       </p>
     </article>
   );

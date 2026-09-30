@@ -1,7 +1,13 @@
 import { CodeBlock } from '../components/CodeBlock';
+import { docHref } from '../link';
 
 const port = 3100;
-const apiBase = `${window.location.protocol}//${window.location.hostname}:${port}`;
+// Resolved per render — SSR (prerender) has no window, so bake localhost and
+// let docs.js rewrite data-port anchors when the host differs.
+const apiBase = () =>
+  typeof window === 'undefined'
+    ? `http://localhost:${port}`
+    : `${window.location.protocol}//${window.location.hostname}:${port}`;
 
 const APIS = [
   { name: 'AtollModule.forRoot', signature: 'forRoot({ pools? }) / forRootAsync(...)', desc: 'Global atoll infrastructure — validator, discovery, lifecycle. Optional pools for simple apps; feature modules prefer registerPool.' },
@@ -148,10 +154,10 @@ export function Nestjs() {
         worker — decorators, DI, and guards intact — and the main app
         proxies a URL prefix into it, with optional clustered and WebSocket
         entry points to the same routes.{' '}
-        <a href="#/fw-nestjs/housed">Housed APIs</a> walks through the whole
-        setup; <a href="#/fw-nestjs/clustering">Clustering</a> and{' '}
-        <a href="#/fw-nestjs/websockets">WebSockets</a> cover the other two
-        entry points, and <a href="#/fw-node/gateway">Node.js → Gateway
+        <a href={docHref('fw-nestjs/housed')}>Housed APIs</a> walks through the whole
+        setup; <a href={docHref('fw-nestjs/clustering')}>Clustering</a> and{' '}
+        <a href={docHref('fw-nestjs/websockets')}>WebSockets</a> cover the other two
+        entry points, and <a href={docHref('fw-node/gateway')}>Node.js → Gateway
         routing</a> documents the underlying{' '}
         <code>@atolljs/node/http</code> machinery.
       </p>
@@ -164,7 +170,7 @@ export function Nestjs() {
         <code>persistence</code> option — restart durability plus optional
         cross-process replication over pub/sub, while reads/writes stay
         synchronous memory ops.{' '}
-        <a href="#/fw-nestjs/persistence">Persistence</a> covers wiring,
+        <a href={docHref('fw-nestjs/persistence')}>Persistence</a> covers wiring,
         replication, and caveats.
       </p>
 
@@ -180,7 +186,7 @@ export function Nestjs() {
         are a couple of imports. The lower-level node pieces (
         <code>createNodeWorker</code>, the shim,{' '}
         <code>createNodePool</code>) live in{' '}
-        <a href="#/fw-node"><code>@atolljs/node</code></a> — usable in plain
+        <a href={docHref('fw-node')}><code>@atolljs/node</code></a> — usable in plain
         Node programs (Express, Fastify, Hono, Koa) with no Nest at all.
       </p>
       <CodeBlock code={USAGE_BUILD} file="nest-cli.json" language="javascript" />
@@ -209,10 +215,10 @@ export function Nestjs() {
         <code>npm run serve:all</code>, then:
       </p>
       <ul>
-        <li><a href={`${apiBase}/api/incidents/stats`} target="_blank" rel="noreferrer"><code>{apiBase}/api/incidents/stats</code></a> — worker-computed aggregates</li>
-        <li><a href={`${apiBase}/api/digest/worker`} target="_blank" rel="noreferrer"><code>{apiBase}/api/digest/worker</code></a> — the answering worker's threadId + per-worker telemetry</li>
-        <li><a href={`${apiBase}/api/incidents/42`} target="_blank" rel="noreferrer"><code>{apiBase}/api/incidents/42</code></a> — a direct shared-memory read, zero dispatch</li>
-        <li><a href={`${apiBase}/api/housed/incidents/whoami`} target="_blank" rel="noreferrer"><code>{apiBase}/api/housed/incidents/whoami</code></a> — the housed worker API (see <a href="#/fw-nestjs/housed">Housed APIs</a>)</li>
+        <li><a href={`${apiBase()}/api/incidents/stats`} target="_blank" rel="noreferrer" data-port={port}><code>{apiBase()}/api/incidents/stats</code></a> — worker-computed aggregates</li>
+        <li><a href={`${apiBase()}/api/digest/worker`} target="_blank" rel="noreferrer" data-port={port}><code>{apiBase()}/api/digest/worker</code></a> — the answering worker's threadId + per-worker telemetry</li>
+        <li><a href={`${apiBase()}/api/incidents/42`} target="_blank" rel="noreferrer" data-port={port}><code>{apiBase()}/api/incidents/42</code></a> — a direct shared-memory read, zero dispatch</li>
+        <li><a href={`${apiBase()}/api/housed/incidents/whoami`} target="_blank" rel="noreferrer" data-port={port}><code>{apiBase()}/api/housed/incidents/whoami</code></a> — the housed worker API (see <a href={docHref('fw-nestjs/housed')}>Housed APIs</a>)</li>
       </ul>
 
       <h2>Notes</h2>

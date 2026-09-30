@@ -1,4 +1,5 @@
 import { CodeBlock } from '../components/CodeBlock';
+import { docHref } from '../link';
 
 const port = 3100;
 
@@ -54,7 +55,7 @@ export function NestjsClustering() {
         polling→upgrade, an HTTP call preceding a WS connection on the same
         worker) need <code>route: stickyByAddress()</code>, which hashes the
         client address onto a fixed worker. Details under{' '}
-        <a href="#/fw-node/clustering">Node.js → Clustering</a>.
+        <a href={docHref('fw-node/clustering')}>Node.js → Clustering</a>.
       </p>
 
       <h2>Live example</h2>

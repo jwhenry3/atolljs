@@ -1,4 +1,5 @@
 import { CodeBlock } from '../components/CodeBlock';
+import { docHref } from '../link';
 
 const REGISTER = `// src/instrumentation.ts — Next.js runs register() once at server boot
 export async function register() {
@@ -43,7 +44,7 @@ export function NextjsWarmup() {
         can&apos;t support it; and the seed is fired without await — boot
         doesn&apos;t block on it, it just starts early. Because the seed is
         dispatched at boot,{' '}
-        <a href="#/fw-nextjs-server/read-model">read-model endpoints</a>{' '}
+        <a href={docHref('fw-nextjs-server/read-model')}>read-model endpoints</a>{' '}
         report live <code>seedProgress</code> during warmup and are fully
         warm before most traffic arrives.
       </p>
@@ -60,7 +61,7 @@ export function NextjsWarmup() {
       <p>
         <code>pool.terminate()</code> also exists for graceful shutdown in a
         custom server — see{' '}
-        <a href="#/fw-nextjs-server/custom-server">custom server</a> for the
+        <a href={docHref('fw-nextjs-server/custom-server')}>custom server</a> for the
         production topology that owns the process lifecycle.
       </p>
 

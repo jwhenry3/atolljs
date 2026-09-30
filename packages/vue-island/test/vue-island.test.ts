@@ -88,7 +88,8 @@ describe('useIsland', () => {
         onEvent: (name, payload) => emitted.push({ name, payload }),
       }),
     )!;
-    expect(island.status.value).toBe('mounting');
+    // No host bound yet — 'idle', not 'mounting'.
+    expect(island.status.value).toBe('idle');
 
     // The composable doesn't render — the caller binds host to an element.
     // `<div ref="host">` would assign exactly this on mount.

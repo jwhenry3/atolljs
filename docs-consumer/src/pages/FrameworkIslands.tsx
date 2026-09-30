@@ -1,4 +1,5 @@
 import { CodeBlock } from '../components/CodeBlock';
+import { docHref } from '../link';
 import { ISLAND_FRAMEWORKS } from '../islandFrameworks';
 
 export function FrameworkIslands({ id }: { id: string }) {
@@ -12,6 +13,12 @@ export function FrameworkIslands({ id }: { id: string }) {
         Install <code>{fw.pkg}</code> for the shell bindings and the worker-side
         renderer.
       </p>
+      {fw.componentCode && (
+        <>
+          <h2>Worker component — what goes inside</h2>
+          <CodeBlock file={fw.componentCodeFile} code={fw.componentCode} />
+        </>
+      )}
       {fw.workerCode && (
         <>
           <h2>Worker entry</h2>
@@ -30,9 +37,9 @@ export function FrameworkIslands({ id }: { id: string }) {
       </ul>
       <p>
         Shell bindings wrap <code>connectIslandWorker</code> +{' '}
-        <code>mountIsland</code> — see the <a href="#/islands">Islands</a>{' '}
+        <code>mountIsland</code> — see the <a href={docHref('islands')}>Islands</a>{' '}
         page for the underlying options (modes, slots, lifecycle), and{' '}
-        <a href="#/island-apps">Writing island apps</a> for the worker-side
+        <a href={docHref('island-apps')}>Writing island apps</a> for the worker-side
         authoring surface.
       </p>
     </article>

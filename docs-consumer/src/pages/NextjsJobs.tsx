@@ -1,4 +1,5 @@
 import { CodeBlock } from '../components/CodeBlock';
+import { docHref } from '../link';
 
 const CONTRACT = `// src/app/api/jobs/jobs.contract.ts — counters all routes share
 import { z } from 'zod';
@@ -98,7 +99,7 @@ export function NextjsJobs() {
       <p>
         Same contract as every server-side use case:{' '}
         <code>export const runtime = &apos;nodejs&apos;</code>, a globalThis-held
-        pool (see <a href="#/fw-nextjs-server">Next.js server</a>), and a
+        pool (see <a href={docHref('fw-nextjs-server')}>Next.js server</a>), and a
         long-lived process. One subtlety the example demonstrates: Next may
         evaluate a contract module in more than one bundle graph
         (instrumentation&apos;s import graph vs the route&apos;s), so handlers

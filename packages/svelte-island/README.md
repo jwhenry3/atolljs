@@ -7,7 +7,7 @@ as an ordinary element in a main-thread Svelte app — plus the Svelte 5
 the Svelte runtime makes serializes to the op stream the shell replays as real
 DOM.
 
-**[Atoll — package documentation](https://jwhenry3.github.io/atolljs/consumer/#/quickstart)**
+**[Atoll — package documentation](https://jwhenry3.github.io/atolljs/consumer/quickstart/)**
 
 ## Install
 
@@ -74,9 +74,9 @@ for the island→shell channel.
 
 ## Documentation
 
-- [Atoll — package documentation](https://jwhenry3.github.io/atolljs/consumer/#/quickstart)
-- [Worker islands for Svelte](https://jwhenry3.github.io/atolljs/consumer/#/fw-svelte/worker-islands)
-- [Worker islands](https://jwhenry3.github.io/atolljs/consumer/#/islands) —
+- [Atoll — package documentation](https://jwhenry3.github.io/atolljs/consumer/quickstart/)
+- [Worker islands for Svelte](https://jwhenry3.github.io/atolljs/consumer/fw-svelte/worker-islands/)
+- [Worker islands](https://jwhenry3.github.io/atolljs/consumer/islands/) —
   `mountIsland` options, `IslandHandle`, island rules
 - In-repo internals: [`docs/islands.md`](../../docs/islands.md),
   [`docs/islands-worker.md`](../../docs/islands-worker.md)

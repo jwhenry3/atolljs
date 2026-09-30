@@ -1,4 +1,5 @@
 import { islandPerfStats } from '../islandPerfStats';
+import { docHref } from '../link';
 import { Segments } from '../components/SplitBar';
 
 const kb = (bytes: number) => (bytes / 1024).toFixed(0);
@@ -224,8 +225,8 @@ export function ProxyDocument() {
       </ul>
       <p>
         Byte-side numbers — what each thread <em>loads</em> — are on{' '}
-        <a href="#/bundle-size">Bundle size &amp; load</a>; mounting mechanics
-        on <a href="#/island-apps">Quickstart</a>.
+        <a href={docHref('bundle-size')}>Bundle size &amp; load</a>; mounting mechanics
+        on <a href={docHref('island-apps')}>Quickstart</a>.
       </p>
     </article>
   );

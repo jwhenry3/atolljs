@@ -67,6 +67,7 @@ examples/express|fastify|hono|koa   plain-Node REST APIs on @atolljs/node
                       (esbuild-bundled worker entries — tsx paths don't reach
                       worker_threads)
 docs/                 this project's documentation (markdown)
-docs-consumer/        consumer docs site (Vite app)
+docs-consumer/        consumer docs site (Vite app — `npm run build` also runs
+                      prerender.mjs, emitting one static HTML page per route)
 scripts/              dev/serve/assemble orchestration
 ```

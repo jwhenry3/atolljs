@@ -1,4 +1,5 @@
 import { CodeBlock } from '../components/CodeBlock';
+import { docHref } from '../link';
 
 const DIAGRAM = `main thread                                    worker(s)
 ┌─────────────────────────────┐   postMessage   ┌──────────────────────────┐
@@ -105,9 +106,9 @@ export function Overview() {
         primitives to each framework's reactivity model. Your app owns the
         domain: contracts, worker handlers, and composition. The islands layer
         is separate: it moves the whole render tree into a worker — see{' '}
-        <a href="#/islands">Islands</a> for when that's the right trade.
+        <a href={docHref('islands')}>Islands</a> for when that's the right trade.
         On the server, <code>@atolljs/node/http</code> moves HTTP itself into
-        workers — see <a href="#/fw-node/clustering">Node.js → Clustering</a>.
+        workers — see <a href={docHref('fw-node/clustering')}>Node.js → Clustering</a>.
       </p>
     </article>
   );

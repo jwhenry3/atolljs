@@ -4,7 +4,7 @@
 and `connectWorker` run on Node's `Worker` (an `EventEmitter`) instead of the
 DOM surface they expect. No framework required.
 
-**[Atoll — package documentation](https://jwhenry3.github.io/atolljs/consumer/#/quickstart)**
+**[Atoll — package documentation](https://jwhenry3.github.io/atolljs/consumer/quickstart/)**
 
 ## Install
 
@@ -93,8 +93,8 @@ export const counterWorker = defineWorker({
 
 ## Documentation
 
-- [Atoll — package documentation](https://jwhenry3.github.io/atolljs/consumer/#/quickstart)
-- [Node backends — Express, Fastify, Hono, Koa](https://jwhenry3.github.io/atolljs/consumer/#/fw-node)
-- [Worker HTTP servers — clustering & gateway](https://jwhenry3.github.io/atolljs/consumer/#/fw-node/clustering)
-- [Worker pool & tasks](https://jwhenry3.github.io/atolljs/consumer/#/tasks)
-- [NestJS guide](https://jwhenry3.github.io/atolljs/consumer/#/fw-nestjs)
+- [Atoll — package documentation](https://jwhenry3.github.io/atolljs/consumer/quickstart/)
+- [Node backends — Express, Fastify, Hono, Koa](https://jwhenry3.github.io/atolljs/consumer/fw-node/)
+- [Worker HTTP servers — clustering & gateway](https://jwhenry3.github.io/atolljs/consumer/fw-node/clustering/)
+- [Worker pool & tasks](https://jwhenry3.github.io/atolljs/consumer/tasks/)
+- [NestJS guide](https://jwhenry3.github.io/atolljs/consumer/fw-nestjs/)

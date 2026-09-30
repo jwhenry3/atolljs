@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://jwhenry3.github.io/atolljs/consumer/sitemap.xml

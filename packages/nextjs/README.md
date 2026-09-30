@@ -5,7 +5,7 @@ for App Router apps. Same signatures, imported by client components under a
 `'use client'` boundary. SSR-safe: field reads return `undefined` until the
 contract binds on the client.
 
-**[Atoll — package documentation](https://jwhenry3.github.io/atolljs/consumer/#/quickstart)**
+**[Atoll — package documentation](https://jwhenry3.github.io/atolljs/consumer/quickstart/)**
 
 ## Install
 
@@ -61,5 +61,5 @@ Same surface as `@atolljs/react`:
 
 ## Documentation
 
-- [Atoll — package documentation](https://jwhenry3.github.io/atolljs/consumer/#/quickstart)
-- [Next.js guide](https://jwhenry3.github.io/atolljs/consumer/#/fw-nextjs)
+- [Atoll — package documentation](https://jwhenry3.github.io/atolljs/consumer/quickstart/)
+- [Next.js guide](https://jwhenry3.github.io/atolljs/consumer/fw-nextjs/)

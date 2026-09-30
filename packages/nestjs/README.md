@@ -5,7 +5,7 @@ NestJS bindings for `@atolljs/core` — worker pools as DI providers on
 memory with the API thread, and `@AtollService`/`@AtollTask` move a service
 method's body into a worker — with real dependency injection on both sides.
 
-**[Atoll — package documentation](https://jwhenry3.github.io/atolljs/consumer/#/quickstart)**
+**[Atoll — package documentation](https://jwhenry3.github.io/atolljs/consumer/quickstart/)**
 
 ## Install
 
@@ -141,5 +141,5 @@ Peer dependencies: `@nestjs/common`, `@nestjs/core`, `reflect-metadata`,
 
 ## Documentation
 
-- [Atoll — package documentation](https://jwhenry3.github.io/atolljs/consumer/#/quickstart)
-- [NestJS guide](https://jwhenry3.github.io/atolljs/consumer/#/fw-nestjs)
+- [Atoll — package documentation](https://jwhenry3.github.io/atolljs/consumer/quickstart/)
+- [NestJS guide](https://jwhenry3.github.io/atolljs/consumer/fw-nestjs/)

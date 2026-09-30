@@ -1,7 +1,13 @@
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/atoll-dark.svg" />
+  <source media="(prefers-color-scheme: light)" srcset="assets/atoll-light.svg" />
+  <img src="assets/atoll-light.svg" alt="Atoll — islands of framework workers around a shared core" width="280" />
+</picture>
+
 # AtollJS
 
-[![CI](https://github.com/jwhenry3/atolljs/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/jwhenry3/atolljs/actions/workflows/ci.yml)
-[![codecov](https://codecov.io/gh/jwhenry3/atolljs/graph/badge.svg?branch=master)](https://codecov.io/gh/jwhenry3/atolljs)
+[![CI](https://github.com/jwhenry3/atolljs/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/jwhenry3/atolljs/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/jwhenry3/atolljs/graph/badge.svg?branch=main)](https://codecov.io/gh/jwhenry3/atolljs)
 
 Typed shared-memory worker pools for TypeScript — deterministic `SharedArrayBuffer`
 layouts, first-class task methods, and cross-thread reactive state. A worker
@@ -9,7 +15,7 @@ atoll: pools and shared workers joined to your app through one shared-memory
 fabric, so work is offloaded as typed method calls while large state stays put
 (zero-copy, no postMessage serialization of the values themselves).
 
-**[Atoll — package documentation](https://jwhenry3.github.io/atolljs/consumer/#/quickstart)**
+**[Atoll — package documentation](https://jwhenry3.github.io/atolljs/consumer/quickstart/)**
 
 ## Install
 
@@ -89,7 +95,7 @@ Shared memory is opt-in: leave `sharedMemory` out of both `defineWorker` and
 `connectWorker` and you get a typed, pooled, cancellable worker RPC that runs
 anywhere Workers do — no isolation headers needed. With shared memory,
 `SharedArrayBuffer` requires
-[cross-origin isolation headers](https://jwhenry3.github.io/atolljs/consumer/#/hosting)
+[cross-origin isolation headers](https://jwhenry3.github.io/atolljs/consumer/hosting/)
 (COOP/COEP) in the browser; Node needs nothing.
 
 ## Packages
@@ -101,35 +107,35 @@ install only what you use.
 
 | Framework | Package | What it is | Docs |
 |---|---|---|---|
-| React | [`@atolljs/react`](https://www.npmjs.com/package/@atolljs/react) | Hooks — `useObservable`, `useSharedValue`, `useTask` | [React guide](https://jwhenry3.github.io/atolljs/consumer/#/fw-react) |
-| Vue | [`@atolljs/vue`](https://www.npmjs.com/package/@atolljs/vue) | Composables — `useObservable`, `useSharedValue`, `useTask` | [Vue guide](https://jwhenry3.github.io/atolljs/consumer/#/fw-vue) |
-| SolidJS | [`@atolljs/solidjs`](https://www.npmjs.com/package/@atolljs/solidjs) | Primitives — `createObservable`, `createSharedValue`, `createTask` | [SolidJS guide](https://jwhenry3.github.io/atolljs/consumer/#/fw-solid) |
-| Svelte | [`@atolljs/svelte`](https://www.npmjs.com/package/@atolljs/svelte) | Svelte 5 rune bindings — `observableValue`, `sharedValue`, `taskState` | [Svelte guide](https://jwhenry3.github.io/atolljs/consumer/#/fw-svelte) |
-| Angular | [`@atolljs/angular`](https://www.npmjs.com/package/@atolljs/angular) | Signals + DI — `observableSignal`, `sharedValue`, `taskState`, `provideAtoll` | [Angular guide](https://jwhenry3.github.io/atolljs/consumer/#/fw-angular) |
-| Next.js | [`@atolljs/nextjs`](https://www.npmjs.com/package/@atolljs/nextjs) | Client-component bindings (React re-export) | [Next.js guide](https://jwhenry3.github.io/atolljs/consumer/#/fw-nextjs) |
-| NestJS | [`@atolljs/nestjs`](https://www.npmjs.com/package/@atolljs/nestjs) | Server-side module/decorators for worker pools | [NestJS guide](https://jwhenry3.github.io/atolljs/consumer/#/fw-nestjs) |
+| React | [`@atolljs/react`](https://www.npmjs.com/package/@atolljs/react) | Hooks — `useObservable`, `useSharedValue`, `useTask` | [React guide](https://jwhenry3.github.io/atolljs/consumer/fw-react/) |
+| Vue | [`@atolljs/vue`](https://www.npmjs.com/package/@atolljs/vue) | Composables — `useObservable`, `useSharedValue`, `useTask` | [Vue guide](https://jwhenry3.github.io/atolljs/consumer/fw-vue/) |
+| SolidJS | [`@atolljs/solidjs`](https://www.npmjs.com/package/@atolljs/solidjs) | Primitives — `createObservable`, `createSharedValue`, `createTask` | [SolidJS guide](https://jwhenry3.github.io/atolljs/consumer/fw-solid/) |
+| Svelte | [`@atolljs/svelte`](https://www.npmjs.com/package/@atolljs/svelte) | Svelte 5 rune bindings — `observableValue`, `sharedValue`, `taskState` | [Svelte guide](https://jwhenry3.github.io/atolljs/consumer/fw-svelte/) |
+| Angular | [`@atolljs/angular`](https://www.npmjs.com/package/@atolljs/angular) | Signals + DI — `observableSignal`, `sharedValue`, `taskState`, `provideAtoll` | [Angular guide](https://jwhenry3.github.io/atolljs/consumer/fw-angular/) |
+| Next.js | [`@atolljs/nextjs`](https://www.npmjs.com/package/@atolljs/nextjs) | Client-component bindings (React re-export) | [Next.js guide](https://jwhenry3.github.io/atolljs/consumer/fw-nextjs/) |
+| NestJS | [`@atolljs/nestjs`](https://www.npmjs.com/package/@atolljs/nestjs) | Server-side module/decorators for worker pools | [NestJS guide](https://jwhenry3.github.io/atolljs/consumer/fw-nestjs/) |
 
 ### Worker islands — render framework trees off the main thread
 
 | Framework | Package | What it is | Docs |
 |---|---|---|---|
-| *(engine)* | [`@atolljs/islands`](https://www.npmjs.com/package/@atolljs/islands) | `mountIsland`, op protocol, proxy DOM, worker runtimes | [Worker islands](https://jwhenry3.github.io/atolljs/consumer/#/islands) |
-| React | [`@atolljs/react-island`](https://www.npmjs.com/package/@atolljs/react-island) | `<Island/>`, `islandComponent`, `lazyIsland` | [React islands](https://jwhenry3.github.io/atolljs/consumer/#/fw-react/worker-islands) |
-| Vue | [`@atolljs/vue-island`](https://www.npmjs.com/package/@atolljs/vue-island) | `useIsland`, `<AtollIsland>` + Vue worker renderer | [Vue islands](https://jwhenry3.github.io/atolljs/consumer/#/fw-vue/worker-islands) |
-| Svelte | [`@atolljs/svelte-island`](https://www.npmjs.com/package/@atolljs/svelte-island) | `use:island`, `createIslandState` + Svelte 5 worker renderer | [Svelte islands](https://jwhenry3.github.io/atolljs/consumer/#/fw-svelte/worker-islands) |
-| SolidJS | [`@atolljs/solid-island`](https://www.npmjs.com/package/@atolljs/solid-island) | `createIsland`, `Island` + `solid-js/universal` worker renderer | [Solid islands](https://jwhenry3.github.io/atolljs/consumer/#/fw-solid/worker-islands) |
-| Angular | [`@atolljs/angular-island`](https://www.npmjs.com/package/@atolljs/angular-island) | `<atoll-island>`, `[atollIsland]` + `Renderer2` worker renderer | [Angular islands](https://jwhenry3.github.io/atolljs/consumer/#/fw-angular/worker-islands) |
+| *(engine)* | [`@atolljs/islands`](https://www.npmjs.com/package/@atolljs/islands) | `mountIsland`, op protocol, proxy DOM, worker runtimes | [Worker islands](https://jwhenry3.github.io/atolljs/consumer/islands/) |
+| React | [`@atolljs/react-island`](https://www.npmjs.com/package/@atolljs/react-island) | `<Island/>`, `islandComponent`, `lazyIsland` | [React islands](https://jwhenry3.github.io/atolljs/consumer/fw-react/worker-islands/) |
+| Vue | [`@atolljs/vue-island`](https://www.npmjs.com/package/@atolljs/vue-island) | `useIsland`, `<AtollIsland>` + Vue worker renderer | [Vue islands](https://jwhenry3.github.io/atolljs/consumer/fw-vue/worker-islands/) |
+| Svelte | [`@atolljs/svelte-island`](https://www.npmjs.com/package/@atolljs/svelte-island) | `use:island`, `createIslandState` + Svelte 5 worker renderer | [Svelte islands](https://jwhenry3.github.io/atolljs/consumer/fw-svelte/worker-islands/) |
+| SolidJS | [`@atolljs/solid-island`](https://www.npmjs.com/package/@atolljs/solid-island) | `createIsland`, `Island` + `solid-js/universal` worker renderer | [Solid islands](https://jwhenry3.github.io/atolljs/consumer/fw-solid/worker-islands/) |
+| Angular | [`@atolljs/angular-island`](https://www.npmjs.com/package/@atolljs/angular-island) | `<atoll-island>`, `[atollIsland]` + `Renderer2` worker renderer | [Angular islands](https://jwhenry3.github.io/atolljs/consumer/fw-angular/worker-islands/) |
 
 ### Runtimes
 
 | Package | What it is | Docs |
 |---|---|---|
-| [`@atolljs/core`](https://www.npmjs.com/package/@atolljs/core) | Core SDK — `defineWorker`/`connectWorker` typed worker clients over `WorkerPool`, shared-memory contracts, `watch`/`observe`, codecs | [Quickstart](https://jwhenry3.github.io/atolljs/consumer/#/quickstart) · [Shared memory](https://jwhenry3.github.io/atolljs/consumer/#/shared-memory) · [Tasks](https://jwhenry3.github.io/atolljs/consumer/#/tasks) |
-| [`@atolljs/node`](https://www.npmjs.com/package/@atolljs/node) | `node:worker_threads` runtime adapter | [Tasks](https://jwhenry3.github.io/atolljs/consumer/#/tasks) |
+| [`@atolljs/core`](https://www.npmjs.com/package/@atolljs/core) | Core SDK — `defineWorker`/`connectWorker` typed worker clients over `WorkerPool`, shared-memory contracts, `watch`/`observe`, codecs | [Quickstart](https://jwhenry3.github.io/atolljs/consumer/quickstart/) · [Shared memory](https://jwhenry3.github.io/atolljs/consumer/shared-memory/) · [Tasks](https://jwhenry3.github.io/atolljs/consumer/tasks/) |
+| [`@atolljs/node`](https://www.npmjs.com/package/@atolljs/node) | `node:worker_threads` runtime adapter | [Tasks](https://jwhenry3.github.io/atolljs/consumer/tasks/) |
 
 ## Documentation
 
-- **[Atoll — package documentation](https://jwhenry3.github.io/atolljs/consumer/#/quickstart)** —
+- **[Atoll — package documentation](https://jwhenry3.github.io/atolljs/consumer/quickstart/)** —
   the consumer-facing site: quickstart, API guides, framework pages, islands,
   hosting & headers.
 - [`docs/`](docs/README.md) — in-repo documentation covering internals,
@@ -144,7 +150,7 @@ packages/<fw>/      independently publishable framework bindings
 packages/incidents/ demo domain package (contract + worker + pool)
 examples/<fw>/      per-framework demo apps
 docs/               in-repo markdown documentation (internals + bindings)
-docs-consumer/      consumer docs site (deploys to GitHub Pages on master)
+docs-consumer/      consumer docs site (deploys to GitHub Pages on main)
 ```
 
 ```bash

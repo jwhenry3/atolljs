@@ -1,4 +1,5 @@
 import { CodeBlock } from '../components/CodeBlock';
+import { docHref } from '../link';
 
 export function IslandApps() {
   return (
@@ -9,7 +10,7 @@ export function IslandApps() {
         mutation serializes to ops the shell replays. Three app shapes cover
         the spectrum from "plain component" to "DOM-heavy library, unmodified".
         Concepts and workload guidance are on{' '}
-        <a href="#/islands">Overview</a>.
+        <a href={docHref('islands')}>Overview</a>.
       </p>
 
       <h2>Install</h2>
@@ -73,7 +74,7 @@ island.destroy();`}
           <tr><td><code>props</code></td><td>Cross via <code>structuredClone</code> — uncloneable values reject naming the offending key. <code>callbackProp(fn)</code> markers pass shell functions through.</td></tr>
           <tr><td><code>onEvent</code></td><td>Receives every worker-side <code>emit(name, payload)</code>.</td></tr>
           <tr><td><code>slots</code></td><td><code>{'{ name: (el | null) => void }'}</code> — a <code>data-atoll-slot</code> element's contents are yours to fill with real main-thread DOM.</td></tr>
-          <tr><td><code>mode</code></td><td><code>'push'</code> (default — SharedArrayBuffer doorbell, needs <a href="#/hosting">COOP/COEP</a>) or <code>'poll'</code> (50ms drain — no SAB, no headers needed).</td></tr>
+          <tr><td><code>mode</code></td><td><code>'push'</code> (default — SharedArrayBuffer doorbell, needs <a href={docHref('hosting')}>COOP/COEP</a>) or <code>'poll'</code> (50ms drain — no SAB, no headers needed).</td></tr>
           <tr><td><code>mountTimeout</code></td><td>Default 15s, <code>0</code> disables — a worker entry that never answers rejects with a named error instead of hanging.</td></tr>
           <tr><td><code>onActivity</code> / <code>onOps</code></td><td>Per-op-batch hooks — stats, and worker-vs-main timing split.</td></tr>
         </tbody>
@@ -137,7 +138,7 @@ doc.createElement('div').setAttribute('data-atoll-slot', 'preview');
         facade records every mutation as an op the shell replays. The full op
         vocabulary, DOM coverage, the geometry/events channels, limits, and
         per-renderer benchmarks live under{' '}
-        <a href="#/island-proxy">Proxy document</a>.
+        <a href={docHref('island-proxy')}>Proxy document</a>.
       </p>
 
       <h2>Testing in-process</h2>

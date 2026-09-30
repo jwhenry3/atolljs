@@ -280,6 +280,10 @@ const wireProps = (initial: Record<string, unknown>): {
 } => {
   let latest: Record<PropertyKey, unknown> = initial;
   const keys = new Set<string | symbol>(Reflect.ownKeys(initial));
+  // Membership is reactive too — `key in props`/`Object.keys(props)` inside
+  // a component must re-run when updateProps adds or drops a key, not just
+  // when a read value changes.
+  const [keysVersion, bumpKeys] = createSignal(0);
   const signals = new Map<string | symbol, ReturnType<typeof createSignal<unknown>>>();
   const sigFor = (key: string | symbol): ReturnType<typeof createSignal<unknown>> => {
     let s = signals.get(key);
@@ -291,14 +295,30 @@ const wireProps = (initial: Record<string, unknown>): {
     // Props are read-only — swallow writes instead of throwing into a
     // component that legitimately believed it owned a plain object.
     set: () => true,
-    has: (_t, key) => keys.has(key),
-    ownKeys: () => [...keys],
+    has: (_t, key) => {
+      keysVersion();
+      return keys.has(key);
+    },
+    ownKeys: () => {
+      keysVersion();
+      return [...keys];
+    },
     getOwnPropertyDescriptor: (_t, key) =>
-      keys.has(key) ? { configurable: true, enumerable: true } : undefined,
+      keys.has(key)
+        ? {
+            configurable: true,
+            enumerable: true,
+            // Accessor descriptor — a value-less descriptor makes
+            // spreads/`Object.values` see undefined for live props.
+            get: () => sigFor(key)[0](),
+          }
+        : undefined,
   });
   const update = (next: Record<string, unknown>): void => {
     latest = next as Record<PropertyKey, unknown>;
+    let keysChanged = false;
     for (const key of Reflect.ownKeys(next)) {
+      if (!keys.has(key)) keysChanged = true;
       keys.add(key);
       // `() => v` forces value semantics — a function-typed prop would
       // otherwise be mistaken for the updater form.
@@ -307,9 +327,11 @@ const wireProps = (initial: Record<string, unknown>): {
     for (const key of keys) {
       if (!(key in next)) {
         keys.delete(key);
+        keysChanged = true;
         signals.get(key)?.[1](() => undefined);
       }
     }
+    if (keysChanged) bumpKeys((v) => v + 1);
   };
   return { props, update };
 };

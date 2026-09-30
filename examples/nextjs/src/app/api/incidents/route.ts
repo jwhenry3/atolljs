@@ -6,7 +6,8 @@ export const dynamic = 'force-dynamic';
 
 // One seed per process — instrumentation.ts kicks this at boot; POST is the
 // manual retry. Repeat calls join the in-flight (or settled) dispatch, which
-// chains a metrics recompute after the seed (same as initIncidents).
+// chains a metrics recompute after the seed (same as initIncidents). A
+// REJECTED promise is cleared so a later POST can retry.
 let seedPromise: Promise<number> | null = null;
 const seed = () =>
   getIncidentsApi()
@@ -33,7 +34,10 @@ export async function GET() {
 
 /** POST /api/incidents — dispatch the seed task (idempotent per process). */
 export async function POST() {
-  seedPromise ??= seed();
+  seedPromise ??= seed().catch((err) => {
+    seedPromise = null; // failed seed — let the next POST retry
+    throw err;
+  });
   const ms = await seedPromise;
   return NextResponse.json({ seeded: true, ms });
 }

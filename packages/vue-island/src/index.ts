@@ -65,7 +65,7 @@ import type {
 export type { IslandHandle };
 
 /** Lifecycle state of a `useIsland` mount. */
-export type IslandStatus = 'mounting' | 'ready' | 'error';
+export type IslandStatus = 'idle' | 'mounting' | 'ready' | 'error' | 'destroyed';
 
 export interface UseIslandOptions {
   /**
@@ -110,7 +110,7 @@ export interface UseIslandReturn {
   host: Ref<HTMLElement | null>;
   /** The mounted island handle — null until `status === 'ready'`. */
   handle: ShallowRef<IslandHandle | null>;
-  /** 'mounting' until the first op batch lands, then 'ready' (or 'error'). */
+  /** idle → mounting → ready | error → destroyed (mirrors the svelte binding). */
   status: Ref<IslandStatus>;
   /** The mount/update failure when `status === 'error'`. */
   error: ShallowRef<unknown>;
@@ -209,7 +209,12 @@ export function useIsland(options: UseIslandOptions): UseIslandReturn {
       island?.destroy();
       island = null;
       handle.value = null;
-      if (el === null) return;
+      // Host detached (v-if) — the island is gone; 'idle' until a new host
+      // arrives, so status doesn't sit at 'ready' over a dead tree.
+      if (el === null) {
+        status.value = 'idle';
+        return;
+      }
       status.value = 'mounting';
       error.value = undefined;
       void mount(el, gen);
@@ -228,10 +233,9 @@ export function useIsland(options: UseIslandOptions): UseIslandReturn {
       if (mounted === null) return; // mount picks up the latest props itself
       mounted
         .updateProps(JSON.parse(nextJson) as Record<string, unknown>)
-        .catch((err: unknown) => {
-          if (options.onError !== undefined) options.onError(err);
-          else console.error('[atoll-vue-island] updateProps failed:', err);
-        });
+        // Same surface as the other bindings — update failures report
+        // status='error' + error, not just the onError callback.
+        .catch(report);
     },
   );
 
@@ -241,6 +245,7 @@ export function useIsland(options: UseIslandOptions): UseIslandReturn {
       island?.destroy();
       island = null;
       handle.value = null;
+      status.value = 'destroyed';
     });
   }
 

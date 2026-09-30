@@ -5,7 +5,7 @@ natively tracked `Accessor`s (the SDK uses `solid-js` internally for its
 reactive core). Subscriptions auto-dispose via `onCleanup` when the owner is
 destroyed.
 
-**[Atoll — package documentation](https://jwhenry3.github.io/atolljs/consumer/#/quickstart)**
+**[Atoll — package documentation](https://jwhenry3.github.io/atolljs/consumer/quickstart/)**
 
 ## Install
 
@@ -48,6 +48,6 @@ export function App() {
 
 ## Documentation
 
-- [Atoll — package documentation](https://jwhenry3.github.io/atolljs/consumer/#/quickstart)
-- [SolidJS guide](https://jwhenry3.github.io/atolljs/consumer/#/fw-solid)
-- [Worker islands for Solid](https://jwhenry3.github.io/atolljs/consumer/#/fw-solid/worker-islands)
+- [Atoll — package documentation](https://jwhenry3.github.io/atolljs/consumer/quickstart/)
+- [SolidJS guide](https://jwhenry3.github.io/atolljs/consumer/fw-solid/)
+- [Worker islands for Solid](https://jwhenry3.github.io/atolljs/consumer/fw-solid/worker-islands/)

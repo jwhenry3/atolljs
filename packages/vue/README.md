@@ -4,7 +4,7 @@ Vue bindings for `@atolljs/core` — composables that bind shared-memory fields
 and worker tasks to `Ref`s. Subscriptions release via `onScopeDispose` when the
 component unmounts.
 
-**[Atoll — package documentation](https://jwhenry3.github.io/atolljs/consumer/#/quickstart)**
+**[Atoll — package documentation](https://jwhenry3.github.io/atolljs/consumer/quickstart/)**
 
 ## Install
 
@@ -47,6 +47,6 @@ const increment = useTask(counter.increment);
 
 ## Documentation
 
-- [Atoll — package documentation](https://jwhenry3.github.io/atolljs/consumer/#/quickstart)
-- [Vue guide](https://jwhenry3.github.io/atolljs/consumer/#/fw-vue)
-- [Worker islands for Vue](https://jwhenry3.github.io/atolljs/consumer/#/fw-vue/worker-islands)
+- [Atoll — package documentation](https://jwhenry3.github.io/atolljs/consumer/quickstart/)
+- [Vue guide](https://jwhenry3.github.io/atolljs/consumer/fw-vue/)
+- [Worker islands for Vue](https://jwhenry3.github.io/atolljs/consumer/fw-vue/worker-islands/)
