@@ -25,5 +25,6 @@
   },
   "bugs": {
     "url": "https://github.com/jwhenry3/atolljs/issues"
-  }
+  },
+  "license": "MIT"
 }

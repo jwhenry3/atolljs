@@ -144,6 +144,9 @@ single-purpose and lives beside the module that spawns it:
 
 ### Tooling
 
+- The project is now MIT-licensed — root `LICENSE` plus a copy in every
+  package so each npm tarball carries it; all manifests declare
+  `"license": "MIT"`.
 - `serve-pages` now stops stale servers on :4174 instead of failing on a
   busy port; `kill-all` shares the same port-listener logic.
 - Vitest coverage is enforced (`statements: 95, branches: 85, functions:
