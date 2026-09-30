@@ -632,7 +632,9 @@ export interface AngularIslandDecoratorOptions extends AngularIslandAppOptions {
   /**
    * Registry name — the wire key and `islandAppNameOf` result. Defaults to
    * the kebab-cased class name minus a trailing `Component`
-   * (`CounterComponent` → 'counter', `Foo` → 'foo').
+   * (`CounterComponent` → 'counter', `Foo` → 'foo'). The default reads
+   * `.name` at runtime — minifiers mangle class names, so pass the key
+   * explicitly in any build that minifies.
    */
   name?: string;
 }
@@ -667,8 +669,8 @@ const angularIslandRegistry = new Map<string, AngularIslandEntry>();
  * @Component({ standalone: true, ... })
  * export class CounterComponent { label = input('count'); }
  *
- * @AngularIsland                    // 'notes' derived from the class name
- * @Component({ standalone: true, ... })
+ * @AngularIsland                    // 'notes' derived from the class name —
+ * @Component({ standalone: true, ... }) // unsafe under minification
  * export class NotesComponent { ... }
  * ```
  *

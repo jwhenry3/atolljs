@@ -144,6 +144,8 @@ export type IslandAppRef<C> = Type<C> | IslandAppLike | string;
  * convention: stamps win (`@AngularIsland`/`islandApp`), then a class's
  * kebab-cased name minus `Component` (`CounterComponent` → 'counter'),
  * then `islandAppNameOf`'s general fallbacks (displayName, imperative def).
+ * Class-name fallbacks read `.name` at runtime — under minification pass a
+ * string or a stamped class, not an unstamped class reference.
  */
 const resolveAppName = (app: IslandAppRef<unknown> | undefined): string | undefined => {
   if (app === undefined || app === null) return undefined;

@@ -134,11 +134,12 @@ describe('React shell', () => {
     expect(stats.textContent).toContain('sync: push');
   });
 
-  it('transport buttons switch mode across all mounted island handles', async () => {
+  it('transport toggle switches mode across all mounted island handles', async () => {
     const stats = realDoc.getElementById('transport-stats')!;
-    (realDoc.getElementById('poll-btn') as HTMLButtonElement).click();
+    const toggle = realDoc.getElementById('push-toggle') as HTMLInputElement;
+    toggle.click();
     await waitFor(() => /sync: poll/.test(stats.textContent ?? ''));
-    (realDoc.getElementById('push-btn') as HTMLButtonElement).click();
+    toggle.click();
     await waitFor(() => /sync: push/.test(stats.textContent ?? ''));
   }, 30_000);
 

@@ -112,17 +112,17 @@ if (rootEl) {
 
     const transportBar = html`<div id="transport-bar">
       <span>transport:</span>
-      <button
-        id="push-btn"
-        style=${() => `font-weight: ${mode() === 'push' ? 700 : 400}`}
-        title=${isolated ? '' : 'needs cross-origin isolation (no SharedArrayBuffer)'}
-        onClick=${() => setMode('push')}
-      >push (SAB doorbell)</button>
-      <button
-        id="poll-btn"
-        style=${() => `font-weight: ${mode() === 'poll' ? 700 : 400}`}
-        onClick=${() => setMode('poll')}
-      >poll (50ms)</button>
+      <label
+        id="transport-toggle"
+        title=${isolated ? 'push via SharedArrayBuffer doorbell — off falls back to 50ms polling' : 'needs cross-origin isolation (no SharedArrayBuffer)'}
+      >
+        <input
+          id="push-toggle"
+          type="checkbox"
+          onClick=${() => setMode(mode() === 'push' ? 'poll' : 'push')}
+        />
+        push (SAB doorbell)
+      </label>
       <span id="transport-stats">${() => {
         statsTick(); // tracked — recompute after every op batch
         const flushes = [...handles.values()].reduce((a, i) => a + i.flushCalls, 0);
@@ -130,7 +130,11 @@ if (rootEl) {
         return `sync: ${mode()} · flush calls: ${flushes} · ops applied: ${ops}`;
       }}</span>
     </div>` as HTMLElement;
-    (transportBar.querySelector('#push-btn') as HTMLButtonElement).disabled = !isolated;
+    // The checkbox is the only mode control, so its native state stays in
+    // sync — just seed the initial mode and the isolation fallback.
+    const pushToggle = transportBar.querySelector('#push-toggle') as HTMLInputElement;
+    pushToggle.checked = isolated;
+    pushToggle.disabled = !isolated;
 
     rootEl.append(
       html`<h1>Solid islands — Solid in the worker</h1>` as Node,

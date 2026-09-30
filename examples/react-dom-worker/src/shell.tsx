@@ -136,22 +136,19 @@ export function Shell(): ReactElement {
 
       <div id="transport-bar">
         <span>transport:</span>
-        <button
-          id="push-btn"
-          style={{ fontWeight: mode === 'push' ? 700 : 400 }}
-          disabled={!isolated}
-          title={isolated ? undefined : 'needs cross-origin isolation (no SharedArrayBuffer)'}
-          onClick={() => setMode('push')}
+        <label
+          id="transport-toggle"
+          title={isolated ? 'push via SharedArrayBuffer doorbell — off falls back to 50ms polling' : 'needs cross-origin isolation (no SharedArrayBuffer)'}
         >
+          <input
+            id="push-toggle"
+            type="checkbox"
+            checked={mode === 'push'}
+            disabled={!isolated}
+            onChange={() => setMode(mode === 'push' ? 'poll' : 'push')}
+          />
           push (SAB doorbell)
-        </button>
-        <button
-          id="poll-btn"
-          style={{ fontWeight: mode === 'poll' ? 700 : 400 }}
-          onClick={() => setMode('poll')}
-        >
-          poll (50ms)
-        </button>
+        </label>
         <span id="transport-stats">
           sync: {mode} · flush calls: {flushes} · ops applied: {ops}
         </span>

@@ -59,9 +59,15 @@ it; `islandComponent<C>` generates a standalone shell component whose
 `props`/`onEvent` are typed from the class's `input()`/`model()`/`output()`
 fields (`IslandInputs<C>`/`IslandEvents<C>`) via `import type`.
 
+> **Minification caveat** — the bare form derives the registry key from the
+> class's `.name` at runtime, which minifiers mangle (`CounterComponent` →
+> `n9`). Explicit keys (`@AngularIsland('counter')`, or the `apps` record
+> form of `defineAngularPolyWorker`) survive any production build — prefer
+> them anywhere code is minified.
+
 ```ts
 // worker entry
-@AngularIsland
+@AngularIsland('counter')
 @Component({ standalone: true, selector: 'atoll-counter', template: `…` })
 export class CounterComponent {
   readonly label = input('count');      // → props key
@@ -106,7 +112,7 @@ component, `[mode]` bound to a signal, events typed via
 
 | Export | Signature | What it does |
 |---|---|---|
-| `@AngularIsland` | `@AngularIsland \| @AngularIsland('name') \| @AngularIsland({ name?, providers? })` | Class decorator — stamps `islandAppName` (default: kebab-cased class name minus `Component`) and registers the component for the no-arg worker form. |
+| `@AngularIsland` | `@AngularIsland \| @AngularIsland('name') \| @AngularIsland({ name?, providers? })` | Class decorator — stamps `islandAppName` (default: kebab-cased class name minus `Component` — **mangled under minification**, pass the key explicitly in production builds) and registers the component for the no-arg worker form. |
 | `defineAngularPolyWorker` | `()` \| `({ apps: [C, …] })` \| `({ apps: { name: C \| { component, providers } } })` | Registry worker — no-arg collects decorated components; array names by stamp/class name; record form unchanged. |
 | `defineAngularMonoWorker` | `defineAngularMonoWorker(Component, options?)` | 1:1 instance worker — mounted namelessly. |
 | `angularIslandApp` / `angularIsland` | `angularIslandApp(Component, { providers? }): RenderedIslandApp` | The adapter — mounts in a bare environment injector; `providedIn: 'root'` services and `options.providers` resolve. |
@@ -119,7 +125,7 @@ import '@angular/compiler';                     // JIT decorator components only
 import { Component, input, output, signal } from '@angular/core';
 import { AngularIsland, defineAngularPolyWorker } from '@atolljs/angular-island/worker';
 
-@AngularIsland
+@AngularIsland('counter')   // explicit key — survives minification
 @Component({
   standalone: true,
   selector: 'atoll-counter',

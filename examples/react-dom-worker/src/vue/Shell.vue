@@ -142,18 +142,19 @@ const incidentsOpts = {
 
   <div id="transport-bar">
     <span>transport:</span>
-    <button
-      id="push-btn"
-      :style="{ fontWeight: state.mode === 'push' ? 700 : 400 }"
-      :disabled="!isolated"
-      :title="isolated ? '' : 'needs cross-origin isolation (no SharedArrayBuffer)'"
-      @click="setMode('push')"
-    >push (SAB doorbell)</button>
-    <button
-      id="poll-btn"
-      :style="{ fontWeight: state.mode === 'poll' ? 700 : 400 }"
-      @click="setMode('poll')"
-    >poll (50ms)</button>
+    <label
+      id="transport-toggle"
+      :title="isolated ? 'push via SharedArrayBuffer doorbell — off falls back to 50ms polling' : 'needs cross-origin isolation (no SharedArrayBuffer)'"
+    >
+      <input
+        id="push-toggle"
+        type="checkbox"
+        :checked="state.mode === 'push'"
+        :disabled="!isolated"
+        @change="setMode(state.mode === 'push' ? 'poll' : 'push')"
+      />
+      push (SAB doorbell)
+    </label>
     <span id="transport-stats">{{ statsText() }}</span>
   </div>
   <div id="status-line">{{ state.status }}</div>

@@ -23,8 +23,11 @@ import { AngularIsland, defineAngularPolyWorker } from '@atolljs/angular-island/
  * 'counter' — the docs' canonical Angular island: a `label` signal input,
  * a `signal` count, a `(click)` binding, and an 'incremented' OUTPUT for
  * the shell's status line — the declared output is the island's event.
+ *
+ * NOTE: pass the registry key explicitly — `@AngularIsland` bare derives
+ * it from the class name, which minification mangles in production builds.
  */
-@AngularIsland
+@AngularIsland('counter')
 @Component({
   selector: 'demo-counter',
   template: `
@@ -50,7 +53,7 @@ export class CounterComponent {
  * `signal` rendered through `@for`, an `(input)` handler reading the wire
  * payload's stamped `value`, and a 'noteAdded' emit on each add.
  */
-@AngularIsland
+@AngularIsland('notes')
 @Component({
   selector: 'demo-notes',
   template: `
@@ -120,7 +123,7 @@ interface Incident {
   dur: string;
 }
 
-@AngularIsland
+@AngularIsland('incidents')
 @Component({
   selector: 'demo-incidents',
   template: `

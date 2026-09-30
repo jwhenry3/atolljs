@@ -45,6 +45,19 @@
         display: flex; gap: 16px; align-items: center; font: 12px monospace; color: #9aa4b2;
         padding: 8px 12px; border: 1px solid #2a3340; border-radius: 6px; margin-bottom: 12px;
       }
+      #transport-toggle { display: inline-flex; gap: 8px; align-items: center; cursor: pointer; }
+      #transport-toggle:has(input:disabled) { opacity: .55; cursor: not-allowed; }
+      #transport-toggle input {
+        appearance: none; width: 30px; height: 16px; margin: 0; padding: 0; border: 0;
+        border-radius: 8px; background: #22354f; position: relative; cursor: pointer; flex: none;
+      }
+      #transport-toggle input::after {
+        content: ''; position: absolute; top: 2px; left: 2px;
+        width: 12px; height: 12px; border-radius: 50%; background: #9aa4b2;
+      }
+      #transport-toggle input:checked { background: #2d6cdf; }
+      #transport-toggle input:checked::after { left: 16px; background: #e6edf3; }
+      #transport-toggle input:disabled { cursor: not-allowed; }
       #status-line { font: 12px monospace; color: #7fb6ff; margin-bottom: 12px; min-height: 1em; }
       .island { border: 1px solid #2a3340; border-radius: 8px; margin-bottom: 14px; overflow: hidden; }
       .island-head {
@@ -55,13 +68,14 @@
       .island-head .badge {
         padding: 1px 8px; border-radius: 8px; background: #1f4d2e; color: #a9e5c3; font-weight: 700;
       }
-      .island-root { padding: 8px 12px; }
+      .island-root { display: block; padding: 8px 12px; }
       .island-root table { max-height: 360px; }
       #island-table, #island-table-2 { max-height: 380px; overflow-y: auto; display: block; }
       /* the vanilla island's content is entirely worker-created via the
          proxy DOM — these rules are shell-side styling of op-applied DOM */
       .vanilla-heading, .vanilla-readout { margin: 4px 0 8px; font-size: 13px; color: #9aa4b2; }
       .vanilla-readout { color: #e6edf3; }
+      span.vanilla-heading { display: inline-block; margin-right: 10px; }
       .swatch { border: 1px solid #303845; border-radius: 4px; padding: 0; background: none; }
       .swatch.active { outline: 2px solid #e6edf3; outline-offset: 1px; }
       .vanilla-log { margin-top: 8px; font: 11px/1.7 monospace; color: #7d8a9c; }

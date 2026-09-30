@@ -104,18 +104,19 @@
 
 <div id="transport-bar">
   <span>transport:</span>
-  <button
-    id="push-btn"
-    style:font-weight={mode === 'push' ? 700 : 400}
-    disabled={!isolated}
-    title={isolated ? '' : 'needs cross-origin isolation (no SharedArrayBuffer)'}
-    onclick={() => setMode('push')}>push (SAB doorbell)</button
+  <label
+    id="transport-toggle"
+    title={isolated ? 'push via SharedArrayBuffer doorbell — off falls back to 50ms polling' : 'needs cross-origin isolation (no SharedArrayBuffer)'}
   >
-  <button
-    id="poll-btn"
-    style:font-weight={mode === 'poll' ? 700 : 400}
-    onclick={() => setMode('poll')}>poll (50ms)</button
-  >
+    <input
+      id="push-toggle"
+      type="checkbox"
+      checked={mode === 'push'}
+      disabled={!isolated}
+      onclick={() => setMode(mode === 'push' ? 'poll' : 'push')}
+    />
+    push (SAB doorbell)
+  </label>
   <span id="transport-stats">{stats}</span>
 </div>
 <div id="status-line">{status}</div>

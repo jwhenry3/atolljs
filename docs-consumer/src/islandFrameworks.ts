@@ -170,11 +170,12 @@ const worker = () =>
     componentCode: `import { Component, input, output, signal } from '@angular/core';
 import { AngularIsland } from '@atolljs/angular-island/worker';
 
-// @AngularIsland stamps the registry name ('counter' from the class name)
-// and registers the component for defineAngularPolyWorker(). Its signal
+// @AngularIsland stamps the registry name and registers the component for
+// defineAngularPolyWorker(). Pass the key explicitly — the bare form
+// derives it from the class name, which minifiers mangle. Its signal
 // fields ARE the island contract: input()/model() → props keys,
 // output()/model() → island events bridged to the shell.
-@AngularIsland
+@AngularIsland('counter')
 @Component({
   standalone: true,
   selector: 'atoll-counter',
@@ -227,7 +228,7 @@ export class AppComponent {
   };
 }`,
     notes: [
-      '@AngularIsland also takes an explicit name or { name, providers } — and undecorated components register via the apps array/record forms of defineAngularPolyWorker.',
+      '@AngularIsland also takes { name, providers } — and undecorated components register via the apps array/record forms of defineAngularPolyWorker. The bare form derives the key from the class name, so pass it explicitly wherever code is minified (any production bundle).',
       'Root output()/model() fields bridge onto the emit channel under their public names (x = model() → \'xChange\') — the adapter handles island-instance re-entry, so afterEveryRender-style emits just work.',
       'JIT components need import \'@angular/compiler\' once in the worker entry — the JIT decorators compile at bootstrap. AOT-compiled components skip it; the generated facade carries a hand-authored ɵcmp so it resolves under both.',
       'The low-level surface stays available: <atoll-island>/<div atollIsland> with [client] (shared) or [worker] (island-owned), [app] accepting a registry name or the stamped component class.',

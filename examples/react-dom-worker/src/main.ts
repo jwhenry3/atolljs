@@ -80,13 +80,11 @@ const setStatus = (msg: string): void => {
 
 /* ── Transport toolbar (global — drives every island's mode) ────────────── */
 
-const pushBtn = $('push-btn') as HTMLButtonElement;
-const pollBtn = $('poll-btn') as HTMLButtonElement;
+const pushToggle = $('push-toggle') as HTMLInputElement;
 const statsEl = $('transport-stats');
 
 function renderStats(): void {
-  pushBtn.style.fontWeight = mode === 'push' ? '700' : '400';
-  pollBtn.style.fontWeight = mode === 'poll' ? '700' : '400';
+  pushToggle.checked = mode === 'push';
   const flushes = islands.reduce((a, i) => a + i.flushCalls, 0);
   const ops = islands.reduce((a, i) => a + i.opsApplied, 0);
   statsEl.textContent =
@@ -102,10 +100,10 @@ function setMode(next: Mode): void {
   renderStats();
 }
 
-pushBtn.disabled = !isolated;
-pushBtn.title = isolated ? '' : 'needs cross-origin isolation (no SharedArrayBuffer)';
-pushBtn.onclick = () => setMode('push');
-pollBtn.onclick = () => setMode('poll');
+pushToggle.checked = mode === 'push';
+pushToggle.disabled = !isolated;
+pushToggle.title = isolated ? '' : 'needs cross-origin isolation (no SharedArrayBuffer)';
+pushToggle.onchange = () => setMode(pushToggle.checked ? 'push' : 'poll');
 
 /* ── Transclusion demo: a live canvas the SHELL owns inside a worker tree ─ */
 

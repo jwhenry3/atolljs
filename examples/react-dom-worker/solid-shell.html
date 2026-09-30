@@ -44,6 +44,19 @@
         display: flex; gap: 16px; align-items: center; font: 12px monospace; color: #9aa4b2;
         padding: 8px 12px; border: 1px solid #2a3340; border-radius: 6px; margin-bottom: 12px;
       }
+      #transport-toggle { display: inline-flex; gap: 8px; align-items: center; cursor: pointer; }
+      #transport-toggle:has(input:disabled) { opacity: .55; cursor: not-allowed; }
+      #transport-toggle input {
+        appearance: none; width: 30px; height: 16px; margin: 0; padding: 0; border: 0;
+        border-radius: 8px; background: #22354f; position: relative; cursor: pointer; flex: none;
+      }
+      #transport-toggle input::after {
+        content: ''; position: absolute; top: 2px; left: 2px;
+        width: 12px; height: 12px; border-radius: 50%; background: #9aa4b2;
+      }
+      #transport-toggle input:checked { background: #2d6cdf; }
+      #transport-toggle input:checked::after { left: 16px; background: #e6edf3; }
+      #transport-toggle input:disabled { cursor: not-allowed; }
       #status-line { font: 12px monospace; color: #7fb6ff; margin-bottom: 12px; min-height: 1em; }
       .island { border: 1px solid #2a3340; border-radius: 8px; margin-bottom: 14px; overflow: hidden; }
       .island-head {
@@ -54,11 +67,12 @@
       .island-head .badge {
         padding: 1px 8px; border-radius: 8px; background: #1f4d2e; color: #a9e5c3; font-weight: 700;
       }
-      .island-root { padding: 8px 12px; }
+      .island-root { display: block; padding: 8px 12px; }
       .island-root table { max-height: 360px; }
       /* worker-created island content — shell-side styling of op-applied DOM */
       .vanilla-heading, .vanilla-readout { margin: 4px 0 8px; font-size: 13px; color: #9aa4b2; }
       .vanilla-readout { color: #e6edf3; }
+      span.vanilla-heading { display: inline-block; margin-right: 10px; }
       .vanilla-log { margin-top: 8px; font: 11px/1.7 monospace; color: #7d8a9c; }
       .vanilla-log-line { border-left: 2px solid #2a3340; padding-left: 8px; }
       .mw-btn { padding: 3px 10px; background: #22354f; font-size: 12px; }
