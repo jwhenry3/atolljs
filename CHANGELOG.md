@@ -1,11 +1,15 @@
 # Changelog
 
-## Unreleased
+## 0.1.3
+
+The `atoll` CLI ships — a zero-dependency scaffolder/doctor covering every
+example topology (workers, islands, NestJS, Next.js) — plus a blog front-matter
+`pinned` flag and deeper NestJS docs. No breaking changes to the 0.1.2 API.
 
 ### `@atolljs/cli` — the `atoll` scaffold/doctor bin
 
 New package shipping a source-level TypeScript CLI (Node ≥ 22.18 type
-stripping — no build step):
+stripping — no build step, zero runtime dependencies):
 
 - **`atoll new <dir>`** — scaffold a fresh app: Vite shell + worker-rendered
   island for `react`/`vue`/`solid`/`svelte`, or a tsx Node service with a
@@ -15,12 +19,34 @@ stripping — no build step):
 - **`atoll init`** — wire Atoll into an existing project: hardened `.npmrc`,
   dependency install, and a contract + worker + client spine under
   `src/atoll/`.
-- **`atoll add worker|memory|island <name>`** — generate pieces into an
-  existing project; workers co-located with a `*.memory.ts` contract pick it
-  up automatically.
+- **`atoll add [framework] <kind> [variant] [name]`** — generate pieces into
+  an existing project, one kind per example topology:
+  - **Frontend** — `worker` emits the pool + typed client (with a
+    `defineTask` latest-wins wrapper) plus framework bindings on UI
+    projects (`useX` hooks for react/nextjs/vue, `createX` for solid, a
+    runes module for svelte, an `@Injectable` facade for angular);
+    `island` emits `facade` (default — `<name>.app` + poly worker +
+    `<name>.island.ts` contract module + `lazyIsland`/`islandComponent`/
+    `use:island` usage) or `mono` worker variants; `memory` emits a
+    `defineSharedMemory` contract. Workers co-located with a `*.memory.ts`
+    contract pick it up automatically.
+  - **NestJS** — `service` (`@AtollService` class + `registerPool` module +
+    `runAtollWorker` entry), `method` (`@AtollTask` service + wiring hint),
+    `module` (pool boundary + worker entry), `housed` (worker + api module +
+    controller + atoll module + printed `proxyToWorker` gateway wiring).
+  - **Next.js** — `route task|client` (`app/api/<name>/{contract,worker,
+    pool,route}.ts` covering both example topologies), `component` (`'use
+    client'` hooks component), `instrumentation` (boot warmup `register()`).
+  - Variants resolve as a positional, `--variant`, an interactive `select`,
+    or the first variant non-interactively; a leading framework word
+    overrides auto-detection; kind scope is enforced per framework.
 - **`atoll doctor [--fix]`** — checks deps, lockfile, `.npmrc` policy,
   bundler-detectable worker entries (`new Worker(new URL(...))` inline), and
   COOP/COEP headers; `--fix` writes the hardened `.npmrc`.
+- **Colored output** — semantic styling (bold headings/prompts, dimmed
+  secondary detail, cyan accents for commands and paths) via `node:util`
+  `styleText`; respects `NO_COLOR`/`FORCE_COLOR`/TTY detection, so piped
+  output stays clean. The `Io` seam keeps tests ANSI-free.
 - Generated code preserves the bundler-detection and shared-contract
   invariants out of the box; the Node template demonstrates a real
   worker→main shared-memory write.
@@ -31,6 +57,23 @@ stripping — no build step):
 so the bundled ambient declaration for `react-reconciler` (which ships no
 types) enters the consumer's program — previously `tsc --noEmit` in a project
 importing `@atolljs/react-island` failed with TS7016.
+
+### Examples & docs
+
+- Blog — post front matter gains a `pinned` flag: pinned standalone posts
+  sort ahead of series groups in both the sidebar and the blog index
+  ("Introducing AtollJS" is pinned). Series headings in the blog sidebar now
+  align with the top-level nav links.
+- "Introducing AtollJS" gains a server section — `@AtollService` facades,
+  `AtollModule.registerPool` on the API thread, `runAtollWorker` booting a
+  Nest context per worker, and housed APIs.
+- "Dependency Injection Across the Boundary" expands into the real
+  `examples/nestjs` code — the full four-file `ReportService`/`DashboardService`
+  facade example, and a dedicated housed-API section covering the worker-side
+  `serveHttp` bootstrap, `proxyToWorker` gateway wiring, port tracking, and
+  respawn reclaim.
+- Root `npm run atoll` script runs the CLI from source (Node ≥ 22.18 type
+  stripping — no build step needed).
 
 ## 0.1.2
 

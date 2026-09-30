@@ -1,6 +1,6 @@
 {
   "name": "@atolljs/node",
-  "version": "0.1.0",
+  "version": "0.0.0",
   "description": "Node runtime adapter — node:worker_threads pools, no framework",
   "homepage": "https://jwhenry3.github.io/atolljs/consumer/quickstart/",
   "type": "module",
@@ -18,7 +18,7 @@
     "registry": "https://registry.npmjs.org"
   },
   "peerDependencies": {
-    "@atolljs/core": "0.1.0"
+    "@atolljs/core": "0.0.0"
   },
   "repository": {
     "type": "git",

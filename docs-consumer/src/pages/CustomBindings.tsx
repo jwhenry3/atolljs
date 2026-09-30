@@ -171,7 +171,7 @@ export function useTask(source) {
   "name": "@atolljs/<fw>",
   "exports": { ".": "./src/index.ts" },
   "peerDependencies": {
-    "@atolljs/core": "0.1.0",
+    "@atolljs/core": "0.1.3",
     "<fw>": "^x.y.z"          // the framework is the consumer's install
   }
 }`}

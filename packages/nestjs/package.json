@@ -1,6 +1,6 @@
 {
   "name": "@atolljs/nestjs",
-  "version": "0.1.0",
+  "version": "0.0.0",
   "description": "NestJS integration — AtollModule, AtollTask, InjectAtollPool",
   "homepage": "https://jwhenry3.github.io/atolljs/consumer/quickstart/",
   "type": "module",
@@ -18,8 +18,8 @@
     "registry": "https://registry.npmjs.org"
   },
   "peerDependencies": {
-    "@atolljs/core": "0.1.0",
-    "@atolljs/node": "0.1.0",
+    "@atolljs/core": "0.0.0",
+    "@atolljs/node": "0.0.0",
     "@nestjs/common": "^11.1.0",
     "@nestjs/core": "^11.1.0",
     "reflect-metadata": "^0.2.0",

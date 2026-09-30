@@ -1,6 +1,6 @@
 {
   "name": "@atolljs/angular-island",
-  "version": "0.1.0",
+  "version": "0.0.0",
   "description": "Angular shell bindings for atoll-islands islands — <atoll-island> and [atollIsland]",
   "homepage": "https://jwhenry3.github.io/atolljs/consumer/quickstart/",
   "type": "module",
@@ -16,8 +16,8 @@
     "registry": "https://registry.npmjs.org"
   },
   "peerDependencies": {
-    "@atolljs/core": "0.1.0",
-    "@atolljs/islands": "0.1.0",
+    "@atolljs/core": "0.0.0",
+    "@atolljs/islands": "0.0.0",
     "@angular/core": "^22.2.0",
     "@angular/common": "^22.2.0",
     "@angular/compiler": "^22.2.0"

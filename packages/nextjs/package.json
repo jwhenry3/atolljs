@@ -1,6 +1,6 @@
 {
   "name": "@atolljs/nextjs",
-  "version": "0.1.0",
+  "version": "0.0.0",
   "description": "Next.js bindings — React hooks for client components",
   "homepage": "https://jwhenry3.github.io/atolljs/consumer/quickstart/",
   "type": "module",
@@ -15,8 +15,8 @@
     "registry": "https://registry.npmjs.org"
   },
   "peerDependencies": {
-    "@atolljs/core": "0.1.0",
-    "@atolljs/react": "0.1.0",
+    "@atolljs/core": "0.0.0",
+    "@atolljs/react": "0.0.0",
     "react": "^19.3.0"
   },
   "repository": {

@@ -1,6 +1,6 @@
 {
   "name": "@atolljs/vue-island",
-  "version": "0.1.0",
+  "version": "0.0.0",
   "description": "Vue shell bindings for atoll-islands islands — useIsland composable, <AtollIsland/> component, islandComponent/lazyIsland facades",
   "homepage": "https://jwhenry3.github.io/atolljs/consumer/quickstart/",
   "type": "module",
@@ -16,8 +16,8 @@
     "registry": "https://registry.npmjs.org"
   },
   "peerDependencies": {
-    "@atolljs/core": "0.1.0",
-    "@atolljs/islands": "0.1.0",
+    "@atolljs/core": "0.0.0",
+    "@atolljs/islands": "0.0.0",
     "vue": "^3.5.43"
   },
   "repository": {

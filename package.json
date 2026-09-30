@@ -1,6 +1,6 @@
 {
   "name": "@atolljs/core",
-  "version": "0.1.0",
+  "version": "0.0.0",
   "description": "Typed shared-memory worker pools — defineWorker/connectWorker, SharedArrayBuffer contracts, cross-thread reactivity",
   "homepage": "https://jwhenry3.github.io/atolljs/consumer/quickstart/",
   "type": "module",

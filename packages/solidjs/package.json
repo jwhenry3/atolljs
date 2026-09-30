@@ -1,6 +1,6 @@
 {
   "name": "@atolljs/solidjs",
-  "version": "0.1.0",
+  "version": "0.0.0",
   "description": "SolidJS bindings — createObservable, createSharedValue, createTask",
   "homepage": "https://jwhenry3.github.io/atolljs/consumer/quickstart/",
   "type": "module",
@@ -15,7 +15,7 @@
     "registry": "https://registry.npmjs.org"
   },
   "peerDependencies": {
-    "@atolljs/core": "0.1.0",
+    "@atolljs/core": "0.0.0",
     "solid-js": "^1.9.15"
   },
   "repository": {

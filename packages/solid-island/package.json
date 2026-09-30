@@ -1,6 +1,6 @@
 {
   "name": "@atolljs/solid-island",
-  "version": "0.1.0",
+  "version": "0.0.0",
   "description": "SolidJS shell bindings for atoll-islands islands — createIsland, Island, islandComponent, lazyIsland + worker renderer",
   "homepage": "https://jwhenry3.github.io/atolljs/consumer/quickstart/",
   "type": "module",
@@ -16,8 +16,8 @@
     "registry": "https://registry.npmjs.org"
   },
   "peerDependencies": {
-    "@atolljs/core": "0.1.0",
-    "@atolljs/islands": "0.1.0",
+    "@atolljs/core": "0.0.0",
+    "@atolljs/islands": "0.0.0",
     "solid-js": "^1.9.15"
   },
   "repository": {

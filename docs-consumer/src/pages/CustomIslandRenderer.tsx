@@ -180,8 +180,8 @@ export const defineFwMonoWorker = (c, opts) =>
     "./worker": "./src/worker.ts"
   },
   "peerDependencies": {
-    "@atolljs/core": "0.1.0",
-    "@atolljs/islands": "0.1.0",
+    "@atolljs/core": "0.1.3",
+    "@atolljs/islands": "0.1.3",
     "<fw>": "^x.y.z"
   }
 }`}

@@ -1,6 +1,6 @@
 {
   "name": "@atolljs/svelte",
-  "version": "0.1.0",
+  "version": "0.0.0",
   "description": "Svelte 5 bindings — observableValue, sharedValue, taskState",
   "homepage": "https://jwhenry3.github.io/atolljs/consumer/quickstart/",
   "type": "module",
@@ -15,7 +15,7 @@
     "registry": "https://registry.npmjs.org"
   },
   "peerDependencies": {
-    "@atolljs/core": "0.1.0",
+    "@atolljs/core": "0.0.0",
     "svelte": "^5.57.1"
   },
   "repository": {
