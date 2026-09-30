@@ -15,7 +15,7 @@
   },
   "devDependencies": {
     "@types/koa": "^3.0.3",
-    "@types/koa__router": "^12.0.5",
+    "@types/koa__router": "^15.0.0",
     "@types/node": "^26.6.3",
     "esbuild": "^0.28.2",
     "tsx": "^4.23.15",
