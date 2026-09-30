@@ -11,6 +11,6 @@
   <circle cx="137" cy="160" r="16" fill="#cfe9f7"/>
   </g>
   <text x="235" y="115" font-family="system-ui, -apple-system, sans-serif"
-        font-weight="800" font-size="58" fill="#cfe9f7" letter-spacing="2">ATOLL<tspan dy="-0.55em" font-size="0.55em" letter-spacing="1">JS</tspan></text>
+        font-weight="800" font-size="58" fill="#cfe9f7" letter-spacing="2">ATOLL<tspan dy="-0.72em" font-size="0.42em">JS</tspan></text>
   <text x="238" y="152" font-family="system-ui, -apple-system, sans-serif"
-        font-weight="600" font-size="17" fill="#cfe9f7" letter-spacing="2.6">ISLANDS BASED MICRO-FRONTEND</text></svg>
+        font-weight="600" font-size="17" fill="#cfe9f7" letter-spacing="2.6">ISLANDS BASED MULTITHREADING</text></svg>

@@ -138,6 +138,9 @@ single-purpose and lives beside the module that spawns it:
   section, the site is dark-only, and each page embeds a single live demo:
   the framework-free shell (`index.html`) is the canonical demo on the
   Islands overview rather than a stacked set per page.
+- Branding — the logo tagline is now "islands based multithreading"
+  (regenerated the full SVG/PNG family: brand, horizontal, compact,
+  transparent, and social rasters).
 
 ### Tooling
 

@@ -36,7 +36,7 @@ const TEXT = (ink) => `
         letter-spacing="2">ATOLL<tspan dy="-0.72em" font-size="0.42em">JS</tspan></text>
   <text x="250" y="475" font-family="system-ui, -apple-system, sans-serif"
         font-weight="600" font-size="14" fill="${ink}" text-anchor="middle"
-        letter-spacing="3">ISLANDS BASED MICRO-FRONTEND</text>`;
+        letter-spacing="3">ISLANDS BASED MULTITHREADING</text>`;
 
 // ── variants ────────────────────────────────────────────────────────────────
 const svg = (ink, viewBox, body) =>
@@ -106,7 +106,7 @@ ${mark(ink)}
   <text x="235" y="115" font-family="system-ui, -apple-system, sans-serif"
         font-weight="800" font-size="58" fill="${ink}" letter-spacing="2">ATOLL<tspan dy="-0.72em" font-size="0.42em">JS</tspan></text>
   <text x="238" y="152" font-family="system-ui, -apple-system, sans-serif"
-        font-weight="600" font-size="17" fill="${ink}" letter-spacing="2.6">ISLANDS BASED MICRO-FRONTEND</text>`
+        font-weight="600" font-size="17" fill="${ink}" letter-spacing="2.6">ISLANDS BASED MULTITHREADING</text>`
   );
 writeFileSync(join(here, 'atoll-horizontal-light.svg'), horizontal('#14455e'));
 writeFileSync(join(here, 'atoll-horizontal-dark.svg'), horizontal('#cfe9f7'));
@@ -128,7 +128,7 @@ ${mark(ink)}
   <text x="264" y="185" font-family="system-ui, -apple-system, sans-serif"
         font-weight="800" font-size="140" fill="${ink}" letter-spacing="2">ATOLL<tspan dy="-0.72em" font-size="0.42em">JS</tspan></text>
   <text x="268" y="233" font-family="system-ui, -apple-system, sans-serif"
-        font-weight="600" font-size="42" fill="${ink}" letter-spacing="2.4">ISLANDS BASED MICRO-FRONTEND</text>`
+        font-weight="600" font-size="42" fill="${ink}" letter-spacing="2.4">ISLANDS BASED MULTITHREADING</text>`
   );
 };
 writeFileSync(join(here, 'atoll-brand-light.svg'), brand('#14455e'));
