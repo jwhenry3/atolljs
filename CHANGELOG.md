@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.1.4
+
+Fixes the published `atoll` bin — `npx @atolljs/cli` failed under 0.1.3
+with `ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING`, because Node refuses
+type stripping for `.ts` files under `node_modules` (where npx installs
+the package). No breaking changes to the 0.1.3 API.
+
+### `@atolljs/cli` — bundled bin
+
+- **`bin` now points at `dist/cli.js`** — the TypeScript sources are
+  bundled by esbuild at stage time (`scripts/publish.mjs` builds and
+  smoke-tests the bundle before stamping), so the shipped bin is plain
+  JavaScript that runs installed. The `src/` TypeScript sources still
+  ship in the tarball for transparency.
+- **Node floor drops to ≥ 20.12** — with no type-stripping requirement
+  left, the only hard dependency is `node:util`'s `styleText`.
+- Local development is unchanged — `npm run atoll`, vitest, and the CI
+  smoke all still exercise `src/cli.ts` through Node's type stripping.
+
+### Tooling
+
+- `esbuild` joins the root dev dependencies for the CLI bundle.
+
 ## 0.1.3
 
 The `atoll` CLI ships — a zero-dependency scaffolder/doctor covering every
