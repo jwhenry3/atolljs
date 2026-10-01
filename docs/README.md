@@ -24,6 +24,9 @@ repository — internals, contracts, and conventions.
 | `packages/islands/` — `mountIsland`, driver, op protocol | [islands.md](islands.md) |
 | `packages/islands/src/worker/` — proxy DOM, instances, worker entries | [islands-worker.md](islands-worker.md) |
 | `packages/*-island/` — Vue/Svelte/Solid/Angular worker renderers | [islands-frameworks.md](islands-frameworks.md) |
+| `examples/mfe`, `examples/*-host` — inter-framework contract demos | [islands-worker.md](islands-worker.md) (Contracts) |
+| Contract `worker` pointing at a CDN/remote bundle | [islands-remote.md](islands-remote.md) |
+| `examples/mfe-publish` + `examples/mfe-consumer` — publish/consume pair | [islands-remote.md](islands-remote.md) |
 | Writing a new `packages/<fw>` binding or `<fw>-island` renderer | [porting.md](porting.md) |
 | `packages/cli` — the `atoll` scaffold/doctor bin | `packages/cli/README.md` |
 | `packages/vite` — dev worker bundling (no refresh/HMR in workers) | [vite-plugin.md](vite-plugin.md) |
@@ -64,6 +67,7 @@ Framework bindings — **backend**:
 - [islands.md](islands.md) — vocabulary (Atoll/PolyWorker/MonoWorker/Island), `mountIsland`, topologies, transport modes
 - [islands-worker.md](islands-worker.md) — app kinds, proxy DOM, `installDomShim`, `emit`/`callbackProp`/`Slot`, instance discipline, testing
 - [islands-frameworks.md](islands-frameworks.md) — the `*-island` packages, mixed registries, bundle composition, real-library limits
+- [islands-remote.md](islands-remote.md) — worker bundles served from another origin (CORS/COEP, versioned URLs, contract pairing)
 
 ## Conventions for agents
 

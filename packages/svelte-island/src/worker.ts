@@ -70,11 +70,13 @@ import {
   defineMonoWorker,
   definePolyWorker,
   islandApp,
+  withContract,
   ProxyElement,
 } from '@atolljs/islands/worker';
 import type {
   DoorbellSpec,
   InternalDocument,
+  IslandContract,
   IslandWorkerMethods,
   ProxyDocument,
   ProxyEventHandler,
@@ -294,8 +296,9 @@ const decorateDocument = (doc: ProxyDocument): void => {
  */
 export function svelteIslandApp<P extends Record<string, unknown>>(
   Component: SvelteIslandComponent<P>,
+  contract?: IslandContract<P>,
 ): RenderedIslandApp {
-  return {
+  const app: RenderedIslandApp = {
     mount({ doc, props }: RenderContext): RenderedHandle {
       installSvelteCompat();
       decorateDocument(doc);
@@ -319,6 +322,9 @@ export function svelteIslandApp<P extends Record<string, unknown>>(
       };
     },
   };
+  // Contract stamp — the engine validates mount/updateProps props and
+  // declared emit payloads against it.
+  return contract !== undefined ? withContract(contract, app) : app;
 }
 
 /** Stamp + wrap in one step — `svelteIsland('counter', Counter)` yields the
@@ -326,8 +332,9 @@ export function svelteIslandApp<P extends Record<string, unknown>>(
 export const svelteIsland = <P extends Record<string, unknown>>(
   name: string,
   Component: SvelteIslandComponent<P>,
+  contract?: IslandContract<P>,
 ): RenderedIslandApp & { readonly islandAppName: string } =>
-  islandApp(name, svelteIslandApp(Component));
+  islandApp(name, svelteIslandApp(Component, contract));
 
 export interface SveltePolyWorkerRegistry {
   /** Name → Svelte component registry, mirroring `definePolyWorker({ apps })`. */
@@ -358,9 +365,9 @@ export function defineSveltePolyWorker(
  * `defineMonoWorker` for Svelte apps — one worker pinned to a single
  * component, the isolated-bundle host shape.
  */
-export function defineSvelteMonoWorker(
-  component: SvelteIslandComponent,
-  options?: { sharedMemory?: SharedMemory<DoorbellSpec> },
+export function defineSvelteMonoWorker<P extends Record<string, unknown>>(
+  component: SvelteIslandComponent<P>,
+  options?: { sharedMemory?: SharedMemory<DoorbellSpec>; contract?: IslandContract<P> },
 ): WorkerDefinition<DoorbellSpec, IslandWorkerMethods> {
-  return defineMonoWorker(svelteIslandApp(component), options);
+  return defineMonoWorker(svelteIslandApp(component, options?.contract), options);
 }

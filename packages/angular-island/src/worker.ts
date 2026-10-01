@@ -112,8 +112,11 @@ import {
   islandAppNameOf,
   pushOp,
   runInInstance,
+  withContract,
 } from '@atolljs/islands/worker';
+import type { IslandContract } from '@atolljs/islands/worker';
 import type { SharedMemory, WorkerDefinition } from '@atolljs/core';
+import type { IslandEvents, IslandInputs } from './index';
 
 // Worker entries shouldn't need a second package specifier for the
 // island→shell channel — `import { emit } from 'atoll-angular-island/worker'`.
@@ -598,7 +601,7 @@ function prepareJitSignalInterop(rootDef: MutableDirectiveDef): void {
 }
 
 /** Options accepted by {@link angularIslandApp}. */
-export interface AngularIslandAppOptions {
+export interface AngularIslandAppOptions<C = unknown> {
   /**
    * Extra providers merged into the island's root environment injector —
    * app-level services (`provideX()` results included) the component tree
@@ -606,6 +609,15 @@ export interface AngularIslandAppOptions {
    * cannot be overridden from here.
    */
   providers?: Array<Provider | EnvironmentProviders>;
+  /**
+   * The wire contract the shell types against — typed
+   * `IslandContract<IslandInputs<C>, IslandEvents<C>>` so a contract that
+   * can't satisfy the component's `input()`/`output()` surface fails HERE
+   * (MFE compile time), not in a consumer's build. Stamped onto the
+   * returned app (`withContract`) — the worker enforces it at mount,
+   * updateProps, and emit.
+   */
+  contract?: IslandContract<IslandInputs<C>, IslandEvents<C>>;
 }
 
 /* ── @AngularIsland — the decorator-driven registry ─────────────────────────
@@ -691,8 +703,9 @@ export function AngularIsland(
       (typeof spec === 'string' ? spec : spec?.name) ?? defaultAngularIslandName(target);
     islandApp(name, target);
     const entry: AngularIslandEntry =
-      typeof spec === 'object' && spec?.providers !== undefined
-        ? { component: target, providers: spec.providers }
+      typeof spec === 'object' &&
+        (spec?.providers !== undefined || spec?.contract !== undefined)
+        ? { component: target, providers: spec.providers, contract: spec.contract }
         : target;
     angularIslandRegistry.set(name, entry);
   };
@@ -734,11 +747,11 @@ export const angularIslandNameOf = (component: Type<unknown> | string): string |
  * - `dispose()` destroys the component ref (running destroys/unlistens) and
  *   the environment injector before the instance's document dies.
  */
-export function angularIslandApp(
-  component: Type<unknown>,
-  options?: AngularIslandAppOptions,
+export function angularIslandApp<C>(
+  component: Type<C>,
+  options?: AngularIslandAppOptions<C>,
 ): RenderedIslandApp {
-  return {
+  const app: RenderedIslandApp = {
     mount(ctx: RenderContext): RenderedHandle {
       // `createComponent` resolves the component def — for a JIT (decorator)
       // component that getter hits the compiler facade; surface the fix when
@@ -945,15 +958,17 @@ export function angularIslandApp(
       };
     },
   };
+  // Contract stamp — the worker engine reads it at mount/updateProps/emit.
+  return options?.contract !== undefined ? withContract(options.contract, app) : app;
 }
 
 /** Stamp + wrap in one step — `angularIsland('counter', CounterComponent)`
  *  yields the registry value AND the component-reference handle the shell
  *  can mount. */
-export const angularIsland = (
+export const angularIsland = <C>(
   name: string,
-  component: Type<unknown>,
-  options?: AngularIslandAppOptions,
+  component: Type<C>,
+  options?: AngularIslandAppOptions<C>,
 ): RenderedIslandApp & { readonly islandAppName: string } =>
   islandApp(name, angularIslandApp(component, options));
 
@@ -1042,9 +1057,9 @@ export function defineAngularPolyWorker(
  * component, the isolated-bundle host shape. Injector extras pass through
  * `AngularIslandAppOptions`.
  */
-export function defineAngularMonoWorker(
-  component: Type<unknown>,
-  options?: AngularIslandAppOptions & { sharedMemory?: SharedMemory<DoorbellSpec> },
+export function defineAngularMonoWorker<C>(
+  component: Type<C>,
+  options?: AngularIslandAppOptions<C> & { sharedMemory?: SharedMemory<DoorbellSpec> },
 ): WorkerDefinition<DoorbellSpec, IslandWorkerMethods> {
   const { sharedMemory, ...appOptions } = options ?? {};
   return defineMonoWorker(angularIslandApp(component, appOptions), { sharedMemory });

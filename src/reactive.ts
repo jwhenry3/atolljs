@@ -1,4 +1,4 @@
-import { createEffect, createMemo, createRoot, createSignal } from 'solid-js';
+import { createEffect, createMemo, createRenderEffect, createRoot, createSignal } from 'solid-js';
 import { Connector } from './contract/sharedMemory';
 import { scoped } from './log';
 
@@ -40,6 +40,87 @@ export interface ReactiveConnector<T> {
   observeRemote(): () => void;
 }
 
+/**
+ * Park on the connector's shared version counter and invoke `onBump` on each
+ * write — local or remote, both bump it. waitAsync when available, 50ms poll
+ * otherwise. No solid-js involved: this is the whole remote-write mechanism.
+ */
+const watchVersion = <T>(connector: Connector<T>, onBump: () => void): (() => void) => {
+  const version = connector._version;
+  if (!version) {
+    throw new Error('This connector does not support remote observation.');
+  }
+  let stopped = false;
+  let last = Atomics.load(version.view, version.index);
+
+  if (typeof Atomics.waitAsync === 'function') {
+    reactiveLog.debug(`observing remote writes (offset ${connector.byteOffset}, waitAsync)`);
+    void (async () => {
+      while (!stopped) {
+        const result = Atomics.waitAsync(version.view, version.index, last);
+        if (result.async) {
+          await result.value;
+        }
+        last = Atomics.load(version.view, version.index);
+        if (!stopped) {
+          reactiveLog.trace(`remote write observed (offset ${connector.byteOffset})`);
+          onBump();
+        }
+      }
+      reactiveLog.debug(`stopped observing (offset ${connector.byteOffset})`);
+    })();
+    return () => { stopped = true; };
+  }
+
+  reactiveLog.warn(`Atomics.waitAsync unavailable — observing via 50ms poll (offset ${connector.byteOffset})`);
+  const timer = setInterval(() => {
+    const current = Atomics.load(version.view, version.index);
+    if (current !== last) {
+      last = current;
+      onBump();
+    }
+  }, 50);
+  return () => {
+    stopped = true;
+    clearInterval(timer);
+  };
+};
+
+/**
+ * Under `node`/`worker`/`deno` export conditions, `solid-js` resolves to the
+ * SSR build — `createEffect` is a no-op, so signal-driven `watch`/`observe`
+ * die silently. Probe once. `createRenderEffect` is the discriminator: it
+ * runs synchronously at creation in BOTH builds but only re-fires on `set`
+ * in the client build. `createEffect` can't be used — the client build
+ * defers it past the synchronous `set` below, probing a false negative.
+ * The write must land AFTER the root's create pass returns for the same
+ * reason (a set issued mid-subscription is swallowed).
+ */
+let solidLive: boolean | null = null;
+const solidIsLive = (): boolean => {
+  if (solidLive !== null) return solidLive;
+  try {
+    let runs = 0;
+    let bump: ((v: number) => number) | undefined;
+    createRoot(() => {
+      const [get, set] = createSignal(0);
+      bump = set;
+      createRenderEffect(() => {
+        get();
+        runs++;
+      });
+    });
+    bump?.(1);
+    solidLive = runs > 1;
+  } catch {
+    solidLive = false;
+  }
+  if (!solidLive) {
+    reactiveLog.warn('solid-js resolved to the SSR build — watch() falls back to direct version watching');
+  }
+  return solidLive;
+};
+
 export function reactive<T>(connector: Connector<T>): ReactiveConnector<T> {
   const [value, setValue] = createSignal<T>(connector.read(), { equals: false });
   const bump = () => setValue(() => connector.read());
@@ -51,47 +132,7 @@ export function reactive<T>(connector: Connector<T>): ReactiveConnector<T> {
       connector.write(v);
       bump();
     },
-    observeRemote: () => {
-      const version = connector._version;
-      if (!version) {
-        throw new Error('This connector does not support remote observation.');
-      }
-      let stopped = false;
-      let last = Atomics.load(version.view, version.index);
-
-      if (typeof Atomics.waitAsync === 'function') {
-        reactiveLog.debug(`observing remote writes (offset ${connector.byteOffset}, waitAsync)`);
-        void (async () => {
-          while (!stopped) {
-            const result = Atomics.waitAsync(version.view, version.index, last);
-            if (result.async) {
-              await result.value;
-            }
-            last = Atomics.load(version.view, version.index);
-            if (!stopped) {
-              reactiveLog.trace(`remote write observed (offset ${connector.byteOffset})`);
-              bump();
-            }
-          }
-          reactiveLog.debug(`stopped observing (offset ${connector.byteOffset})`);
-        })();
-        return () => { stopped = true; };
-      }
-
-      // Fallback for environments without Atomics.waitAsync
-      reactiveLog.warn(`Atomics.waitAsync unavailable — observing via 50ms poll (offset ${connector.byteOffset})`);
-      const timer = setInterval(() => {
-        const current = Atomics.load(version.view, version.index);
-        if (current !== last) {
-          last = current;
-          bump();
-        }
-      }, 50);
-      return () => {
-        stopped = true;
-        clearInterval(timer);
-      };
-    },
+    observeRemote: () => watchVersion(connector, bump),
   };
 }
 
@@ -126,6 +167,30 @@ export function watch<T, S = T>(
 ): () => void {
   const select = onChange ? (selOrCb as (value: T) => S) : ((v: T) => v as unknown as S);
   const cb = (onChange ?? selOrCb) as (slice: S, previous: S | undefined) => void;
+
+  // SSR solid build (node/worker conditions): effects never re-run, so the
+  // signal pipeline below would silently never emit. Same semantics, driven
+  // straight off the version counter instead.
+  if (!solidIsLive()) {
+    const eq = (a: S | undefined, b: S | undefined): boolean =>
+      a === undefined || b === undefined ? a === b : (options?.equals ?? Object.is)(a, b);
+    let prev: S | undefined;
+    const emit = () => {
+      const v = connector.read() as T | null | undefined;
+      const s = v == null ? undefined : select(v);
+      if (s === undefined || eq(prev, s)) return;
+      const old = prev;
+      prev = s;
+      cb(s, old);
+    };
+    emit();
+    const stop = watchVersion(connector, emit);
+    reactiveLog.debug(`watching connector at offset ${connector.byteOffset} (direct)`);
+    return () => {
+      reactiveLog.debug(`watch stopped (offset ${connector.byteOffset})`);
+      stop();
+    };
+  }
 
   const sig = reactive(connector);
   const stopRemote = sig.observeRemote();

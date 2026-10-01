@@ -1,0 +1,31 @@
+{
+  "name": "@atolljs/mfe-counter",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/mfe/counter.contract.ts"
+  },
+  "files": [
+    "src/mfe",
+    "dist-mfe"
+  ],
+  "scripts": {
+    "dev": "vite",
+    "build": "npm run build:mfe && vite build",
+    "build:mfe": "vite build --config vite.mfe.config.ts",
+    "preview:mfe": "vite preview --config vite.mfe.config.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@atolljs/islands": "file:../../packages/islands",
+    "@atolljs/react-island": "file:../../packages/react-island",
+    "react": "file:../../node_modules/react",
+    "react-dom": "file:../../node_modules/react-dom"
+  },
+  "devDependencies": {
+    "@types/react": "^19.3.0",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.1"
+  }
+}

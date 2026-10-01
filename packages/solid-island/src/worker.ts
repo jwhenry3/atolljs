@@ -75,7 +75,9 @@ import {
   ProxyElement,
   ProxyNode,
   ProxyText,
+  withContract,
   type DoorbellSpec,
+  type IslandContract,
   type IslandWorkerMethods,
   type ProxyDocument,
   type ProxyEventHandler,
@@ -383,8 +385,9 @@ const assertClientBuild = (): void => {
  */
 export function solidIslandApp<P extends Record<string, unknown>>(
   Component: SolidComponent<P>,
+  contract?: IslandContract<P>,
 ): RenderedIslandApp {
-  return {
+  const app: RenderedIslandApp = {
     mount({ doc, props }: RenderContext): RenderedHandle {
       assertClientBuild();
       const renderer = rendererFor(doc);
@@ -405,6 +408,9 @@ export function solidIslandApp<P extends Record<string, unknown>>(
       };
     },
   };
+  // Contract stamp — the engine validates mount/updateProps props and
+  // declared emit payloads against it.
+  return contract !== undefined ? withContract(contract, app) : app;
 }
 
 /** Stamp + wrap in one step — `solidIsland('counter', Counter)` yields the
@@ -412,8 +418,9 @@ export function solidIslandApp<P extends Record<string, unknown>>(
 export const solidIsland = <P extends Record<string, unknown>>(
   name: string,
   Component: SolidComponent<P>,
+  contract?: IslandContract<P>,
 ): RenderedIslandApp & { readonly islandAppName: string } =>
-  islandApp(name, solidIslandApp(Component));
+  islandApp(name, solidIslandApp(Component, contract));
 
 export interface SolidPolyWorkerRegistry {
   /** Name → Solid component registry, mirroring `definePolyWorker({ apps })`. */
@@ -444,11 +451,11 @@ export function defineSolidPolyWorker(
  * `defineMonoWorker` for Solid apps — one worker pinned to a single
  * component, the isolated-bundle host shape.
  */
-export function defineSolidMonoWorker(
-  component: SolidComponent,
-  options?: { sharedMemory?: SharedMemory<DoorbellSpec> },
+export function defineSolidMonoWorker<P extends Record<string, unknown>>(
+  component: SolidComponent<P>,
+  options?: { sharedMemory?: SharedMemory<DoorbellSpec>; contract?: IslandContract<P> },
 ): WorkerDefinition<DoorbellSpec, IslandWorkerMethods> {
-  return defineMonoWorker(solidIslandApp(component), options);
+  return defineMonoWorker(solidIslandApp(component, options?.contract), options);
 }
 
 /* ── Compiled-JSX / hand-authoring primitives ─────────────────────────────

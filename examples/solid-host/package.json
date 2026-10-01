@@ -1,0 +1,37 @@
+{
+  "name": "solid-host-example",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@angular/common": "file:../../node_modules/@angular/common",
+    "@angular/compiler": "file:../../node_modules/@angular/compiler",
+    "@angular/core": "file:../../node_modules/@angular/core",
+    "@angular/platform-browser": "file:../../node_modules/@angular/platform-browser",
+    "@atolljs/angular-island": "file:../../packages/angular-island",
+    "@atolljs/islands": "file:../../packages/islands",
+    "@atolljs/react-island": "file:../../packages/react-island",
+    "@atolljs/solid-island": "file:../../packages/solid-island",
+    "@atolljs/svelte-island": "file:../../packages/svelte-island",
+    "@atolljs/vue-island": "file:../../packages/vue-island",
+    "react": "file:../../node_modules/react",
+    "react-dom": "file:../../node_modules/react-dom",
+    "rxjs": "file:../../node_modules/rxjs",
+    "solid-js": "file:../../node_modules/solid-js",
+    "svelte": "file:../../node_modules/svelte",
+    "tslib": "file:../../node_modules/tslib",
+    "vue": "file:../../node_modules/vue"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "file:../../node_modules/@sveltejs/vite-plugin-svelte",
+    "@vitejs/plugin-vue": "^6.0.9",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.1",
+    "vite-plugin-solid": "^2.11.14"
+  }
+}

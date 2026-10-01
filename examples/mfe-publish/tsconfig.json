@@ -1,0 +1,24 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ESNext", "DOM", "WebWorker"],
+    "types": ["vite/client", "node"],
+    "strict": true,
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "isolatedModules": true,
+    "jsx": "react-jsx",
+    "skipLibCheck": true,
+    "paths": {
+      "@atolljs/core": ["../../src/index.ts"],
+      "@atolljs/core/*": ["../../src/*"],
+      "@atolljs/islands": ["../../packages/islands/src/index.ts"],
+      "@atolljs/islands/worker": ["../../packages/islands/src/worker/index.ts"],
+      "@atolljs/react-island": ["../../packages/react-island/src/index.tsx"],
+      "@atolljs/react-island/worker": ["../../packages/react-island/src/worker.ts"]
+    }
+  },
+  "include": ["src", "vite.config.ts", "vite.mfe.config.ts"]
+}

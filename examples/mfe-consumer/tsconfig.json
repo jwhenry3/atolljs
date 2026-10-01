@@ -1,0 +1,27 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ESNext", "DOM", "WebWorker"],
+    "types": ["vite/client", "node"],
+    "strict": true,
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "isolatedModules": true,
+    "jsx": "react-jsx",
+    "skipLibCheck": true,
+    "paths": {
+      "@atolljs/core": ["../../src/index.ts"],
+      "@atolljs/core/*": ["../../src/*"],
+      "@atolljs/islands": ["../../packages/islands/src/index.ts"],
+      "@atolljs/islands/worker": ["../../packages/islands/src/worker/index.ts"],
+      "@atolljs/react-island": ["../../packages/react-island/src/index.tsx"],
+      "@atolljs/react-island/worker": ["../../packages/react-island/src/worker.ts"],
+      "@atolljs/mfe-counter": ["../mfe-publish/src/mfe/counter.contract.ts"]
+    }
+  },
+  // The contract file is pulled into the program by the @atolljs/mfe-counter
+  // path/import itself — no need to include the producer's whole src/.
+  "include": ["src", "vite.config.ts"]
+}

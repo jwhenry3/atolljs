@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Vue host — five frameworks inside workers</title>
+    <script>
+      // GitHub Pages can't send COOP/COEP headers — coi-sw.js injects them
+      // via a service worker so SharedArrayBuffer exists there (push-mode
+      // doorbell). First visit reloads once so the document becomes
+      // controlled; if isolation never arrives the islands run in poll mode.
+      (function () {
+        var flag = 'coi-reload:' + location.pathname;
+        if (window.crossOriginIsolated) { sessionStorage.removeItem(flag); return; }
+        if (!('serviceWorker' in navigator)) return;
+        navigator.serviceWorker
+          .register('coi-sw.js')
+          .then(function () { return navigator.serviceWorker.ready; })
+          .then(function () {
+            if (sessionStorage.getItem(flag)) return;
+            sessionStorage.setItem(flag, '1');
+            location.reload();
+          })
+          .catch(function () {});
+      })();
+    </script>
+
+    <style>
+      body { font-family: system-ui, sans-serif; margin: 0; background: #101418; color: #e6edf3; }
+      #root { max-width: 960px; margin: 0 auto; padding: 24px; }
+      button, input { font: inherit; }
+      input { padding: 6px 10px; background: #1c2330; color: inherit; border: 1px solid #303845; border-radius: 6px; }
+      #status-line { font: 12px monospace; color: #7fb6ff; margin-bottom: 12px; min-height: 1em; }
+      .island { border: 1px solid #2a3340; border-radius: 8px; margin-bottom: 14px; overflow: hidden; }
+      .island-head {
+        display: flex; justify-content: space-between; align-items: center;
+        padding: 6px 12px; background: #161c26; border-bottom: 1px solid #2a3340;
+        font: 12px monospace; color: #9aa4b2;
+      }
+      .island-head .badge {
+        padding: 1px 8px; border-radius: 8px; background: #1f4d2e; color: #a9e5c3; font-weight: 700;
+      }
+      .island-root { display: block; padding: 8px 12px; }
+      .mfe-card { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+      .mfe-heading { font-size: 13px; color: #9aa4b2; }
+      .mfe-btn { padding: 3px 10px; background: #22354f; color: #e6edf3; font-size: 12px; border: 0; border-radius: 6px; cursor: pointer; }
+      .mfe-btn:hover { background: #2d4365; }
+      .mfe-row { display: flex; gap: 4px; }
+      .mfe-list { margin: 8px 0 0; padding-left: 16px; font: 11px/1.7 monospace; color: #7d8a9c; }
+      .mfe-list-line { border-left: 2px solid #2a3340; padding-left: 8px; list-style: none; }
+      .mfe-readout { font: 11px monospace; color: #7d8a9c; margin-top: 4px; }
+      .mfe-range { accent-color: #2d6cdf; }
+      .island-code {
+        margin: 0; padding: 8px 12px; border-top: 1px dashed #2a3340;
+        font: 11px/1.6 monospace; color: #7d8a9c; white-space: pre-wrap;
+        overflow-x: auto;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

@@ -1,0 +1,35 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ESNext", "DOM", "WebWorker"],
+    "types": ["vite/client", "node"],
+    "strict": true,
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "isolatedModules": true,
+    "jsx": "react-jsx",
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "useDefineForClassFields": false,
+    "skipLibCheck": true,
+    "paths": {
+      "@atolljs/core": ["../../src/index.ts"],
+      "@atolljs/core/*": ["../../src/*"],
+      "@atolljs/islands": ["../../packages/islands/src/index.ts"],
+      "@atolljs/islands/worker": ["../../packages/islands/src/worker/index.ts"],
+      "@atolljs/react-island": ["../../packages/react-island/src/index.tsx"],
+      "@atolljs/react-island/worker": ["../../packages/react-island/src/worker.ts"],
+      "@atolljs/vue-island": ["../../packages/vue-island/src/index.ts"],
+      "@atolljs/vue-island/worker": ["../../packages/vue-island/src/worker.ts"],
+      "@atolljs/solid-island": ["../../packages/solid-island/src/index.ts"],
+      "@atolljs/solid-island/worker": ["../../packages/solid-island/src/worker.ts"],
+      "@atolljs/svelte-island": ["../../packages/svelte-island/src/index.ts"],
+      "@atolljs/svelte-island/worker": ["../../packages/svelte-island/src/worker.ts"],
+      "@atolljs/angular-island": ["../../packages/angular-island/src/index.ts"],
+      "@atolljs/angular-island/worker": ["../../packages/angular-island/src/worker.ts"]
+    }
+  },
+  "include": ["src", "../mfe", "vite.config.ts"]
+}

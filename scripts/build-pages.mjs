@@ -15,6 +15,15 @@ const projects = [
   ['svelte', 'examples/svelte'],
   ['angular', 'examples/angular'],
   ['react-dom-worker', 'examples/react-dom-worker'],
+  ['react-host', 'examples/react-host'],
+  ['vue-host', 'examples/vue-host'],
+  ['solid-host', 'examples/solid-host'],
+  ['svelte-host', 'examples/svelte-host'],
+  ['angular-host', 'examples/angular-host'],
+  // mfe-publish must build FIRST -- mfe-consumer's contract resolves
+  // its dist-mfe/ worker bundle as an asset.
+  ['mfe-publish', 'examples/mfe-publish'],
+  ['mfe-consumer', 'examples/mfe-consumer'],
 ];
 
 if (!process.argv.includes('--no-build')) {

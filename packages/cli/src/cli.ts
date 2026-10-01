@@ -16,9 +16,10 @@ import { runAdd, runCreate, runDoctor, runInit, type Ctx } from './commands.ts';
 
 const HELP = (fmt: Fmt) => `${fmt.strong('atoll')} — bootstrap multithreading ${fmt.dim('(experimental)')}
 
-  ${fmt.accent('atoll new <dir>')} [--framework react|vue|solid|svelte|node] [--pm npm]
+  ${fmt.accent('atoll new <dir>')} [--framework react|vue|solid|svelte|node] [--mfe] [--pm npm]
       Scaffold a fresh app — vite shell + a worker-rendered island,
-      or a tsx Node service with a pooled worker.
+      or a tsx Node service with a pooled worker. --mfe scaffolds a
+      publishable MFE package (contract + worker + bundle build).
 
   ${fmt.accent('atoll init')} [--name app] [--force]
       Wire Atoll into the current project: hardened .npmrc, package
@@ -28,6 +29,8 @@ const HELP = (fmt: Fmt) => `${fmt.strong('atoll')} — bootstrap multithreading 
       worker      pool + typed client (+ framework bindings on UI projects)
       memory      shared-memory contract
       island      worker-rendered UI — facade (contract + lazy import) | mono
+      mfe         publishable micro-frontend — island contract + worker +
+                  vite.mfe.config.ts (build a self-contained remote bundle)
       service     nestjs: @AtollService class facade + pool module + worker
       method      nestjs: @AtollTask method-level offload
       module      nestjs: registerPool boundary module + worker entry

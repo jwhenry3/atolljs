@@ -39,12 +39,16 @@
  */
 import {
   connectIslandWorker,
+  contractWorkerOf,
   islandAppNameOf,
   mountIsland,
 } from '@atolljs/islands';
 import type {
   IslandAppLike,
   IslandClient,
+  IslandContract,
+  IslandContractEventHandler,
+  IslandContractProps,
   IslandHandle,
   IslandWorkerOptions,
 } from '@atolljs/islands';
@@ -77,7 +81,7 @@ export interface IslandActionOptions {
   worker?: (() => Worker) | URL;
   client?: IslandClient;
   /** Extra pool options — concurrency, taskTimeout, respawn… (poolSize stays 1). */
-  workerOptions?: IslandWorkerOptions;
+  workerOptions?: IslandWorkerOptions & { doorbell?: boolean };
   /** Initial + updated root props — serialized to the worker. */
   props?: Record<string, unknown>;
   /** Island → shell channel: every `emit` op lands here. */
@@ -100,6 +104,26 @@ export interface IslandActionOptions {
   /** Fired when Svelte destroys the action — before the island tears down. */
   onDestroy?: () => void;
 }
+
+/**
+ * `IslandActionOptions` narrowed to a `defineIslandContract` — `props` and
+ * `onEvent` type off the contract's schemas, `app` accepts the contract
+ * itself (resolves to `contract.app`). The cross-framework surface for
+ * generated `XIsland.svelte` wrappers and hand-rolled actions:
+ *
+ * ```svelte
+ * <div use:island={{ app: checkoutContract, props: { label: 'alpha' },
+ *                    onEvent: (n, p) => ... }} />
+ * ```
+ */
+export type IslandContractOptions<C extends IslandContract> = Omit<
+  IslandActionOptions,
+  'app' | 'props' | 'onEvent'
+> & {
+  app?: C;
+  props?: IslandContractProps<C>;
+  onEvent?: IslandContractEventHandler<C>;
+};
 
 /**
  * The Svelte action for worker islands: `<div use:island={{ client, app, props }} />`.
@@ -139,10 +163,13 @@ export const island: Action<HTMLElement, IslandActionOptions> = (node, options) 
     },
   };
 
+  // A contract `app` can carry its own worker factory — the contract
+  // module is then the whole connection, call sites pass no worker.
+  const worker = options.worker ?? contractWorkerOf(options.app);
   const client =
     options.client ??
-    (options.worker !== undefined
-      ? connectIslandWorker({ worker: options.worker, ...options.workerOptions })
+    (worker !== undefined
+      ? connectIslandWorker({ worker, ...options.workerOptions })
       : undefined);
   if (client === undefined) {
     report(new Error('use:island requires either `worker` or `client`'));

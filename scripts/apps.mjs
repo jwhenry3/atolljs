@@ -15,4 +15,13 @@ export const apps = [
   ['koa', 'examples/koa', 3203],
   ['http-offload', 'examples/http-offload', 3204],
   ['react-dom-worker', 'examples/react-dom-worker', 5177],
+  ['react-host', 'examples/react-host', 5180],
+  ['vue-host', 'examples/vue-host', 5181],
+  ['solid-host', 'examples/solid-host', 5182],
+  ['svelte-host', 'examples/svelte-host', 5183],
+  ['angular-host', 'examples/angular-host', 5184],
+  // Published-MFE pair — producer harness (:5185) + consumer shell (:5187).
+  // :5186 is the producer's `preview:mfe` (dist-mfe/ + CORS, the fake CDN).
+  ['mfe-publish', 'examples/mfe-publish', 5185],
+  ['mfe-consumer', 'examples/mfe-consumer', 5187],
 ];

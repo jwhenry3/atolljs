@@ -148,6 +148,25 @@ constructor throws on `sharedMemory` without `SharedArrayBuffer`, so this is
 `setMode('push')` on such a client just polls). The `worker:`-shorthand form
 of `mountIsland` does this implicitly when `mode: 'poll'` is passed.
 
+## Island contracts
+
+`defineIslandContract({ app, props, events, worker? })` publishes a
+framework-free wire contract: the registry key plus `Schema` shapes for
+props and the declared `emit` vocabulary. It exists so a shell mounts a
+foreign-framework island by typed contract — importing the MFE's contract
+module, never its component or framework. `islandAppNameOf` resolves the
+contract to its `app` key, so `app: checkoutContract` works everywhere an
+app reference does; `*-island` facades (`islandComponent(contract)`,
+`lazyIsland` over a contract module, Angular's `{ contract }` config, the
+Svelte `IslandContractOptions` type) derive props and a narrowed `onEvent`
+from it.
+
+Contracts are enforced worker-side — `withContract(contract, app)` stamps
+a registry entry (or the adapters' `contract` option), then mount/
+updateProps/emit payloads parse against it. See
+[the cross-framework section](islands-frameworks.md#island-contracts--the-cross-framework-seam)
+and [worker enforcement](islands-worker.md#contracts---withcontract-and-wire-enforcement).
+
 ## Worker entries per bundler
 
 The `worker` option is a factory — the bundler must see the worker script as
@@ -159,6 +178,11 @@ an entry, which is where setups diverge:
 
 A path the bundler didn't resolve shows up as a `mountIsland` `mountTimeout`
 rejection naming the unanswered entry — not a silent hang.
+
+A **remote** URL is also legal — `worker: () => new Worker('https://cdn…/x.worker.js',
+{ type: 'module' })`. The bundler-detection rule doesn't apply (nothing to
+bundle), but CORS/COEP and versioning rules do — see
+[islands-remote.md](islands-remote.md).
 
 ## Shell packages
 

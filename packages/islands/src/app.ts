@@ -10,6 +10,9 @@
  * The stamp is a plain data property — stable through minification.
  */
 
+import { isIslandContract } from './contract';
+import type { IslandContract } from './contract';
+
 /** The data property `islandApp` stamps — read by islandAppNameOf. */
 const ISLAND_APP_NAME = 'islandAppName';
 
@@ -41,6 +44,9 @@ export const islandApp = <A>(name: string, app: A): A & { readonly islandAppName
 export const islandAppNameOf = (app: unknown): string | undefined => {
   if (typeof app === 'string') return app === '' ? undefined : app;
   if (app === null || (typeof app !== 'function' && typeof app !== 'object')) return undefined;
+  // A contract's registry key IS its `app` field — checked before the
+  // function/imperative fallbacks so `app={checkoutContract}` resolves.
+  if (isIslandContract(app)) return app.app === '' ? undefined : app.app;
   const stamped = (app as unknown as Record<string, unknown>)[ISLAND_APP_NAME];
   if (typeof stamped === 'string' && stamped !== '') return stamped;
   if (typeof app === 'function') {
@@ -62,13 +68,15 @@ export const islandAppNameOf = (app: unknown): string | undefined => {
  * string names (the un-typed mount path). Interfaces without index
  * signatures still infer here — serialization happens at mount.
  */
-export type IslandAppProps<A> = A extends {
-  imperative: (doc: never, props: infer P) => void;
-}
+export type IslandAppProps<A> = A extends IslandContract<infer P, infer _E>
   ? P
-  : A extends (props: infer P) => unknown
+  : A extends {
+        imperative: (doc: never, props: infer P) => void;
+      }
     ? P
-    : Record<string, unknown>;
+    : A extends (props: infer P) => unknown
+      ? P
+      : Record<string, unknown>;
 
 /**
  * The structural shape of a mountable app — `never` params so ANY component,
@@ -80,4 +88,5 @@ export type IslandAppProps<A> = A extends {
 export type IslandAppLike =
   | ((props: never) => unknown)
   | { imperative: (doc: never, props: never) => void }
-  | { mount: (ctx: never) => unknown };
+  | { mount: (ctx: never) => unknown }
+  | IslandContract;

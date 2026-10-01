@@ -1,0 +1,24 @@
+{
+  "name": "mfe-consumer-example",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@atolljs/islands": "file:../../packages/islands",
+    "@atolljs/mfe-counter": "file:../mfe-publish",
+    "@atolljs/react-island": "file:../../packages/react-island",
+    "react": "file:../../node_modules/react",
+    "react-dom": "file:../../node_modules/react-dom"
+  },
+  "devDependencies": {
+    "@types/react": "^19.3.0",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.1"
+  }
+}

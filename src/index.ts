@@ -2,6 +2,8 @@
 
 export { bindSharedMemories, defineSharedMemory, field, getDefinedSharedMemoryCount, jsonCodec, registerConnectorFactory } from './contract/sharedMemory';
 export { reef } from './contract/reef';
+export { z, SchemaError } from './contract/zod';
+export type { ZodLike } from './contract/zod';
 export type {
   Codec,
   Connector,

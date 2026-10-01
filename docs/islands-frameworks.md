@@ -56,6 +56,64 @@ The demo's Vue island runs exactly this way — its own worker entry
 (`examples/react-dom-worker/src/worker/vue.worker.ts`), Vue but no React in
 the bundle.
 
+## Island contracts — the cross-framework seam
+
+The registry key alone doesn't type a foreign app's props — an Angular
+component's `IslandInputs<C>` requires `@angular/core` declarations
+resolvable wherever the type is consumed, which a React shell for a
+distributed MFE shouldn't need. `defineIslandContract` (`@atolljs/islands`)
+closes that gap: a framework-free module the MFE publishes and BOTH sides
+import — the shell for types, the worker for enforcement:
+
+```ts
+// checkout.contract.ts — imports nothing framework-specific
+import { z } from '@atolljs/core';
+import { defineIslandContract } from '@atolljs/islands';
+
+export const checkout = defineIslandContract({
+  app: 'checkout',                                    // the registry key
+  props: z.object({ label: z.optional(z.string()), total: z.number() }),
+  events: { paid: z.object({ total: z.number() }) },
+  // optional worker factory makes the contract itself a lazy module:
+  worker: () => new Worker(new URL('./checkout.worker.ts', import.meta.url), { type: 'module' }),
+});
+```
+
+`z` is the vendored schema engine — message-domain kinds (`optional`,
+`nullable`, `literal`, `union`, `record`, `callback<F>` for `callbackProp`
+members) beyond reef's fixed-width set; any `Schema<T>` (`{ parse }`)
+works, including consumer zod. Props/events stay structured-cloneable —
+that's still the wire.
+
+Shell facades accept the contract directly — the key resolves via
+`contract.app`, props infer `P`, and `onEvent` narrows to `E`:
+
+```tsx
+// React / Solid — islandComponent(contract) or lazyIsland over the module
+const Checkout = islandComponent(checkout);
+<Checkout count={2} onEvent={(name, payload) => name === 'paid' && …} />
+const CheckoutLazy = lazyIsland(() => import('./checkout.contract'));
+
+// Vue — same contract overload
+const Checkout = islandComponent(checkout);
+
+// Angular — the `contract` config field (types ride a phantom carrier
+// through IslandInputs/IslandEvents — no component class needed)
+const CheckoutIsland = islandComponent({ contract: checkout, selector: 'x-checkout' });
+// <x-checkout [props]="{ count: 2 }" [onEvent]="onCheckoutEvent" />
+
+// Svelte — IslandContractOptions<C> narrows the action's props/onEvent
+<div use:island={{ app: checkout, props: { count: 2 }, onEvent }} />
+```
+
+Worker side, attach the contract to the registry entry — every adapter
+takes it (`angularIslandApp(C, { contract })` is even type-checked against
+the component's `IslandInputs`/`IslandEvents`, so drift fails in the MFE's
+own build), or stamp any app shape directly with
+`withContract(contract, app)`. Enforcement (mount/updateProps/emit
+validation) is worker-side — see
+[islands-worker.md#contracts](islands-worker.md#contracts---withcontract-and-wire-enforcement).
+
 ## Bundle composition — what's in a worker bundle
 
 The `/worker` entry is framework-neutral: `definePolyWorker`, the proxy DOM,

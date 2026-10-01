@@ -54,6 +54,7 @@ import {
 } from 'solid-js';
 import {
   connectIslandWorker,
+  contractWorkerOf,
   islandAppNameOf,
   mountIsland,
 } from '@atolljs/islands';
@@ -61,6 +62,8 @@ import type {
   IslandAppLike,
   IslandAppProps,
   IslandClient,
+  IslandContract,
+  IslandContractEventHandler,
   IslandHandle,
   IslandWorkerOptions,
 } from '@atolljs/islands';
@@ -93,7 +96,7 @@ export interface CreateIslandOptions<A = string> {
   worker?: (() => Worker) | URL;
   client?: IslandClient;
   /** Extra pool options — concurrency, taskTimeout, respawn… (poolSize stays 1). */
-  workerOptions?: IslandWorkerOptions;
+  workerOptions?: IslandWorkerOptions & { doorbell?: boolean };
   /**
    * Initial + updated root props — serialized to the worker. Pass an
    * accessor (`props: () => ({ … })`) or define `props` as a reactive getter
@@ -219,10 +222,13 @@ export function createIsland<A = string>(
       );
       return;
     }
+    // A contract `app` can carry its own worker factory — the contract
+    // module is then the whole connection, call sites pass no worker.
+    const worker = options.worker ?? contractWorkerOf(options.app);
     const client =
       options.client ??
-      (options.worker !== undefined
-        ? connectIslandWorker({ worker: options.worker, ...options.workerOptions })
+      (worker !== undefined
+        ? connectIslandWorker({ worker, ...options.workerOptions })
         : undefined);
     if (client === undefined) {
       fail(new Error('createIsland requires either `worker` or `client`'));
@@ -369,7 +375,7 @@ export interface IslandShellProps {
   /** How to reach the worker — see CreateIslandOptions.worker/client. */
   worker?: (() => Worker) | URL;
   client?: IslandClient;
-  workerOptions?: IslandWorkerOptions;
+  workerOptions?: IslandWorkerOptions & { doorbell?: boolean };
   /** Island → shell channel: every `emit` op lands here. */
   onEvent?: (name: string, payload: unknown) => void;
   /** Fired after each applied op batch. */
@@ -488,11 +494,28 @@ type LazyModule<A> = A | { default: A } | { app: A; worker?: (() => Worker) | UR
  * contract-module shape `{ app: A, worker? }`, passes bare A through.
  */
 export type LazyResolvedApp<T extends Promise<unknown>> =
-  Awaited<T> extends { app: infer A }
-    ? A
-    : Awaited<T> extends { default: infer D }
-      ? D
-      : Awaited<T>;
+  // A contract object IS a lazy module (`{ app, worker? }` + brand) — match
+  // it before `{ app: infer A }` so props infer `P`, not `app`'s string.
+  // The never guard keeps a `Promise.reject` loader on the untyped path.
+  [Awaited<T>] extends [never]
+    ? string
+    : Awaited<T> extends { readonly islandContract: true }
+      ? Awaited<T>
+      : Awaited<T> extends { app: infer A }
+        ? A
+        : Awaited<T> extends { default: infer D }
+          ? D
+          : Awaited<T>;
+
+/**
+ * Facade prop surface for `A`: app-derived props plus the shell props. When
+ * `A` is an `IslandContract`, `onEvent` narrows to the contract's declared
+ * event vocabulary — the cross-framework contract type.
+ */
+export type IslandFacadeProps<A> = IslandAppProps<A> &
+  Omit<IslandShellProps, 'onEvent'> & {
+    onEvent?: A extends IslandContract ? IslandContractEventHandler<A> : IslandShellProps['onEvent'];
+  };
 
 /**
  * `islandComponent<P>('charts')` — a proxy component for a worker app that
@@ -500,12 +523,18 @@ export type LazyResolvedApp<T extends Promise<unknown>> =
  * the worker component's props); the string is the registry key. Against a
  * `defineSolidMonoWorker` (1:1) worker the name can be omitted entirely.
  *
+ * `islandComponent(checkoutContract)` — the cross-framework facade: mounts
+ * by `contract.app`, props and `onEvent` typed off the contract's schemas.
+ *
  * ```tsx
  * import type { TableProps } from './worker/apps';
  * const TableIsland = islandComponent<TableProps>('data-table');
  * <TableIsland worker={renderWorker} filter={filter()} desc={desc()} />
  * ```
  */
+export function islandComponent<C extends IslandContract>(
+  app: C,
+): (props: IslandFacadeProps<C>) => JSX.Element;
 export function islandComponent<P extends object = Record<string, unknown>>(
   app?: string,
 ): (props: P & IslandShellProps) => JSX.Element;
@@ -547,7 +576,7 @@ export function islandComponent(
  */
 export function lazyIsland<T extends Promise<LazyModule<IslandAppLike>>>(
   loader: () => T,
-): (props: IslandAppProps<LazyResolvedApp<T>> & IslandShellProps) => JSX.Element {
+): (props: IslandFacadeProps<LazyResolvedApp<T>>) => JSX.Element {
   const Component = lazy(
     () =>
       Promise.resolve()
@@ -573,5 +602,5 @@ export function lazyIsland<T extends Promise<LazyModule<IslandAppLike>>>(
           default: (props: Record<string, unknown>) => JSX.Element;
         }>,
   );
-  return Component as (props: IslandAppProps<LazyResolvedApp<T>> & IslandShellProps) => JSX.Element;
+  return Component as (props: IslandFacadeProps<LazyResolvedApp<T>>) => JSX.Element;
 }

@@ -15,6 +15,7 @@
 
 import { renderMemory } from '../memory';
 import { enterProxyFrame, exitProxyFrame, proxyMetrics } from '../metrics';
+import type { IslandContract } from '../contract';
 import type { Op, WireProps } from '../ops';
 
 /**
@@ -94,6 +95,21 @@ interface HandlerEntry {
 const handlers = new Map<number, HandlerEntry>();
 let nextId = 1;
 let nextHandlerId = 1;
+
+/**
+ * instance key → the `withContract`-attached contract (undefined for
+ * unstamped apps — most mounts). `emit` validates declared event payloads
+ * against it; defineWorkers registers it at instance create and clears it
+ * at unmount.
+ */
+const instanceContracts = new Map<string, IslandContract>();
+export const setInstanceContract = (
+  instance: string,
+  contract: IslandContract | undefined,
+): void => {
+  if (contract === undefined) instanceContracts.delete(instance);
+  else instanceContracts.set(instance, contract);
+};
 
 /** Allocate an instance id — the shared counter React and the proxy DOM both draw from. */
 export const allocId = (): number => nextId++;
@@ -285,6 +301,20 @@ export const unregisterHandler = (id: number): void => {
  */
 export const emit = (name: string, payload?: unknown): void => {
   timed(() => {
+    // Contract enforcement: a declared event's payload parses before it
+    // crosses — undeclared names pass through (the contract describes the
+    // wire; it doesn't fence forward-compatible additions).
+    const schema = instanceContracts.get(activeInstance)?.events?.[name];
+    if (schema !== undefined) {
+      try {
+        payload = schema.parse(payload);
+      } catch (err) {
+        throw new Error(
+          `emit("${name}") rejected by the island contract for "${activeInstance}": ` +
+            (err instanceof Error ? err.message : String(err)),
+        );
+      }
+    }
     pushOp(activeInstance, { t: 'emit', name, payload });
   });
 };

@@ -141,6 +141,30 @@ escape hatch instead: `field.object({ maxBytes })` / `field.array({ maxBytes })`
 / `field.string({ maxBytes })` encode with the contract's codec — the schema
 is then optional validation, not layout.
 
+### Message-domain kinds
+
+`@atolljs/core` also exports the raw engine as `z` — the zod/mini-style
+schema layer reef is built on — extended with layout-free kinds for
+contracts that ride `postMessage` instead of the buffer
+(`defineIslandContract` prop/event schemas; see
+[islands.md](islands.md#island-contracts)):
+
+- `z.optional(inner)`, `z.nullable(inner)` — wrapper members; in
+  `z.object` shapes an optional-output member produces an optional key
+  (`{ label?: string }`).
+- `z.literal(v)`, `z.union([members])`, `z.record(element)` — value
+  equality, first-match unions, elementwise maps.
+- `z.callback<F>()` — declares a `callbackProp` function member; the wire
+  `{__cb:id}` handle is unmarshalled to a callable BEFORE schema parse, so
+  parse sees a real function.
+- `z.unknown()` accepts anything.
+
+These kinds have no byte width — inside a `field.*`/`reef.object` layout
+they fail compilation loudly, which is correct: they only ever ride the
+message channel. `fluent` schemas also gain `.optional()`/`.nullable()`
+wrappers; bare `z` members use the `z.optional(...)` factory (zod/mini
+spelling).
+
 ## `listSchema` and `memory.schemas`
 
 `listSchema({ id: 'u32', site: { string: 10 } })` builds the same record

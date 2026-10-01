@@ -20,6 +20,16 @@ export const DEMOS = [
   ['angular', 'examples/angular/dist/incidents-angular/browser'],
   // Multi-page build: index.html (framework-free shell) + react-shell.html.
   ['react-dom-worker', 'examples/react-dom-worker/dist'],
+  // Inter-framework hosts — one shell per framework, all five worker MFEs.
+  ['react-host', 'examples/react-host/dist'],
+  ['vue-host', 'examples/vue-host/dist'],
+  ['solid-host', 'examples/solid-host/dist'],
+  ['svelte-host', 'examples/svelte-host/dist'],
+  ['angular-host', 'examples/angular-host/dist'],
+  // Publishable-MFE pair — producer harness + consumer shell mounting the
+  // prebuilt worker bundle emitted as a verbatim asset.
+  ['mfe-publish', 'examples/mfe-publish/dist'],
+  ['mfe-consumer', 'examples/mfe-consumer/dist'],
 ];
 
 // Projects the consumer tree needs built (docs site + every demo above).

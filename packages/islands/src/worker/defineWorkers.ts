@@ -58,6 +58,7 @@
 import { defineWorker } from '@atolljs/core';
 import type { SharedMemory, WorkerDefinition } from '@atolljs/core';
 import { islandAppNameOf } from '../app';
+import { contractOf, type IslandContract } from '../contract';
 import { renderMemory, type DoorbellSpec } from '../memory';
 import { CALLBACK_EVENT, unmarshalCallbackProps } from '../callbackProps';
 import {
@@ -76,6 +77,7 @@ import {
   pushOp,
   runInInstance,
   setDoorbellContract,
+  setInstanceContract,
   setInstanceSize,
   takeOps,
 } from './instance';
@@ -198,6 +200,9 @@ interface InstanceBase {
    *  distinct render instance (in production: a distinct worker). Stable across
    *  remounts of the same instance key. */
   pid: string;
+  /** The `withContract`-stamped contract — drives props validation at
+   *  mount/updateProps; mirrored into instanceContracts for `emit`. */
+  contract?: IslandContract;
 }
 
 interface ImperativeInstance extends InstanceBase {
@@ -286,17 +291,43 @@ function createIslandRuntime(
   // installDomShim, which builds on this.
   installInstanceDispatcher();
 
+  /**
+   * Contract enforcement — a `withContract`-stamped app's prop schema parses
+   * the unmarshalled props (callbackProp callables already restored, so
+   * `z.callback()` members see functions). parse() also strips undeclared
+   * keys, making the contract the authoritative wire shape. Throws —
+   * mount/updateProps reject, which mountIsland surfaces as a named error.
+   */
+  const parseContractProps = (
+    contract: IslandContract | undefined,
+    key: string,
+    props: Record<string, unknown>,
+  ): Record<string, unknown> => {
+    if (contract?.props === undefined) return props;
+    try {
+      return contract.props.parse(props) as Record<string, unknown>;
+    } catch (err) {
+      throw new Error(
+        `[island "${contract.app}"] props for "${key}" rejected by contract: ` +
+          (err instanceof Error ? err.message : String(err)),
+      );
+    }
+  };
+
   // Container creation is per-instance, not module-level, so a second mount()
   // can't collide with the first instance's tree. Imperative mounts skip the
   // renderer entirely — their "host environment" is the proxy DOM, and
   // build() emits ops itself.
   function createInstance(key: string, pid: string): Instance {
     const app = resolveApp(appNameOf(key));
+    const contract = contractOf(app);
+    setInstanceContract(key, contract);
     if (isRendered(app)) {
       return {
         key,
         app: appNameOf(key),
         pid,
+        contract,
         rendered: { app, handle: undefined, props: {} },
       };
     }
@@ -305,6 +336,7 @@ function createIslandRuntime(
         key,
         app: appNameOf(key),
         pid,
+        contract,
         imperative: {
           build: app.imperative,
           dispose: app.dispose,
@@ -397,6 +429,7 @@ function createIslandRuntime(
             `mount: unknown app "${instance}" — registry has: ${[...APP_REGISTRY.keys()].join(', ')}`,
           );
         }
+        props = parseContractProps(contractOf(App), instance, props);
 
         const mounted = mounts.get(instance);
         // Remount — same clear+rebuild semantics as updateProps; the instance
@@ -445,6 +478,7 @@ function createIslandRuntime(
         if (mounted === undefined) {
           throw new Error(`updateProps: "${instance}" is not mounted in this worker — mount() first`);
         }
+        props = parseContractProps(mounted.contract, instance, props);
         // Imperative mounts have no diffing — updateProps REBUILDS: clear the
         // root and re-run build(props) on a fresh proxy document. Documented
         // as the honest semantics; fine for widgets, not for huge trees.
@@ -540,6 +574,7 @@ function createIslandRuntime(
         const mounted = mounts.get(instance);
         if (mounted === undefined) return [];
         mounts.delete(instance);
+        setInstanceContract(instance, undefined);
         return runInInstance(instance, () => {
           if (isImperativeInstance(mounted)) {
             // The app's dispose hook cancels deferred work (library timers,

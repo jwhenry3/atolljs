@@ -20,6 +20,17 @@ const mounts = [
   // Multi-page build: dist holds index.html (framework-free shell) AND
   // react-shell.html (React + <Island/> proxies) side by side.
   ['react-dom-worker', 'examples/react-dom-worker/dist'],
+  // Inter-framework hosts — one shell per framework, all five worker MFEs
+  // mounted via contracts from examples/mfe/.
+  ['react-host', 'examples/react-host/dist'],
+  ['vue-host', 'examples/vue-host/dist'],
+  ['solid-host', 'examples/solid-host/dist'],
+  ['svelte-host', 'examples/svelte-host/dist'],
+  ['angular-host', 'examples/angular-host/dist'],
+  // Published-MFE pair -- mfe-consumer's build already carries the
+  // producer's worker bundle as an emitted asset.
+  ['mfe-publish', 'examples/mfe-publish/dist'],
+  ['mfe-consumer', 'examples/mfe-consumer/dist'],
 ];
 
 // The root page is the static landing — the dashboard app was removed when

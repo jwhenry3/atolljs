@@ -289,6 +289,80 @@ describe('island templates', () => {
   });
 });
 
+describe('mfe add + scaffold', () => {
+  it('add mfe emits contract + contracted worker + publish config', async () => {
+    const dir = tmp();
+    mkdirSync(join(dir, 'src'));
+    writePkg(dir, { name: 'demo', dependencies: { react: '^19' }, devDependencies: { vite: '^8' } });
+    const io = scriptIo();
+    const code = await runCli(['add', 'mfe', 'charts'], io, dir);
+    expect(code).toBe(0);
+    const contract = readFileSync(join(dir, 'src/mfe/charts.contract.ts'), 'utf8');
+    expect(contract).toContain('defineIslandContract');
+    expect(contract).toContain(`app: 'charts'`);
+    expect(contract).toContain(`new URL('./charts.worker.tsx', import.meta.url)`);
+    const worker = readFileSync(join(dir, 'src/mfe/charts.worker.tsx'), 'utf8');
+    expect(worker).toContain(`defineReactMonoWorker(Charts, { contract: chartsContract })`);
+    const cfg = readFileSync(join(dir, 'vite.mfe.config.ts'), 'utf8');
+    expect(cfg).toContain(`outDir: 'dist-mfe'`);
+    expect(cfg).toContain(`fileName: () => 'charts.worker.js'`);
+    expect(cfg).toContain('Access-Control-Allow-Origin');
+    expect(io.output.join('\n')).toContain('islandComponent');
+  });
+
+  it('add mfe emits the svelte SFC + entry pair', async () => {
+    const dir = tmp();
+    mkdirSync(join(dir, 'src'));
+    writePkg(dir, { name: 'demo', dependencies: { svelte: '^5' } });
+    const code = await run(['add', 'mfe', 'dial'], dir);
+    expect(code).toBe(0);
+    expect(existsSync(join(dir, 'src/mfe/Dial.svelte'))).toBe(true);
+    const worker = readFileSync(join(dir, 'src/mfe/dial.worker.ts'), 'utf8');
+    expect(worker).toContain('defineSvelteMonoWorker');
+    expect(worker).toContain('contract: dialContract');
+  });
+
+  it('add mfe refuses non-island frameworks', async () => {
+    const dir = tmp();
+    writePkg(dir, { name: 'api', dependencies: { express: '^5' } });
+    const code = await run(['add', 'mfe', 'charts'], dir);
+    expect(code).toBe(1);
+  });
+
+  it('warns when the publish build has no vite', async () => {
+    const dir = tmp();
+    mkdirSync(join(dir, 'src'));
+    writePkg(dir, { name: 'demo', dependencies: { react: '^19' } });
+    const io = scriptIo();
+    const code = await runCli(['add', 'mfe', 'charts'], io, dir);
+    expect(code).toBe(0);
+    expect(io.output.join('\n')).toContain("vite isn't installed");
+  });
+
+  it('new --mfe scaffolds a publishable MFE package', async () => {
+    const dir = tmp();
+    const code = await run(['new', 'my-mfe', '--framework', 'solid', '--mfe'], dir, [false]);
+    expect(code).toBe(0);
+    const pkg = JSON.parse(readFileSync(join(dir, 'my-mfe/package.json'), 'utf8'));
+    expect(pkg.scripts['build:mfe']).toContain('vite.mfe.config.ts');
+    expect(pkg.devDependencies['vite-plugin-solid']).toBeDefined();
+    const contract = readFileSync(join(dir, 'my-mfe/src/mfe/my-mfe.contract.ts'), 'utf8');
+    expect(contract).toContain(`app: 'my-mfe'`);
+    const worker = readFileSync(join(dir, 'my-mfe/src/mfe/my-mfe.worker.tsx'), 'utf8');
+    expect(worker).toContain('defineSolidMonoWorker');
+    const app = readFileSync(join(dir, 'my-mfe/src/App.tsx'), 'utf8');
+    expect(app).toContain('islandComponent(myMfeContract)');
+    expect(readFileSync(join(dir, 'my-mfe/vite.mfe.config.ts'), 'utf8')).toContain('dist-mfe');
+  });
+
+  it('new --mfe refuses node', async () => {
+    const dir = tmp();
+    const io = scriptIo();
+    expect(await runCli(['new', 'svc', '--framework', 'node', '--mfe'], io, dir)).toBe(1);
+    expect(io.output.join('\n')).toContain('--mfe');
+  });
+});
+
 describe('nestjs add kinds', () => {
   const nestPkg = (dir: string) =>
     writePkg(dir, { name: 'api', dependencies: { '@nestjs/core': '11' } });

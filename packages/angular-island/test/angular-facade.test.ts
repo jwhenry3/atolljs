@@ -25,8 +25,10 @@ import {
 } from '@angular/platform-browser-dynamic/testing';
 import type { IslandHandle } from '@atolljs/islands';
 import { InProcessWorker } from '@atolljs/core/testing/inProcessWorker';
+import { z } from '@atolljs/core';
+import { connectIslandWorker, defineIslandContract } from '@atolljs/islands';
 import { AtollIslandComponent, islandComponent } from '../src/index';
-import { angularIslandNameOf } from '../src/worker';
+import { angularIslandApp, angularIslandNameOf } from '../src/worker';
 import type { GreetComponent, SaverComponent } from './fixtures/facade.worker';
 import * as facadeFixture from './fixtures/facade.worker';
 
@@ -155,6 +157,62 @@ describe('output → emit bridging', () => {
     await vi.waitFor(() =>
       expect(host.querySelector('.vote-btn')?.textContent).toContain('1'),
     );
+  });
+});
+
+describe('island contracts', () => {
+  it('angularIslandApp({ contract }) is checked against the component surface', () => {
+    // SaverComponent: `amount = input(0)` in, `save = output<number>()` out.
+    const good = defineIslandContract({
+      app: 'saver-app',
+      props: z.object({ amount: z.number() }),
+      events: { save: z.number() },
+    });
+    expect(angularIslandApp(facadeFixture.SaverComponent, { contract: good })).toBeDefined();
+
+    // A contract whose `save` payload disagrees with output<number> fails
+    // HERE — the MFE's own compile — not in a consumer's build.
+    const bad = defineIslandContract({ app: 'saver-app', events: { save: z.string() } });
+    // @ts-expect-error — 'save' payload string can't satisfy output<number>
+    angularIslandApp(facadeFixture.SaverComponent, { contract: bad });
+  });
+
+  it('islandComponent({ contract }) types the facade without a component class', async () => {
+    // The cross-framework surface — the shell binds the CONTRACT, not
+    // ContractedComponent: props/onEvent infer via IslandContractCarrier.
+    const ContractedIsland = islandComponent({
+      contract: facadeFixture.contractedContract,
+      selector: 'contracted-island',
+    });
+    const emitted: Array<{ name: string; payload: unknown }> = [];
+    const fixture = TestBed.createComponent(ContractedIsland);
+    fixture.componentRef.setInput('worker', renderWorker);
+    fixture.componentRef.setInput('props', { price: 7 });
+    fixture.componentRef.setInput('onEvent', (name: string, payload: unknown) => {
+      emitted.push({ name, payload });
+    });
+    fixture.detectChanges();
+
+    const hostEl = fixture.nativeElement as HTMLElement;
+    await vi.waitFor(() => expect(hostEl.querySelector('.pay-btn')).not.toBeNull());
+    hostEl.querySelector('.pay-btn')!.dispatchEvent(
+      new MouseEvent('click', { bubbles: true }),
+    );
+    // output → emit bridged AND parsed against contract.events.paid.
+    await vi.waitFor(() =>
+      expect(emitted).toContainEqual({ name: 'paid', payload: { total: 7 } }),
+    );
+    fixture.destroy();
+  });
+
+  it('the contract rejects violating props at mount', async () => {
+    const client = connectIslandWorker({ worker: renderWorker });
+    await expect(client.mount('contracted@1', { price: 'x' })).rejects.toThrow(/contracted/);
+    await client.mount('contracted@1', { price: 4 }); // valid — still mounts
+    // Unmount before terminating — a live proxy doc would stay ambient in
+    // this shared module graph and poison `document` for later tests.
+    await client.unmount('contracted@1');
+    client.terminate();
   });
 });
 

@@ -14,6 +14,9 @@ interface DemoFrameProps {
  * at ./<id>/ relative to the site root — works under any base path
  * (serve:all, GitHub Pages). Server-rendered examples (Next.js) get no frame
  * at all — a static host has no Node runtime to render them.
+ *
+ * Multiple DemoFrames on one page are folded into a tabbed dock by
+ * prerender.mjs's docs.js — `name` becomes the tab label, so keep it short.
  */
 export function DemoFrame({ id, port, name, path = '' }: DemoFrameProps) {
   const base = import.meta.env.DEV

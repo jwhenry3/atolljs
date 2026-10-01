@@ -40,6 +40,40 @@ wires the incident tasks and shared fields through the framework bindings.
 | Angular  | `examples/angular` | `npm run dev`   | 4201 |
 | Next.js  | `examples/nextjs`  | `npm run dev`   | 3001 |
 
+## Inter-framework island examples
+
+`react-dom-worker` is the full islands demo — every shell and every renderer in
+one app. The `*-host` folders split the same idea into one folder per shell
+framework: each page mounts all five supported worker frameworks (its own plus
+the four foreign ones) through **island contracts** — framework-free
+`defineIslandContract` modules that carry the app key, prop/event schemas, and
+the worker factory, so the shell never imports the worker's framework.
+
+| Example        | Dir                   | Command         | Port |
+|----------------|-----------------------|-----------------|------|
+| React host     | `examples/react-host` | `npm run dev`   | 5180 |
+| Vue host       | `examples/vue-host`   | `npm run dev`   | 5181 |
+| Solid host     | `examples/solid-host` | `npm run dev`   | 5182 |
+| Svelte host    | `examples/svelte-host`| `npm run dev`   | 5183 |
+| Angular host   | `examples/angular-host`| `npm run dev`  | 5184 |
+| MFE producer   | `examples/mfe-publish` | `npm run build:mfe && npm run dev` | 5185 |
+| MFE consumer   | `examples/mfe-consumer`| `npm run dev`   | 5187 |
+
+All five hosts import the same prebuilt MFEs from `examples/mfe/` — five
+contracts and five one-app worker entries (React, Vue, Solid, Svelte, Angular)
+that model what a published MFE package would ship. Each host is independently
+installable (`npm install` in its own folder).
+
+`mfe-publish` + `mfe-consumer` are the full **publish/consume pair**: the
+producer is a standalone package (`@atolljs/mfe-counter`) whose public API is
+a contract module (`exports` → `src/mfe/counter.contract.ts`) and whose
+`build:mfe` emits `dist-mfe/counter.worker.js`; the consumer declares it as a
+dependency and mounts the island with no worker source in its bundle — the
+prebuilt worker arrives as a verbatim asset (or from `preview:mfe` on :5186
+via `VITE_MFE_ORIGIN`, the remote/CDN shape — worker script URLs must be
+same-origin, so that path goes through a `blob:` shim; see
+`docs/islands-remote.md`).
+
 ## Backend examples
 
 The same incidents contract served as a JSON REST API — a `WorkerPool` of

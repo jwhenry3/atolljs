@@ -92,4 +92,53 @@ describe('vendored schema engine', () => {
     const s = reef.u8();
     expect(Object.keys(s._zod.def)).not.toContain('refine');
   });
+
+  it('message-domain kinds: optional, nullable, literal, union, record, callback', () => {
+    // optional — undefined passes through, present values parse memberwise.
+    expect(z.optional(z.string()).parse(undefined)).toBeUndefined();
+    expect(z.optional(z.string()).parse('x')).toBe('x');
+    expect(() => z.optional(z.string()).parse(1)).toThrow(/string/);
+
+    // nullable — same shape, null is the escape.
+    expect(z.nullable(z.number()).parse(null)).toBeNull();
+    expect(z.nullable(z.number()).parse(2)).toBe(2);
+    expect(() => z.nullable(z.number()).parse(undefined)).toThrow(/number/);
+
+    // literal — exact value equality.
+    expect(z.literal('paid').parse('paid')).toBe('paid');
+    expect(z.literal(7).parse(7)).toBe(7);
+    expect(() => z.literal('paid').parse('owed')).toThrow(/paid/);
+
+    // union — first matching member wins, all-fail throws.
+    const u = z.union([z.literal('a'), z.literal('b'), z.number()]);
+    expect(u.parse('b')).toBe('b');
+    expect(u.parse(3)).toBe(3);
+    expect(() => u.parse('c')).toThrow(/union/);
+
+    // record — elementwise over own entries.
+    const r = z.record(z.number());
+    expect(r.parse({ x: 1, y: 2 })).toEqual({ x: 1, y: 2 });
+    expect(() => r.parse({ x: 'no' })).toThrow(/number/);
+    expect(() => r.parse('nope')).toThrow(/object/);
+    expect(() => r.parse([1])).toThrow(/object/);
+
+    // callback — functions pass; anything else fails. (Wire form is the
+    // {__cb} handle unmarshalled BEFORE contract parse.)
+    const cb = z.callback<(v: string) => void>();
+    const fn = (v: string): void => void v;
+    expect(cb.parse(fn)).toBe(fn);
+    expect(() => cb.parse({ __cb: 1 })).toThrow(/function/);
+    expect(() => cb.parse('x')).toThrow(/function/);
+  });
+
+  it('object members with optional outputs yield optional keys at runtime', () => {
+    const s = z.object({
+      required: z.number(),
+      opt: z.optional(z.string()),
+    });
+    // Missing optional member parses to an undefined-valued key.
+    expect(s.parse({ required: 1 })).toEqual({ required: 1, opt: undefined });
+    // A missing REQUIRED member still fails — optionality is per-member.
+    expect(() => s.parse({ opt: 'x' })).toThrow(/number/);
+  });
 });

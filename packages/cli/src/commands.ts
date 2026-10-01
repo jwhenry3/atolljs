@@ -137,6 +137,7 @@ const ADD_KINDS = [
   'worker',
   'memory',
   'island',
+  'mfe',
   'service',
   'method',
   'module',
@@ -152,6 +153,7 @@ const KIND_SCOPE: Record<AddKind, readonly Framework[] | null> = {
   worker: null,
   memory: null,
   island: ISLAND_FRAMEWORKS,
+  mfe: ISLAND_FRAMEWORKS,
   service: ['nestjs'],
   method: ['nestjs'],
   module: ['nestjs'],
@@ -360,6 +362,34 @@ export async function runAdd(ctx: Ctx): Promise<number> {
       return 0;
     }
 
+    case 'mfe': {
+      const dir = flag(ctx.args, 'dir') ?? rel(join(project.srcDir, 'mfe'));
+      const files = T.mfeFiles(name, framework, dir);
+      // The publish build lives at the project root beside vite.config.ts —
+      // it exists only for `vite build --config`, never the app dev server.
+      const publishCfg = rel(join(project.root!, 'vite.mfe.config.ts'));
+      // The config lives at the project root — the lib entry must be
+      // root-relative even when `add` ran from a subdirectory or --dir moved.
+      const dirFromRoot = relative(project.root!, join(ctx.cwd, dir)).replaceAll('\\', '/');
+      await writeTree(
+        ctx.io,
+        ctx.cwd,
+        [
+          ...files,
+          { path: publishCfg, content: T.mfePublishConfig(name, framework, dirFromRoot) },
+        ],
+        force,
+      );
+      if (missingDeps(project.pkg, ['vite']).length) {
+        ctx.io.warn(
+          `vite isn't installed — the publish build needs it: ${ctx.io.fmt.accent(pmInstallCmd(project.pm, ['-D', 'vite']))}`,
+        );
+      }
+      ctx.io.print(ctx.io.fmt.strong('\nwire it:'));
+      ctx.io.print(T.mfeUsage(name, framework, dir));
+      return 0;
+    }
+
     case 'service': {
       const dir = atollDir;
       mkdirSync(join(ctx.cwd, dir), { recursive: true });
@@ -488,8 +518,17 @@ export async function runCreate(ctx: Ctx): Promise<number> {
   }
   mkdirSync(target, { recursive: true });
 
+  const mfe = hasFlag(ctx.args, 'mfe');
+  if (mfe && fw === 'node') {
+    ctx.io.error('--mfe is a browser-island shape — pick react|vue|solid|svelte');
+    return 1;
+  }
   const files =
-    fw === 'node' ? T.nodeScaffoldFiles(dirName) : T.scaffoldFiles(dirName, fw);
+    fw === 'node'
+      ? T.nodeScaffoldFiles(dirName)
+      : mfe
+        ? T.mfeScaffoldFiles(dirName, fw)
+        : T.scaffoldFiles(dirName, fw);
   await writeTree(ctx.io, target, files, { force: true });
 
   const written = JSON.parse(readFileSync(join(target, 'package.json'), 'utf8'));
@@ -507,6 +546,14 @@ export async function runCreate(ctx: Ctx): Promise<number> {
 
   ctx.io.print('');
   ctx.io.print(`done — ${ctx.io.fmt.accent(`cd ${dirName} && ${pm} run dev`)}`);
+  if (mfe) {
+    ctx.io.print(
+      `  ${ctx.io.fmt.accent('npm run build:mfe')} → dist-mfe/${dirName}.worker.js — publish behind CORS + a versioned URL`,
+    );
+    ctx.io.print(
+      `  ${ctx.io.fmt.accent('npm run preview:mfe')} serves it cross-origin; shells mount the contract`,
+    );
+  }
   return 0;
 }
 

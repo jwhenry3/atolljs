@@ -1143,6 +1143,528 @@ const ${P}Island = lazyIsland(() => import('./islands/${name}.island'));
   }
 }
 
+/* ── mfe — publishable micro-frontend (contract + worker + bundle config) ── */
+
+/**
+ * The framework-free contract — the ONE module both sides import. The
+ * `worker` factory is bundler-detectable for local dev; a comment shows the
+ * remote-URL variant used once the bundle is deployed (islands-remote.md).
+ */
+export function mfeContractFile(name: string, fw: Framework): OutFile {
+  const c = camel(name);
+  const ext = ISLAND_EXT[fw] ?? 'ts';
+  return {
+    path: `${name}.contract.ts`,
+    content: `import { z } from '@atolljs/core';
+import { defineIslandContract } from '@atolljs/islands';
+
+/**
+ * '${name}' — the wire contract for this micro-frontend. Shells import THIS
+ * module only: it names the app, pins the prop/event payload shapes, and
+ * carries the worker factory. The worker attaches the same module via
+ * { contract } so both sides validate one shape — drift fails loudly at
+ * mount or emit.
+ *
+ * The factory below is bundler-detectable (\`new URL(..., import.meta.url)\`)
+ * so local dev builds the worker entry automatically. Deployment changes
+ * only this field — see docs/islands-remote.md for the serving rules:
+ *
+ *   // CDN deploy — worker SCRIPT urls must stay same-origin (a cross-origin
+ *   // new Worker() throws SecurityError regardless of CORS), so the remote
+ *   // bundle loads through a same-origin blob: shim; CORS covers the
+ *   // import fetch inside it:
+ *   worker: () => {
+ *     const shim = \`import \${JSON.stringify(\`\${import.meta.env.VITE_MFE_ORIGIN}/${name}.worker.js\`)};\`;
+ *     return new Worker(
+ *       URL.createObjectURL(new Blob([shim], { type: 'text/javascript' })),
+ *       { type: 'module' },
+ *     );
+ *   },
+ *
+ *   // Or ship dist-mfe/ INSIDE the npm package — resolve the bundle
+ *   // package-relative as a plain ASSET (hoisted new URL — inline inside
+ *   // new Worker would make the consumer's bundler re-emit it as a worker
+ *   // entry instead of copying it verbatim):
+ *   const bundled = new URL('../../dist-mfe/${name}.worker.js', import.meta.url);
+ *   worker: () => new Worker(bundled, { type: 'module' }),
+ */
+export const ${c}Contract = defineIslandContract({
+  app: '${name}',
+  props: z.object({ label: z.string().optional() }),
+  events: {
+    incremented: z.object({ count: z.number(), label: z.string() }),
+  },
+  worker: () =>
+    new Worker(new URL('./${name}.worker.${ext}', import.meta.url), { type: 'module' }),
+});
+
+export default ${c}Contract;
+`,
+  };
+}
+
+/**
+ * Worker entry per framework — the MFE implementation, attaching the
+ * contract ({ contract }) so props parse at mount/updateProps and the
+ * declared emit payload validates inside the worker.
+ */
+export function mfeWorkerFiles(name: string, fw: Framework): OutFile[] {
+  const P = pascal(name);
+  const c = camel(name);
+  switch (fw) {
+    case 'react':
+      return [
+        {
+          path: `${name}.worker.tsx`,
+          content: `import { useState } from 'react';
+import { defineReactMonoWorker, emit } from '@atolljs/react-island/worker';
+import ${c}Contract from './${name}.contract';
+
+/**
+ * ${P} — a publishable React micro-frontend rendered INSIDE its own worker.
+ * The bundle is self-contained; deploy it behind CORS + a versioned URL.
+ */
+function ${P}({ label = '${name}' }: { label?: string }) {
+  const [count, setCount] = useState(0);
+  return (
+    <button
+      onClick={() => {
+        const n = count + 1;
+        setCount(n);
+        emit('incremented', { count: n, label }); // validates against the contract
+      }}
+    >
+      {label}: {count}
+    </button>
+  );
+}
+
+export const worker = defineReactMonoWorker(${P}, { contract: ${c}Contract });
+`,
+        },
+      ];
+    case 'vue':
+      return [
+        {
+          path: `${P}.vue`,
+          content: `<script setup lang="ts">
+import { ref } from 'vue';
+import { emit } from '@atolljs/islands/worker';
+
+// Rendered inside the worker — ops stream to the shell; emit() validates
+// the payload against the contract before it leaves the worker.
+const props = defineProps<{ label?: string }>();
+const count = ref(0);
+function increment() {
+  count.value += 1;
+  emit('incremented', { count: count.value, label: props.label ?? '${name}' });
+}
+</script>
+
+<template>
+  <button @click="increment">{{ label ?? '${name}' }}: {{ count }}</button>
+</template>
+`,
+        },
+        {
+          path: `${name}.worker.ts`,
+          content: `import { defineVueMonoWorker } from '@atolljs/vue-island/worker';
+import ${P} from './${P}.vue';
+import ${c}Contract from './${name}.contract';
+
+/** '${name}' — publishable Vue MFE, one app per worker. */
+export const worker = defineVueMonoWorker(${P}, { contract: ${c}Contract });
+`,
+        },
+      ];
+    case 'solid':
+      return [
+        {
+          path: `${name}.worker.tsx`,
+          content: `import { createSignal } from 'solid-js';
+import { defineSolidMonoWorker, emit } from '@atolljs/solid-island/worker';
+import ${c}Contract from './${name}.contract';
+
+/** ${P} — a publishable Solid MFE rendered inside its own worker. */
+function ${P}(props: { label?: string }) {
+  const [count, setCount] = createSignal(0);
+  return (
+    <button
+      onClick={() => {
+        const n = count() + 1;
+        setCount(n);
+        emit('incremented', { count: n, label: props.label ?? '${name}' });
+      }}
+    >
+      {props.label ?? '${name}'}: {count()}
+    </button>
+  );
+}
+
+export const worker = defineSolidMonoWorker(${P}, { contract: ${c}Contract });
+`,
+        },
+      ];
+    case 'svelte':
+      return [
+        {
+          path: `${P}.svelte`,
+          content: `<script lang="ts">
+  import { emit } from '@atolljs/islands/worker';
+
+  // Rendered inside the worker — emit() validates against the contract.
+  let { label = '${name}' }: { label?: string } = $props();
+  let count = $state(0);
+  function increment() {
+    count += 1;
+    emit('incremented', { count, label });
+  }
+</script>
+
+<button onclick={increment}>{label}: {count}</button>
+`,
+        },
+        {
+          path: `${name}.worker.ts`,
+          content: `import { defineSvelteMonoWorker } from '@atolljs/svelte-island/worker';
+import ${P} from './${P}.svelte';
+import ${c}Contract from './${name}.contract';
+
+/** '${name}' — publishable Svelte MFE, one app per worker. */
+export const worker = defineSvelteMonoWorker(${P}, { contract: ${c}Contract });
+`,
+        },
+      ];
+    case 'angular':
+      return [
+        {
+          path: `${name}.worker.ts`,
+          content: `import '@angular/compiler'; // JIT — compiles the decorator template in the worker
+import { Component, input, output } from '@angular/core';
+import { defineAngularMonoWorker } from '@atolljs/angular-island/worker';
+import ${c}Contract from './${name}.contract';
+
+/**
+ * ${P}Component — a publishable Angular MFE. The contract is checked against
+ * this class's input()/output() surface (IslandContract<IslandInputs<C>,
+ * IslandEvents<C>>) — a contract missing 'label' or 'incremented' fails
+ * typecheck HERE, not at the shell.
+ */
+@Component({
+  selector: 'mfe-${name}',
+  template: \`<button (click)="increment()">{{ label() }}: {{ count }}</button>\`,
+})
+export class ${P}Component {
+  readonly label = input('${name}');
+  readonly incremented = output<{ count: number; label: string }>();
+  count = 0;
+  increment(): void {
+    this.count += 1;
+    this.incremented.emit({ count: this.count, label: this.label() });
+  }
+}
+
+export const worker = defineAngularMonoWorker(${P}Component, {
+  contract: ${c}Contract,
+});
+`,
+        },
+      ];
+    default:
+      return [];
+  }
+}
+
+/** All MFE files rooted at `dir` — contract + worker (+ framework SFCs). */
+export function mfeFiles(name: string, fw: Framework, dir: string): OutFile[] {
+  return [
+    { ...mfeContractFile(name, fw), path: `${dir}/${name}.contract.ts` },
+    ...mfeWorkerFiles(name, fw).map((f) => ({ ...f, path: `${dir}/${f.path}` })),
+  ];
+}
+
+/**
+ * The publish build — `vite build --config vite.mfe.config.ts` emits ONE
+ * self-contained ESM worker bundle per MFE, deployable to any static host.
+ */
+export function mfePublishConfig(name: string, fw: Framework, dir = 'src/mfe'): string {
+  const ext = ISLAND_EXT[fw] ?? 'ts';
+  const plugin = SCAFFOLDS[fw]?.vitePlugin;
+  return `import { defineConfig } from 'vite';
+${plugin?.import_ ?? ''}
+/**
+ * MFE publish build — emits ONE self-contained ESM worker bundle at
+ * dist-mfe/${name}.worker.js (worker entry + framework runtime baked in;
+ * every remote import would need its own CORS headers, so ship one file).
+ *
+ * Serve it cross-origin with:
+ *   Access-Control-Allow-Origin: <shell origin>   // module workers fetch via CORS
+ *   Cache-Control: public, max-age=31536000, immutable
+ * and version the URL per release — the contract's worker factory is the
+ * cache key. docs/islands-remote.md covers the full matrix.
+ *
+ *   npm run build:mfe     → dist-mfe/${name}.worker.js
+ *   npm run preview:mfe   → serves dist-mfe with the CORS header below —
+ *                           shells still need a same-origin shim entry
+ *                           (blob: or a local re-export file) since worker
+ *                           script URLs can't be cross-origin
+ */
+export default defineConfig({
+  plugins: [
+    {
+      // The worker entry imports the contract, so the contract's own worker
+      // factory lands in this bundle too — and its new URL(...) resolves
+      // the PREVIOUS dist-mfe output, inlining it into its own successor
+      // (the bundle grows every rebuild). The field is dead code here — a
+      // worker never spawns itself — so stub the URL before vite's asset
+      // plugin can resolve it.
+      name: 'mfe:stub-worker-url',
+      enforce: 'pre',
+      transform(code: string, id: string) {
+        if (!id.endsWith('${name}.contract.ts')) return null;
+        return code.replace(
+          /new URL\\(\\s*'[^']*'\\s*,\\s*import\\.meta\\.url,?\\s*\\)/,
+          "'about:blank'",
+        );
+      },
+    },
+    ${plugin?.call ?? ''}
+  ],
+  // App builds define process.env.NODE_ENV automatically; a lib-mode worker
+  // bundle doesn't, and framework dev/prod checks crash on a bare
+  // \`process\` in a browser worker.
+  define: { 'process.env.NODE_ENV': '"production"' },
+  build: {
+    outDir: 'dist-mfe',
+    minify: true,
+    lib: {
+      entry: '${dir}/${name}.worker.${ext}',
+      formats: ['es'],
+      fileName: () => '${name}.worker.js',
+    },
+  },
+  preview: {
+    headers: { 'Access-Control-Allow-Origin': '*' },
+  },
+});
+`;
+}
+
+/** Shell-side consume + publish guidance printed after `add mfe`. */
+export function mfeUsage(name: string, fw: Framework, dir = 'src/mfe'): string {
+  const c = camel(name);
+  const consume: Record<string, string> = {
+    react: `import { islandComponent } from '@atolljs/react-island';
+import ${c}Contract from './${dir}/${name}.contract';
+const ${pascal(name)}Island = islandComponent(${c}Contract);
+<${pascal(name)}Island label="${name}" onEvent={(n, p) => console.log(n, p)} />`,
+    vue: `import { islandComponent } from '@atolljs/vue-island';
+import ${c}Contract from './${dir}/${name}.contract';
+const ${pascal(name)}Island = islandComponent(${c}Contract);
+<${pascal(name)}Island v-bind="{ label: '${name}', onEvent }" />`,
+    solid: `import { islandComponent } from '@atolljs/solid-island';
+import ${c}Contract from './${dir}/${name}.contract';
+const ${pascal(name)}Island = islandComponent(${c}Contract);
+<${pascal(name)}Island label="${name}" onEvent={(n, p) => console.log(n, p)} />`,
+    svelte: `import { island } from '@atolljs/svelte-island';
+import ${c}Contract from './${dir}/${name}.contract';
+<div use:island={{ app: ${c}Contract, props: { label: '${name}' }, onEvent }} />`,
+    angular: `import { islandComponent } from '@atolljs/angular-island';
+import ${c}Contract from './${dir}/${name}.contract';
+export const ${pascal(name)}Island = islandComponent({
+  contract: ${c}Contract,
+  selector: '${name}-island',
+});
+// <${name}-island [props]="{ label: '${name}' }" [onEvent]="onEvent" />`,
+  };
+  return `shell side — mount through the contract, no framework import:
+${consume[fw] ?? ''}
+
+publish — \`vite build --config vite.mfe.config.ts\` emits dist-mfe/${name}.worker.js
+deploy it behind Access-Control-Allow-Origin + a versioned URL, then point the
+contract's worker factory at it (docs/islands-remote.md).`;
+}
+
+/** `atoll new <dir> --mfe` — a standalone publishable-MFE package. */
+export function mfeScaffoldFiles(appName: string, fw: Framework): OutFile[] {
+  const spec = SCAFFOLDS[fw];
+  if (!spec) return [];
+  const name = appName;
+  const P = pascal(name);
+  const files: OutFile[] = [
+    {
+      path: 'package.json',
+      content:
+        JSON.stringify(
+          {
+            name: appName,
+            private: true,
+            type: 'module',
+            // The package's PUBLIC surface is the contract module — shells
+            // import it, never the worker entry. The worker ships as a
+            // deployed asset (dist-mfe/) referenced by URL, not an import.
+            exports: { '.': `./src/mfe/${name}.contract.ts` },
+            files: ['src/mfe', 'dist-mfe'],
+            scripts: {
+              dev: 'vite',
+              'build:mfe': 'vite build --config vite.mfe.config.ts',
+              'preview:mfe': 'vite preview --config vite.mfe.config.ts',
+            },
+            dependencies: spec.deps,
+            devDependencies: spec.devDeps,
+          },
+          null,
+          2,
+        ) + '\n',
+    },
+    { path: 'tsconfig.json', content: JSON.stringify(TSCONFIGS[fw], null, 2) + '\n' },
+    { path: 'vite.config.ts', content: viteConfig(fw) },
+    { path: 'vite.mfe.config.ts', content: mfePublishConfig(name, fw) },
+    { path: '.npmrc', content: NPMRC },
+    { path: '.gitignore', content: GITIGNORE + 'dist-mfe/\n' },
+    { path: 'index.html', content: INDEX_HTML(appName, `src/main.${ISLAND_EXT[fw]}`) },
+    ...mfeFiles(name, fw, 'src/mfe'),
+  ];
+  // Dev harness — mounts the MFE through its contract so `vite dev` previews
+  // exactly what a consuming shell sees (no worker imports on the page).
+  switch (fw) {
+    case 'react':
+      files.push(
+        {
+          path: 'src/main.tsx',
+          content: `import { createRoot } from 'react-dom/client';
+import { App } from './App';
+
+createRoot(document.getElementById('root')!).render(<App />);
+`,
+        },
+        {
+          path: 'src/App.tsx',
+          content: `import { islandComponent } from '@atolljs/react-island';
+import ${camel(name)}Contract from './mfe/${name}.contract';
+
+const ${P}Island = islandComponent(${camel(name)}Contract);
+
+/** Dev harness — this page mounts the MFE exactly like a consuming shell. */
+export function App() {
+  return (
+    <main style={{ fontFamily: 'system-ui', padding: '2rem' }}>
+      <h1>${appName}</h1>
+      <p>
+        This island renders in a worker. Publish with{' '}
+        <code>npm run build:mfe</code> → <code>dist-mfe/</code>.
+      </p>
+      <${P}Island
+        label="${name}"
+        onEvent={(name, payload) => console.log('mfe event:', name, payload)}
+      />
+    </main>
+  );
+}
+`,
+        },
+      );
+      break;
+    case 'vue':
+      files.push(
+        { path: 'src/env.d.ts', content: `declare module '*.vue';\n` },
+        {
+          path: 'src/main.ts',
+          content: `import { createApp } from 'vue';
+import App from './App.vue';
+
+createApp(App).mount('#root');
+`,
+        },
+        {
+          path: 'src/App.vue',
+          content: `<script setup lang="ts">
+import { islandComponent } from '@atolljs/vue-island';
+import ${camel(name)}Contract from './mfe/${name}.contract';
+
+const ${P}Island = islandComponent(${camel(name)}Contract);
+const onEvent = (name: string, payload: unknown) => console.log('mfe event:', name, payload);
+</script>
+
+<template>
+  <main style="font-family: system-ui; padding: 2rem">
+    <h1>${appName}</h1>
+    <p>This island renders in a worker — <code>npm run build:mfe</code> publishes it.</p>
+    <${P}Island v-bind="{ label: '${name}', onEvent }" />
+  </main>
+</template>
+`,
+        },
+      );
+      break;
+    case 'solid':
+      files.push(
+        {
+          path: 'src/main.tsx',
+          content: `import { render } from 'solid-js/web';
+import { App } from './App';
+
+render(() => <App />, document.getElementById('root')!);
+`,
+        },
+        {
+          path: 'src/App.tsx',
+          content: `import { islandComponent } from '@atolljs/solid-island';
+import ${camel(name)}Contract from './mfe/${name}.contract';
+
+const ${P}Island = islandComponent(${camel(name)}Contract);
+
+/** Dev harness — mounts the MFE exactly like a consuming shell. */
+export function App() {
+  return (
+    <main style={{ 'font-family': 'system-ui', padding: '2rem' }}>
+      <h1>${appName}</h1>
+      <p>
+        This island renders in a worker — <code>npm run build:mfe</code> publishes it.
+      </p>
+      <${P}Island
+        label="${name}"
+        onEvent={(name, payload) => console.log('mfe event:', name, payload)}
+      />
+    </main>
+  );
+}
+`,
+        },
+      );
+      break;
+    case 'svelte':
+      files.push(
+        {
+          path: 'src/main.ts',
+          content: `import { mount } from 'svelte';
+import App from './App.svelte';
+
+mount(App, { target: document.getElementById('root')! });
+`,
+        },
+        {
+          path: 'src/App.svelte',
+          content: `<script lang="ts">
+  import { island } from '@atolljs/svelte-island';
+  import ${camel(name)}Contract from './mfe/${name}.contract';
+
+  const onEvent = (name: string, payload: unknown) => console.log('mfe event:', name, payload);
+</script>
+
+<main style="font-family: system-ui; padding: 2rem">
+  <h1>${appName}</h1>
+  <p>This island renders in a worker — <code>npm run build:mfe</code> publishes it.</p>
+  <div use:island={{ app: ${camel(name)}Contract, props: { label: '${name}' }, onEvent }} />
+</main>
+`,
+        },
+      );
+      break;
+  }
+  return files;
+}
+
 /* ── nestjs (`atoll add nestjs <level> <name>`) ─────────────────────────── */
 
 /**

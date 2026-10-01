@@ -293,7 +293,8 @@ figure.code pre.hljs {
 @media (min-width: 1760px) {
   .demo-frame {
     position: fixed;
-    top: 24px;
+    /* Clear the 52px sticky site header — it sits above the rail (z 20 > 10). */
+    top: 68px;
     right: 24px;
     bottom: 24px;
     width: clamp(400px, 32vw, 720px);
@@ -334,6 +335,9 @@ figure.code pre.hljs {
   gap: 2px;
   overflow-x: auto;
   align-self: flex-end;
+  /* docs.js removes the label and drops the tablist in as the bar's first
+     child — flex: 1 pushes the ↗ link to the right edge. */
+  flex: 1;
   /* Drop the strip below the bar's bottom edge so the active tab's bottom
      border covers the pane's top border — a real attached tab. */
   margin-bottom: -7px;

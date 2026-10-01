@@ -33,12 +33,14 @@ import {
   getLastActiveInstance,
   getLastTouchedInstance,
   islandApp,
+  withContract,
   docForInstance,
 } from '@atolljs/islands/worker';
 import type {
   DoorbellSpec,
   EventPayload,
   InternalDocument,
+  IslandContract,
   IslandWorkerMethods,
   ProxyElement,
   ProxyNode,
@@ -317,8 +319,11 @@ const { render, createApp } = createRenderer<ProxyNode, ProxyElement>({
  * and the changed ops ride back inside the updateProps task batch;
  * `dispose` unmounts the app.
  */
-export function vueIslandApp(Component: Component): RenderedIslandApp {
-  return {
+export function vueIslandApp(
+  Component: Component,
+  contract?: IslandContract,
+): RenderedIslandApp {
+  const renderedApp: RenderedIslandApp = {
     mount({ instance, doc, props }: RenderContext): RenderedHandle {
 
       const container = doc.body;
@@ -349,6 +354,9 @@ export function vueIslandApp(Component: Component): RenderedIslandApp {
       };
     },
   };
+  // Contract stamp — the engine validates mount/updateProps props and
+  // declared emit payloads against it.
+  return contract !== undefined ? withContract(contract, renderedApp) : renderedApp;
 }
 
 /** Stamp + wrap in one step — `vueIsland('counter', Counter)` yields the
@@ -356,8 +364,9 @@ export function vueIslandApp(Component: Component): RenderedIslandApp {
 export const vueIsland = (
   name: string,
   Component: Component,
+  contract?: IslandContract,
 ): RenderedIslandApp & { readonly islandAppName: string } =>
-  islandApp(name, vueIslandApp(Component));
+  islandApp(name, vueIslandApp(Component, contract));
 
 export interface VuePolyWorkerRegistry {
   /** Name → Vue component registry, mirroring `definePolyWorker({ apps })`. */
@@ -390,7 +399,7 @@ export function defineVuePolyWorker(
  */
 export function defineVueMonoWorker(
   component: Component,
-  options?: { sharedMemory?: SharedMemory<DoorbellSpec> },
+  options?: { sharedMemory?: SharedMemory<DoorbellSpec>; contract?: IslandContract },
 ): WorkerDefinition<DoorbellSpec, IslandWorkerMethods> {
-  return defineMonoWorker(vueIslandApp(component), options);
+  return defineMonoWorker(vueIslandApp(component, options?.contract), options);
 }

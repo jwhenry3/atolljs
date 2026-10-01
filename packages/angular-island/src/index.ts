@@ -76,10 +76,13 @@ import type {
   SimpleChanges,
   Type,
 } from '@angular/core';
-import { islandAppNameOf, mountIsland } from '@atolljs/islands';
+import { contractWorkerOf, islandAppNameOf, mountIsland } from '@atolljs/islands';
 import type {
   IslandAppLike,
   IslandClient,
+  IslandContract,
+  IslandContractEvents,
+  IslandContractProps,
   IslandHandle,
   IslandWorkerOptions,
   Mode,
@@ -140,6 +143,25 @@ export type IslandEventHandler<C> = <K extends keyof IslandEvents<C> & string>(
 export type IslandAppRef<C> = Type<C> | IslandAppLike | string;
 
 /**
+ * The phantom "component class" a `defineIslandContract` poses as — its prop
+ * keys pose as `InputSignalWithTransform` fields (so `IslandInputs<…>` yields
+ * the contract's `P`) and its event names as `OutputEmitterRef`s (so
+ * `IslandEvents<…>` yields the contract's `E`). Feeds the class-generic
+ * facade without the shell ever importing a real component — the
+ * cross-framework path.
+ */
+export type IslandContractCarrier<C extends IslandContract> = {
+  [K in keyof IslandContractProps<C>]: InputSignalWithTransform<
+    IslandContractProps<C>[K],
+    IslandContractProps<C>[K]
+  >;
+} & {
+  [K in keyof IslandContractEvents<C> & string]: OutputEmitterRef<
+    IslandContractEvents<C>[K]
+  >;
+};
+
+/**
  * Resolve an `app` input to its wire name — mirrors the worker side's
  * convention: stamps win (`@AngularIsland`/`islandApp`), then a class's
  * kebab-cased name minus `Component` (`CounterComponent` → 'counter'),
@@ -193,7 +215,7 @@ export abstract class AtollIslandBase<C = unknown> implements OnInit, OnChanges,
    */
   @Input() worker?: (() => Worker) | URL;
   /** Extra pool options for the `worker` path — see ConnectIslandWorkerConfig. */
-  @Input() workerOptions?: IslandWorkerOptions;
+  @Input() workerOptions?: IslandWorkerOptions & { doorbell?: boolean };
   /**
    * Initial flush mode — 'push' (default) subscribes the shared-memory
    * doorbell once mounted (needs COOP/COEP cross-origin isolation);
@@ -295,7 +317,9 @@ export abstract class AtollIslandBase<C = unknown> implements OnInit, OnChanges,
     const seq = ++this.mountSeq;
     const el = this.host.nativeElement;
     const client = this.client;
-    const worker = this.worker;
+    // A contract `app` can carry its own worker factory — the contract
+    // module is then the whole connection, templates bind no worker.
+    const worker = this.worker ?? contractWorkerOf(this.app);
     if ((client === undefined || client === null) && worker === undefined) {
       this.report(
         new Error(
@@ -399,6 +423,13 @@ export interface IslandComponentConfig<C = unknown> {
    */
   app?: string | Type<C> | IslandAppLike;
   /**
+   * A `defineIslandContract` — supplies the registry key (`contract.app`)
+   * and, through the contract overload of {@link islandComponent}, the
+   * props/event types. Pass INSTEAD of `app` for the cross-framework facade
+   * — the shell imports the contract, never the component class.
+   */
+  contract?: IslandContract;
+  /**
    * Custom-element selector for the generated component — e.g.
    * `'counter-island'` produces `<counter-island>`. Defaults to
    * `'atoll-island'` when omitted (fine for `NgComponentOutlet`-style use,
@@ -413,7 +444,7 @@ export interface IslandComponentConfig<C = unknown> {
    */
   worker?: (() => Worker) | URL;
   client?: IslandClient;
-  workerOptions?: IslandWorkerOptions;
+  workerOptions?: IslandWorkerOptions & { doorbell?: boolean };
   mode?: Mode;
 }
 
@@ -440,6 +471,12 @@ export interface IslandComponentConfig<C = unknown> {
  * All {@link AtollIslandBase} inputs remain bound (the config supplies
  * defaults, not locks).
  */
+export function islandComponent<C extends IslandContract>(
+  config: Omit<IslandComponentConfig<IslandContractCarrier<C>>, 'app'> & { contract: C },
+): Type<AtollIslandComponent<IslandContractCarrier<C>>>;
+export function islandComponent<C = unknown>(
+  config: IslandComponentConfig<C>,
+): Type<AtollIslandComponent<C>>;
 export function islandComponent<C = unknown>(
   config: IslandComponentConfig<C>,
 ): Type<AtollIslandComponent<C>> {
@@ -450,6 +487,9 @@ export function islandComponent<C = unknown>(
       // Config supplies DEFAULTS — explicit template bindings still win
       // (inputs are written after construction).
       if (config.app !== undefined) this.app = config.app;
+      // A contract IS the app reference (resolves to contract.app via
+      // islandAppNameOf); it wins when both fields are set.
+      if (config.contract !== undefined) this.app = config.contract;
       if (config.client !== undefined) this.client = config.client;
       if (config.worker !== undefined) this.worker = config.worker;
       if (config.workerOptions !== undefined) this.workerOptions = config.workerOptions;

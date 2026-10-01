@@ -98,6 +98,10 @@ export interface SchemaDef {
   format?: string;
   shape?: Record<string, ZodLike>;
   element?: ZodLike;
+  /** union members. */
+  options?: readonly ZodLike[];
+  /** literal value. */
+  literal?: unknown;
   cls?: abstract new (...args: any[]) => unknown;
 }
 
@@ -205,9 +209,24 @@ class ZodInstanceof<T> extends ZodType<T> {
   }
 }
 
-type ShapeOutput<S extends Record<string, ZodLike>> = {
-  [K in keyof S]: S[K] extends { _zod: { output: infer O } } ? O : never;
-};
+/** Members whose output admits `undefined` become optional keys — mirroring
+ *  zod's `z.optional()` object-member semantics (message-domain schemas like
+ *  island prop contracts need this; reef's fixed-width members never produce
+ *  it, so the split preserves their all-required output). */
+type IsOptional<S, K extends keyof S> =
+  S[K] extends { _zod: { output: infer O } }
+    ? undefined extends O
+      ? true
+      : false
+    : false;
+
+type Flatten<T> = { [K in keyof T]: T[K] };
+
+type ShapeOutput<S extends Record<string, ZodLike>> = Flatten<
+  { [K in keyof S as IsOptional<S, K> extends true ? never : K]: OutputOf<S[K]> } & {
+    [K in keyof S as IsOptional<S, K> extends true ? K : never]?: OutputOf<S[K]>;
+  }
+>;
 
 /** Strips unknown keys like zod's object parse — output is the shape only. */
 class ZodObjectSchema<S extends Record<string, ZodLike>> extends ZodType<ShapeOutput<S>> {
@@ -242,21 +261,111 @@ class ZodArraySchema<E extends ZodLike> extends ZodType<OutputOf<E>[]> {
 
 type OutputOf<S> = S extends { _zod: { output: infer O } } ? O : never;
 
-/* ------------------------------------------------------------------ */
-/* Factories — the vendored `zod/mini` spelling                         */
-/* ------------------------------------------------------------------ */
+/* ── Message-domain kinds ────────────────────────────────────────────────
+ * Layout-free members for contracts that ride postMessage instead of the
+ * shared buffer — island prop/event schemas (defineIslandContract). The
+ * layout compiler doesn't understand these def.types and rejects them with
+ * "can't lay out" if they ever appear inside a fixed-width field — that
+ * loud failure is intended: they have no byte width.
+ */
 
-const number = () => new ZodNumber({ type: 'number' });
-const string = () => new ZodString({ type: 'string' });
-const boolean_ = () => new ZodBoolean({ type: 'boolean' });
-const bigint_ = () => new ZodBigint({ type: 'bigint' });
-const unknown_ = () => new ZodUnknown({ type: 'unknown' });
+class ZodOptional<E extends ZodLike> extends ZodType<OutputOf<E> | undefined> {
+  declare readonly _zod: {
+    output: OutputOf<E> | undefined; input: OutputOf<E> | undefined;
+    def: SchemaDef & { type: 'optional'; element: E };
+  };
+  inner(v: unknown): OutputOf<E> | undefined {
+    // The intersected def narrows element to E; read it as the element's
+    // output type so the wrapper's output lines up.
+    return v === undefined
+      ? undefined
+      : (this._zod.def.element as ZodLike<OutputOf<E>>).parse(v);
+  }
+}
+class ZodNullable<E extends ZodLike> extends ZodType<OutputOf<E> | null> {
+  declare readonly _zod: {
+    output: OutputOf<E> | null; input: OutputOf<E> | null;
+    def: SchemaDef & { type: 'nullable'; element: E };
+  };
+  inner(v: unknown): OutputOf<E> | null {
+    return v === null
+      ? null
+      : (this._zod.def.element as ZodLike<OutputOf<E>>).parse(v);
+  }
+}
+class ZodLiteral<V extends string | number | boolean> extends ZodType<V> {
+  declare readonly _zod: { output: V; input: V; def: SchemaDef & { type: 'literal' } };
+  inner(v: unknown): V {
+    return v === this._zod.def.literal ? (v as V) : fail(JSON.stringify(this._zod.def.literal));
+  }
+}
+class ZodUnion<O extends readonly ZodLike[]> extends ZodType<OutputOf<O[number]>> {
+  declare readonly _zod: {
+    output: OutputOf<O[number]>; input: OutputOf<O[number]>;
+    def: SchemaDef & { type: 'union'; options: O };
+  };
+  inner(v: unknown): OutputOf<O[number]> {
+    for (const option of this._zod.def.options as readonly ZodLike<OutputOf<O[number]>>[]) {
+      const r = option.safeParse(v);
+      if (r.success) return r.data;
+    }
+    return fail('a union member');
+  }
+}
+class ZodRecord<E extends ZodLike> extends ZodType<Record<string, OutputOf<E>>> {
+  declare readonly _zod: {
+    output: Record<string, OutputOf<E>>; input: Record<string, OutputOf<E>>;
+    def: SchemaDef & { type: 'record'; element: E };
+  };
+  inner(v: unknown): Record<string, OutputOf<E>> {
+    if (typeof v !== 'object' || v === null || Array.isArray(v)) fail('object');
+    const el = this._zod.def.element;
+    const out: Record<string, unknown> = {};
+    for (const [k, value] of Object.entries(v as Record<string, unknown>)) {
+      out[k] = el.parse(value);
+    }
+    return out as Record<string, OutputOf<E>>;
+  }
+}
+/**
+ * Function-typed members — how a props schema declares a `callbackProp`
+ * slot: the wire carries a `{__cb:id}` handle that `unmarshalCallbackProps`
+ * restores to a callable BEFORE contract validation runs, so at parse time
+ * the member is a real function.
+ */
+class ZodCallback<F extends (...args: any[]) => any = (...args: unknown[]) => unknown>
+  extends ZodType<F> {
+  declare readonly _zod: { output: F; input: F; def: SchemaDef & { type: 'function' } };
+  inner(v: unknown): F {
+    return typeof v === 'function' ? (v as F) : fail('function');
+  }
+}
+
+// z factories return FLUENT schemas — `z.string().optional()` chains like
+// classic zod; the mini spellings (`z.optional(z.string())`) stay valid.
+const number = () => fluent(new ZodNumber({ type: 'number' }));
+const string = () => fluent(new ZodString({ type: 'string' }));
+const boolean_ = () => fluent(new ZodBoolean({ type: 'boolean' }));
+const bigint_ = () => fluent(new ZodBigint({ type: 'bigint' }));
+const unknown_ = () => fluent(new ZodUnknown({ type: 'unknown' }));
 const instanceof_ = <T extends abstract new (...args: any[]) => any>(cls: T) =>
-  new ZodInstanceof<InstanceType<T>>({ type: 'instanceof', cls });
+  fluent(new ZodInstanceof<InstanceType<T>>({ type: 'instanceof', cls }));
 const object_ = <S extends Record<string, ZodLike>>(shape: S) =>
-  new ZodObjectSchema<S>({ type: 'object', shape });
+  fluent(new ZodObjectSchema<S>({ type: 'object', shape }));
 const array = <E extends ZodLike>(element: E) =>
-  new ZodArraySchema<E>({ type: 'array', element });
+  fluent(new ZodArraySchema<E>({ type: 'array', element }));
+const optional = <E extends ZodLike>(element: E) =>
+  fluent(new ZodOptional<E>({ type: 'optional', element }));
+const nullable = <E extends ZodLike>(element: E) =>
+  fluent(new ZodNullable<E>({ type: 'nullable', element }));
+const literal = <V extends string | number | boolean>(value: V) =>
+  fluent(new ZodLiteral<V>({ type: 'literal', literal: value }));
+const union = <O extends readonly [ZodLike, ...ZodLike[]]>(options: O) =>
+  fluent(new ZodUnion<O>({ type: 'union', options }));
+const record = <E extends ZodLike>(element: E) =>
+  fluent(new ZodRecord<E>({ type: 'record', element }));
+const callback = <F extends (...args: any[]) => any = (...args: unknown[]) => unknown>() =>
+  fluent(new ZodCallback<F>({ type: 'function' }));
 
 const int32 = () => new ZodNumber({ type: 'number', format: 'int32' }).check(intRange('int32', int32min, int32max));
 const uint32 = () => new ZodNumber({ type: 'number', format: 'uint32' }).check(intRange('uint32', 0, 4294967295));
@@ -288,6 +397,10 @@ export type Fluent<S extends ZodLike> = S & {
   max(value: number | bigint): Fluent<S>;
   length(n: number): Fluent<S>;
   int(): Fluent<S>;
+  /** Wraps in an optional member — the `label?: string` spelling. */
+  optional(): Fluent<ZodOptional<S>>;
+  /** Wraps in a nullable member — `T | null`. */
+  nullable(): Fluent<ZodNullable<S>>;
 };
 
 /** Attaches the `Fluent` methods as non-enumerable own properties. */
@@ -302,6 +415,8 @@ export function fluent<S extends ZodType>(schema: S): Fluent<S> {
     max: (v: number | bigint) => fluent(boundCheck_(boundCheck(schema, 'max', v))),
     length: (n: number) => fluent(boundCheck_(length(n))),
     int: () => fluent(boundCheck_(int())),
+    optional: () => fluent(new ZodOptional({ type: 'optional', element: schema })),
+    nullable: () => fluent(new ZodNullable({ type: 'nullable', element: schema })),
   };
   for (const [key, fn] of Object.entries(own)) {
     Object.defineProperty(schema, key, { value: fn, enumerable: false, configurable: true });
@@ -316,6 +431,7 @@ export function fluent<S extends ZodType>(schema: S): Fluent<S> {
 export const z = {
   number, string, boolean: boolean_, bigint: bigint_, object: object_, array,
   instanceof: instanceof_, unknown: unknown_,
+  optional, nullable, literal, union, record, callback,
   int32, uint32, float32, float64, int64, uint64,
   int, gte, lte, nonnegative, refine, length, maxLength, minLength,
   globalRegistry,

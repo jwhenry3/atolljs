@@ -35,10 +35,12 @@ import {
   definePolyWorker,
   islandApp,
   islandAppNameOf,
+  withContract,
 } from '@atolljs/islands/worker';
 import type {
   DoorbellSpec,
   ImperativeIslandApp,
+  IslandContract,
   IslandWorkerMethods,
   RenderContext,
   RenderedHandle,
@@ -65,7 +67,10 @@ type AnyComponent = ComponentType<Record<string, unknown>>;
  * the wrap, so registry warn-checks and `defineMonoWorker` name resolution
  * still see the shell-facing name.
  */
-export function reactIslandApp(App: AnyComponent): RenderedIslandApp {
+export function reactIslandApp(
+  App: AnyComponent,
+  contract?: IslandContract,
+): RenderedIslandApp {
   const app: RenderedIslandApp = {
     mount({ instance, props }: RenderContext): RenderedHandle {
       const react = createReactInstance(instance);
@@ -82,7 +87,9 @@ export function reactIslandApp(App: AnyComponent): RenderedIslandApp {
   };
   const stamp = islandAppNameOf(App);
   if (stamp !== undefined) (app as { islandAppName?: string }).islandAppName = stamp;
-  return app;
+  // Contract stamp — the engine validates mount/updateProps props and
+  // declared emit payloads against it.
+  return contract !== undefined ? withContract(contract, app) : app;
 }
 
 /** Stamp + wrap in one step — `reactIsland('charts', ChartsApp)` yields the
@@ -90,8 +97,9 @@ export function reactIslandApp(App: AnyComponent): RenderedIslandApp {
 export const reactIsland = (
   name: string,
   App: AnyComponent,
+  contract?: IslandContract,
 ): RenderedIslandApp & { readonly islandAppName: string } =>
-  islandApp(name, reactIslandApp(App));
+  islandApp(name, reactIslandApp(App, contract));
 
 export interface ReactPolyWorkerRegistry {
   /**
@@ -131,9 +139,11 @@ export function defineReactPolyWorker(
  */
 export function defineReactMonoWorker(
   app: AnyComponent | ImperativeIslandApp | RenderedIslandApp,
-  options?: { sharedMemory?: SharedMemory<DoorbellSpec> },
+  options?: { sharedMemory?: SharedMemory<DoorbellSpec>; contract?: IslandContract },
 ): WorkerDefinition<DoorbellSpec, IslandWorkerMethods> {
-  return typeof app === 'function'
-    ? defineMonoWorker(reactIslandApp(app), options)
-    : defineMonoWorker(app, options);
+  const resolved = typeof app === 'function' ? reactIslandApp(app) : app;
+  return defineMonoWorker(
+    options?.contract !== undefined ? withContract(options.contract, resolved) : resolved,
+    options,
+  );
 }

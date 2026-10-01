@@ -47,6 +47,7 @@ import { createPortal } from 'react-dom';
 import type { HTMLAttributes, ReactElement, ReactNode, Ref } from 'react';
 import {
   connectIslandWorker,
+  contractWorkerOf,
   islandAppNameOf,
   mountIsland,
 } from '@atolljs/islands';
@@ -54,6 +55,9 @@ import type {
   IslandAppLike,
   IslandAppProps,
   IslandClient,
+  IslandContract,
+  IslandContractEventHandler,
+  IslandContractProps,
   IslandHandle,
   IslandWorkerOptions,
   Mode,
@@ -183,9 +187,14 @@ export function Island<A = string>({
       return;
     }
 
+    // A contract `app` can carry its own worker factory — the contract
+    // module is then the whole connection, call sites pass no worker.
+    const resolvedWorker = worker ?? contractWorkerOf(app);
     const client =
       clientProp ??
-      (worker !== undefined ? connectIslandWorker({ worker, ...workerOptions }) : undefined);
+      (resolvedWorker !== undefined
+        ? connectIslandWorker({ worker: resolvedWorker, ...workerOptions })
+        : undefined);
     if (client === undefined) {
       report(new Error('<Island> requires either `worker` or `client`'));
       return;
@@ -423,11 +432,18 @@ function ProxyIsland({
  * contract-module shape `{ app: A, worker? }`, passes bare A through.
  */
 export type LazyResolvedApp<T extends Promise<unknown>> =
-  Awaited<T> extends { app: infer A }
-    ? A
-    : Awaited<T> extends { default: infer D }
-      ? D
-      : Awaited<T>;
+  // A contract object IS a lazy module (`{ app, worker? }` + brand) — match
+  // it before `{ app: infer A }` so props infer `P`, not `app`'s string.
+  // The never guard keeps a `Promise.reject` loader on the untyped path.
+  [Awaited<T>] extends [never]
+    ? string
+    : Awaited<T> extends { readonly islandContract: true }
+      ? Awaited<T>
+      : Awaited<T> extends { app: infer A }
+        ? A
+        : Awaited<T> extends { default: infer D }
+          ? D
+          : Awaited<T>;
 
 /**
  * `islandComponent<P>('charts')` — a proxy component for a worker app that
@@ -441,6 +457,21 @@ export type LazyResolvedApp<T extends Promise<unknown>> =
  * <TableIsland worker={renderWorker} filter={filter} desc={desc} />
  * ```
  */
+/**
+ * `islandComponent(checkoutContract)` — the cross-framework facade: a
+ * worker app described by `defineIslandContract` mounts by the contract's
+ * `app` key, props come from its schema, and `onEvent` narrows to the
+ * declared event vocabulary. The shell imports the CONTRACT module only —
+ * never the component or its framework.
+ */
+export function islandComponent<C extends IslandContract>(
+  app: C,
+): (
+  props: IslandContractProps<C> &
+    Omit<IslandShellProps, 'onEvent'> & {
+      onEvent?: IslandContractEventHandler<C>;
+    },
+) => ReactElement;
 export function islandComponent<P extends object = Record<string, unknown>>(
   app?: string,
 ): (props: P & IslandShellProps) => ReactElement;

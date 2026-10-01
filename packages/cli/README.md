@@ -20,11 +20,15 @@ builds it automatically before staging.
 ## Commands
 
 ```bash
-atoll new <dir> [--framework react|vue|solid|svelte|node] [--pm npm]
+atoll new <dir> [--framework react|vue|solid|svelte|node] [--mfe] [--pm npm]
     Scaffold a fresh app: vite shell with COOP/COEP headers, the
     @atolljs/vite plugin (worker entries are dev-bundled — no
     fast-refresh in workers), a worker-rendered counter island,
     hardened .npmrc — or a tsx Node service with a pooled worker.
+    --mfe instead scaffolds a publishable micro-frontend package:
+    contract + worker entry + vite.mfe.config.ts (emits a
+    self-contained remote bundle) + a dev harness mounting the
+    island through the contract.
 
 atoll init
     Wire Atoll into the current project: .npmrc, installs the @atolljs/*
@@ -34,6 +38,10 @@ atoll init
 atoll add worker <name>   pooled worker + typed client (browser or node)
 atoll add memory <name>   shared-memory contract module
 atoll add island <name>   worker-rendered component for your framework
+atoll add mfe <name>      publishable micro-frontend — framework-free
+                          contract (defineIslandContract) + worker entry
+                          attaching it + vite.mfe.config.ts publish build
+                          → dist-mfe/<name>.worker.js behind CORS
 
 atoll doctor [--fix]      verify deps, lockfile, .npmrc policy,
                           worker-entry detectability, COOP/COEP headers

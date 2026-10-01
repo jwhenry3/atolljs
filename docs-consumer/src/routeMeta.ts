@@ -48,6 +48,8 @@ const ROUTE_DESC: Record<string, string> = {
     'Worker-rendered UI islands — real React, Vue, Solid, Svelte, or Angular components running inside workers, streamed to the DOM over an op protocol.',
   'island-apps':
     'Write island apps: definePolyWorker entries, serializable props, emit() events to the shell, and mountIsland on the main thread.',
+  'island-mfe':
+    'Micro-frontends with island contracts — one framework-free contract module per MFE, any supported framework in the worker, any supported framework in the shell.',
   'island-proxy':
     'The Islands → Proxy document engine: op protocol, latency split between app and engine, live-node counts, and memory inflation.',
   'fw-node':

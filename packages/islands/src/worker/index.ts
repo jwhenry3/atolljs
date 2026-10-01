@@ -27,6 +27,14 @@ export type {
 
 export { islandApp, islandAppNameOf } from '../app';
 
+export { defineIslandContract, isIslandContract, withContract, contractOf } from '../contract';
+export type {
+  IslandContract,
+  IslandContractEventHandler,
+  IslandContractEvents,
+  IslandContractProps,
+} from '../contract';
+
 export {
   allocId,
   bumpOpsVersion,

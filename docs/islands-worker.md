@@ -58,6 +58,51 @@ component reference then resolves to the wire key, and `definePolyWorker`
 warns when a stamp and its registry key drift apart. `IslandAppProps<A>`
 infers a reference's props type from its signature.
 
+### Contracts — `withContract` and wire enforcement
+
+`defineIslandContract` (`@atolljs/islands`) names the app and declares the
+props/events wire shape as `Schema`s — the vendored `z` from
+`@atolljs/core`, consumer zod, or any `{ parse }` object. `withContract`
+stamps it onto a registry app (or it arrives via an adapter's `contract`
+option — `angularIslandApp(C, { contract })`, `reactIslandApp(App,
+contract)`, `define*MonoWorker(C, { contract })`):
+
+```ts
+import { z } from '@atolljs/core';
+import { defineIslandContract, withContract } from '@atolljs/islands/worker';
+
+export const checkout = defineIslandContract({
+  app: 'checkout',
+  props: z.object({ count: z.number(), label: z.optional(z.string()) }),
+  events: { paid: z.object({ total: z.number() }) },
+});
+
+definePolyWorker({ apps: { checkout: withContract(checkout, checkoutApp) } });
+```
+
+Enforcement is worker-side, at the points a payload crosses:
+
+- **mount / updateProps** parse props AFTER `unmarshalCallbackProps`
+  restores `callbackProp` callables — declare function members
+  `z.callback<Fn>()` (or `z.optional(z.callback<Fn>())`). A rejected parse
+  rejects the task, which `mountIsland`/`updateProps` surfaces as a named
+  error (`[island "checkout"] props for "checkout@1" rejected by contract:
+  expected number`). Parse output also strips undeclared keys — the
+  contract is the authoritative wire shape. `updateProps` sees the FULL
+  prop set (it replaces, not merges), so required members must be present
+  every call.
+- **`emit`** parses payloads for event names the contract declares —
+  `emit('paid', { total: 'x' })` throws inside the dispatch/mount task.
+  Undeclared names pass through untouched: the contract describes the
+  wire, it doesn't fence forward-compatible additions (a newer worker may
+  emit events an older shell doesn't know).
+
+Unstamped apps skip all of it — the map lookup is per-instance and absent
+for most mounts, so this is opt-in and free when unused. The schema objects
+also survive in the contract for the shell to introspect or validate
+against; `Schema<T>` is deliberately loose, so heavy validation libraries
+are optional.
+
 ## The proxy document
 
 Every instance owns a `ProxyDocument` (`src/worker/proxyDom.ts` →

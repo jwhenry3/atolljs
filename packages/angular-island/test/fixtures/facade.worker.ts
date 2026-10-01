@@ -12,10 +12,12 @@
  */
 import '@angular/compiler';
 import { Component, input, model, output } from '@angular/core';
+import { z } from '@atolljs/core';
 import {
   AngularIsland,
   defineAngularPolyWorker,
 } from '../../src/worker';
+import { defineIslandContract } from '@atolljs/islands/worker';
 
 /**
  * Bare-decorator form — the registry name derives from the class name
@@ -70,6 +72,28 @@ export class VoterComponent {
 })
 export class PlainEchoComponent {
   readonly text = input('x');
+}
+
+/**
+ * Contracted component — `@AngularIsland({ contract })` stamps the wire
+ * schema onto the registry entry: props parse at mount/updateProps, and
+ * the `paid` output's bridged emit validates its payload.
+ */
+export const contractedContract = defineIslandContract({
+  app: 'contracted',
+  props: z.object({ price: z.number() }),
+  events: { paid: z.object({ total: z.number() }) },
+});
+
+@AngularIsland({ name: 'contracted', contract: contractedContract })
+@Component({
+  standalone: true,
+  selector: 'atoll-contracted',
+  template: `<button class="pay-btn" (click)="paid.emit({ total: price() })">pay</button>`,
+})
+export class ContractedComponent {
+  readonly price = input(0);
+  readonly paid = output<{ total: number }>();
 }
 
 // No-arg form: collects every @AngularIsland-decorated component above.

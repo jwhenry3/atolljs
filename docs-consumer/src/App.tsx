@@ -14,6 +14,7 @@ import { CustomIslandRenderer } from './pages/CustomIslandRenderer';
 import { FrameworkPage } from './pages/FrameworkPage';
 import { Hosting } from './pages/Hosting';
 import { IslandApps } from './pages/IslandApps';
+import { IslandMfe } from './pages/IslandMfe';
 import { Islands } from './pages/Islands';
 import { Nestjs } from './pages/Nestjs';
 import { NestjsClustering } from './pages/NestjsClustering';
@@ -83,6 +84,7 @@ const SECTIONS: { label: string; routes: Route[] }[] = [
     routes: [
       { id: 'islands', label: 'Overview', page: () => <Islands /> },
       { id: 'island-apps', label: 'Quickstart', page: () => <IslandApps /> },
+      { id: 'island-mfe', label: 'Micro-frontends', page: () => <IslandMfe /> },
       { id: 'island-proxy', label: 'Proxy document', page: () => <ProxyDocument /> },
     ],
   },

@@ -39,6 +39,13 @@ watch(incidentsMemory.state.metrics, (m) => m.critical, (n) => alert(n));
 const conn = reactive(incidentsMemory.signals.seedProgress);
 ```
 
+> **Node note:** under `node`/`worker`/`deno` export conditions `solid-js`
+> resolves to its SSR build where effects never re-run. `watch`/`observe`
+> detect this at runtime and fall back to driving callbacks straight off the
+> shared version counter — same semantics, no signals. (The fallback makes
+> callbacks fire asynchronously even for local writes; `reactive()`'s
+> signal-tracked `get()` still requires the client build.)
+
 ## `defineTask()` / `toTask()` — latest-wins async
 
 ```ts

@@ -52,6 +52,7 @@ import {
 import type { Component, MaybeRefOrGetter, PropType, Ref, ShallowRef } from 'vue';
 import {
   connectIslandWorker,
+  contractWorkerOf,
   islandAppNameOf,
   mountIsland,
 } from '@atolljs/islands';
@@ -59,6 +60,8 @@ import type {
   IslandAppLike,
   IslandAppProps,
   IslandClient,
+  IslandContract,
+  IslandContractEventHandler,
   IslandHandle,
   IslandWorkerOptions,
   Mode,
@@ -80,7 +83,7 @@ export interface UseIslandOptions {
   client?: IslandClient;
   worker?: (() => Worker) | URL;
   /** Extra pool options for the `worker` path (concurrency, taskTimeout…). */
-  workerOptions?: IslandWorkerOptions;
+  workerOptions?: IslandWorkerOptions & { doorbell?: boolean };
   /**
    * Which app to mount — the `apps` registry key ('charts') or an
    * `islandApp`-stamped reference. Optional against a `defineMonoWorker`
@@ -167,10 +170,13 @@ export function useIsland(options: UseIslandOptions): UseIslandReturn {
       );
       return;
     }
+    // A contract `app` can carry its own worker factory — the contract
+    // module is then the whole connection, call sites pass no worker.
+    const worker = options.worker ?? contractWorkerOf(options.app);
     const client =
       options.client ??
-      (options.worker !== undefined
-        ? connectIslandWorker({ worker: options.worker, ...options.workerOptions })
+      (worker !== undefined
+        ? connectIslandWorker({ worker, ...options.workerOptions })
         : undefined);
     if (client === undefined) {
       report(new Error('useIsland requires either `client` or `worker`'));
@@ -272,7 +278,7 @@ export interface AtollIslandProps {
   /** Worker factory — alternative to `client` for the 1:1 case. */
   worker?: (() => Worker) | URL;
   /** Extra pool options for the `worker` path. */
-  workerOptions?: IslandWorkerOptions;
+  workerOptions?: IslandWorkerOptions & { doorbell?: boolean };
   /** Registry name or islandApp-stamped reference — see UseIslandOptions.app. */
   app?: string | IslandAppLike;
   /** Root props — may be a `reactive()` object; changes call updateProps. */
@@ -410,7 +416,7 @@ export interface IslandShellProps {
   /** How to reach the worker — see UseIslandOptions.worker/client. */
   worker?: (() => Worker) | URL;
   client?: IslandClient;
-  workerOptions?: IslandWorkerOptions;
+  workerOptions?: IslandWorkerOptions & { doorbell?: boolean };
   /** Initial flush mode — see UseIslandOptions.mode. */
   mode?: Mode;
   /** Island → shell channel: every `emit` op lands here. */
@@ -508,6 +514,19 @@ function createIslandProxy(
  * // template: <ChartsIsland :worker="renderWorker" :width="520" />
  * ```
  */
+/**
+ * Facade attribute surface for `A`: app-derived props plus the shell props.
+ * When `A` is an `IslandContract`, `onEvent` narrows to the contract's
+ * declared event vocabulary — the cross-framework contract type.
+ */
+export type IslandFacadeProps<A> = IslandAppProps<A> &
+  Omit<IslandShellProps, 'onEvent'> & {
+    onEvent?: A extends IslandContract ? IslandContractEventHandler<A> : IslandShellProps['onEvent'];
+  };
+
+export function islandComponent<C extends IslandContract>(
+  app: C,
+): Component<IslandFacadeProps<C>>;
 export function islandComponent<P extends object = Record<string, unknown>>(
   app?: string,
 ): Component<P & IslandShellProps>;
@@ -527,11 +546,18 @@ type LazyModule<A> = A | { default: A } | { app: A | string; worker?: (() => Wor
  * contract-module shape `{ app: A, worker? }`, passes bare A through.
  */
 export type LazyResolvedApp<T extends Promise<unknown>> =
-  Awaited<T> extends { app: infer A }
-    ? A
-    : Awaited<T> extends { default: infer D }
-      ? D
-      : Awaited<T>;
+  // A contract object IS a lazy module (`{ app, worker? }` + brand) — match
+  // it before `{ app: infer A }` so props infer `P`, not `app`'s string.
+  // The never guard keeps a `Promise.reject` loader on the untyped path.
+  [Awaited<T>] extends [never]
+    ? string
+    : Awaited<T> extends { readonly islandContract: true }
+      ? Awaited<T>
+      : Awaited<T> extends { app: infer A }
+        ? A
+        : Awaited<T> extends { default: infer D }
+          ? D
+          : Awaited<T>;
 
 /**
  * `lazyIsland(() => import('./worker/apps').then(m => ({ default: m.ChartsApp })))`
@@ -559,7 +585,7 @@ export function lazyIsland<T extends Promise<LazyModule<IslandAppLike>>>(
     timeout?: number;
     suspensible?: boolean;
   },
-): Component<IslandAppProps<LazyResolvedApp<T>> & IslandShellProps> {
+): Component<IslandFacadeProps<LazyResolvedApp<T>>> {
   return defineAsyncComponent({
     loader: async () => {
       const mod = await loader();
@@ -579,5 +605,5 @@ export function lazyIsland<T extends Promise<LazyModule<IslandAppLike>>>(
       }));
     },
     ...options,
-  }) as Component<IslandAppProps<LazyResolvedApp<T>> & IslandShellProps>;
+  }) as Component<IslandFacadeProps<LazyResolvedApp<T>>>;
 }

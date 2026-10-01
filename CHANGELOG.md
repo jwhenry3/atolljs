@@ -1,5 +1,143 @@
 # Changelog
 
+## Unreleased
+
+Fix `watch`/`observe` silently never firing under Node runtimes: `solid-js`
+resolves to its SSR build via `node`/`worker`/`deno` export conditions, so
+`createEffect` never re-ran and the whole reactive chain was dead (task
+dispatch and direct reads still worked, hiding it). A runtime probe now
+detects the inert build and `watch` falls back to driving select/emit
+straight off the shared version counter — no signals involved. Reported via
+micro-mmo's NestJS gateway, where `--conditions=browser` was no escape either
+(it breaks `ws`/`engine.io` in the same process). Adds
+`src/reactive.node.test.ts` covering emit-on-write, initial fire, unsubscribe,
+and selector equality under the `node` environment.
+
+### Island contracts — `@atolljs/islands`
+
+Shells can now mount worker-rendered islands by **contract** instead of by
+framework-coupled reference. `defineIslandContract({ app, props?, events?,
+worker? })` publishes a framework-free module — registry key, `z` schemas for
+props and the declared `emit` vocabulary, and an optional worker factory —
+that both threads import and neither side's framework crosses.
+
+- `islandAppNameOf` resolves contracts to their `app` key, so `app:
+  contract` works anywhere an app reference does. `IslandAppProps`,
+  `IslandEventHandler`, and `IslandContractEventHandler` project prop/event
+  types off the contract's schemas, and every facade gets that inference:
+  React/Vue/Solid `islandComponent(contract)`, `lazyIsland` over a contract
+  module, Svelte's `use:island={{ app: contract }}`, Angular's
+  `islandComponent({ contract, selector })`.
+- `contract.worker` is consumed automatically at each facade's mount seam
+  when no explicit `worker`/`client` is passed — call sites wire nothing.
+- **Worker-side enforcement**: `withContract(contract, app)` (or the
+  adapters' `{ contract }` option) stamps the registry entry; props parse at
+  mount and `updateProps`, declared event payloads parse at `emit`, and
+  undeclared events pass through — drift fails loudly instead of dropping
+  fields.
+- Angular's `angularIslandApp(Component, { contract })` types the contract
+  as `IslandContract<IslandInputs<C>, IslandEvents<C>>`, so a contract
+  missing an `input()`/`output()` field fails at the *MFE's* compile time.
+
+### `z` vocabulary — message-domain kinds (`src/contract/zod.ts`)
+
+The bundled schema engine gains `optional`, `nullable`, `literal`, `union`,
+`record`, and `ZodObject.exact()`, plus fluent factories so
+`z.string().optional()` works — contracts can express `{ label?: string
+}`-shaped payloads that `reef`'s fixed-width layout intentionally can't.
+The split is documented: `reef` = buffers, `z` = messages.
+
+### Inter-framework MFE examples — `examples/mfe/` + `examples/*-host/`
+
+- `examples/mfe/` models five published MFEs — one contract + one mono
+  worker each (React counter, Vue notes, Solid ticker, Svelte dial, Angular
+  checkout) — as shared source every shell consumes by contract only.
+- `examples/react-host`, `vue-host`, `solid-host`, `svelte-host`,
+  `angular-host` each mount all five; no shell bundle imports a foreign
+  framework. Wired into `apps.mjs` (ports 5180–5184), `assemble.mjs`, and
+  the Pages pipeline (`pages-lib.mjs` DEMOS + per-demo `coi-sw.js`,
+  `build-pages.mjs`).
+- `examples/mfe/tsconfig.json` carries Angular's legacy decorator flags —
+  shared sources outside a host's tsconfig previously resolved the root
+  config and emitted native TC39 decorators, crashing the Angular worker in
+  every host (`WorkerCrashedError`).
+- The Solid ticker's `setInterval` now calls `bumpOpsVersion()` — inside
+  `runInInstance` the proxy-DOM auto-bump is suppressed and `emit` doesn't
+  ring the doorbell, so the ticker silently stalled at `pulse: 0`.
+- `solid-host` is authored in JSX via `vite-plugin-solid` (per-file
+  `@jsxImportSource solid-js` pragma; the tsconfig stays `react-jsx` for the
+  shared React worker sources).
+- All hosts are header-less-host safe: `coi-sw.js` bootstrap in each
+  `index.html` plus isolation detection falling back to poll/doorbell-free
+  transport.
+
+### `*-island` facades — `workerOptions.doorbell` typing
+
+Solid/Svelte/Vue/Angular widen `workerOptions` to `IslandWorkerOptions & {
+doorbell?: boolean }` — the runtime already spread it into
+`connectIslandWorker` but the types rejected it, which blocked the
+doorbell-free fallback on non-isolated pages. React already admitted it.
+
+### `@atolljs/cli` — `add mfe` and `new --mfe`
+
+- `atoll add mfe <name>` emits the publishable-MFE triple into an existing
+  project: `src/mfe/<name>.contract.ts` (`defineIslandContract` — the
+  framework-free module both sides share), `<name>.worker.*` with the
+  contract attached (`define*MonoWorker(App, { contract })`), and a root
+  `vite.mfe.config.ts` that builds `dist-mfe/<name>.worker.js` — one
+  self-contained ESM bundle for CDN deploy, with the CORS preview headers
+  baked in as the serving example.
+- `atoll new <dir> --mfe` scaffolds a standalone MFE package — the same
+  contract + worker + publish build, plus a dev harness page that mounts
+  the island through the contract, so `vite dev` previews exactly what a
+  consuming shell sees.
+
+### Publish/consume e2e — `examples/mfe-publish` + `examples/mfe-consumer`
+
+A working two-project publish pair: `mfe-publish` is a standalone package
+(`@atolljs/mfe-counter`) whose `exports` entry is the contract module and
+whose `vite.mfe.config.ts` emits a self-contained
+`dist-mfe/counter.worker.js`; `mfe-consumer` depends on it by `file:` and
+mounts the island through `islandComponent(counterContract)` — no worker
+source or framework in its own graph. Verified end to end: the consumer's
+build emits the producer's bundle **verbatim** as an asset, and
+`VITE_MFE_ORIGIN` repoints the same contract at a remote origin. Building it
+exposed three real gotchas, all now baked into the scaffolded
+`vite.mfe.config.ts`:
+
+- **Worker script URLs must be same-origin.** `new Worker('https://cdn…')`
+  throws `SecurityError` regardless of CORS — CORS only governs the fetches
+  a worker *makes*. Remote loading goes through a same-origin `blob:`
+  module shim that `import`s the remote bundle; the remote host then needs
+  only `Access-Control-Allow-Origin`.
+- **Lib builds don't define `process.env.NODE_ENV`.** Framework dev/prod
+  checks crash on a bare `process` in a browser worker — the publish config
+  sets `define: { 'process.env.NODE_ENV': '"production"' }`.
+- **The contract's own `worker` URL self-embeds.** The worker entry bundles
+  the contract, so its `new URL('../../dist-mfe/…')` resolves the *previous*
+  build output and inlines it into its successor — the bundle grew ~1MB per
+  rebuild. A small `enforce: 'pre'` plugin stubs the dead URL.
+- Related: referencing a prebuilt bundle via inline
+  `new Worker(new URL(...))` makes the consumer's bundler *re-bundle* it as
+  a worker entry; a hoisted `const url = new URL(...)` gives verbatim asset
+  emission — the shape the example contract uses.
+
+### Docs
+
+- New `docs/islands-remote.md` — the two distribution shapes (npm package
+  with `dist-mfe/` inside vs remote/CDN), the same-origin worker-URL rule
+  and the blob-shim pattern, the publish-build gotchas above, the CORS/COEP
+  serving matrix, versioned-URL rules, remote registry workers, and the
+  drift failure table.
+- `docs/islands.md`, `islands-worker.md`, `islands-frameworks.md`,
+  `reef.md`, `docs/README.md` — contract semantics, worker-side
+  enforcement, remote pointer, reading-map entries.
+- Consumer docs site: new `island-mfe` page (contract boundary, per-shell
+  call-site snippets, remote deployment section, live demos) with route +
+  SEO metadata. The wide-viewport demo rail now clears the sticky site
+  header (`top: 24px` → `68px` — the tab strip was being clipped), and the
+  page renders all five hosts so `docs.js` folds them into the tabbed dock.
+
 ## 0.1.5
 
 Fixes `atoll new`-generated React projects, which crashed their island
