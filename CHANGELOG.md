@@ -1,5 +1,42 @@
 # Changelog
 
+## Unreleased
+
+Fixes `atoll new`-generated React projects, which crashed their island
+worker on every spawn in `vite dev` (`worker error: Uncaught
+ReferenceError: window is not defined` → respawn loop) and then, once the
+worker survived, hung `mountIsland` at the 15s timeout because the worker
+never answered `EXECUTE_TASK`. Two independent bugs, both only visible
+when the SDK is consumed from `node_modules` (the examples alias to
+source, which is why they never hit either).
+
+### `@atolljs/core` — worker message pump survives bundling
+
+- `workerBootstrap` now exports `installWorkerListener()` and
+  `defineWorker()` **calls it** instead of relying on
+  `import './workerBootstrap'` as a bare side effect. Vite's dep
+  optimizer (dev) and bundlers (build) were tree-shaking the import:
+  `sideEffects: ["**/workerBootstrap.ts"]` matches the source filename but
+  not its flattened dist chunk (`index16.js`), so the whole
+  `self.onmessage` pump — INIT_MEMORY binding and EXECUTE_TASK dispatch —
+  vanished from optimized/bundled workers. An explicit call can't be
+  shaken. The module still auto-installs on import, so direct
+  `import '@atolljs/core/worker/workerBootstrap'` entries (NestJS/Next.js
+  workers) are unaffected.
+
+### `@atolljs/cli` — React scaffold excludes worker entries from plugin-react
+
+- The generated `vite.config.ts` now uses
+  `react({ exclude: [/\/node_modules\//, /\.worker\./] })` (in both
+  `plugins` and `worker.plugins`). plugin-react injects a fast-refresh
+  tail (`import * as RefreshRuntime from "/@react-refresh"`, which reads
+  `window` unguarded) into every transformed module — including
+  `*.worker.tsx` entries served as `?worker_file`, which have no
+  `window`. `exclude` **replaces** the plugin's default
+  `/node_modules/` filter, so the array must carry both patterns — an
+  exclude of just `*.worker.*` lets the refresh tail land inside
+  `.vite/deps` chunks instead.
+
 ## 0.1.4
 
 Fixes the published `atoll` bin — `npx @atolljs/cli` failed under 0.1.3

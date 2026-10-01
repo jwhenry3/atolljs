@@ -420,7 +420,11 @@ const SCAFFOLDS: Record<string, ScaffoldSpec> = {
   react: {
     deps: { react: '^19.3.0', 'react-dom': '^19.3.0', 'react-reconciler': '^0.34.0', '@atolljs/core': '^0.1.0', '@atolljs/react': '^0.1.0', '@atolljs/react-island': '^0.1.0', zod: '^4.6.5' },
     devDeps: { vite: '^8.3.1', typescript: '^7.0.2', '@vitejs/plugin-react': '^6.1.1', '@types/react': '^19.3.0', '@types/react-dom': '^19.3.0' },
-    vitePlugin: { pkg: '@vitejs/plugin-react', import_: `import react from '@vitejs/plugin-react';`, call: 'react()' },
+    // `exclude` replaces the plugin's default /node_modules/ — keep it, and
+    // add *.worker.*: fast-refresh injects `/@react-refresh` (which reads
+    // `window` unguarded) into every transformed module, including worker
+    // entries served as ?worker_file — that crashes the worker in dev.
+    vitePlugin: { pkg: '@vitejs/plugin-react', import_: `import react from '@vitejs/plugin-react';`, call: 'react({ exclude: [/\\/node_modules\\//, /\\.worker\\./] })' },
   },
   vue: {
     deps: { vue: '^3.5.43', '@atolljs/core': '^0.1.0', '@atolljs/vue': '^0.1.0', '@atolljs/vue-island': '^0.1.0', zod: '^4.6.5' },

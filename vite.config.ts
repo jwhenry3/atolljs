@@ -10,7 +10,10 @@ export default defineConfig({
       formats: ["es"],
       fileName: () => "index.js",
     },
-    sourcemap: true,
+    // 'hidden' writes .map files for local debugging but drops the
+    // sourceMappingURL comment — the package excludes *.map, so a visible
+    // map comment would leave consumers resolving a file that doesn't ship.
+    sourcemap: "hidden",
     rollupOptions: {
       // Libraries don't bundle dependencies — consumers resolve msgpackr/
       // solid-js from their own node_modules via "dependencies".

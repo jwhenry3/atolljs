@@ -1,4 +1,4 @@
-import './workerBootstrap'; // side-effect: wires self.onmessage (guarded for main-thread import)
+import { installWorkerListener } from './workerBootstrap';
 import { TaskRegistry } from './registry';
 import { scoped } from '../log';
 import type { ServiceMethod } from '../service';
@@ -62,7 +62,7 @@ const RESERVED = new Set<string>(RESERVED_CLIENT_KEYS);
 
 /**
  * The worker-side half of the tRPC-style pair: the worker script owns the
- * runtime (importing this module wires `self.onmessage` via workerBootstrap)
+ * runtime (calling this wires `self.onmessage` via workerBootstrap)
  * and the method list — the main thread imports only `typeof` the returned
  * definition and drives it through a {@link connectWorker} Proxy client.
  *
@@ -88,6 +88,10 @@ export function defineWorker<
   M extends WorkerMethodMap = {},
   Svc extends WorkerServiceMap = {},
 >(config: DefineWorkerConfig<S, M, Svc>): WorkerDefinition<S, M, Svc> {
+  // Called (not a bare import) so the wiring survives bundler tree-shaking —
+  // a `sideEffects` glob can't match renamed dist chunks (index16.js), which
+  // is how vite's dep-optimizer used to drop the entire message pump.
+  installWorkerListener();
   const methods = (config.methods ?? {}) as M;
   const services = (config.services ?? {}) as Svc;
 
