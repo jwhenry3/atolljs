@@ -338,6 +338,7 @@ figure.code pre.hljs {
 .nav-sublink.active { color: var(--accent); }
 
 .doc-table td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.doc-table td.nowrap { white-space: nowrap; }
 .doc-table .muted { color: var(--muted); }
 
 .loadbar-cell { width: 1%; }  /* let the share column take the slack */

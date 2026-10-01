@@ -123,7 +123,7 @@ export function Overview() {
         <tbody>
           {IMPORT_PATHS.map(({ pkg, contents }) => (
             <tr key={pkg}>
-              <td><PkgLink name={pkg} /></td>
+              <td className="nowrap"><PkgLink name={pkg} /></td>
               <td>{contents}</td>
               <td><PkgLink name={pkg} site="bundlephobia">size report ↗</PkgLink></td>
             </tr>
