@@ -20,3 +20,4 @@ docs-consumer.zip
 # screenshot artifacts — real assets live in assets/, docs-consumer/public/, pages-landing/
 /*.png
 *-check.png
+.angular

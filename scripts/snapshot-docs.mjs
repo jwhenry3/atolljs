@@ -60,6 +60,7 @@ mountConsumerTree(root, stage);
 // tar -C stage . → archive root IS the consumer tree; extraction into
 // consumer/v<minor>/ at deploy time lands the files at the right depth.
 // Relative paths only — Windows bsdtar reads 'C:\…' as rmt host:path syntax.
-execFileSync('tar', ['czf', `docs-${tag.replace(/^v/, 'v')}.tar.gz`, '-C', 'dist-snapshot', '.'], { cwd: root });
+const tarball = `docs-v${tag.replace(/^v/, '')}.tar.gz`; // normalize: always docs-v<x.y.z>
+execFileSync('tar', ['czf', tarball, '-C', 'dist-snapshot', '.'], { cwd: root });
 rmSync(stage, { recursive: true, force: true });
-console.log(`snapshot: docs-${tag}.tar.gz written — upload it as a release asset`);
+console.log(`snapshot: ${tarball} written — upload it as a release asset`);

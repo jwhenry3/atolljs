@@ -91,6 +91,16 @@ http
         res.writeHead(404).end('not found');
         return;
       }
+      // GitHub Pages semantics when the tree carries a 404.html (dist-pages
+      // does): unknown extensionless paths get it verbatim, with status 404.
+      // The prerendered docs site has no client router to fall back to —
+      // serving a neighbor's index.html here would mask real broken links.
+      const notFound = join(root, '404.html');
+      if (existsSync(notFound)) {
+        res.writeHead(404, { 'Content-Type': MIME['.html'] });
+        createReadStream(notFound).pipe(res);
+        return;
+      }
       // SPA fallback — the deepest ancestor mount with an index.html wins
       // (/consumer/<demo>/route resolves to the demo, not the docs root),
       // then the root's index.html.

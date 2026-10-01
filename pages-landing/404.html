@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>404 — Atoll</title>
+  <meta name="robots" content="noindex" />
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #081420;
+      --panel: #10232f;
+      --border: #1e425a;
+      --text: #e4f2fb;
+      --muted: #8fb6cd;
+      --accent: #58c0f0;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; color: var(--text);
+      min-height: 100vh; display: flex; align-items: center; justify-content: center;
+      background: var(--bg); padding: 24px;
+    }
+    main { max-width: 520px; width: 100%; }
+    h1 { font-size: 2rem; margin: 0 0 12px; font-weight: 800; letter-spacing: 0.02em; }
+    h1 .code { color: var(--accent); }
+    p { color: var(--muted); line-height: 1.6; margin: 0 0 8px; }
+    code.path {
+      display: inline-block; max-width: 100%; overflow-wrap: anywhere;
+      background: var(--panel); border: 1px solid var(--border); border-radius: 6px;
+      padding: 1px 8px; color: var(--text); font-size: 0.9em;
+    }
+    nav { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 22px; }
+    nav a {
+      padding: 8px 16px; border-radius: 8px; text-decoration: none;
+      font-size: 0.92rem; border: 1px solid var(--border);
+      color: var(--muted); background: var(--panel);
+    }
+    nav a:hover { color: var(--text); border-color: var(--accent); }
+    nav a.primary { color: #062033; background: var(--accent); border-color: var(--accent); font-weight: 600; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1><span class="code">404</span> — page not found</h1>
+    <p><code class="path" id="path"></code></p>
+    <p>That URL doesn't match anything in this site. The most common cause is a
+      versioned docs path for a release that has no snapshot — the links below
+      get you back on track.</p>
+    <nav id="links"></nav>
+  </main>
+  <script>
+    // GitHub Pages serves this file AT the requested URL, so static relative
+    // links can't know their own depth — compute everything from the path.
+    (function () {
+      var segs = location.pathname.split('/').filter(Boolean);
+      document.getElementById('path').textContent = location.pathname;
+
+      var i = segs.indexOf('consumer');
+      // Project pages mount the whole artifact under /<repo>/ — for misses
+      // outside /consumer/, the first segment is the mount root.
+      // 'consumer' at segment 0 means a root mount — home is '/' itself.
+      var home = i > 0 ? '/' + segs.slice(0, i).join('/') + '/'
+               : i === 0 ? '/'
+               : segs.length >= 2 ? '/' + segs[0] + '/' : '/';
+      var links = [];
+
+      if (i >= 0) {
+        var docs = '/' + segs.slice(0, i + 1).join('/') + '/';
+        var rest = segs.slice(i + 1);
+        // Versioned miss (consumer/v0.9/x/) → offer the same page on latest.
+        if (/^v\d+\.\d+$/.test(rest[0] || '') && rest.length > 1) {
+          links.push(['This page on latest docs', docs + rest.slice(1).join('/') + '/', true]);
+        }
+        links.push(['Docs home', docs, links.length === 0]);
+        links.push(['Blog', docs + 'blog/', false]);
+      } else {
+        links.push(['Docs', home + 'consumer/', true]);
+      }
+      links.push(['Site home', home, false]);
+
+      var nav = document.getElementById('links');
+      links.forEach(function (l) {
+        var a = document.createElement('a');
+        a.href = l[1];
+        a.textContent = l[0];
+        if (l[2]) a.className = 'primary';
+        nav.appendChild(a);
+      });
+    })();
+  </script>
+</body>
+</html>

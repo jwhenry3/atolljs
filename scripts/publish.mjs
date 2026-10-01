@@ -13,9 +13,13 @@
 // one-time bootstrap, since staging requires the package to already exist
 // on the registry. Run it interactively (2FA prompts per package) to create
 // each package; provenance is dropped since it needs Actions OIDC.
-import { execFileSync } from 'node:child_process';
+//
+// Without `--direct` the run pre-flights `npm view` on every package BEFORE
+// stamping or staging: a confirmed 404 (a new package staging can't create)
+// aborts immediately rather than leaving a release half-staged.
+import { execFileSync, spawnSync } from 'node:child_process';
 import { appendFileSync, readFileSync, writeFileSync, readdirSync, statSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, relative } from 'node:path';
 
 const root = new URL('..', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1');
 const [, , tag, ...rest] = process.argv;
@@ -28,6 +32,8 @@ if (!version || !/^\d+\.\d+\.\d+(-[\w.]+)?$/.test(version)) {
   process.exit(1);
 }
 
+const REGISTRY = 'https://registry.npmjs.org';
+
 const read = (dir) => JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'));
 
 // Collect publishable packages: root + non-private packages/*.
@@ -39,6 +45,48 @@ for (const name of readdirSync(join(root, 'packages'))) {
   if (!pkg.private) packages.push({ dir, pkg });
 }
 const names = new Set(packages.map((p) => p.pkg.name));
+
+/* ── Pre-flight: staging can't create packages ────────────────────────────
+ * `npm stage publish` requires the package to already exist on the
+ * registry. Discovering that MID-RUN leaves a partial stage — earlier
+ * packages staged, the new one failed, docs-snapshot skipped. Gate on
+ * `npm view` up front instead: a confirmed 404 aborts before any package
+ * stages (and before version stamping dirties the working tree). Skipped
+ * under --direct — a direct publish IS the bootstrap.
+ */
+if (!direct) {
+  const missing = [];
+  for (const { dir, pkg } of packages) {
+    const res = spawnSync('npm', ['view', pkg.name, 'name', '--registry', REGISTRY], {
+      encoding: 'utf8',
+      shell: process.platform === 'win32',
+    });
+    if (res.status === 0) continue;
+    if (/E404|404/.test(res.stderr ?? '')) {
+      missing.push({ name: pkg.name, dir: relative(root, dir) || '.' });
+    } else {
+      // Network/auth hiccup — inconclusive, not a confirmed miss. The stage
+      // step remains the real gate.
+      console.warn(
+        `WARN ${pkg.name}: registry check inconclusive — ` +
+          (res.stderr || String(res.error ?? 'npm view failed')).trim().split('\n')[0],
+      );
+    }
+  }
+  if (missing.length > 0) {
+    const msg =
+      `\n${missing.map((m) => `  ${m.name}`).join('\n')}\n\n` +
+      `${missing.length} package(s) don't exist on npm — \`npm stage publish\` cannot create them.\n` +
+      `Bootstrap each first (one-time, interactive 2FA):\n` +
+      missing.map((m) => `  (cd ${m.dir} && npm publish)`).join('\n') +
+      `\n\npublishConfig.access is already "public" — then re-run this release.`;
+    if (dryRun) console.warn(`[dry-run] would abort before staging:${msg}`);
+    else {
+      console.error(msg);
+      process.exit(1);
+    }
+  }
+}
 
 // Stamp version + rewrite internal dep ranges to the release version.
 for (const { dir, pkg } of packages) {
@@ -66,8 +114,6 @@ const sorted = [...packages].sort(
 );
 
 /* ── Transparency preamble ──────────────────────────────────────────────── */
-
-const REGISTRY = 'https://registry.npmjs.org';
 
 // Declared destination per package — publishConfig.registry pins the
 // registry in the manifest itself so a stray ~/.npmrc scope mapping (or a

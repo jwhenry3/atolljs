@@ -7,7 +7,7 @@
 //       v0.1/ v0.2/ …             release snapshots (docs-versions/*.tar.gz)
 //       versions.json             runtime manifest the version switcher reads
 //     .nojekyll                   skip Jekyll processing
-//     404.html                    copy of the landing page (deep-link fallback)
+//     404.html                    standalone not-found page (pages-landing/)
 //
 // The docs app embeds demos via relative ./<id>/ iframe URLs, so demos are
 // mounted inside the site's own folder — the tree works under any Pages
@@ -22,7 +22,7 @@
 // page in ANY snapshot can discover every available version at runtime.
 //
 // Usage: node scripts/assemble-pages.mjs   (run after `npm run build` in each app)
-import { cpSync, existsSync, mkdirSync, readdirSync, rmSync, writeFileSync, copyFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
@@ -45,7 +45,8 @@ function pickSnapshots() {
   if (!existsSync(versionsDir)) return [];
   const byMinor = new Map();
   for (const f of readdirSync(versionsDir)) {
-    const m = /^docs-v(\d+)\.(\d+)\.(\d+)\.tar\.gz$/.exec(f);
+    // 'v' prefix optional — tags are created without it (docs-0.1.3.tar.gz).
+    const m = /^docs-v?(\d+)\.(\d+)\.(\d+)\.tar\.gz$/.exec(f);
     if (!m) continue;
     const key = `v${m[1]}.${m[2]}`;
     const patch = +m[3];
@@ -84,8 +85,9 @@ writeFileSync(
 );
 console.log(`versions.json: ${snapshots.length ? snapshots.map((s) => s.ver).join(', ') : '(no snapshots)'}`);
 
-// .nojekyll: serve everything as-is; 404.html: GitHub Pages serves it for
-// unknown paths — hash routing means only the entry URL matters anyway.
+// .nojekyll: serve everything as-is. pages-landing/404.html (copied with
+// the landing tree above) is what GitHub Pages serves for unknown paths —
+// it computes its links from location.pathname since it renders at the
+// failed URL's depth.
 writeFileSync(join(out, '.nojekyll'), '');
-copyFileSync(join(out, 'index.html'), join(out, '404.html'));
 console.log('assemble-pages: done -> dist-pages/');

@@ -181,8 +181,11 @@ manifest also pins `publishConfig.registry` to `registry.npmjs.org`, so the
 destination is declared in the repo rather than resolved from the
 publisher's local npmrc.
 
-Staging needs each package to already exist on the registry, so the first
-release is a manual bootstrap — from the repo root:
+Staging needs each package to already exist on the registry — the script
+pre-flights `npm view` on every package and aborts before anything stages
+if one is missing, so a new package can never leave a release half-staged.
+The first release (and any release adding a package) is therefore a manual
+bootstrap — from the repo root:
 
 ```bash
 npm login                                    # once
@@ -201,7 +204,7 @@ even if compromised. Configure per package (needs the package to exist on
 npm, and npm CLI ≥ 11.10):
 
 ```bash
-for p in core node react vue solidjs svelte angular nextjs nestjs \
+for p in core node react vue solidjs svelte angular nextjs nestjs cli \
          islands react-island vue-island svelte-island solid-island angular-island; do
   npm trust github "@atolljs/$p" --repo jwhenry3/atolljs --file publish.yml --allow-stage-publish -y
   sleep 2

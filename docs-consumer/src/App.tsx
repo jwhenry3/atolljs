@@ -202,30 +202,34 @@ const routeIds = new Set(allRoutes.map((r) => r.id));
  * under whatever mount point the site lives at (`/` in dev, `/consumer/` in
  * production) — match the longest trailing suffix that is a known id.
  */
-function routeFromPathname(pathname: string): string {
+function routeFromPathname(pathname: string): string | null {
   const segs = pathname.split('/').filter(Boolean);
+  if (segs.length === 0) return 'overview'; // the site root is the overview page
   for (let take = Math.min(2, segs.length); take > 0; take--) {
     const candidate = segs.slice(-take).join('/');
     if (routeIds.has(candidate)) return candidate;
   }
-  return 'overview';
+  return null;
 }
 
 export function App({ route }: { route?: string }) {
+  // No route match → real not-found state instead of silently showing the
+  // overview (the dev equivalent of the deployed 404.html).
   const active =
     allRoutes.find((r) => r.id === route) ??
-    allRoutes.find((r) => r.id === routeFromPathname(window.location.pathname)) ??
-    allRoutes.find((r) => r.id === 'overview')!;
+    allRoutes.find((r) => r.id === (routeFromPathname(window.location.pathname) ?? ''));
+  const notFound = !active;
+  const shown = active ?? allRoutes.find((r) => r.id === 'overview')!;
 
-  const isBlog = active.id === 'blog' || active.id.startsWith('blog/');
+  const isBlog = !notFound && (shown.id === 'blog' || shown.id.startsWith('blog/'));
 
   // Links, iframe srcs, and the site switcher are relative to the page's own
   // depth under the consumer root — publish it for the whole render. The
   // overview page lives AT the root (dist/index.html), so depth 0.
-  setRouteDepth(active.id === 'overview' ? 0 : active.id.split('/').length);
+  setRouteDepth(shown.id === 'overview' ? 0 : shown.id.split('/').length);
 
   useEffect(() => {
-    document.title = metaFor(active.id, active.label).title;
+    document.title = notFound ? 'Atoll docs — page not found' : metaFor(shown.id, shown.label).title;
     // Legacy `#/route` URLs (old npm homepages, bookmarks) — bounce to the
     // real path. docs.js does the same in the prerendered site; this covers
     // the dev server where docs.js isn't loaded.
@@ -244,7 +248,7 @@ export function App({ route }: { route?: string }) {
         sidebar.scrollTop += ar.top - sb.top - sb.height / 3;
       }
     }
-  }, [active.id, active.label]);
+  }, [shown.id, shown.label, notFound]);
 
   return (
     <div className="shell">
@@ -265,7 +269,7 @@ export function App({ route }: { route?: string }) {
               <span key={r.id} style={{ display: 'contents' }}>
                 <a
                   href={docHref(r.id)}
-                  className={r.id === active.id ? 'nav-link active' : 'nav-link'}
+                  className={r.id === active?.id ? 'nav-link active' : 'nav-link'}
                 >
                   {r.label}
                 </a>
@@ -278,7 +282,7 @@ export function App({ route }: { route?: string }) {
                           key={post.id}
                           href={docHref(post.id)}
                           className={
-                            post.id === active.id
+                            post.id === active?.id
                               ? 'nav-link nav-sublink active'
                               : 'nav-link nav-sublink'
                           }
@@ -292,7 +296,7 @@ export function App({ route }: { route?: string }) {
                       key={sub.id}
                       href={docHref(sub.id)}
                       className={
-                        sub.id === active.id
+                        sub.id === active?.id
                           ? 'nav-link nav-sublink active'
                           : 'nav-link nav-sublink'
                       }
@@ -307,9 +311,22 @@ export function App({ route }: { route?: string }) {
         ))}
       </aside>
       <main className="content">
-        <CodeSideContext.Provider value={sideFor(active.id)}>
-          {active.page()}
-        </CodeSideContext.Provider>
+        {notFound ? (
+          <article>
+            <h1>Page not found</h1>
+            <p>
+              <code>{window.location.pathname}</code> doesn't match a docs
+              page.
+            </p>
+            <p>
+              <a href="/">Back to the docs overview</a>
+            </p>
+          </article>
+        ) : (
+          <CodeSideContext.Provider value={sideFor(shown.id)}>
+            {shown.page()}
+          </CodeSideContext.Provider>
+        )}
         <footer className="site-footer">
           <span>
             MIT licensed · © 2026 Justin Henry ·{' '}
