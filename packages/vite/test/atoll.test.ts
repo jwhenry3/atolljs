@@ -4,11 +4,33 @@
 import { writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { createServer, type ViteDevServer } from 'vite';
+import { createServer, type Plugin, type ViteDevServer } from 'vite';
 import { atoll } from '../src/index.ts';
 
 const fixture = fileURLToPath(new URL('./fixture', import.meta.url));
 const depPath = `${fixture}/src/dep.ts`;
+const depUrl = `/@fs/${depPath.replace(/\\/g, '/')}`;
+
+// Plugin-owned virtual modules — the `atoll-vite-load` fallback namespace in
+// the esbuild bridge exists for these (no fs path; load hooks only).
+const virtuals: Plugin = {
+  name: 'atoll-test-virtuals',
+  resolveId(id) {
+    if (id === 'virtual:throws') throw new Error('resolve blew up');
+    return id.startsWith('virtual:') ? `\0${id}` : null;
+  },
+  load(id) {
+    if (id === '\0virtual:atoll-fixture')
+      return `import { DEEP } from '/@id/__x00__virtual:dep';
+              import { VALUE } from '${depUrl}';
+              import { C } from '/@custom/thing';
+              export const MSG = 'VIRTUAL-' + DEEP + '-' + VALUE + '-' + C;`;
+    if (id === '\0virtual:dep') return `export const DEEP = 'DEEP_OK';`;
+    if (id === '/@custom/thing') return `export const C = 'CUSTOM_OK';`;
+    if (id === '\0virtual:sfc-link') return `import '${depUrl.replace('dep.ts', 'Widget.vue')}';`;
+    return null;
+  },
+};
 
 let server: ViteDevServer;
 let base: string;
@@ -20,11 +42,16 @@ beforeAll(async () => {
     root: fixture,
     configFile: false,
     logLevel: 'silent',
-    plugins: [atoll()],
+    plugins: [virtuals, atoll()],
     resolve: {
       // Proves the esbuild bundle resolves through vite's plugin container —
       // a bare specifier the esbuild resolver alone could never satisfy.
-      alias: [{ find: /^virtual-dep$/, replacement: `${fixture}/src/aliased.ts` }],
+      alias: [
+        { find: /^virtual-dep$/, replacement: `${fixture}/src/aliased.ts` },
+        // Bare specifier that resolves to an SFC — the fallback marker must
+        // fire from the *resolved* path, not just the raw import.
+        { find: /^widget-sfc$/, replacement: `${fixture}/src/Widget.vue` },
+      ],
     },
     server: {
       port: 0,
@@ -72,8 +99,43 @@ describe('atoll vite plugin', () => {
     expect(code).not.toContain('__defProp'); // esbuild bundle prelude
   });
 
+  it('bundles plugin-owned virtual modules via the plugin container', async () => {
+    const res = await fetch(`${base}/src/virtual.worker.ts?worker_file&type=module`);
+    expect(res.status).toBe(200);
+    const code = await res.text();
+    // `virtual:atoll-fixture` has no fs path — it only exists through
+    // pluginContainer.load; its code then imports an `/@id/` nul-encoded
+    // virtual dep and an `/@fs/` dev URL, both decoded back to real modules.
+    expect(code).toContain('VIRTUAL-');
+    expect(code).toContain('DEEP_OK');
+    expect(code).toContain('DEP_V');
+    expect(code).toContain('CUSTOM_OK');
+  });
+
+  it('falls back when a resolved specifier turns out to be an SFC', async () => {
+    const res = await fetch(`${base}/src/sfc-alias.worker.ts?worker_file&type=module`);
+    expect(res.status).toBe(200);
+    expect(await res.text()).toMatch(/import[^;]*widget-sfc|Widget\.vue/);
+  });
+
+  it('falls back when a dev-URL import points at an SFC', async () => {
+    const res = await fetch(`${base}/src/sfc-fs.worker.ts?worker_file&type=module`);
+    expect(res.status).toBe(200);
+    expect(await res.text()).toContain('virtual:sfc-link');
+  });
+
   it('returns 500 for a missing worker entry', async () => {
     const res = await fetch(`${base}/src/nope.worker.ts?worker_file&type=module`);
+    expect(res.status).toBe(500);
+  });
+
+  it('returns 500 when a plugin module resolves but fails to load', async () => {
+    const res = await fetch(`${base}/src/virtual-fail.worker.ts?worker_file&type=module`);
+    expect(res.status).toBe(500);
+  });
+
+  it('returns 500 when vite resolution itself throws', async () => {
+    const res = await fetch(`${base}/src/virtual-throw.worker.ts?worker_file&type=module`);
     expect(res.status).toBe(500);
   });
 

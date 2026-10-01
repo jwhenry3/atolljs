@@ -7,6 +7,9 @@
     "types": ["vite/client", "node"],
     "strict": true,
     "noEmit": true,
+    // vite.config.ts imports packages/vite sources with explicit .ts
+    // specifiers (same convention as the type-stripped CLI sources).
+    "allowImportingTsExtensions": true,
     "isolatedModules": true,
     "jsx": "react-jsx",
     // angular-shell.ts and @atolljs/angular-island are decorator-compiled

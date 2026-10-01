@@ -69,7 +69,9 @@ const STUB_ASSET = /\.(?:css|s[ac]ss|less|styl|png|jpe?g|gif|webp|avif|svg|woff2
 const NEEDS_VITE = /\.(?:vue|svelte|astro|md|mdx)(?:$|\?)/i;
 // vite dev URLs that pull the browser HMR client / refresh runtime into the
 // worker graph — replaced with an empty module (worker bundles get neither).
-const VITE_DEV_INTERNAL = /^\/@(?:vite|react-refresh|id)\b/;
+// `/@id/` is deliberately NOT here: it encodes real virtual modules, decoded
+// and loaded through the plugin container below.
+const VITE_DEV_INTERNAL = /^\/@(?:vite|react-refresh)\b/;
 // vite dev resolves bare imports to prebundled dep chunks — their CJS
 // interop wrappers don't expose statically-visible named exports to esbuild
 // (e.g. `.vite/deps/react.js` exports only a `default`). Those ids are
@@ -108,7 +110,11 @@ async function buildWorkerBundle(
     name: 'atoll:vite-bridge',
     setup(build) {
       build.onResolve({ filter: /.*/ }, async (args) => {
-        if (args.kind === 'entry-point' || args.namespace !== 'file') return undefined;
+        // Imports inside plugin-loaded virtual modules (atoll-vite-load)
+        // resolve through the same bridge — their sources carry /@id/ and
+        // /@fs/ dev URLs esbuild can't resolve natively.
+        if (args.kind === 'entry-point') return undefined;
+        if (args.namespace !== 'file' && args.namespace !== 'atoll-vite-load') return undefined;
         if (NEEDS_VITE.test(args.path)) {
           throw new Error(`${FALLBACK_MARKER} ${args.path}`);
         }
@@ -116,18 +122,21 @@ async function buildWorkerBundle(
         if (STUB_ASSET.test(args.path)) return { path: args.path, namespace: 'atoll-empty' };
         // /@id/__x00__foo urls encode virtual module ids — decode and load
         // through the plugin container (they're real modules, not stubs).
+        // Checked before the '/' dev-URL branch since /@id/ ids aren't paths.
         if (args.path.startsWith('/@id/')) {
           const vid = args.path.slice(5).replace(/__x00__/g, '\0').replace(/__x2E__/g, '.');
           if (NEEDS_VITE.test(vid)) throw new Error(`${FALLBACK_MARKER} ${vid}`);
+          // Decoded ids can point at optimized-dep chunks — same CJS-interop
+          // problem, so esbuild resolves the real package instead.
+          if (OPTIMIZED_DEP.test(vid)) return undefined;
           return { path: vid, namespace: 'atoll-vite-load' };
         }
         // Leading-slash ids are dev URLs (root-relative, /@fs/) from code
-        // vite already rewrote — resolve straight to the fs path.
+        // vite already rewrote — resolve straight to the fs path. No
+        // NEEDS_VITE re-check: the specifier's filename survives toFsPath
+        // intact, so an SFC here already threw on the raw path above.
         if (args.path.startsWith('/')) {
           const abs = toFsPath(args.path, root);
-          if (NEEDS_VITE.test(abs)) {
-            throw new Error(`${FALLBACK_MARKER} ${abs}`);
-          }
           if (existsSync(abs)) return { path: abs };
           return { path: args.path, namespace: 'atoll-vite-load' };
         }
