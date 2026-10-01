@@ -60,6 +60,11 @@ jobs:
       - name: Test — all suites (don't publish a red tree)
         run: npx vitest run
 
+      # Unit tests drive the CLI through scriptIo — exercise the real bin
+      # (shebang + Node type stripping of shipped .ts sources) before staging.
+      - name: Smoke — atoll bin runs
+        run: node packages/cli/src/cli.ts --help
+
       - name: Build core package types (index.d.ts)
         run: npx tsc -p tsconfig.build.json
 
@@ -67,3 +72,52 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }} # fallback until all packages have OIDC trust
         run: node scripts/publish.mjs "${{ github.event.release.tag_name }}"
+
+  # Immutable docs snapshot for the release tag — uploaded as a
+  # docs-v<x.y.z>.tar.gz release asset. The Pages workflow downloads these
+  # assets and mounts them under consumer/v<major.minor>/ (see
+  # fetch-docs-versions.mjs + assemble-pages.mjs), so the deployed site's
+  # version switcher stays in lock step with releases. Runs after `publish`
+  # so a failed staging never ships docs for a release that didn't land.
+  docs-snapshot:
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # gh release upload
+    steps:
+      # Release events check out the tag's ref — the snapshot is built from
+      # exactly the commit the release points at.
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: 26
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            docs-consumer/package-lock.json
+            examples/react/package-lock.json
+            examples/vue/package-lock.json
+            examples/solid/package-lock.json
+            examples/svelte/package-lock.json
+            examples/angular/package-lock.json
+            examples/react-dom-worker/package-lock.json
+
+      - name: Install dependencies
+        run: |
+          set -e
+          # Root deps first — example projects alias @atolljs/* to the root
+          # source tree, whose imports resolve upward to root node_modules.
+          npm ci
+          for d in docs-consumer examples/react examples/vue examples/solid examples/svelte examples/angular examples/react-dom-worker; do
+            echo "=== npm ci: $d ==="
+            (cd "$d" && npm ci)
+          done
+
+      - name: Build docs snapshot tarball
+        run: node scripts/snapshot-docs.mjs "${{ github.event.release.tag_name }}"
+
+      - name: Attach snapshot to the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "${{ github.event.release.tag_name }}" docs-*.tar.gz --clobber

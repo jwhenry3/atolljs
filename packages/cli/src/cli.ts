@@ -11,7 +11,7 @@ import { consoleIo, type Fmt, type Io } from './io.ts';
 import { hasFlag, parseArgs } from './parse.ts';
 import { runAdd, runCreate, runDoctor, runInit, type Ctx } from './commands.ts';
 
-const HELP = (fmt: Fmt) => `${fmt.strong('atoll')} — bootstrap multithreading
+const HELP = (fmt: Fmt) => `${fmt.strong('atoll')} — bootstrap multithreading ${fmt.dim('(experimental)')}
 
   ${fmt.accent('atoll new <dir>')} [--framework react|vue|solid|svelte|node] [--pm npm]
       Scaffold a fresh app — vite shell + a worker-rendered island,
@@ -44,10 +44,16 @@ const HELP = (fmt: Fmt) => `${fmt.strong('atoll')} — bootstrap multithreading
          --no-install skips dependency installation`)}
 `;
 
+const DISCLAIMER =
+  'atoll is experimental — report bugs or feedback: ' +
+  'https://github.com/jwhenry3/atolljs/issues';
+
 export async function runCli(argv: readonly string[], io: Io, cwd: string): Promise<number> {
   const args = parseArgs(argv);
   const ctx: Ctx = { io, cwd, args };
   const [cmd] = args._;
+
+  io.warn(io.fmt.dim(DISCLAIMER));
 
   try {
     switch (cmd) {

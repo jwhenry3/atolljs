@@ -94,6 +94,16 @@
       background: rgba(88, 192, 240, 0.05);
     }
     .note code { font-family: 'Cascadia Code', 'JetBrains Mono', Consolas, monospace; font-size: 0.9em; }
+    .site-footer {
+      margin-top: 44px; padding-top: 18px;
+      border-top: 1px solid var(--border);
+      display: flex; justify-content: space-between; align-items: baseline;
+      flex-wrap: wrap; gap: 8px 20px;
+      font-size: 0.8rem; color: var(--muted);
+    }
+    .site-footer nav { display: flex; gap: 18px; flex-wrap: wrap; }
+    .site-footer a { color: var(--muted); text-decoration: none; }
+    .site-footer a:hover { color: var(--accent); }
   </style>
 </head>
 <body>
@@ -147,6 +157,19 @@
         </p>
       </a>
     </div>
+
+    <footer class="site-footer">
+      <span>
+        MIT licensed · © 2026 Justin Henry ·
+        <a href="https://github.com/jwhenry3/atolljs/blob/main/LICENSE">LICENSE</a>
+      </span>
+      <nav>
+        <a href="https://github.com/jwhenry3/atolljs">GitHub</a>
+        <a href="https://www.npmjs.com/org/atolljs">npm</a>
+        <a href="https://github.com/jwhenry3/atolljs/issues">Issues</a>
+        <a href="https://github.com/jwhenry3/atolljs/blob/main/CHANGELOG.md">Changelog</a>
+      </nav>
+    </footer>
   </main>
 </body>
 </html>

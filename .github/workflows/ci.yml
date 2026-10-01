@@ -54,6 +54,12 @@ jobs:
             npx tsc -p "packages/$pkg/tsconfig.json"
           done
 
+      # The unit tests drive the CLI through scriptIo — this exercises the
+      # real bin entry: shebang, argv parsing, and Node's type stripping of
+      # the shipped .ts sources (bin points at src/cli.ts, engines >=22.18).
+      - name: Smoke — atoll bin runs on the CI toolchain
+        run: node packages/cli/src/cli.ts --help
+
       # packages/node's sharedBuffer.functional.test spawns REAL
       # worker_threads that import '@atolljs/core' via a loader hook that
       # maps to dist/index.js — the built lib bundle must exist.

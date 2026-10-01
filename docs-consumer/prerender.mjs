@@ -24,6 +24,12 @@ const ssgDir = join(root, 'dist-ssg');
 // Canonical base — override with DOCS_BASE_URL for forks/staging deploys.
 const BASE = (process.env.DOCS_BASE_URL ?? 'https://jwhenry3.github.io/atolljs/consumer/').replace(/\/?$/, '/');
 
+// Release snapshots (consumer/v<minor>/ mounts) set VITE_DOCS_VERSION to the
+// version dir name — e.g. 'v0.1' — stamping it into <meta atoll:version> so
+// docs.js can resolve paths across the extra segment, plus a noindex so the
+// immutable copy never outranks the live docs. Latest builds emit 'latest'.
+const DOCS_VERSION = process.env.VITE_DOCS_VERSION || 'latest';
+
 const ssgEntry = readdirSync(ssgDir).find((f) => /\.(m?js)$/.test(f));
 if (!ssgEntry) {
   console.error('prerender: dist-ssg bundle missing — run `vite build --ssr src/ssg.tsx` first');
@@ -46,6 +52,8 @@ function headBlock(route) {
   const url = route.id === 'overview' ? BASE : `${BASE}${route.id}/`;
   return [
     `<meta name="atoll:route" content="${route.id}" />`,
+    `<meta name="atoll:version" content="${esc(DOCS_VERSION)}" />`,
+    ...(DOCS_VERSION === 'latest' ? [] : ['<meta name="robots" content="noindex" />']),
     `<link rel="canonical" href="${esc(url)}" />`,
     '<meta property="og:type" content="article" />',
     '<meta property="og:site_name" content="Atoll" />',
@@ -89,12 +97,44 @@ function buildPage(route) {
 // demo links. Plain DOM, no framework.
 const DOCS_JS = `(function () {
   var meta = document.querySelector('meta[name="atoll:route"]');
-  var depth = meta ? meta.content.split('/').filter(Boolean).length : 0;
+  var route = meta ? meta.content : 'overview';
+  var depth = route === 'overview' ? 0 : route.split('/').filter(Boolean).length;
+  var verMeta = document.querySelector('meta[name="atoll:version"]');
+  var ver = verMeta ? verMeta.content : 'latest';
+  // Versioned snapshots sit one segment deeper (consumer/v0.1/<route>/), so
+  // climbing out to the consumer root takes an extra '../' on those pages.
+  var root = '../'.repeat(depth + (ver === 'latest' ? 0 : 1));
+  var routePath = depth ? location.pathname.split('/').filter(Boolean).slice(-depth).join('/') + '/' : '';
   // Legacy hash routes (#/quickstart — old npm homepages, bookmarks).
   if (location.hash.indexOf('#/') === 0) {
     var id = location.hash.slice(2);
     location.replace('../'.repeat(depth) + (id === 'overview' ? '' : id + '/'));
     return;
+  }
+  // Version switcher — route-preserving segment swap between the latest
+  // docs (consumer/<route>/) and snapshots (consumer/<ver>/<route>/). The
+  // option list is refreshed from versions.json at the live consumer root,
+  // so snapshots built before a release still learn about it.
+  var verSel = document.querySelector('select.version-switch');
+  if (verSel) {
+    fetch(root + 'versions.json').then(function (r) {
+      return r.ok ? r.json() : null;
+    }).then(function (manifest) {
+      if (!manifest || !manifest.versions) return;
+      var list = ['latest'].concat(manifest.versions);
+      verSel.innerHTML = '';
+      list.forEach(function (v) {
+        var o = document.createElement('option');
+        o.value = o.textContent = v;
+        verSel.appendChild(o);
+      });
+      verSel.value = ver;
+      verSel.hidden = list.length < 2;
+    }).catch(function () {});
+    verSel.addEventListener('change', function () {
+      var v = verSel.value;
+      location.href = root + (v === 'latest' ? '' : v + '/') + routePath;
+    });
   }
   // Sidebar scroll persists across page loads — the section you were
   // browsing stays put instead of snapping back to the top.
@@ -116,12 +156,6 @@ const DOCS_JS = `(function () {
       }
     }
   }
-  document.addEventListener('change', function (e) {
-    var sel = e.target && e.target.closest ? e.target.closest('select.site-switch') : null;
-    if (!sel) return;
-    var opt = sel.options[sel.selectedIndex];
-    if (opt && opt.dataset.href) location.href = opt.dataset.href;
-  });
   // Demo API links are baked as http://localhost:<port>; rewrite the host when
   // the site is served somewhere else (serve:all on a LAN box, CI preview).
   document.querySelectorAll('a[data-port]').forEach(function (a) {

@@ -1,7 +1,7 @@
 {
   "name": "@atolljs/cli",
   "version": "0.0.0",
-  "description": "atoll — scaffold worker pools, shared-memory contracts, and framework islands",
+  "description": "atoll — scaffold worker pools, shared-memory contracts, and framework islands (experimental)",
   "homepage": "https://jwhenry3.github.io/atolljs/consumer/quickstart/",
   "type": "module",
   "bin": {

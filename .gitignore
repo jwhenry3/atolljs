@@ -2,6 +2,9 @@ node_modules
 dist
 dist-ssg
 dist-pages
+dist-snapshot
+docs-versions/
+docs-*.tar.gz
 nul
 *.tsbuildinfo
 coverage/

@@ -6,7 +6,7 @@ The `atoll` CLI ships — a zero-dependency scaffolder/doctor covering every
 example topology (workers, islands, NestJS, Next.js) — plus a blog front-matter
 `pinned` flag and deeper NestJS docs. No breaking changes to the 0.1.2 API.
 
-### `@atolljs/cli` — the `atoll` scaffold/doctor bin
+### `@atolljs/cli` — the `atoll` scaffold/doctor bin *(experimental)*
 
 New package shipping a source-level TypeScript CLI (Node ≥ 22.18 type
 stripping — no build step, zero runtime dependencies):
@@ -74,6 +74,13 @@ importing `@atolljs/react-island` failed with TS7016.
   respawn reclaim.
 - Root `npm run atoll` script runs the CLI from source (Node ≥ 22.18 type
   stripping — no build step needed).
+- Versioned docs — each release now builds an immutable snapshot of the
+  consumer site and attaches it as a `docs-v<x.y.z>.tar.gz` release asset;
+  Pages deploys mount them under `consumer/v<major.minor>/` (newest patch
+  per minor line wins). A header version switcher swaps between `latest`
+  and snapshots while preserving the current route, and a runtime-fetched
+  `consumer/versions.json` keeps even old snapshots aware of newer releases.
+  Snapshots are `noindex`ed so search engines keep ranking `latest`.
 
 ## 0.1.2
 

@@ -27,7 +27,8 @@ body {
 }
 code { font-family: 'Cascadia Code', 'JetBrains Mono', Consolas, monospace; font-size: 0.9em; }
 
-.shell { display: flex; min-height: 100vh; }
+.shell { display: flex; flex-direction: column; min-height: 100vh; }
+.shell-body { display: flex; flex: 1; min-width: 0; }
 
 .brand-watermark {
   position: fixed;
@@ -40,35 +41,82 @@ code { font-family: 'Cascadia Code', 'JetBrains Mono', Consolas, monospace; font
   z-index: -1;
 }
 
+/* Sticky top bar — brand, site tabs, external icons. */
+.site-header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 28px;
+  height: 52px;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg) 78%, transparent);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+.site-brand {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  text-decoration: none;
+}
+.site-brand img { display: block; height: 30px; width: auto; }
+.site-brand-name {
+  font-weight: 800;
+  font-size: 1.05rem;
+  letter-spacing: 0.09em;
+  color: var(--text);
+  line-height: 1;
+}
+.site-brand-js { font-size: 0.62em; vertical-align: 0.55em; letter-spacing: 0.04em; }
+.site-tabs { display: flex; gap: 4px; }
+.site-tabs a {
+  padding: 5px 11px;
+  border-radius: 6px;
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 0.85rem;
+}
+.site-tabs a:hover { color: var(--text); background: var(--panel); }
+.site-tabs a.active { color: var(--accent); background: var(--panel); }
+/* Version select — right-packed against the icon links; the auto margin
+   lives here so tabs stay left and select+icons cluster on the right. */
+.version-switch {
+  margin-left: auto;
+  appearance: none;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.78rem;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+.version-switch:hover { color: var(--text); }
+.version-switch[hidden] { display: none; }
+.site-icons { display: flex; gap: 6px; }
+.site-icons a {
+  display: flex;
+  align-items: center;
+  padding: 6px;
+  border-radius: 6px;
+  color: var(--muted);
+}
+.site-icons a:hover { color: var(--text); background: var(--panel); }
+
 .sidebar {
   width: 240px;
   flex-shrink: 0;
   border-right: 1px solid var(--border);
   padding: 20px 14px;
   position: sticky;
-  top: 0;
-  height: 100vh;
+  top: 52px;
+  height: calc(100vh - 52px);
   overflow-y: auto;
 }
-.brand {
-  display: block;
-  color: var(--text);
-  text-decoration: none;
-  margin-bottom: 6px;
-}
-.brand-mark { display: block; width: 100%; height: auto; }
-.site-switch {
-  width: 100%;
-  margin: 0 0 20px;
-  padding: 5px 8px;
-  background: var(--panel);
-  color: var(--muted);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  font: inherit;
-  font-size: 0.8rem;
-}
-.site-switch:hover, .site-switch:focus { border-color: var(--accent); color: var(--text); }
 .nav-section { margin-bottom: 18px; }
 .nav-section h3 {
   font-size: 0.7rem;
@@ -93,6 +141,22 @@ code { font-family: 'Cascadia Code', 'JetBrains Mono', Consolas, monospace; font
   max-width: 960px;
   padding: 32px 44px 80px;
 }
+
+.site-footer {
+  margin-top: 64px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+.site-footer nav { display: flex; gap: 18px; flex-wrap: wrap; }
+.site-footer a { color: var(--muted); text-decoration: none; }
+.site-footer a:hover { color: var(--accent); }
 
 article h1 { margin-top: 0; font-size: 1.9rem; }
 article h2 { margin-top: 36px; border-bottom: 1px solid var(--border); padding-bottom: 6px; }

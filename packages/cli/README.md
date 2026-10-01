@@ -3,6 +3,9 @@
 `atoll` — scaffold worker pools, shared-memory contracts, and framework
 islands into a new or existing app.
 
+> **Experimental.** The command grammar and generated code are still
+> evolving — expect breaking changes between minor releases.
+
 ```
 npx @atolljs/cli <command>
 # or, once installed: atoll <command>

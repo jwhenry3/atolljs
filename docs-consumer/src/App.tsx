@@ -1,6 +1,6 @@
 import { useEffect, type ReactNode } from 'react';
 import { CodeSideContext } from './components/CodeBlock';
-import { SiteSwitch } from './components/SiteSwitch';
+import { SiteHeader } from './components/SiteHeader';
 import { FRAMEWORKS } from './frameworks';
 import { consumerRootHref, docHref, setRouteDepth } from './link';
 import { metaFor } from './routeMeta';
@@ -8,6 +8,7 @@ import { FRAMEWORK_PAGE_COMPONENTS, FRAMEWORK_PAGES } from './frameworkPages';
 import { BLOG_NAV } from './blog';
 import { BlogIndex, BlogPost } from './pages/Blog';
 import { BundleSize } from './pages/BundleSize';
+import { Cli } from './pages/Cli';
 import { CustomBindings } from './pages/CustomBindings';
 import { CustomIslandRenderer } from './pages/CustomIslandRenderer';
 import { FrameworkPage } from './pages/FrameworkPage';
@@ -63,6 +64,7 @@ const SECTIONS: { label: string; routes: Route[] }[] = [
     routes: [
       { id: 'overview', label: 'Overview', page: () => <Overview /> },
       { id: 'quickstart', label: 'Quickstart', page: () => <Quickstart /> },
+      { id: 'cli', label: 'CLI', page: () => <Cli /> },
     ],
   },
   {
@@ -252,15 +254,9 @@ export function App({ route }: { route?: string }) {
         src={`${consumerRootHref()}atoll-dark-t.svg`}
         alt=""
       />
+      <SiteHeader active={isBlog ? 'blog' : 'docs'} />
+      <div className="shell-body">
       <aside className="sidebar">
-        <a className="brand" href={docHref('overview')}>
-          <img
-            className="brand-mark"
-            src={`${consumerRootHref()}atoll-brand-dark.svg`}
-            alt="AtollJS"
-          />
-        </a>
-        <SiteSwitch current={isBlog ? 'blog' : 'consumer'} />
         {/* Blog pages get the post list instead of the docs tree. */}
         {(isBlog ? [BLOG_SECTION] : SECTIONS).map((section) => (
           <nav key={section.label} className="nav-section">
@@ -314,7 +310,20 @@ export function App({ route }: { route?: string }) {
         <CodeSideContext.Provider value={sideFor(active.id)}>
           {active.page()}
         </CodeSideContext.Provider>
+        <footer className="site-footer">
+          <span>
+            MIT licensed · © 2026 Justin Henry ·{' '}
+            <a href="https://github.com/jwhenry3/atolljs/blob/main/LICENSE">LICENSE</a>
+          </span>
+          <nav>
+            <a href="https://github.com/jwhenry3/atolljs" target="_blank" rel="noreferrer">GitHub</a>
+            <a href="https://www.npmjs.com/org/atolljs" target="_blank" rel="noreferrer">npm</a>
+            <a href="https://github.com/jwhenry3/atolljs/issues" target="_blank" rel="noreferrer">Issues</a>
+            <a href="https://github.com/jwhenry3/atolljs/blob/main/CHANGELOG.md" target="_blank" rel="noreferrer">Changelog</a>
+          </nav>
+        </footer>
       </main>
+      </div>
     </div>
   );
 }

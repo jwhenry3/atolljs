@@ -1,7 +1,9 @@
 # Builds the docs-consumer site + static framework examples and deploys the
 # assembled dist-pages/ tree to GitHub Pages:
-#   /           landing page (links to the docs site + repo markdown docs)
-#   /consumer/  docs-consumer site (+ demo mounts embedded by its iframes)
+#   /                 landing page (links to the docs site + repo markdown docs)
+#   /consumer/        docs-consumer site (+ demo mounts embedded by its iframes)
+#   /consumer/vX.Y/   versioned docs snapshots — tarballs attached to each
+#                     release by publish.yml's docs-snapshot job, fetched below
 #
 # NOTE: GitHub Pages cannot set COOP/COEP response headers — the assembled
 # artifact ships coi-sw.js, a service worker that injects them so
@@ -65,6 +67,14 @@ jobs:
             echo "=== npm ci: $d ==="
             (cd "$d" && npm ci)
           done
+
+      # Pull docs-v*.tar.gz release assets into docs-versions/ so the
+      # assembler can mount them under consumer/v<minor>/. gh reads releases
+      # with the token's contents:read permission; no gh → empty manifest.
+      - name: Fetch versioned docs snapshots
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/fetch-docs-versions.mjs
 
       - name: Build and assemble Pages artifact
         run: node scripts/build-pages.mjs

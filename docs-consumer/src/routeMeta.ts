@@ -30,6 +30,8 @@ const ROUTE_DESC: Record<string, string> = {
     'Install @atolljs/core and run your first typed worker pool — schema-defined shared memory, main-thread reactivity, and cancellation in ten minutes.',
   overview:
     'Atoll is a TypeScript toolkit for real multithreading in JavaScript: typed worker pools, SharedArrayBuffer contracts, Atomics-based reactivity, and worker-rendered UI islands.',
+  cli:
+    'The atoll CLI — scaffold worker pools, shared-memory contracts, and islands with atoll new/init/add, and audit the setup with atoll doctor.',
   'shared-memory':
     'defineSharedMemory — deterministic schema layouts over SharedArrayBuffer, versioned fields, and transactional writes shared by every thread.',
   reef:
