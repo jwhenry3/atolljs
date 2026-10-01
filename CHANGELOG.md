@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.6
 
 Fix `watch`/`observe` silently never firing under Node runtimes: `solid-js`
 resolves to its SSR build via `node`/`worker`/`deno` export conditions, so
