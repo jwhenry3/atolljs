@@ -88,6 +88,30 @@ if (!direct) {
   }
 }
 
+/* ── Build the CLI bundle before staging ─────────────────────────────────
+ * `bin` points at dist/cli.js — plain JS, because Node refuses type
+ * stripping for files under node_modules (ERR_UNSUPPORTED_NODE_MODULES_
+ * TYPE_STRIPPING), which is exactly where npx installs the package. src/
+ * still ships in the tarball for transparency; dev runs the .ts entry
+ * directly (npm run atoll / vitest / CI smoke). A missing dist/ would
+ * stage a package whose bin resolves to nothing — build + smoke it here,
+ * for real runs and dry-runs (so pack --dry-run lists the bundle).
+ */
+const cli = packages.find((p) => p.pkg.name === '@atolljs/cli');
+if (cli) {
+  console.log('build: @atolljs/cli — esbuild src/cli.ts → dist/cli.js');
+  try {
+    execFileSync('npm', ['run', 'build'], {
+      cwd: cli.dir,
+      stdio: 'inherit',
+      shell: process.platform === 'win32',
+    });
+    execFileSync('node', ['dist/cli.js', '--help'], { cwd: cli.dir, stdio: 'ignore' });
+  } catch {
+    throw new Error('@atolljs/cli bundle build/smoke failed — see output above');
+  }
+}
+
 // Stamp version + rewrite internal dep ranges to the release version.
 for (const { dir, pkg } of packages) {
   pkg.version = version;

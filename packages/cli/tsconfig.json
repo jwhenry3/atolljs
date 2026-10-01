@@ -7,8 +7,9 @@
     "types": ["node"],
     "strict": true,
     "noEmit": true,
-    // The bin ships as TypeScript and runs under Node's type stripping —
-    // relative imports keep explicit .ts extensions.
+    // Sources are TypeScript run via Node's type stripping in dev and
+    // bundled to dist/cli.js at publish time — relative imports keep
+    // explicit .ts extensions so both paths work.
     "allowImportingTsExtensions": true,
     "isolatedModules": true,
     "skipLibCheck": true

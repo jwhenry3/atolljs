@@ -11,8 +11,11 @@ npx @atolljs/cli <command>
 # or, once installed: atoll <command>
 ```
 
-Requires Node ≥ 22.18 — the bin ships as TypeScript and runs under Node's
-native type stripping.
+Requires Node ≥ 20.12. The published bin is a bundled `dist/cli.js` —
+Node refuses type stripping for `.ts` under `node_modules`, which is
+where `npx` installs packages. The TypeScript sources ship alongside it;
+`npm run build` (esbuild) regenerates the bundle, and `scripts/publish.mjs`
+builds it automatically before staging.
 
 ## Commands
 

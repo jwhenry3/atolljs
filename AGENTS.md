@@ -65,8 +65,9 @@ packages/<fw>/        framework bindings (react, vue, solidjs, svelte, angular, 
 packages/islands/     island engine — driver, op protocol, proxy DOM
 packages/<fw>-island/ per-framework island shell + worker renderer
 packages/cli/         the `atoll` bin — init/add/new/doctor scaffolder
-                      (ships TS source; Node ≥22.18 type stripping — keep
-                      `.ts` import extensions and erasable syntax)
+                      (TS sources dev-run via Node type stripping; the
+                      published bin is `dist/cli.js` bundled by esbuild —
+                      keep `.ts` import extensions and erasable syntax)
 packages/node/        node:worker_threads adapter (+ ./http socket routing)
 packages/nestjs/      NestJS module + decorators
 examples/<fw>/        demo apps; examples/react-dom-worker/ is the islands demo;

@@ -55,8 +55,9 @@ jobs:
           done
 
       # The unit tests drive the CLI through scriptIo — this exercises the
-      # real bin entry: shebang, argv parsing, and Node's type stripping of
-      # the shipped .ts sources (bin points at src/cli.ts, engines >=22.18).
+      # real entry: shebang, argv parsing, and Node's type stripping of the
+      # .ts sources (publish.mjs bundles the same sources to dist/cli.js —
+      # the shipped bin — at stage time).
       - name: Smoke — atoll bin runs on the CI toolchain
         run: node packages/cli/src/cli.ts --help
 

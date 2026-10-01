@@ -3,9 +3,12 @@
  * `atoll` — bootstrap multithreading in an app: worker pools, shared-memory
  * contracts, framework islands, and a doctor that checks the setup.
  *
- * Ships as TypeScript — Node >= 22.18 runs it via native type stripping.
- * Keep every relative import's `.ts` extension explicit and stay inside
- * erasable syntax (no enums, namespaces, or parameter properties).
+ * Sources stay TypeScript — dev runs this entry via Node's type stripping
+ * (`npm run atoll`, vitest, CI smoke). The *published* bin is a bundled
+ * dist/cli.js: Node refuses type stripping inside node_modules, which is
+ * where npx installs packages. Keep relative imports' `.ts` extensions
+ * explicit and stay inside erasable syntax so both paths keep working;
+ * `npm run build` (esbuild) regenerates the bundle.
  */
 import { consoleIo, type Fmt, type Io } from './io.ts';
 import { hasFlag, parseArgs } from './parse.ts';

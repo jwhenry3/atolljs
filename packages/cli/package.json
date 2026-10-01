@@ -5,16 +5,20 @@
   "homepage": "https://jwhenry3.github.io/atolljs/consumer/quickstart/",
   "type": "module",
   "bin": {
-    "atoll": "./src/cli.ts"
+    "atoll": "./dist/cli.js"
   },
   "exports": {
     "./package.json": "./package.json"
   },
   "files": [
-    "src"
+    "src",
+    "dist"
   ],
+  "scripts": {
+    "build": "esbuild src/cli.ts --bundle --format=esm --platform=node --target=node20.12 --outfile=dist/cli.js"
+  },
   "engines": {
-    "node": ">=22.18"
+    "node": ">=20.12"
   },
   "publishConfig": {
     "access": "public",

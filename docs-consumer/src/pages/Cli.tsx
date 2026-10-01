@@ -40,8 +40,8 @@ export function Cli() {
 # or, once installed: atoll <command>`}
       />
       <p>
-        Requires Node ≥ 22.18 — the bin ships as TypeScript and runs under Node's native
-        type stripping, so there's no build step. The generated <em>app</em> code runs on
+        Requires Node ≥ 20.12 — the bin ships pre-bundled, so there's nothing to
+        compile on install. The generated <em>app</em> code runs on
         Node ≥ 20 and in browsers.
       </p>
 
