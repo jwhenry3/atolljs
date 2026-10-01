@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.5
 
 Fixes `atoll new`-generated React projects, which crashed their island
 worker on every spawn in `vite dev` (`worker error: Uncaught
@@ -24,11 +24,35 @@ source, which is why they never hit either).
   `import '@atolljs/core/worker/workerBootstrap'` entries (NestJS/Next.js
   workers) are unaffected.
 
-### `@atolljs/cli` — React scaffold excludes worker entries from plugin-react
+### `@atolljs/vite` — new package: dev workers as bundles, not module graphs
 
-- The generated `vite.config.ts` now uses
-  `react({ exclude: [/\/node_modules\//, /\.worker\./] })` (in both
-  `plugins` and `worker.plugins`). plugin-react injects a fast-refresh
+- New plugin `atoll()` intercepts `?worker_file`/`?sharedworker_file`
+  requests before vite's transform middleware and answers them with an
+  esbuild bundle — so browser-only transforms (react fast-refresh,
+  `/@vite/client`, SFC HMR) can never leak into worker code, and no
+  per-plugin `exclude` is needed. Worker-side HMR can't preserve a worker's
+  module graph anyway; on any input-graph change the plugin rebuilds the
+  bundle and sends `full-reload`, so the next worker spawn runs fresh code —
+  rebuild + respawn is the worker reload flow.
+- Resolution is bridged through vite's `pluginContainer` (aliases, tsconfig
+  paths, and virtual modules apply inside worker bundles); styles/assets
+  resolve to empty modules. Worker graphs containing framework SFCs
+  (`.vue`/`.svelte`) fall back to vite's per-module pipeline — those plugins
+  don't inject `window`-bound code at module scope, so the fallback is safe.
+- Worker responses echo `server.headers` — required because Chrome blocks
+  worker script fetches lacking the page's COEP under `require-corp`
+  (`ERR_BLOCKED_BY_RESPONSE`, an opaque `worker error`). Documented in
+  `docs/cross-origin-isolation.md` and `docs/vite-plugin.md`.
+- Ships compiled `dist/` like the CLI (Node won't type-strip `.ts` under
+  `node_modules`); `vite` is a peer dep, `esbuild` a dependency.
+
+### `@atolljs/cli` — scaffolds use `atoll()` from `@atolljs/vite`
+
+- Every framework scaffold emits `import atoll from '@atolljs/vite'` +
+  `atoll()` in `plugins` (solid emits `atoll({ jsxImportSource:
+  'solid-js' })`), and `@atolljs/vite` joins `devDependencies`.
+- The react scaffold keeps `react({ exclude: [/\/node_modules\//,
+  /\.worker\./] })` as a safety net: plugin-react injects a fast-refresh
   tail (`import * as RefreshRuntime from "/@react-refresh"`, which reads
   `window` unguarded) into every transformed module — including
   `*.worker.tsx` entries served as `?worker_file`, which have no

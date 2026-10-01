@@ -88,27 +88,30 @@ if (!direct) {
   }
 }
 
-/* ── Build the CLI bundle before staging ─────────────────────────────────
- * `bin` points at dist/cli.js — plain JS, because Node refuses type
+/* ── Build compiled bundles before staging ───────────────────────────────
+ * Packages that run under node_modules as plain JS (@atolljs/cli's bin,
+ * @atolljs/vite's plugin entry) ship dist/ because Node refuses type
  * stripping for files under node_modules (ERR_UNSUPPORTED_NODE_MODULES_
- * TYPE_STRIPPING), which is exactly where npx installs the package. src/
- * still ships in the tarball for transparency; dev runs the .ts entry
- * directly (npm run atoll / vitest / CI smoke). A missing dist/ would
- * stage a package whose bin resolves to nothing — build + smoke it here,
- * for real runs and dry-runs (so pack --dry-run lists the bundle).
+ * TYPE_STRIPPING) — exactly where npm installs them. src/ still ships in
+ * the tarball for transparency; dev runs the .ts sources directly (npm run
+ * atoll / vitest / CI smoke). A missing dist/ would stage a package whose
+ * entry resolves to nothing — build (and smoke the cli bin) here, for real
+ * runs and dry-runs (so pack --dry-run lists the bundles).
  */
-const cli = packages.find((p) => p.pkg.name === '@atolljs/cli');
-if (cli) {
-  console.log('build: @atolljs/cli — esbuild src/cli.ts → dist/cli.js');
+for (const { dir, pkg } of packages) {
+  if (!pkg.scripts?.build) continue;
+  console.log(`build: ${pkg.name} — npm run build`);
   try {
     execFileSync('npm', ['run', 'build'], {
-      cwd: cli.dir,
+      cwd: dir,
       stdio: 'inherit',
       shell: process.platform === 'win32',
     });
-    execFileSync('node', ['dist/cli.js', '--help'], { cwd: cli.dir, stdio: 'ignore' });
+    if (pkg.bin) {
+      execFileSync('node', [Object.values(pkg.bin)[0], '--help'], { cwd: dir, stdio: 'ignore' });
+    }
   } catch {
-    throw new Error('@atolljs/cli bundle build/smoke failed — see output above');
+    throw new Error(`${pkg.name} bundle build/smoke failed — see output above`);
   }
 }
 

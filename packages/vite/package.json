@@ -1,0 +1,43 @@
+{
+  "name": "@atolljs/vite",
+  "version": "0.0.0",
+  "description": "Vite dev-server plugin for Atoll — worker entries served as esbuild bundles with rebuild + worker-respawn reload instead of per-module HMR",
+  "homepage": "https://jwhenry3.github.io/atolljs/consumer/quickstart/",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "src",
+    "dist"
+  ],
+  "scripts": {
+    "build": "esbuild src/index.ts --bundle --format=esm --platform=node --target=node20.12 --external:esbuild --external:vite --outfile=dist/index.js && tsc -p tsconfig.build.json"
+  },
+  "engines": {
+    "node": ">=20.12"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  },
+  "dependencies": {
+    "esbuild": ">=0.20.0"
+  },
+  "peerDependencies": {
+    "vite": ">=5"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jwhenry3/atolljs",
+    "directory": "packages/vite"
+  },
+  "bugs": {
+    "url": "https://github.com/jwhenry3/atolljs/issues"
+  },
+  "license": "MIT"
+}

@@ -68,6 +68,9 @@ packages/cli/         the `atoll` bin — init/add/new/doctor scaffolder
                       (TS sources dev-run via Node type stripping; the
                       published bin is `dist/cli.js` bundled by esbuild —
                       keep `.ts` import extensions and erasable syntax)
+packages/vite/        vite dev plugin — worker entries served as esbuild
+                      bundles (rebuild + respawn, no per-module HMR); ships
+                      dist/ like cli, see docs/vite-plugin.md
 packages/node/        node:worker_threads adapter (+ ./http socket routing)
 packages/nestjs/      NestJS module + decorators
 examples/<fw>/        demo apps; examples/react-dom-worker/ is the islands demo;

@@ -74,6 +74,14 @@ cross-origin*.
 - **Stable `index.html` URLs cache aggressively.** Assets are content-hashed
   but the document URL never changes — this repo stamps links with
   `?v=<build id>` and serves `Cache-Control: no-store` on every surface.
+- **Worker script responses need the page's COEP too.** Under
+  `require-corp`, Chrome refuses a `new Worker(...)` fetch whose response
+  lacks a compatible `Cross-Origin-Embedder-Policy` — the failure surfaces as
+  `net::ERR_BLOCKED_BY_RESPONSE` and an uninformative `Worker.onerror` ("worker
+  error"), not a JS exception. Custom dev middleware that answers
+  `?worker_file` requests itself (see `@atolljs/vite`) must echo
+  `server.headers` onto the response; vite's own pipeline does this
+  automatically.
 
 ## Hosts that can't set headers (GitHub Pages)
 

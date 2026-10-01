@@ -21,9 +21,10 @@ builds it automatically before staging.
 
 ```bash
 atoll new <dir> [--framework react|vue|solid|svelte|node] [--pm npm]
-    Scaffold a fresh app: vite shell with COOP/COEP headers, a
-    worker-rendered counter island, hardened .npmrc — or a tsx Node
-    service with a pooled worker.
+    Scaffold a fresh app: vite shell with COOP/COEP headers, the
+    @atolljs/vite plugin (worker entries are dev-bundled — no
+    fast-refresh in workers), a worker-rendered counter island,
+    hardened .npmrc — or a tsx Node service with a pooled worker.
 
 atoll init
     Wire Atoll into the current project: .npmrc, installs the @atolljs/*

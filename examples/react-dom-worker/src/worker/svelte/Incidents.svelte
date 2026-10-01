@@ -58,8 +58,12 @@
   const scope = getActiveInstance();
   $effect(() => {
     void rows; // track the window
-    lastMs = performance.now() - t0;
-    runInInstance(scope, () => emit('rendered', { start: first, end, ms: lastMs }));
+    const ms = performance.now() - t0;
+    // Read no $state we write: a self-invalidating effect never converges —
+    // each flush re-schedules it via a new Batch, which recurses in
+    // Batch.#process() until the worker dies on a stack overflow.
+    runInInstance(scope, () => emit('rendered', { start: first, end, ms }));
+    lastMs = ms;
   });
 </script>
 

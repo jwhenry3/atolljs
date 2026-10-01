@@ -1,0 +1,91 @@
+// Functional test: a real vite dev server answering `?worker_file` requests
+// through the atoll middleware — bundled output, COEP header echo, vite alias
+// bridging, and watch → invalidate → full-reload.
+import { writeFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { createServer, type ViteDevServer } from 'vite';
+import { atoll } from '../src/index.ts';
+
+const fixture = fileURLToPath(new URL('./fixture', import.meta.url));
+const depPath = `${fixture}/src/dep.ts`;
+
+let server: ViteDevServer;
+let base: string;
+
+const workerUrl = () => `${base}/src/app.worker.ts?worker_file&type=module`;
+
+beforeAll(async () => {
+  server = await createServer({
+    root: fixture,
+    configFile: false,
+    logLevel: 'silent',
+    plugins: [atoll()],
+    resolve: {
+      // Proves the esbuild bundle resolves through vite's plugin container —
+      // a bare specifier the esbuild resolver alone could never satisfy.
+      alias: [{ find: /^virtual-dep$/, replacement: `${fixture}/src/aliased.ts` }],
+    },
+    server: {
+      port: 0,
+      headers: {
+        'Cross-Origin-Opener-Policy': 'same-origin',
+        'Cross-Origin-Embedder-Policy': 'require-corp',
+      },
+    },
+  });
+  await server.listen();
+  const addr = server.httpServer!.address();
+  base = `http://localhost:${typeof addr === 'object' && addr ? addr.port : 0}`;
+});
+
+afterAll(async () => {
+  await server.close();
+  writeFileSync(depPath, `export const VALUE = 'DEP_V1';\n`);
+});
+
+describe('atoll vite plugin', () => {
+  it('serves a bundled worker entry with vite config headers echoed', async () => {
+    const res = await fetch(workerUrl());
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toBe('text/javascript');
+    // require-corp pages reject worker scripts that don't echo the embedder
+    // policy — the middleware must carry server.headers onto the response.
+    expect(res.headers.get('cross-origin-embedder-policy')).toBe('require-corp');
+    const code = await res.text();
+    // Bundled: the dep and the alias-resolved module are inlined…
+    expect(code).toContain('DEP_V1');
+    expect(code).toContain('ALIAS_OK');
+    // …and nothing from vite's browser dev pipeline leaks into the worker.
+    expect(code).not.toContain('/@vite/client');
+    expect(code).not.toContain('/@react-refresh');
+    expect(code).not.toContain('import.meta.hot');
+  });
+
+  it('falls back to vite per-module serving for SFC worker graphs', async () => {
+    const res = await fetch(`${base}/src/sfc.worker.ts?worker_file&type=module`);
+    expect(res.status).toBe(200);
+    const code = await res.text();
+    // Vite's module transform keeps the SFC import live (rewritten specifier)
+    // rather than esbuild-inlining it — proof the request hit `next()`.
+    expect(code).toMatch(/import[^;]*Widget\.vue/);
+    expect(code).not.toContain('__defProp'); // esbuild bundle prelude
+  });
+
+  it('returns 500 for a missing worker entry', async () => {
+    const res = await fetch(`${base}/src/nope.worker.ts?worker_file&type=module`);
+    expect(res.status).toBe(500);
+  });
+
+  it('invalidates and full-reloads when a worker dependency changes', async () => {
+    const send = vi.spyOn(server.ws, 'send');
+    writeFileSync(depPath, `export const VALUE = 'DEP_V2';\n`);
+    await vi.waitFor(
+      () => expect(send).toHaveBeenCalledWith({ type: 'full-reload' }),
+      { timeout: 10_000 },
+    );
+    const res = await fetch(workerUrl());
+    expect(await res.text()).toContain('DEP_V2');
+    send.mockRestore();
+  });
+});

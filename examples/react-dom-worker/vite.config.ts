@@ -2,6 +2,7 @@ import { fileURLToPath } from 'node:url';
 import { svelte } from '@sveltejs/vite-plugin-svelte';
 import vue from '@vitejs/plugin-vue';
 import { defineConfig } from 'vite';
+import { atoll } from '../../packages/vite/src/index.ts';
 
 // The sdk and the islands package live in the workspace root — alias the
 // package names to their sources so the example runs against them without a
@@ -61,7 +62,10 @@ export default defineConfig(({ command }) => ({
   // .vue files (worker/vue/*.vue too), vite-plugin-svelte compiles
   // .svelte files (and svelte-island's .svelte.ts rune module). Both only
   // process their own flavored ids, so the React/TSX entries are untouched.
-  plugins: [vue(), svelte()],
+  // atoll() dev-bundles worker entries (vue/svelte SFCs included) so worker
+  // code never sees the browser transform pipeline — rebuild + respawn is
+  // the worker reload flow.
+  plugins: [vue(), svelte(), atoll()],
   // Worker bundles build in their own rolldown pass — worker.plugins must
   // carry FRESH plugin instances so worker/vue.worker.ts and
   // worker/svelte.worker.ts can import .vue/.svelte components (the

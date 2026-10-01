@@ -26,6 +26,7 @@ repository — internals, contracts, and conventions.
 | `packages/*-island/` — Vue/Svelte/Solid/Angular worker renderers | [islands-frameworks.md](islands-frameworks.md) |
 | Writing a new `packages/<fw>` binding or `<fw>-island` renderer | [porting.md](porting.md) |
 | `packages/cli` — the `atoll` scaffold/doctor bin | `packages/cli/README.md` |
+| `packages/vite` — dev worker bundling (no refresh/HMR in workers) | [vite-plugin.md](vite-plugin.md) |
 
 Framework bindings — **frontend**:
 

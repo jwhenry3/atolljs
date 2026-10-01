@@ -175,6 +175,11 @@ describe('atoll new', () => {
     expect(pkg.dependencies['@atolljs/react-island']).toBeDefined();
     const vite = readFileSync(join(dir, 'my-app/vite.config.ts'), 'utf8');
     expect(vite).toContain('Cross-Origin-Embedder-Policy');
+    // worker entries are served as esbuild bundles — react fast-refresh can
+    // never reach a worker context, no per-plugin excludes needed.
+    expect(vite).toContain(`import atoll from '@atolljs/vite'`);
+    expect(vite).toContain('atoll()');
+    expect(pkg.devDependencies['@atolljs/vite']).toBeDefined();
     expect(existsSync(join(dir, 'my-app/src/islands/counter.worker.tsx'))).toBe(true);
     expect(readFileSync(join(dir, 'my-app/.npmrc'), 'utf8')).toContain('ignore-scripts');
   });

@@ -414,12 +414,14 @@ interface ScaffoldSpec {
   deps: Record<string, string>;
   devDeps: Record<string, string>;
   vitePlugin?: { pkg: string; import_: string; call: string };
+  /** `atoll(…)` call args for the emitted config — e.g. solid needs its jsx runtime. */
+  atollCall?: string;
 }
 
 const SCAFFOLDS: Record<string, ScaffoldSpec> = {
   react: {
     deps: { react: '^19.3.0', 'react-dom': '^19.3.0', 'react-reconciler': '^0.34.0', '@atolljs/core': '^0.1.0', '@atolljs/react': '^0.1.0', '@atolljs/react-island': '^0.1.0', zod: '^4.6.5' },
-    devDeps: { vite: '^8.3.1', typescript: '^7.0.2', '@vitejs/plugin-react': '^6.1.1', '@types/react': '^19.3.0', '@types/react-dom': '^19.3.0' },
+    devDeps: { vite: '^8.3.1', typescript: '^7.0.2', '@vitejs/plugin-react': '^6.1.1', '@atolljs/vite': '^0.1.0', '@types/react': '^19.3.0', '@types/react-dom': '^19.3.0' },
     // `exclude` replaces the plugin's default /node_modules/ — keep it, and
     // add *.worker.*: fast-refresh injects `/@react-refresh` (which reads
     // `window` unguarded) into every transformed module, including worker
@@ -428,17 +430,18 @@ const SCAFFOLDS: Record<string, ScaffoldSpec> = {
   },
   vue: {
     deps: { vue: '^3.5.43', '@atolljs/core': '^0.1.0', '@atolljs/vue': '^0.1.0', '@atolljs/vue-island': '^0.1.0', zod: '^4.6.5' },
-    devDeps: { vite: '^8.3.1', typescript: '^7.0.2', '@vitejs/plugin-vue': '^6.0.9' },
+    devDeps: { vite: '^8.3.1', typescript: '^7.0.2', '@vitejs/plugin-vue': '^6.0.9', '@atolljs/vite': '^0.1.0' },
     vitePlugin: { pkg: '@vitejs/plugin-vue', import_: `import vue from '@vitejs/plugin-vue';`, call: 'vue()' },
   },
   solid: {
     deps: { 'solid-js': '^1.9.15', '@atolljs/core': '^0.1.0', '@atolljs/solidjs': '^0.1.0', '@atolljs/solid-island': '^0.1.0', zod: '^4.6.5' },
-    devDeps: { vite: '^8.3.1', typescript: '^7.0.2', 'vite-plugin-solid': '^2.11.14' },
+    devDeps: { vite: '^8.3.1', typescript: '^7.0.2', 'vite-plugin-solid': '^2.11.14', '@atolljs/vite': '^0.1.0' },
+    atollCall: `atoll({ jsxImportSource: 'solid-js' })`,
     vitePlugin: { pkg: 'vite-plugin-solid', import_: `import solid from 'vite-plugin-solid';`, call: 'solid()' },
   },
   svelte: {
     deps: { svelte: '^5.57.1', '@atolljs/core': '^0.1.0', '@atolljs/svelte': '^0.1.0', '@atolljs/svelte-island': '^0.1.0', zod: '^4.6.5' },
-    devDeps: { vite: '^8.3.1', typescript: '^7.0.2', '@sveltejs/vite-plugin-svelte': '^7.3.1' },
+    devDeps: { vite: '^8.3.1', typescript: '^7.0.2', '@sveltejs/vite-plugin-svelte': '^7.3.1', '@atolljs/vite': '^0.1.0' },
     vitePlugin: { pkg: '@sveltejs/vite-plugin-svelte', import_: `import { svelte } from '@sveltejs/vite-plugin-svelte';`, call: 'svelte()' },
   },
 };
@@ -517,9 +520,13 @@ function viteConfig(fw: string): string {
   const plugin = spec.vitePlugin;
   return `import { defineConfig } from 'vite';
 ${plugin?.import_ ?? ''}
+import atoll from '@atolljs/vite';
 
 export default defineConfig({
-  plugins: [${plugin?.call ?? ''}],
+  // atoll() serves worker entries as esbuild bundles (rebuild + respawn on
+  // change) — browser-plugin transforms like react fast-refresh can't leak
+  // into worker code.
+  plugins: [${plugin?.call ?? ''}, ${spec.atollCall ?? 'atoll()'}],
 ${
   plugin
     ? `  // Worker bundles run their own rolldown pass — fresh plugin instances

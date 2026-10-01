@@ -102,3 +102,11 @@ export const worker = defineSveltePolyWorker({ apps: { counter: Counter } });
   There is no legacy/SSR fallback: the renderer needs the DOM runes runtime.
 - `structuredClone`-able props (they cross `postMessage`; `mountIsland`
   rejects uncloneable values naming the offending key).
+- **Never let an `$effect` read `$state` it also writes** (e.g. emitting a
+  `lastMs` it just assigned). A self-invalidating effect that can't converge
+  (`performance.now()` always differs) re-schedules a new svelte `Batch`
+  inside the current flush; `Batch.#process` tail-recurses and the worker
+  dies with an opaque `RangeError: Maximum call stack size exceeded` →
+  `WorkerCrashedError` — svelte's `infinite_loop_guard` never fires because
+  the recursion path bypasses its counter. Compute into a local and assign
+  after the reads (see `Incidents.svelte`).

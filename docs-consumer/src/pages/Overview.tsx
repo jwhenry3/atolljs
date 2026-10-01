@@ -78,6 +78,10 @@ const IMPORT_PATHS: { pkg: string; contents: ReactNode }[] = [
     pkg: '@atolljs/angular-island',
     contents: <>Angular island shell — <code>islandComponent</code> facades, <code>atollIsland</code> directive + <code>Renderer2</code> worker renderer</>,
   },
+  {
+    pkg: '@atolljs/vite',
+    contents: <>Dev-server plugin — worker entries served as esbuild bundles; rebuild + respawn on change, so browser transforms (fast-refresh, <code>@vite/client</code>) never reach a worker</>,
+  },
 ];
 
 export function Overview() {
