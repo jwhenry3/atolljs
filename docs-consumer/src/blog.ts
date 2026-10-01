@@ -17,12 +17,16 @@ const ESCAPE: Record<string, string> = {
 const escapeHtml = (s: string) => s.replace(/[&<>"]/g, (c) => ESCAPE[c]);
 
 /**
- * Posts cite sources as repo-relative doc links (`../tasks-and-pool.md`),
- * which resolve correctly when the markdown is read on GitHub. At compile
- * time they're rewritten to absolute consumer-site paths — `/consumer/<r>/`
- * for local serves and `/atolljs/consumer/<r>/` in the Pages deployment
- * (VITE_CONSUMER_BASE set by scripts/build-pages.mjs / pages.yml). Anything
- * unmapped falls back to the GitHub blob URL rather than a dead link.
+ * Posts cite sources two ways, both repo-relative so they resolve correctly
+ * when the markdown is read on GitHub:
+ *
+ *   ../tasks-and-pool.md   — a doc in docs/          → consumer route
+ *   worker-pools.md        — a sibling post in docs/blog/ → /blog/<slug>/
+ *
+ * At compile time they're rewritten to absolute consumer-site paths —
+ * `/consumer/<r>/` for local serves and `/atolljs/consumer/<r>/` in the Pages
+ * deployment (VITE_CONSUMER_BASE set by scripts/build-pages.mjs / pages.yml).
+ * Anything unmapped falls back to the GitHub blob URL rather than a dead link.
  */
 const CONSUMER_BASE = import.meta.env.DEV
   ? '/' // vite dev serves the app at the origin root
@@ -50,12 +54,18 @@ const DOC_ROUTES: Record<string, string> = {
   'frameworks/nextjs': 'fw-nextjs-server',
 };
 
-const DOC_LINK = /href="\.\.\/([^"#]+?)\.md(#([^"]*))?"/g;
+const DOC_LINK = /href="((?:\.\.\/)+|\.\/)?([^"#]+?)\.md(#([^"]*))?"/g;
 
 function rewriteDocLinks(html: string): string {
-  return html.replace(DOC_LINK, (_m, path: string, _frag, anchor: string) => {
-    const route = DOC_ROUTES[path];
+  return html.replace(DOC_LINK, (_m, up: string | undefined, path: string, _frag, anchor: string) => {
     const suffix = anchor ? `#${anchor}` : '';
+    if (up === undefined || up === './') {
+      // Same-directory link — a sibling blog post in docs/blog/.
+      return POST_SLUGS.has(path)
+        ? `href="${CONSUMER_BASE}blog/${path}/${suffix}"`
+        : `href="https://github.com/jwhenry3/atolljs/blob/main/docs/blog/${path}.md${suffix}"`;
+    }
+    const route = DOC_ROUTES[path];
     if (route !== undefined) {
       return `href="${CONSUMER_BASE}${route ? `${route}/` : ''}${suffix}"`;
     }
@@ -93,6 +103,8 @@ const raw: RawPost[] = Object.entries(files).map(([path, md]) => ({
   slug: /([^/\\]+)\.md$/.exec(path)![1],
   md,
 }));
+
+const POST_SLUGS = new Set(raw.map((p) => p.slug));
 
 /**
  * Optional YAML-style front matter per post (GitHub renders the block as a

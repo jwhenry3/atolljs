@@ -61,7 +61,7 @@ byte width from, so the two sides can't disagree — there's only one
 source of offsets. And it costs nothing you didn't ask for: the schema
 engine is vendored into `reef`, so no zod dependency ships with the SDK.
 
-Deep dive: [Shared Memory Is a Contract, Not a Buffer](../shared-memory.md).
+Deep dive: [Shared Memory Is a Contract, Not a Buffer](shared-memory.md).
 
 ## 2. Make worker calls feel like method calls
 
@@ -102,7 +102,7 @@ await incidents.queryIncidents({ offset: 0, limit: 50 });
 the hood the pool handles what bare workers don't — queueing,
 `taskTimeout`, cancellation, crash respawn. A pool call always settles.
 
-Deep dive: [Worker Pools That Fail Gracefully](../tasks-and-pool.md).
+Deep dive: [Worker Pools That Fail Gracefully](worker-pools.md).
 
 ## 3. Let results flow back as reactivity
 
@@ -124,7 +124,7 @@ them — `useSharedValue`/`useTask` in React, equivalents in Vue, Solid,
 Svelte, Angular, Next.js. Your component subscribes; the worker writes;
 the diff flows through the version counter, not a message.
 
-Deep dive: [Reactivity Across a Thread Boundary](../reactivity.md).
+Deep dive: [Reactivity Without Messages](reactivity.md).
 
 ## 4. Render UI itself off-thread
 
@@ -210,7 +210,7 @@ bare element on framework-free shells.
 Per-framework packages (`react-island`, `vue-island`, …) keep each
 worker's renderer to the framework it actually uses.
 
-Deep dive: [Islands in the Worker](../islands.md).
+Deep dive: [Islands That Render in Workers](islands.md).
 
 ## On the server — NestJS
 
@@ -297,7 +297,7 @@ same discipline as every browser layer. Node needs no COOP/COEP for
 subtree can even be *housed* inside workers outright, proxied at the
 framework boundary.
 
-Deep dive: [NestJS — pools behind DI](../frameworks/nestjs.md).
+Deep dive: [Dependency Injection Across the Boundary](nestjs-di.md).
 
 ## What ties it together
 
