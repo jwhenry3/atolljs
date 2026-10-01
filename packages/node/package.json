@@ -11,8 +11,12 @@
     "./shim": "./src/shim.ts"
   },
   "files": [
-    "src"
+    "src",
+    "dist"
   ],
+  "scripts": {
+    "build": "node ../../scripts/build-lib.mjs"
+  },
   "publishConfig": {
     "access": "public",
     "registry": "https://registry.npmjs.org"

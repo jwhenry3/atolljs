@@ -8,7 +8,8 @@
     ".": "./src/index.ts"
   },
   "files": [
-    "src"
+    "src",
+    "dist"
   ],
   "publishConfig": {
     "access": "public",
@@ -27,5 +28,8 @@
   "bugs": {
     "url": "https://github.com/jwhenry3/atolljs/issues"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "scripts": {
+    "build": "node ../../scripts/build-lib.mjs"
+  }
 }

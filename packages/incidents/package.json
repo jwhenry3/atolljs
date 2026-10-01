@@ -11,7 +11,8 @@
     "./worker/*": "./src/worker/*"
   },
   "files": [
-    "src"
+    "src",
+    "dist"
   ],
   "peerDependencies": {
     "@atolljs/core": "0.0.0",
@@ -22,5 +23,8 @@
     "url": "https://github.com/jwhenry3/atolljs",
     "directory": "packages/incidents"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "scripts": {
+    "build": "node ../../scripts/build-lib.mjs"
+  }
 }

@@ -73,6 +73,11 @@ packages/vite/        vite dev plugin — worker entries served as esbuild
                       dist/ like cli, see docs/vite-plugin.md
 packages/node/        node:worker_threads adapter (+ ./http socket routing)
 packages/nestjs/      NestJS module + decorators
+                      — node/nestjs/nextjs/incidents are Node-facing: they ship
+                      compiled dist/ (esbuild + real .d.ts, scripts/build-lib.mjs)
+                      because bare Node won't type-strip .ts under node_modules.
+                      Repo exports stay → ./src/ for dev; publish.mjs rewrites
+                      → ./dist/ at stage time. Bundler-only packages ship src/.
 examples/<fw>/        demo apps; examples/react-dom-worker/ is the islands demo;
                       examples/http-offload/ serves HTTP inside pool workers (Node ≥26)
 examples/express|fastify|hono|koa   plain-Node REST APIs on @atolljs/node

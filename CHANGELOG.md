@@ -46,6 +46,27 @@ source, which is why they never hit either).
 - Ships compiled `dist/` like the CLI (Node won't type-strip `.ts` under
   `node_modules`); `vite` is a peer dep, `esbuild` a dependency.
 
+### Node-facing packages ship compiled `dist/` — `node`, `nestjs`, `nextjs`, `incidents`
+
+- Bare Node can't type-strip `.ts` under `node_modules`
+  (`ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING`) — in-repo it never bites
+  because workspace links are symlinks and the check uses realpaths. The
+  four packages consumers load through plain Node (compiled apps,
+  `worker_threads`, bundled worker entries' external imports) now build
+  `dist/` via `scripts/build-lib.mjs`: one esbuild ESM bundle per exports
+  leaf (code splitting keeps shared modules single-instance across
+  subpaths) plus real `.d.ts` declarations — emitted by tsc, with `.js`
+  appended to extensionless relative specifiers so the type graph resolves
+  under consumer `nodenext`, not just `bundler`.
+- Repo `exports` stay mapped to `./src/` so in-repo dev/tests keep
+  resolving sources; `scripts/publish.mjs` rewrites staged manifests to
+  `./dist/` (types → `*.d.ts`), gated on the dist target existing so a
+  map↔build drift fails loudly.
+- `@atolljs/core` likewise emits real `dist/**/*.d.ts` (it declared
+  `types: ./dist/index.d.ts` without ever emitting it), and its `"./*"`
+  export now resolves deep-subpath types from the emitted mirror while
+  `default` still serves `./src/*` to bundlers.
+
 ### `@atolljs/cli` — scaffolds use `atoll()` from `@atolljs/vite`
 
 - Every framework scaffold emits `import atoll from '@atolljs/vite'` +

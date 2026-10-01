@@ -12,7 +12,10 @@
       "import": "./dist/index.js"
     },
     "./package.json": "./package.json",
-    "./*": "./src/*"
+    "./*": {
+      "types": "./dist/*.d.ts",
+      "default": "./src/*"
+    }
   },
   "files": [
     "dist",
@@ -29,7 +32,7 @@
     "kill:all": "node scripts/kill-all.mjs",
     "atoll": "node packages/cli/src/cli.ts",
     "serve:all": "node scripts/serve-all.mjs",
-    "build": "tsc --noEmit && vite build",
+    "build": "tsc --noEmit && vite build && node scripts/core-dts.mjs",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "stats": "node scripts/bundle-stats.mjs",

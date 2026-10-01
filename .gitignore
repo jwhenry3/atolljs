@@ -21,3 +21,5 @@ docs-consumer.zip
 /*.png
 *-check.png
 .angular
+packages/*/dist-raw/
+tsconfig.build-lib.json

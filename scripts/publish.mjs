@@ -18,8 +18,9 @@
 // stamping or staging: a confirmed 404 (a new package staging can't create)
 // aborts immediately rather than leaving a release half-staged.
 import { execFileSync, spawnSync } from 'node:child_process';
-import { appendFileSync, readFileSync, writeFileSync, readdirSync, statSync } from 'node:fs';
+import { appendFileSync, existsSync, readFileSync, writeFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
+import { rewriteExports } from './build-lib.mjs';
 
 const root = new URL('..', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1');
 const [, , tag, ...rest] = process.argv;
@@ -115,9 +116,23 @@ for (const { dir, pkg } of packages) {
   }
 }
 
+/* ── Node-facing packages: exports → dist at stage time ──────────────────
+ * Packages built by scripts/build-lib.mjs (node/nestjs/nextjs/incidents)
+ * keep `exports` → ./src/ in the repo so in-repo dev/tests resolve sources.
+ * Published consumers load them through bare Node (compiled app output,
+ * bundled worker entries' external imports), where .ts under node_modules
+ * dies on ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING — so the staged
+ * manifest rewrites each ./src/ leaf to its emitted ./dist/ file, and
+ * `types` to the real .d.ts build-lib emits alongside. Rewrite lives in
+ * build-lib.mjs so pack/verify flows exercise the same code.
+ */
+
 // Stamp version + rewrite internal dep ranges to the release version.
 for (const { dir, pkg } of packages) {
   pkg.version = version;
+  if (pkg.scripts?.build?.includes('build-lib.mjs') && pkg.exports) {
+    pkg.exports = rewriteExports(dir, pkg.exports);
+  }
   for (const field of ['dependencies', 'peerDependencies', 'devDependencies']) {
     for (const dep of Object.keys(pkg[field] ?? {})) {
       if (names.has(dep)) pkg[field][dep] = version;
