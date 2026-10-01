@@ -99,7 +99,7 @@ export function BundleSize() {
         <tbody>
           {pkgs.map((pkg) => (
             <tr key={pkg.id}>
-              <td><PkgLink name={pkg.id} /></td>
+              <td><PkgLink name={pkg.id} site="bundlephobia" /></td>
               <td className="num">
                 {kb(pkg.main.min)} kB <span className="muted">({kb(pkg.main.gzip)} gz)</span>
               </td>
@@ -296,7 +296,7 @@ export function BundleSize() {
         <tbody>
           {bundleStats.dependencies.map((d) => (
             <tr key={d.id}>
-              <td><PkgLink name={d.id} /></td>
+              <td><PkgLink name={d.id} site="bundlephobia" /></td>
               <td className="num">{kb(d.min)} kB</td>
               <td className="num">{kb(d.gzip)} kB</td>
               <td>{d.note}</td>
