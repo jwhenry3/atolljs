@@ -4,7 +4,7 @@
 //     index.html                  landing page (pages-landing/)
 //     consumer/                   docs-consumer site
 //       react/ vue/ … react-dom-worker/       demos embedded by consumer iframes
-//       v0.1/ v0.2/ …             release snapshots (docs-versions/*.tar.gz)
+//       v0.1.3/ v0.1.4/ …         release snapshots (docs-versions/*.tar.gz)
 //       versions.json             runtime manifest the version switcher reads
 //     .nojekyll                   skip Jekyll processing
 //     404.html                    standalone not-found page (pages-landing/)
@@ -17,9 +17,9 @@
 //
 // Snapshots: each release's docs-snapshot job uploads a docs-v<x.y.z>.tar.gz
 // asset (see snapshot-docs.mjs). fetch-docs-versions.mjs drops them in
-// docs-versions/; here they are mounted under consumer/v<major.minor>/ —
-// the newest patch per minor line wins — and listed in versions.json so a
-// page in ANY snapshot can discover every available version at runtime.
+// docs-versions/; here they are mounted under consumer/v<x.y.z>/ — one
+// mount per release — and listed in versions.json so a page in ANY snapshot
+// can discover every available version at runtime.
 //
 // Usage: node scripts/assemble-pages.mjs   (run after `npm run build` in each app)
 import { cpSync, existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
@@ -39,24 +39,21 @@ if (!existsSync(join(landingSrc, 'index.html'))) {
   process.exit(1);
 }
 
-// docs-v<major>.<minor>.<patch>.tar.gz → mount dir 'v<major>.<minor>',
-// keeping only the newest patch of each minor line.
+// docs-v<major>.<minor>.<patch>.tar.gz → mount dir 'v<major>.<minor>.<patch>'
+// — one entry per release, so the version switcher lists every patch.
 function pickSnapshots() {
   if (!existsSync(versionsDir)) return [];
-  const byMinor = new Map();
+  const snapshots = [];
   for (const f of readdirSync(versionsDir)) {
     // 'v' prefix optional — tags are created without it (docs-0.1.3.tar.gz).
     const m = /^docs-v?(\d+)\.(\d+)\.(\d+)\.tar\.gz$/.exec(f);
     if (!m) continue;
-    const key = `v${m[1]}.${m[2]}`;
-    const patch = +m[3];
-    const cur = byMinor.get(key);
-    if (!cur || patch > cur.patch) byMinor.set(key, { patch, file: f });
+    snapshots.push({ ver: `v${m[1]}.${m[2]}.${m[3]}`, file: f, maj: +m[1], min: +m[2], patch: +m[3] });
   }
-  // Newest minor first — matches the order the version switcher shows.
-  return [...byMinor.entries()]
-    .map(([ver, s]) => ({ ver, file: s.file, maj: +ver.slice(1).split('.')[0], min: +ver.split('.')[1] }))
-    .sort((a, b) => b.maj - a.maj || b.min - a.min);
+  // Newest first — matches the order the version switcher shows.
+  return snapshots.sort(
+    (a, b) => b.maj - a.maj || b.min - a.min || b.patch - a.patch,
+  );
 }
 
 rmSync(out, { recursive: true, force: true });

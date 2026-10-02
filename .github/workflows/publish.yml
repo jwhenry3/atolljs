@@ -76,7 +76,7 @@ jobs:
 
   # Immutable docs snapshot for the release tag — uploaded as a
   # docs-v<x.y.z>.tar.gz release asset. The Pages workflow downloads these
-  # assets and mounts them under consumer/v<major.minor>/ (see
+  # assets and mounts them under consumer/v<x.y.z>/ (see
   # fetch-docs-versions.mjs + assemble-pages.mjs), so the deployed site's
   # version switcher stays in lock step with releases. Runs after `publish`
   # so a failed staging never ships docs for a release that didn't land.
@@ -103,6 +103,13 @@ jobs:
             examples/svelte/package-lock.json
             examples/angular/package-lock.json
             examples/react-dom-worker/package-lock.json
+            examples/react-host/package-lock.json
+            examples/vue-host/package-lock.json
+            examples/solid-host/package-lock.json
+            examples/svelte-host/package-lock.json
+            examples/angular-host/package-lock.json
+            examples/mfe-publish/package-lock.json
+            examples/mfe-consumer/package-lock.json
 
       - name: Install dependencies
         run: |
@@ -110,7 +117,7 @@ jobs:
           # Root deps first — example projects alias @atolljs/* to the root
           # source tree, whose imports resolve upward to root node_modules.
           npm ci
-          for d in docs-consumer examples/react examples/vue examples/solid examples/svelte examples/angular examples/react-dom-worker; do
+          for d in docs-consumer examples/react examples/vue examples/solid examples/svelte examples/angular examples/react-dom-worker examples/react-host examples/vue-host examples/solid-host examples/svelte-host examples/angular-host examples/mfe-publish examples/mfe-consumer; do
             echo "=== npm ci: $d ==="
             (cd "$d" && npm ci)
           done

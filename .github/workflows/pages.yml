@@ -55,6 +55,13 @@ jobs:
             examples/svelte/package-lock.json
             examples/angular/package-lock.json
             examples/react-dom-worker/package-lock.json
+            examples/react-host/package-lock.json
+            examples/vue-host/package-lock.json
+            examples/solid-host/package-lock.json
+            examples/svelte-host/package-lock.json
+            examples/angular-host/package-lock.json
+            examples/mfe-publish/package-lock.json
+            examples/mfe-consumer/package-lock.json
 
       - name: Install dependencies
         run: |
@@ -63,13 +70,13 @@ jobs:
           # root source tree, whose imports (react, zod, msgpackr, solid-js,
           # node:* types) resolve upward to the root node_modules.
           npm ci
-          for d in docs-consumer examples/react examples/vue examples/solid examples/svelte examples/angular examples/react-dom-worker; do
+          for d in docs-consumer examples/react examples/vue examples/solid examples/svelte examples/angular examples/react-dom-worker examples/react-host examples/vue-host examples/solid-host examples/svelte-host examples/angular-host examples/mfe-publish examples/mfe-consumer; do
             echo "=== npm ci: $d ==="
             (cd "$d" && npm ci)
           done
 
       # Pull docs-v*.tar.gz release assets into docs-versions/ so the
-      # assembler can mount them under consumer/v<minor>/. gh reads releases
+      # assembler can mount them under consumer/v<x.y.z>/. gh reads releases
       # with the token's contents:read permission; no gh → empty manifest.
       - name: Fetch versioned docs snapshots
         env:

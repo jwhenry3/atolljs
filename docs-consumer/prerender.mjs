@@ -24,8 +24,8 @@ const ssgDir = join(root, 'dist-ssg');
 // Canonical base — override with DOCS_BASE_URL for forks/staging deploys.
 const BASE = (process.env.DOCS_BASE_URL ?? 'https://jwhenry3.github.io/atolljs/consumer/').replace(/\/?$/, '/');
 
-// Release snapshots (consumer/v<minor>/ mounts) set VITE_DOCS_VERSION to the
-// version dir name — e.g. 'v0.1' — stamping it into <meta atoll:version> so
+// Release snapshots (consumer/v<x.y.z>/ mounts) set VITE_DOCS_VERSION to the
+// version dir name — e.g. 'v0.1.6' — stamping it into <meta atoll:version> so
 // docs.js can resolve paths across the extra segment, plus a noindex so the
 // immutable copy never outranks the live docs. Latest builds emit 'latest'.
 const DOCS_VERSION = process.env.VITE_DOCS_VERSION || 'latest';
@@ -100,8 +100,14 @@ const DOCS_JS = `(function () {
   var route = meta ? meta.content : 'overview';
   var depth = route === 'overview' ? 0 : route.split('/').filter(Boolean).length;
   var verMeta = document.querySelector('meta[name="atoll:version"]');
-  var ver = verMeta ? verMeta.content : 'latest';
-  // Versioned snapshots sit one segment deeper (consumer/v0.1/<route>/), so
+  // The mount dir is ground truth — snapshots built before per-patch mounts
+  // were stamped 'v0.1' but now live under their full v<x.y.z> dir.
+  var pathSeg = location.pathname.split('/').filter(Boolean);
+  var verSeg = pathSeg[pathSeg.length - 1 - depth];
+  var ver = /^v\d+\.\d+\.\d+$/.test(verSeg || '')
+    ? verSeg
+    : verMeta ? verMeta.content : 'latest';
+  // Versioned snapshots sit one segment deeper (consumer/v0.1.6/<route>/), so
   // climbing out to the consumer root takes an extra '../' on those pages.
   var root = '../'.repeat(depth + (ver === 'latest' ? 0 : 1));
   var routePath = depth ? location.pathname.split('/').filter(Boolean).slice(-depth).join('/') + '/' : '';

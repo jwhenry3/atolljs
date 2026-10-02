@@ -1,5 +1,5 @@
 // Downloads release-time docs snapshots into docs-versions/ for
-// assemble-pages.mjs to mount under consumer/v<minor>/.
+// assemble-pages.mjs to mount under consumer/v<x.y.z>/.
 //
 // Each release carries a docs-v<x.y.z>.tar.gz asset (uploaded by the
 // docs-snapshot job in publish.yml). This uses the `gh` CLI — preinstalled

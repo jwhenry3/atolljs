@@ -8,8 +8,8 @@ import { consumerRootHref, routeDepth } from '../link';
  * works under any mount (/, /consumer/, /atolljs/consumer/, or a versioned
  * snapshot one segment deeper).
  */
-// 'v0.1' on a release-snapshot build, 'latest' otherwise. Inside a version
-// mount the consumer root is one extra '../' down (consumer/v0.1/<route>/).
+// 'v0.1.6' on a release-snapshot build, 'latest' otherwise. Inside a version
+// mount the consumer root is one extra '../' down (consumer/v0.1.6/<route>/).
 const VERSION = import.meta.env.VITE_DOCS_VERSION || 'latest';
 const versioned = VERSION !== 'latest';
 
@@ -61,7 +61,7 @@ export function SiteHeader({ active }: { active: 'docs' | 'blog' }) {
           Blog
         </a>
       </nav>
-      {/* Versioned snapshots (consumer/v<minor>/) — docs.js repopulates the
+      {/* Versioned snapshots (consumer/v<x.y.z>/) — docs.js repopulates the
           options from the live versions.json and drives navigation; the
           baked options are the no-JS floor. */}
       <select

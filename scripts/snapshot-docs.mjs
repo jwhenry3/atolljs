@@ -3,7 +3,7 @@
 //   node scripts/snapshot-docs.mjs v0.1.3 [--no-build]
 //
 // Produces docs-v0.1.3.tar.gz at the repo root — the workflow uploads it as
-// a release asset; assemble-pages.mjs later mounts it at consumer/v0.1/.
+// a release asset; assemble-pages.mjs later mounts it at consumer/v0.1.3/.
 //
 // The snapshot is the FULL consumer tree (docs pages + demo mounts +
 // coi-sw.js), so its iframes and service worker resolve inside v0.1/ and the
@@ -26,7 +26,7 @@ if (!/^v?\d+\.\d+\.\d+/.test(tag ?? '')) {
   console.error('usage: node scripts/snapshot-docs.mjs <tag>   e.g. v0.1.3');
   process.exit(1);
 }
-const ver = `v${tag.replace(/^v/, '').split('.').slice(0, 2).join('.')}`; // v0.1.3 -> v0.1
+const ver = `v${tag.replace(/^v/, '')}`; // 0.1.3 / v0.1.3 -> v0.1.3
 
 // owner/repo — for the Pages base path baked into links/canonicals.
 const slug = (process.env.GITHUB_REPOSITORY ??
