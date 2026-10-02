@@ -22,7 +22,7 @@
 // can discover every available version at runtime.
 //
 // Usage: node scripts/assemble-pages.mjs   (run after `npm run build` in each app)
-import { cpSync, existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
@@ -72,8 +72,33 @@ for (const { ver, file } of snapshots) {
   execFileSync('tar', ['xzf', `docs-versions/${file}`, '-C', `dist-pages/consumer/${ver}`], {
     cwd: root,
   });
+  patchSnapshotDocsJs(dest, ver);
   console.log(`mounted ${ver} docs snapshot <- docs-versions/${file}`);
 }
+// Snapshots built before per-patch mounts were stamped <meta atoll:version>
+// 'v<major>.<minor>' ('v0.1') and their baked docs.js takes `ver` straight
+// from the meta — 'v0.1' never matches a per-patch option, so the selector
+// renders unselected on those pages. The mount dir is ground truth; rewrite
+// `ver` to path-derive it (indexing back by route depth, so it works under
+// any base prefix). Newer snapshots already carry this logic — the replace
+// is a no-op there.
+function patchSnapshotDocsJs(dir, ver) {
+  const docsJs = join(dir, 'docs.js');
+  if (!existsSync(docsJs)) return;
+  const src = readFileSync(docsJs, 'utf8');
+  const marker = "var ver = verMeta ? verMeta.content : 'latest';";
+  if (!src.includes(marker)) return;
+  const patched = src.replace(
+    marker,
+    `var verSeg = location.pathname.split('/').filter(Boolean);\n` +
+      `  var ver = /^v\\d+\\.\\d+\\.\\d+$/.test(verSeg[verSeg.length - 1 - depth] || '')\n` +
+      `    ? verSeg[verSeg.length - 1 - depth]\n` +
+      `    : verMeta ? verMeta.content : 'latest';`
+  );
+  writeFileSync(docsJs, patched);
+  console.log(`patched ${ver}/docs.js — version now derived from mount path`);
+}
+
 // versions.json lives at the consumer root so pages in any snapshot can
 // fetch the LIVE list — an old snapshot still learns about newer releases.
 writeFileSync(

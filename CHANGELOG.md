@@ -137,6 +137,12 @@ exposed three real gotchas, all now baked into the scaffolded
   SEO metadata. The wide-viewport demo rail now clears the sticky site
   header (`top: 24px` → `68px` — the tab strip was being clipped), and the
   page renders all five hosts so `docs.js` folds them into the tabbed dock.
+- Blog: new four-post **Micro-frontends** series — the worker-isolation
+  pitch (`microfrontends`), the framework-neutral contract as the seam
+  (`mfe-contract`), npm-vs-CDN publishing and the same-origin worker rule
+  (`mfe-publishing`), and use cases plus honest limits (`mfe-use-cases`).
+  `docs/islands-remote.md` now maps to the `island-mfe` consumer route in
+  `DOC_ROUTES` so posts and docs link it as a site page.
 
 ## 0.1.5
 

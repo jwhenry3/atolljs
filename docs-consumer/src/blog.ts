@@ -39,6 +39,7 @@ const DOC_ROUTES: Record<string, string> = {
   'reactivity': 'reactivity',
   'shared-worker': 'shared-worker',
   'islands': 'islands',
+  'islands-remote': 'island-mfe',
   'islands-frameworks': 'island-apps',
   'islands-worker': 'island-proxy',
   'cross-origin-isolation': 'hosting',
