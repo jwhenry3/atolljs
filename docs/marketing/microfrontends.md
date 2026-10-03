@@ -16,13 +16,13 @@ I built **AtollJS** around a different answer: run each micro-frontend inside a 
 
 What that buys you:
 
-🏝️ **Real isolation** — a wedged MFE wedges its worker, not your page. `destroy()` is a `worker.terminate()` away.
+**Real isolation** — a wedged MFE wedges its worker, not your page. `destroy()` is a `worker.terminate()` away.
 
-📦 **Independent deployment** — the worker bundle is a URL. Ship it inside an npm package or from a CDN on its own release cadence — the shell never rebuilds to pick up a new MFE version.
+**Independent deployment** — the worker bundle is a URL. Ship it inside an npm package or from a CDN on its own release cadence — the shell never rebuilds to pick up a new MFE version.
 
-⚡ **Zero runtime tax** — a React shell hosting a Vue island loads zero bytes of Vue. The framework lives entirely inside the worker bundle.
+**Zero runtime tax** — a React shell hosting a Vue island loads zero bytes of Vue. The framework lives entirely inside the worker bundle.
 
-📜 **A typed seam, not a handshake** — each MFE publishes one framework-free contract module: app key, schema'd props, schema'd events, worker factory. The shell's facade derives the component types from it, and the worker enforces it at runtime.
+**A typed seam, not a handshake** — each MFE publishes one framework-free contract module: app key, schema'd props, schema'd events, worker factory. The shell's facade derives the component types from it, and the worker enforces it at runtime.
 
 The matrix it unlocks: **any supported framework in the shell × any supported framework in the worker** — 25 combinations, one op protocol, zero glue code. The repo mounts all five MFEs in all five shells to prove it.
 
