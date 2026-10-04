@@ -46,6 +46,11 @@ and cross-app views. No breaking changes.
   in Node (reported as `rssBytes`), main thread and workers alike. Network
   instrumentation covers outbound `fetch()` only — inbound HTTP handled by a
   Nest/Express app isn't probed.
+- Fix: the fallback Node WebSocket client left `open` reporting `true` after
+  close and server close frames — `connectDevtools`' send gate kept writing
+  into a dead socket.
+- `atoll-devtools` accepts `--help`/`-h` and exits instead of booting the
+  server (the publish pipeline's bin smoke relies on it).
 
 ### `@atolljs/cli` — `atoll add devtools`
 
@@ -58,6 +63,17 @@ and cross-app views. No breaking changes.
   and Node hosts get the `@atolljs/devtools/node` entry gated on
   `ATOLL_DEVTOOLS=1`. A positional/`--name` argument sets the dashboard
   session label (default: the package name).
+
+### Release tooling
+
+- `scripts/publish.mjs` takes an optional package positional —
+  `publish.mjs <ver> devtools` (accepts the scoped name, unscoped part, or
+  directory) — to build/stamp/stage one package; internal deps still stamp
+  to the release version and warn when they aren't on npm yet. Combined
+  with `--direct` this is the one-command bootstrap for a new package.
+- Re-runs are safe: a package whose target version is already published (or
+  staged, pending approval via `npm stage list`) is skipped instead of
+  hard-failing on `EPUBLISHCONFLICT`.
 
 ### `@atolljs/vite` — `/@fs/` worker entries, `/__atoll/` mount
 
@@ -88,6 +104,11 @@ and cross-app views. No breaking changes.
   invariants, `/__atoll/` mount, session lifecycle); consumer docs site gains
   a `/devtools/` page; `packages/devtools/README.md` documents the three
   subpaths.
+- Coverage: new suites for the overlay, init gating, client transports, and
+  the RFC6455 frame codec (masked/fragmented/large frames, ping/pong, close
+  semantics over real sockets) plus core fetch/memory probe tests —
+  `packages/devtools` at ~94% statements; every publishable package is now
+  in the CI typecheck loop.
 
 ## 0.1.6
 

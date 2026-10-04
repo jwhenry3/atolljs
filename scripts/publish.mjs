@@ -25,6 +25,10 @@
 // Re-runs are safe: a package whose target version is already published (or
 // staged, pending approval) is skipped rather than hard-failing — so a
 // partially-completed release can just be run again.
+//
+// Stamped manifests are restored to their pre-run bytes on exit (byte-for-
+// byte, not `git checkout` — uncommitted edits survive and no git is
+// needed). A stamped package.json must never reach a commit.
 import { execFileSync, spawnSync } from 'node:child_process';
 import { appendFileSync, existsSync, readFileSync, writeFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
@@ -162,6 +166,12 @@ for (const { dir, pkg } of selected) {
 
 // Stamp version + rewrite internal dep ranges to the release version —
 // only the selected package's manifest changes on a single-package run.
+// Stamped manifests are stage-time artifacts: capture each original before
+// writing and restore it verbatim on the way out (success, failure, or
+// Ctrl+C). Repo convention stays `0.0.0` + `exports` → `./src` — a
+// `git add -A` after publishing must never sweep stamped state into a
+// commit.
+const stamped = new Map(); // manifest path → original text
 for (const { dir, pkg } of selected) {
   pkg.version = version;
   if (pkg.scripts?.build?.includes('build-lib.mjs') && pkg.exports) {
@@ -172,7 +182,26 @@ for (const { dir, pkg } of selected) {
       if (names.has(dep)) pkg[field][dep] = version;
     }
   }
-  if (!dryRun) writeFileSync(join(dir, 'package.json'), JSON.stringify(pkg, null, 2) + '\n');
+  if (!dryRun) {
+    const manifest = join(dir, 'package.json');
+    if (!stamped.has(manifest)) stamped.set(manifest, readFileSync(manifest, 'utf8'));
+    writeFileSync(manifest, JSON.stringify(pkg, null, 2) + '\n');
+  }
+}
+
+const restoreManifests = () => {
+  for (const [p, original] of stamped) writeFileSync(p, original);
+  if (stamped.size) {
+    console.log(`restored ${stamped.size} manifest(s) — stamped state is publish-only`);
+    stamped.clear();
+  }
+};
+process.on('exit', restoreManifests);
+for (const sig of ['SIGINT', 'SIGTERM']) {
+  process.on(sig, () => {
+    restoreManifests();
+    process.exit(sig === 'SIGINT' ? 130 : 143);
+  });
 }
 
 // Dependency order — a package publishes after every internal dep it needs.
