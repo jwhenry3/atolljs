@@ -1524,13 +1524,17 @@ function render() {
   $('sessions').innerHTML = sess.length
     ? `<div class="sess ${state.sel === null ? 'sel' : ''}" data-id=""><span class="nm">all live sessions</span></div>` +
       sess.map((s) =>
-        `<div class="sess ${state.sel === s.id ? 'sel' : ''} ${s.closed ? 'muted' : ''}" data-id="${esc(s.id)}"><span class="nm">${esc(s.name ?? s.id)}</span>${s.closed ? ' <span class="pill">ended</span><span class="dismiss" title="dismiss session">×</span>' : ''}<br><span class="rt">${esc(s.runtime)}${sessHeapOf(s.id) !== undefined ? ` · heap ${fmtBytes(sessHeapOf(s.id))}` : ''} · ${esc(s.hint ?? '')}</span></div>`,
+        `<div class="sess ${state.sel === s.id ? 'sel' : ''} ${s.closed ? 'muted' : ''}" data-id="${esc(s.id)}"><span class="nm">${esc(s.name ?? s.id)}</span>${s.closed ? ` <span class="pill">ended</span><span class="pin${s.pinned ? ' on' : ''}" title="${s.pinned ? 'pinned — kept after the 30min cleanup' : 'pin — keep after the 30min cleanup'}">◆</span><span class="dismiss" title="dismiss session">×</span>` : ''}<br><span class="rt">${esc(s.runtime)}${sessHeapOf(s.id) !== undefined ? ` · heap ${fmtBytes(sessHeapOf(s.id))}` : ''} · ${esc(s.hint ?? '')}</span></div>`,
       ).join('')
     : '<div class="muted">none</div>';
   for (const el of document.querySelectorAll('.sess')) {
     el.onclick = (ev) => {
       if (ev.target.classList.contains('dismiss')) {
         dismissSession(el.dataset.id);
+        return;
+      }
+      if (ev.target.classList.contains('pin')) {
+        pinSession(el.dataset.id, !state.sessions.get(el.dataset.id)?.pinned);
         return;
       }
       state.sel = el.dataset.id || null;
@@ -1546,11 +1550,13 @@ const scheduleRender = () => {
 };
 
 // Keep the live charts rolling while their tab is visible, even between
-// batches — cheap canvas redraws, ~1 fps.
+// batches — cheap canvas redraws, ~1 fps. In broadcast mode this tick
+// also runs the closed-session retention sweep.
 setInterval(() => {
   if ($('view-network').classList.contains('on')) renderNetwork();
   if ($('view-memory').classList.contains('on')) renderMemory();
   if ($('view-dashboard').classList.contains('on')) renderTopology();
+  if (BC) sweepClosed();
 }, 1000);
 
 /* ── tabs + waterfall interaction ────────────────────────────────────────── */
@@ -1624,6 +1630,25 @@ if (amap) {
   });
 }
 
+// Mini mode — the flyout is small, so the app map becomes its own
+// default sub-tab and gets the whole view instead of a hero strip.
+if (new URLSearchParams(location.search).has('mini')) {
+  const view = document.getElementById('view-dashboard');
+  const subnav = view.querySelector('.subnav');
+  const mapView = document.createElement('div');
+  mapView.className = 'subview on';
+  mapView.id = 'tv-map';
+  mapView.append(view.querySelector('h2'), $('appmap'));
+  view.appendChild(mapView);
+  const mapBtn = document.createElement('button');
+  mapBtn.dataset.sub = 'tv-map';
+  mapBtn.textContent = 'Map';
+  mapBtn.className = 'on';
+  subnav.prepend(mapBtn);
+  subnav.querySelector('[data-sub="tv-dash"]').classList.remove('on');
+  document.getElementById('tv-dash').classList.remove('on');
+}
+
 for (const b of document.querySelectorAll('.subnav button')) {
   b.onclick = () => {
     const nav = b.closest('.subnav');
@@ -1683,13 +1708,96 @@ attachWaterfallHandlers($('wklane'));
 
 let viewer = null;
 
+/**
+ * Pure-client mode: the dashboard page is served on the app's own origin
+ * (vite plugin mounts it at /__atoll/) and listens on the same
+ * BroadcastChannel the app publishes on. There is no server-side session
+ * registry — this page builds it from hello/batch/bye frames and owns
+ * retention (pins + TTL) itself.
+ */
+const BC = window.__ATOLL_TRANSPORT === 'broadcast' && typeof BroadcastChannel !== 'undefined'
+  ? new BroadcastChannel('atoll-devtools')
+  : null;
+// ?mini=1 — the overlay flyout: compact single-instance layout (CSS does
+// the hiding; the session sidebar is meaningless for one origin's app).
+if (new URLSearchParams(location.search).has('mini')) document.body.classList.add('mini');
+const bcSessions = new Map(); // broadcast mode: local session registry
+const CLOSED_TTL = 30 * 60 * 1000;
+// Pure-client mode is structurally single-app — sessions are just this
+// origin's instances, so the selector/scope title earn their space back.
+if (BC) document.body.classList.add('local');
+
+const bcSync = () => reconcileSessions([...bcSessions.values()]);
+
+/** Broadcast-mode retention: closed unpinned sessions expire after the TTL. */
+const sweepClosed = () => {
+  const cutoff = Date.now() - CLOSED_TTL;
+  let changed = false;
+  for (const [id, s] of bcSessions) {
+    if (s.closed && !s.pinned && s.closedAt !== undefined && s.closedAt < cutoff) {
+      bcSessions.delete(id);
+      changed = true;
+    }
+  }
+  if (changed) { bcSync(); scheduleRender(); }
+};
+
 const dismissSession = (id) => {
+  if (BC) {
+    bcSessions.delete(id);
+    bcSync();
+    scheduleRender();
+    return;
+  }
   if (viewer?.readyState === WebSocket.OPEN) {
     viewer.send(JSON.stringify({ type: 'dismiss', sessionId: id }));
   }
 };
 
+const pinSession = (id, pinned) => {
+  if (BC) {
+    const s = bcSessions.get(id);
+    if (s) { s.pinned = pinned; bcSync(); scheduleRender(); }
+    return;
+  }
+  if (viewer?.readyState === WebSocket.OPEN) {
+    viewer.send(JSON.stringify({ type: 'pin', sessionId: id, pinned }));
+  }
+};
+
 function connect() {
+  if (BC) {
+    $('conn').textContent = 'local';
+    $('conn').className = 'on';
+    BC.onmessage = (msg) => {
+      const data = msg.data;
+      if (data.type === 'hello') {
+        // a fresh hello means a new app instance — same id can't revive
+        const prev = bcSessions.get(data.session.id);
+        bcSessions.set(data.session.id, {
+          ...data.session, closed: false, closedAt: undefined, pinned: prev?.pinned,
+        });
+        bcSync();
+      } else if (data.type === 'bye') {
+        const s = bcSessions.get(data.sessionId);
+        if (s && !s.closed) { s.closed = true; s.closedAt = Date.now(); bcSync(); }
+      } else if (data.type === 'batch') {
+        if (!bcSessions.has(data.session.id)) {
+          bcSessions.set(data.session.id, data.session);
+          bcSync();
+        }
+        state.sessions.set(data.session.id, data.session);
+        for (const e of data.events) {
+          applyEvent(data.session, e);
+          logLine(data.session, e);
+        }
+      }
+      scheduleRender();
+    };
+    // announce — apps re-hello and replay their batch tail
+    BC.postMessage({ type: 'view' });
+    return;
+  }
   const ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/view`);
   viewer = ws;
   ws.onopen = () => { $('conn').textContent = 'live'; $('conn').className = 'on'; };

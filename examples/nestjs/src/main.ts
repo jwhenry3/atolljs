@@ -1,4 +1,5 @@
 import 'reflect-metadata';
+import './devtools'; // first — installs the sink before Nest spawns any pools
 import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { getAtollPool } from '@atolljs/nestjs';

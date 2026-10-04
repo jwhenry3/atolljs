@@ -1,3 +1,4 @@
+import './devtools'; // first — installs the sink before ./incidents spawns the pool
 import Koa from 'koa';
 import Router from '@koa/router';
 import { closePool, incidents, parseQueryArgs, readIncident, seedProgress } from './incidents';

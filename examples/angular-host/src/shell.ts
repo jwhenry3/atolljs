@@ -20,7 +20,13 @@ import '@angular/compiler';
 import { Component, provideZonelessChangeDetection, signal } from '@angular/core';
 import { bootstrapApplication } from '@angular/platform-browser';
 import { islandComponent } from '@atolljs/angular-island';
+import { initDevtools } from '@atolljs/devtools';
 import type { IslandHandle, IslandContractEventHandler, Mode } from '@atolljs/islands';
+
+// Instrument before islands mount — the sink must exist when workers
+// spawn for their events to forward. No-op unless the URL carries
+// ?__atoll_devtools.
+initDevtools({ session: { name: 'islands-angular-host' } });
 import counterContract from '../../mfe/contracts/counter.contract';
 import notesContract from '../../mfe/contracts/notes.contract';
 import tickerContract from '../../mfe/contracts/ticker.contract';

@@ -11,6 +11,7 @@ import { BundleSize } from './pages/BundleSize';
 import { Cli } from './pages/Cli';
 import { CustomBindings } from './pages/CustomBindings';
 import { CustomIslandRenderer } from './pages/CustomIslandRenderer';
+import { Devtools } from './pages/Devtools';
 import { FrameworkPage } from './pages/FrameworkPage';
 import { Hosting } from './pages/Hosting';
 import { IslandApps } from './pages/IslandApps';
@@ -76,6 +77,7 @@ const SECTIONS: { label: string; routes: Route[] }[] = [
       { id: 'tasks', label: 'Worker pool & tasks', page: () => <TasksAndPool /> },
       { id: 'reactivity', label: 'Reactivity', page: () => <Reactivity /> },
       { id: 'shared-worker', label: 'Shared worker', page: () => <SharedWorker /> },
+      { id: 'devtools', label: 'Devtools', page: () => <Devtools /> },
       { id: 'bundle-size', label: 'Bundle size & load', page: () => <BundleSize /> },
     ],
   },

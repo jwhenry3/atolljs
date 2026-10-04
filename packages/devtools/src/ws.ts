@@ -10,7 +10,7 @@ import type { IncomingMessage } from 'node:http';
 import type { Duplex } from 'node:stream';
 
 const WS_GUID = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
-const OPCODES = { continuation: 0, text: 1, close: 8, ping: 9, pong: 10 } as const;
+export const OPCODES = { continuation: 0, text: 1, close: 8, ping: 9, pong: 10 } as const;
 
 export interface WsConnection {
   /** Queue a text frame — safe before/without concern for socket state. */
@@ -46,8 +46,83 @@ export function encodeTextFrame(text: string): Buffer {
   return Buffer.concat([header, payload]);
 }
 
-const encodeControl = (opcode: number, payload = Buffer.alloc(0)): Buffer =>
+const encodeControl = (opcode: number, payload: Buffer<ArrayBufferLike> = Buffer.alloc(0)): Buffer =>
   Buffer.concat([Buffer.from([0x80 | opcode, payload.length]), payload]);
+
+export interface WsFrame {
+  fin: boolean;
+  opcode: number;
+  payload: Buffer<ArrayBufferLike>;
+}
+
+/**
+ * Decode as many complete frames as `buf` holds — shared by the server-side
+ * drain (masked client frames) and the Node client (unmasked server frames).
+ * Returns the frames plus the unconsumed remainder.
+ */
+export function decodeFrames(
+  buf: Buffer<ArrayBufferLike>,
+): { frames: WsFrame[]; rest: Buffer<ArrayBufferLike> } {
+  const frames: WsFrame[] = [];
+  for (;;) {
+    if (buf.length < 2) break;
+    const fin = (buf[0] & 0x80) !== 0;
+    const opcode = buf[0] & 0x0f;
+    const masked = (buf[1] & 0x80) !== 0;
+    let len = buf[1] & 0x7f;
+    let off = 2;
+    if (len === 126) {
+      if (buf.length < off + 2) break;
+      len = buf.readUInt16BE(off);
+      off += 2;
+    } else if (len === 127) {
+      if (buf.length < off + 8) break;
+      len = Number(buf.readBigUInt64BE(off));
+      off += 8;
+    }
+    const maskLen = masked ? 4 : 0;
+    if (buf.length < off + maskLen + len) break;
+    let payload = buf.subarray(off + maskLen, off + maskLen + len);
+    if (masked) {
+      const mask = buf.subarray(off, off + 4);
+      const un = Buffer.alloc(len);
+      for (let i = 0; i < len; i++) un[i] = payload[i] ^ mask[i & 3];
+      payload = un;
+    }
+    buf = buf.subarray(off + maskLen + len);
+    frames.push({ fin, opcode, payload });
+  }
+  return { frames, rest: buf };
+}
+
+/** One masked text frame (client→server frames MUST be masked per RFC6455). */
+export function encodeMaskedTextFrame(text: string): Buffer {
+  const payload = Buffer.from(text, 'utf8');
+  const mask = randomBytes(4);
+  for (let i = 0; i < payload.length; i++) payload[i] ^= mask[i & 3];
+  const len = payload.length;
+  let header: Buffer;
+  if (len < 126) {
+    header = Buffer.from([0x80 | OPCODES.text, 0x80 | len]);
+  } else if (len < 65536) {
+    header = Buffer.alloc(4);
+    header[0] = 0x80 | OPCODES.text;
+    header[1] = 0x80 | 126;
+    header.writeUInt16BE(len, 2);
+  } else {
+    header = Buffer.alloc(10);
+    header[0] = 0x80 | OPCODES.text;
+    header[1] = 0x80 | 127;
+    header.writeBigUInt64BE(BigInt(len), 2);
+  }
+  return Buffer.concat([header, mask, payload]);
+}
+
+export const encodeMaskedControl = (opcode: number, payload: Buffer<ArrayBufferLike> = Buffer.alloc(0)): Buffer => {
+  const mask = randomBytes(4);
+  for (let i = 0; i < payload.length; i++) payload[i] ^= mask[i & 3];
+  return Buffer.concat([Buffer.from([0x80 | opcode, 0x80 | payload.length]), mask, payload]);
+};
 
 /**
  * Complete the upgrade handshake on `socket` and return a framed connection.
@@ -63,8 +138,8 @@ export function acceptWebSocket(req: IncomingMessage, socket: Duplex): WsConnect
       '\r\n',
   );
 
-  let buf = Buffer.alloc(0);
-  let fragments: Buffer[] = [];
+  let buf: Buffer<ArrayBufferLike> = Buffer.alloc(0);
+  let fragments: Buffer<ArrayBufferLike>[] = [];
   let closed = false;
 
   const conn: WsConnection = {
@@ -98,33 +173,9 @@ export function acceptWebSocket(req: IncomingMessage, socket: Duplex): WsConnect
 
   // Parse as many complete frames as the buffer holds.
   const drain = () => {
-    for (;;) {
-      if (buf.length < 2) return;
-      const fin = (buf[0] & 0x80) !== 0;
-      const opcode = buf[0] & 0x0f;
-      const masked = (buf[1] & 0x80) !== 0;
-      let len = buf[1] & 0x7f;
-      let off = 2;
-      if (len === 126) {
-        if (buf.length < off + 2) return;
-        len = buf.readUInt16BE(off);
-        off += 2;
-      } else if (len === 127) {
-        if (buf.length < off + 8) return;
-        len = Number(buf.readBigUInt64BE(off));
-        off += 8;
-      }
-      const maskLen = masked ? 4 : 0;
-      if (buf.length < off + maskLen + len) return;
-      let payload = buf.subarray(off + maskLen, off + maskLen + len);
-      if (masked) {
-        const mask = buf.subarray(off, off + 4);
-        const un = Buffer.alloc(len);
-        for (let i = 0; i < len; i++) un[i] = payload[i] ^ mask[i & 3];
-        payload = un;
-      }
-      buf = buf.subarray(off + maskLen + len);
-
+    const { frames, rest } = decodeFrames(buf);
+    buf = rest;
+    for (const { fin, opcode, payload } of frames) {
       if (opcode === OPCODES.close) {
         conn.close();
         return;

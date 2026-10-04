@@ -1,7 +1,7 @@
 import type { Prettify, Schema } from './types';
 import { msgpackrCodec } from './msgpackrCodec';
 import { memberToSpec, zodArrayInfo, zodObjectShape, zodStringBytes } from './listSchema';
-import { emitDevtools } from '../devtools';
+import { devtoolsEnabled, emitDevtools } from '../devtools';
 import { fmtBytes, scoped } from '../log';
 import { z, fluent } from './zod';
 
@@ -677,7 +677,9 @@ function listFactory(d: FieldDescriptor, ctx: ConnectorContext, byteOffset: numb
         // Wake EVERY waitAsync observer — several watchers may share this
         // field's counter; a bounded notify starves all but one.
         Atomics.notify(ctx.version.view, ctx.version.index);
-        if (ctx.path) emitDevtools({ type: 'memory:write', path: ctx.path, version: prev + 1 });
+        if (ctx.path && devtoolsEnabled()) {
+          emitDevtools({ type: 'memory:write', path: ctx.path, version: prev + 1 });
+        }
       }
     },
     read: () => Array.from({ length: count }, (_, i) => readAt(i)),
@@ -818,16 +820,20 @@ export class SharedMemory<S extends SharedSpec = SharedSpec> {
           // No count bound: every watcher on this field must wake.
           const prev = Atomics.add(versionView, index, 1);
           Atomics.notify(versionView, index);
-          emitDevtools({ type: 'memory:write', path, version: prev + 1 });
+          if (devtoolsEnabled()) {
+            emitDevtools({ type: 'memory:write', path, version: prev + 1 });
+          }
         },
         _version: { view: versionView, index },
       });
     });
-    emitDevtools({
-      type: 'memory:bind',
-      fields: this.entries.map((e, i) => [i, e.path]),
-      totalBytes: this.totalBytes,
-    });
+    if (devtoolsEnabled()) {
+      emitDevtools({
+        type: 'memory:bind',
+        fields: this.entries.map((e, i) => [i, e.path]),
+        totalBytes: this.totalBytes,
+      });
+    }
     this.isBound = true;
     this.boundBuffer = buffer;
     for (const cb of [...this.boundListeners]) cb();

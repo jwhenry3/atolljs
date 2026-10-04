@@ -1,5 +1,82 @@
 # Changelog
 
+## Unreleased
+
+New `@atolljs/devtools` package: live observability for pools, workers,
+islands, shared-memory traffic, and task lifecycles — a same-origin dashboard
+in the browser with no backend, and an opt-in aggregate server for Node apps
+and cross-app views. No breaking changes.
+
+### `@atolljs/devtools` — instrumentation dashboard *(experimental)*
+
+- **The instrumentation seam is a sink, not a transport.** `src/devtools.ts`
+  emits structured events (`pool:init`, `worker:spawn`/`crash`/`respawn`,
+  `task:enqueue`/`dispatch`/`settle`, `memory:bind`/`write`, `net:fetch`,
+  `runtime:memory`, island lifecycle) to an installed sink; transports are
+  pluggable behind `connectDevtools()`. Workers forward their own events over
+  `postMessage` only when the pool stamps `devtools: true` into INIT — a
+  disabled app leaves workers with no sink, no fetch/memory probes, and zero
+  devtools traffic, and `devtoolsEnabled()` guards event construction on
+  hot paths so even the object allocation is skipped.
+- **Browser mode needs no backend.** In a window, `connectDevtools()` defaults
+  to `BroadcastChannel('atoll-devtools')`, so the dashboard is served on the
+  app's own origin at `/__atoll/` (by `atoll()` from `@atolljs/vite`) and can
+  only ever see that origin's sessions — the isolation is structural. Apps
+  keep a 500-batch replay tail so a dashboard opened later gets session
+  history.
+- **URL-gated**: `initDevtools()` installs nothing unless `?__atoll_devtools`
+  is in the URL (Node checks `ATOLL_DEVTOOLS` instead) — it must run before
+  pools spawn. The same call mounts a floating overlay: a draggable, resizable
+  flyout (`position` option: six anchors, default bottom-right) hosting a
+  purpose-built mini layout whose `Map` tab is a full-size application map of
+  pools, workers, and islands.
+- **Node mode** uses the standalone aggregate server (`npx atoll-devtools`,
+  dashboard + ingest at `http://127.0.0.1:4780`) over WebSocket. The client
+  uses the global `WebSocket` on Node ≥ 22 and falls back to a bundled
+  dependency-free RFC6455 client below it. Server sessions survive disconnect
+  for post-mortem analysis — unpinned ended sessions sweep after 30 minutes;
+  the session selector appears only here, where it's earned.
+- **One package, three subpaths**: `@atolljs/devtools` (browser/client),
+  `@atolljs/devtools/node` (Node apps — env gate, WebSocket only, no
+  overlay), `@atolljs/devtools/server` (the aggregate). The Node client's
+  `node:*` imports load behind a computed dynamic specifier, so browser
+  tsconfigs and bundles never see them.
+- `runtime:memory` covers `performance.memory` /
+  `measureUserAgentSpecificMemory` in browsers and `process.memoryUsage()`
+  in Node (reported as `rssBytes`), main thread and workers alike. Network
+  instrumentation covers outbound `fetch()` only — inbound HTTP handled by a
+  Nest/Express app isn't probed.
+
+### `@atolljs/vite` — `/@fs/` worker entries, `/__atoll/` mount
+
+- Fix: `?worker_file` entry paths were resolved against the project root
+  verbatim, so a worker entry outside the root — every workspace-linked
+  package, which vite serves as `/@fs/<abs>` dev URLs — bundled as
+  `<root>/@fs/...` and failed (`Could not resolve`). The middleware now
+  unwraps dev-URL prefixes through the same `toFsPath` the bundle resolver
+  uses; note win32 `isAbsolute('/x')` is true, so the absolute check requires
+  a drive letter. `atoll.test.ts` gains an `/@fs/` entry case.
+- The plugin also serves the devtools dashboard at `/__atoll/` (mini layout
+  at `?mini=1`), resolving `app/` through the app's own dependency graph and
+  echoing `server.headers` — required for both the overlay iframe (COOP) and
+  worker scripts (COEP).
+
+### Examples & docs
+
+- Devtools wired into every demo: vite pool demos and island hosts call
+  `initDevtools()` (`?__atoll_devtools`); the six Node APIs (express, fastify,
+  hono, koa, nestjs, http-offload) import a `src/devtools.ts` module **first**
+  so the sink is installed before their pools spawn — pools created earlier
+  never stamp `devtools: true` into worker INIT. `mfe-*` and `nextjs` follow
+  the same pattern; `angular` (no vite plugin) feeds the aggregate over
+  WebSocket, demonstrating both topologies.
+- `npm run dev:all` now launches the aggregate server on :4780 and arms
+  `ATOLL_DEVTOOLS=1` for the Node demos.
+- New `docs/devtools.md` (sink seam, transports, worker-forwarding
+  invariants, `/__atoll/` mount, session lifecycle); consumer docs site gains
+  a `/devtools/` page; `packages/devtools/README.md` documents the three
+  subpaths.
+
 ## 0.1.6
 
 Fix `watch`/`observe` silently never firing under Node runtimes: `solid-js`

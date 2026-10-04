@@ -11,6 +11,8 @@
     "skipLibCheck": true,
     "paths": {
       "@atolljs/vue": ["../../packages/vue/src/index.ts"],
+      "@atolljs/devtools": ["../../packages/devtools/src/index.ts"],
+      "@atolljs/devtools/*": ["../../packages/devtools/src/*"],
       "@atolljs/incidents": ["../../packages/incidents/src/index.ts"],
       "@atolljs/core": ["../../src/index.ts"],
       "@atolljs/core/*": ["../../src/*"]

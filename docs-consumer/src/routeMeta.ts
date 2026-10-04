@@ -42,6 +42,8 @@ const ROUTE_DESC: Record<string, string> = {
     'Atomics-driven change notification — subscribe to shared-memory fields on the main thread without polling or message fan-out.',
   'shared-worker':
     'Share one worker pool across tabs with SharedWorker — the atoll client runs in the shared worker so shared memory stays per-browser.',
+  devtools:
+    'Atoll devtools — a backend-free observability dashboard for pools, workers, and islands: app map, task waterfalls, fetch log, shared-memory writes, and heap sampling, gated on ?__atoll_devtools.',
   'bundle-size':
     'Per-package bundle sizes, dependency budgets, and processing-load numbers for every @atolljs package on npm.',
   islands:

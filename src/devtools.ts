@@ -134,10 +134,13 @@ export type DevtoolsEvent =
       type: 'runtime:memory';
       /**
        * measureUserAgentSpecificMemory: cluster total.
-       * performance.memory fallback: this context's usedJSHeapSize.
+       * performance.memory / process.memoryUsage fallback: this context's
+       * usedJSHeapSize / heapUsed.
        */
       heapBytes: number;
       heapLimitBytes?: number;
+      /** Resident set size — present on the Node memoryUsage() path. */
+      rssBytes?: number;
       /**
        * Per-execution-context attribution from
        * `performance.measureUserAgentSpecificMemory` — emitted on the main
@@ -406,7 +409,8 @@ interface MeasureMemoryResult {
  * per-execution-context breakdown (windows + workers identified by script
  * URL) for the whole agent cluster; falls back to `performance.memory`,
  * which also covers the worker-side install on engines that expose it
- * there. No-ops on engines with neither API.
+ * there, then `process.memoryUsage()` on Node (heapUsed + rss — works
+ * inside worker_threads too). No-ops with none of the three.
  */
 export const installMemoryProbe = (scope: object, intervalMs = 2500): void => {
   if (memProbed.has(scope)) return;
@@ -421,9 +425,16 @@ export const installMemoryProbe = (scope: object, intervalMs = 2500): void => {
   const measure = (
     perf as { measureUserAgentSpecificMemory?: () => Promise<MeasureMemoryResult> }
   ).measureUserAgentSpecificMemory?.bind(perf);
+  // Node fallback — process.memoryUsage() exists on the main thread and
+  // inside worker_threads, so per-worker heap columns fill there too.
+  const procMem = (
+    globalThis as {
+      process?: { memoryUsage?: () => { heapUsed: number; rss: number } };
+    }
+  ).process?.memoryUsage;
   // Workers skip the breakdown path: contexts sharing a script URL can't
   // be told apart, so a worker can't pick its own entry reliably.
-  if (!mem && (!measure || inWorker)) return;
+  if (!mem && (!measure || inWorker) && !procMem) return;
   memProbed.add(scope);
 
   if (measure && !inWorker) {
@@ -460,11 +471,16 @@ export const installMemoryProbe = (scope: object, intervalMs = 2500): void => {
   }
 
   const timer = setInterval(() => {
-    emitDevtools({
-      type: 'runtime:memory',
-      heapBytes: mem!.usedJSHeapSize,
-      heapLimitBytes: mem!.jsHeapSizeLimit,
-    });
+    if (mem) {
+      emitDevtools({
+        type: 'runtime:memory',
+        heapBytes: mem.usedJSHeapSize,
+        heapLimitBytes: mem.jsHeapSizeLimit,
+      });
+    } else if (procMem) {
+      const u = procMem();
+      emitDevtools({ type: 'runtime:memory', heapBytes: u.heapUsed, rssBytes: u.rss });
+    }
   }, intervalMs);
   (timer as unknown as { unref?: () => void }).unref?.();
 };

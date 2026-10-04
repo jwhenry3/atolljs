@@ -30,6 +30,12 @@
       "@atolljs/react": [
         "../../packages/react/src/index.ts"
       ],
+      "@atolljs/devtools": [
+        "../../packages/devtools/src/index.ts"
+      ],
+      "@atolljs/devtools/*": [
+        "../../packages/devtools/src/*"
+      ],
       "@atolljs/incidents": [
         "../../packages/incidents/src/index.ts"
       ],

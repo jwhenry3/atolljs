@@ -20,6 +20,8 @@ const nextConfig: NextConfig = {
       '@atolljs/nextjs': '../../packages/nextjs/src/index.ts',
       '@atolljs/react': '../../packages/react/src/index.ts',
       '@atolljs/incidents': '../../packages/incidents/src/index.ts',
+      '@atolljs/devtools': '../../packages/devtools/src/index.ts',
+      '@atolljs/devtools/*': '../../packages/devtools/src/*',
       '@atolljs/node': '../../packages/node/src/index.ts',
       '@atolljs/node/*': '../../packages/node/src/*',
       '@atolljs/incidents/*': '../../packages/incidents/src/*',

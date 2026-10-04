@@ -9,6 +9,11 @@
  */
 export async function register() {
   if (process.env.NEXT_RUNTIME !== 'nodejs') return;
+  // Devtools sink before any pool spawns — worker INIT carries the flag at
+  // spawn time. No-op unless ATOLL_DEVTOOLS is set; streams to the
+  // standalone dashboard (`npx atoll-devtools`, http://127.0.0.1:4780).
+  const { initDevtools } = await import('@atolljs/devtools/node');
+  initDevtools({ session: { name: 'incidents-nextjs' } });
   const { getDigest } = await import('./app/api/atoll/pool');
   const { getJobs } = await import('./app/api/jobs/pool');
   const { getIncidentsApi } = await import('./app/api/incidents/pool');

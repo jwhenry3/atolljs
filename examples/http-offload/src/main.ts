@@ -12,6 +12,7 @@
 //
 // The same two workers also answer task dispatch — the boot-time seed and
 // POST /api/incidents/seed (main route) go through workerClient.
+import './devtools'; // first — installs the sink before the pool spawns
 import { Worker } from 'node:worker_threads';
 import { workerClient } from '@atolljs/core';
 import { createNodePool } from '@atolljs/node';

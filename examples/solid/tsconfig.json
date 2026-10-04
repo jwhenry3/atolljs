@@ -13,6 +13,8 @@
     "skipLibCheck": true,
     "paths": {
       "@atolljs/solidjs": ["../../packages/solidjs/src/index.ts"],
+      "@atolljs/devtools": ["../../packages/devtools/src/index.ts"],
+      "@atolljs/devtools/*": ["../../packages/devtools/src/*"],
       "@atolljs/incidents": ["../../packages/incidents/src/index.ts"],
       "@atolljs/core": ["../../src/index.ts"],
       "@atolljs/core/*": ["../../src/*"]

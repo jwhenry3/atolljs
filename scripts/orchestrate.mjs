@@ -25,12 +25,14 @@ function pipePrefixed(name, stream) {
 }
 
 // Long-lived process — if it exits unexpectedly, everything stops.
-export function launch(name, cwd, command, args) {
+// `env` replaces the child's environment (defaults to process.env).
+export function launch(name, cwd, command, args, env) {
   const child = spawn(command, args, {
     cwd,
     stdio: ['ignore', 'pipe', 'pipe'],
     shell: false,
     detached: !windows,
+    ...(env ? { env } : {}),
   });
   children.add(child);
   pipePrefixed(name, child.stdout);

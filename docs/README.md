@@ -30,6 +30,7 @@ repository — internals, contracts, and conventions.
 | Writing a new `packages/<fw>` binding or `<fw>-island` renderer | [porting.md](porting.md) |
 | `packages/cli` — the `atoll` scaffold/doctor bin | `packages/cli/README.md` |
 | `packages/vite` — dev worker bundling (no refresh/HMR in workers) | [vite-plugin.md](vite-plugin.md) |
+| `packages/devtools`, `app/` dashboard, `emitDevtools`/sink seam, `ATOLL_DEVTOOLS` forwarding | [devtools.md](devtools.md) |
 
 Framework bindings — **frontend**:
 

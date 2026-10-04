@@ -60,7 +60,8 @@ current and future viewers. Live sessions can't be dismissed.
 
 | Import | Purpose |
 |---|---|
-| `@atolljs/devtools` | `connectDevtools({ url?, session?, flushMs?, bufferCap?, network?, memory? })` — installs the core event sink and batches events over WebSocket. Browser and Node ≥22 (global `WebSocket`). `network` (default on) wraps `fetch` to emit `net:fetch` per request; `memory` (default on) samples JS heap into `runtime:memory`. |
+| `@atolljs/devtools` | `connectDevtools({ transport?, url?, session?, flushMs?, bufferCap?, replayBatches?, network?, memory? })` — installs the core event sink and batches events to dashboards. Default `transport: 'auto'`: **BroadcastChannel** in a browser window (pure client — no backend; the dashboard is served on the app's own origin at `/__atoll/` by the vite plugin, and `mountDevtoolsOverlay()` embeds it in a floating flyout — draggable, resizable, `position` option), WebSocket to the aggregate server everywhere else (`url` or `transport: 'websocket'` opts in — Node uses this path). `network` (default on) wraps `fetch` to emit `net:fetch` per request; `memory` (default on) samples JS heap into `runtime:memory`. |
+| `@atolljs/devtools/node` | Node entry — `initDevtools`/`connectDevtools` without the browser-only pieces (WebSocket-only, env-gated, no overlay). Use this import in Node apps. |
 | `@atolljs/devtools/server` | `createDevtoolsServer({ port?, host?, appDir?, replayBatches? })` — Node http + dependency-free WebSocket server on `127.0.0.1` (default port 4780). |
 | `atoll-devtools` bin | Boots the server and prints the dashboard URL. `atoll devtools` resolves it through the CLI too. |
 
@@ -71,12 +72,57 @@ npx atoll-devtools          # or: atoll devtools [--port 4780]
 ```
 
 ```ts
-// in the app — one line, then everything is streamed.
+// in the app — one line. No-op unless the URL carries ?__atoll_devtools:
+// then the BroadcastChannel sink installs and the overlay flyout mounts.
 // Call before pools spawn: worker-side events forward only if the sink
 // existed at INIT time.
-import { connectDevtools } from '@atolljs/devtools';
-connectDevtools({ session: { name: 'my-app' } });
+import { initDevtools } from '@atolljs/devtools';
+initDevtools({ session: { name: 'my-app' } });
+
+//   my-app/?__atoll_devtools  → devtools on
+//   my-app/                   → zero cost, no sink installed
+//
+// Always-on or programmatic control: `connectDevtools(opts)` ignores the
+// param; `initDevtools({ enabled, overlay })` overrides the gate.
 ```
+
+## Node apps (Express, NestJS, …)
+
+Node takes the WebSocket path automatically — no `window`, so no
+BroadcastChannel — pointed at the standalone server, which is also the
+dashboard:
+
+```bash
+npx atoll-devtools          # http://127.0.0.1:4780
+```
+
+```ts
+// src/devtools.ts — a dedicated module, imported FIRST from the entry.
+// No-op unless ATOLL_DEVTOOLS is set in the environment.
+import { initDevtools } from '@atolljs/devtools/node';
+initDevtools({ session: { name: 'my-api' } });
+```
+
+```ts
+// main.ts — the import order matters: ESM evaluates imports before the
+// body, and pools usually spawn inside a sibling module or NestFactory.
+import './devtools';
+```
+
+```bash
+ATOLL_DEVTOOLS=1 npm run start
+```
+
+- Works on any Node — the client uses the global `WebSocket` on ≥ 22 and
+  falls back to a bundled dependency-free client (`src/nodeWs.ts`) below it.
+- Inbound HTTP is not instrumented — `net:fetch` covers the `fetch()` calls
+  your app *makes*, on the main thread and inside workers.
+- `runtime:memory` comes from `process.memoryUsage()` in Node — per-worker
+  heap columns fill for `worker_threads` pools.
+- No overlay, no `/__atoll/` — Node sessions appear on the aggregate
+  dashboard as `runtime: 'node'` alongside any browser apps pointed at the
+  same server.
+- See `examples/express` and `examples/nestjs` for the wiring.
 
 - Worker-side events reach the sink automatically: pools pass a
   `devtools` flag in INIT, workers forward `ATOLL_DEVTOOLS` messages back
@@ -89,9 +135,9 @@ connectDevtools({ session: { name: 'my-app' } });
   is enabled). XHR is not covered.
 - `runtime:memory` uses Chrome's `performance.measureUserAgentSpecificMemory`
   on the main thread (cluster breakdown — every worker context listed by
-  its script URL) and `performance.memory` where available (main thread
-  only in Chrome — per-worker heap columns/charts populate on engines
-  that expose it inside workers).
+  its script URL), `performance.memory` where available, and
+  `process.memoryUsage()` on Node (heapUsed + RSS — also inside
+  `worker_threads`, so per-worker heap columns populate for Node pools).
 - Zero cost when unused: `emitDevtools` is one branch without a sink, and
   `connectDevtools()` is the only thing that installs one.
 - Events buffered while the socket connects are capped (50k, oldest

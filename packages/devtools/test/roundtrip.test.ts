@@ -118,4 +118,97 @@ describe('devtools server + client', () => {
     expect(v2.msgs[0].sessions.some((s: any) => s.id === sessionId)).toBe(false);
     expect(v2.msgs.some((m) => m.type === 'batch' && m.session.id === sessionId)).toBe(false);
   });
+
+  it('sweeps unpinned closed sessions after the TTL but keeps pinned ones', async () => {
+    server = await createDevtoolsServer({ port: 0, closedTtlMs: 250, sweepMs: 40 });
+    const wsUrl = server.url.replace('http://', 'ws://');
+    const v = viewer(wsUrl);
+    sockets.push(v.ws);
+
+    // A pinned session that survives the sweep.
+    conn = connectDevtools({ url: `${wsUrl}/events`, session: { name: 'pinned-app' }, flushMs: 10 });
+    await wait(100);
+    const pinnedId = conn.session.id;
+    emitDevtools({ type: 'pool:terminate', poolId: 'pool-1' });
+    await wait(50);
+    conn.close();
+    conn = undefined;
+    await wait(50);
+    v.ws.send(JSON.stringify({ type: 'pin', sessionId: pinnedId, pinned: true }));
+
+    // An unpinned session that the sweep evicts.
+    const conn2 = connectDevtools({ url: `${wsUrl}/events`, session: { name: 'ephemeral' }, flushMs: 10 });
+    await wait(100);
+    const deadId = conn2.session.id;
+    conn2.close();
+    await wait(400); // > closedTtlMs + a few sweep ticks
+
+    const last = v.msgs.filter((m) => m.type === 'sessions').at(-1);
+    const kept = last.sessions.find((s: any) => s.id === pinnedId);
+    expect(kept).toBeTruthy();
+    expect(kept.pinned).toBe(true);
+    expect(last.sessions.some((s: any) => s.id === deadId)).toBe(false);
+  });
+
+  it('Node WS client (no global WebSocket) handshakes and streams masked frames', async () => {
+    const { connectNodeWebSocket } = await import('../src/nodeWs');
+    server = await createDevtoolsServer({ port: 0 });
+    const wsUrl = server.url.replace('http://', 'ws://');
+
+    const sock = connectNodeWebSocket(`${wsUrl}/events`);
+    await new Promise<void>((resolve) => {
+      sock.onOpen = () => resolve();
+      setTimeout(resolve, 500);
+    });
+    expect(sock.open).toBe(true);
+
+    sock.send(JSON.stringify({ type: 'hello', session: { id: 's-node', name: 'node-ws', runtime: 'node' } }));
+    sock.send(JSON.stringify({
+      type: 'batch',
+      events: [{ type: 'task:enqueue', poolId: 'pool-1', callId: 1, taskId: 'x', at: 0, thread: 'main' }],
+    }));
+    await wait(100);
+    expect(server.sessions().map((s) => s.name)).toContain('node-ws');
+
+    const v = viewer(wsUrl);
+    sockets.push(v.ws);
+    await wait(100);
+    const replayed = v.msgs
+      .filter((m) => m.type === 'batch')
+      .flatMap((m) => m.events.map((e: any) => e.type));
+    expect(replayed).toContain('task:enqueue');
+    sock.close();
+  });
+
+  it('broadcast transport publishes hello/batch/bye and replays on view', async () => {
+    // Same BroadcastChannel in-process — the dashboard half of the pure
+    // client path, no server involved.
+    const listener = new BroadcastChannel('atoll-devtools');
+    const msgs: any[] = [];
+    listener.onmessage = (m) => msgs.push(m.data);
+    try {
+      conn = connectDevtools({ transport: 'broadcast', session: { name: 'bc-app' }, flushMs: 10 });
+      await wait(50);
+      expect(msgs.some((m) => m.type === 'hello' && m.session.name === 'bc-app')).toBe(true);
+
+      emitDevtools({ type: 'task:enqueue', poolId: 'pool-1', callId: 1, taskId: 'x' });
+      await wait(50);
+      expect(msgs.some((m) => m.type === 'batch' && m.events.some((e: any) => e.type === 'task:enqueue'))).toBe(true);
+
+      // A late-joining dashboard announces itself — expect re-hello + tail.
+      const before = msgs.length;
+      listener.postMessage({ type: 'view' });
+      await wait(50);
+      const replay = msgs.slice(before);
+      expect(replay[0].type).toBe('hello');
+      expect(replay.some((m) => m.type === 'batch')).toBe(true);
+
+      conn.close();
+      conn = undefined;
+      await wait(50);
+      expect(msgs.at(-1).type).toBe('bye');
+    } finally {
+      listener.close();
+    }
+  });
 });

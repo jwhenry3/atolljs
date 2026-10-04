@@ -129,3 +129,17 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh release upload "${{ github.event.release.tag_name }}" docs-*.tar.gz --clobber
+
+  # Deploy the assembled docs site to GitHub Pages — the reusable workflow
+  # from pages.yml. Runs after docs-snapshot so this release's tarball is
+  # fetched and mounted under consumer/v<x.y.z>/ in the same deployment.
+  # Checkout happens on the tag ref, so the site builds from exactly the
+  # commit the release points at (matching the snapshot it mounts).
+  deploy-docs:
+    needs: docs-snapshot
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    secrets: inherit
+    uses: ./.github/workflows/pages.yml

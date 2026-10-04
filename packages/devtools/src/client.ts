@@ -1,15 +1,20 @@
 /**
  * The instrumented-app side: `connectDevtools()` installs the core event
- * sink and batches events over a WebSocket to the local devtools server
- * (`atoll devtools` / `atoll-devtools`). Works identically in the browser
- * and in Node ≥22 (global WebSocket) — pool events from `worker_threads`
- * reach it through the same ATOLL_DEVTOOLS forwarding.
+ * sink and batches events to dashboards. Two transports:
  *
- *   import { connectDevtools } from '@atolljs/devtools';
- *   connectDevtools();                       // ws://127.0.0.1:4780/events
+ *   connectDevtools()                    // auto — BroadcastChannel in a
+ *                                        // browser (pure client), else ws
+ *   connectDevtools({ url })             // explicit aggregate server
+ *   connectDevtools({ transport: 'websocket' })   // server, default url
  *
- * Events emitted while the socket is still connecting are buffered; the
- * buffer is bounded so an app that runs without the server doesn't grow
+ * BroadcastChannel mode needs no backend: the dashboard is served on the
+ * app's own origin (vite plugin mounts it at /__atoll/) and listens on
+ * the same channel — origin scoping is the isolation. WebSocket mode
+ * targets the standalone aggregate server (`atoll devtools`, default
+ * ws://127.0.0.1:4780/events) — opt-in for cross-app views and Node.
+ *
+ * Events emitted while a socket is still connecting are buffered; the
+ * buffer is bounded so an app that runs without a listener doesn't grow
  * memory unboundedly.
  */
 import {
@@ -18,10 +23,18 @@ import {
   setDevtoolsSink,
   type EmittedDevtoolsEvent,
 } from '@atolljs/core';
+import { connectBroadcast } from './broadcast';
 import type { ClientMessage, SessionInfo } from './protocol';
 
 export interface ConnectDevtoolsOptions {
-  /** Server ingest endpoint — default ws://127.0.0.1:4780/events. */
+  /**
+   * Transport. Default `'auto'`: BroadcastChannel in a browser window
+   * (pure client — dashboards open on the app's own origin via /__atoll/),
+   * WebSocket everywhere else (Node, workers, non-BC browsers).
+   * `'websocket'` or setting `url` opts into the aggregate server.
+   */
+  transport?: 'auto' | 'broadcast' | 'websocket';
+  /** Server ingest endpoint — implies websocket transport. */
   url?: string;
   /** Session identity shown in the dashboard. */
   session?: { name?: string; hint?: string };
@@ -29,6 +42,8 @@ export interface ConnectDevtoolsOptions {
   flushMs?: number;
   /** Events buffered while disconnected (default 50_000 — oldest dropped). */
   bufferCap?: number;
+  /** Batches kept for replay to late-joining dashboards (broadcast, default 500). */
+  replayBatches?: number;
   /** Patch global fetch to log requests (default true). Worker fetch is probed via the pool's devtools INIT flag. */
   network?: boolean;
   /** Sample JS heap usage periodically — Chrome/Blink only (default true). */
@@ -44,8 +59,7 @@ export interface DevtoolsConnection {
 
 let sessionSeq = 0;
 
-export function connectDevtools(opts: ConnectDevtoolsOptions = {}): DevtoolsConnection {
-  const url = opts.url ?? 'ws://127.0.0.1:4780/events';
+const makeSession = (opts: ConnectDevtoolsOptions): SessionInfo => {
   const runtime: SessionInfo['runtime'] =
     typeof window !== 'undefined' && typeof window.document !== 'undefined' ? 'browser' : 'node';
   const hint =
@@ -53,44 +67,90 @@ export function connectDevtools(opts: ConnectDevtoolsOptions = {}): DevtoolsConn
     (runtime === 'browser'
       ? (globalThis as { location?: { href?: string } }).location?.href
       : (globalThis as { process?: { title?: string } }).process?.title);
-  const session: SessionInfo = {
+  return {
     id: `s-${Date.now().toString(36)}-${++sessionSeq}`,
     name: opts.session?.name,
     runtime,
     hint,
   };
+};
 
+/** 'auto' picks broadcast only in a real browser window — workers and
+ *  Node contexts keep the aggregate-server path. An explicit
+ *  `transport: 'broadcast'` is honored wherever BroadcastChannel exists
+ *  (SharedWorkers have no window but can still be pure-client hubs). */
+const autoBroadcast = () =>
+  typeof BroadcastChannel !== 'undefined' &&
+  typeof window !== 'undefined' &&
+  typeof window.document !== 'undefined';
+
+export function connectDevtools(opts: ConnectDevtoolsOptions = {}): DevtoolsConnection {
+  const session = makeSession(opts);
+  const t = opts.url !== undefined ? 'websocket' : (opts.transport ?? 'auto');
+  const useBc =
+    t === 'broadcast'
+      ? typeof BroadcastChannel !== 'undefined'
+      : t === 'auto' && autoBroadcast();
+  return useBc ? connectBroadcast(opts, session) : connectWebSocket(opts, session);
+}
+
+function connectWebSocket(opts: ConnectDevtoolsOptions, session: SessionInfo): DevtoolsConnection {
+  const url = opts.url ?? 'ws://127.0.0.1:4780/events';
   const cap = opts.bufferCap ?? 50_000;
   const pending: EmittedDevtoolsEvent[] = [];
-  let ws: WebSocket | null = null;
   let closed = false;
 
+  /** Uniform socket surface over the global WebSocket and the Node fallback. */
+  let sock: { open: boolean; send(text: string): void; close(): void } | null = null;
+
   const send = (msg: ClientMessage) => {
-    if (ws && ws.readyState === ws.OPEN) ws.send(JSON.stringify(msg));
+    if (sock?.open) sock.send(JSON.stringify(msg));
   };
 
   const flush = () => {
-    if (!ws || ws.readyState !== ws.OPEN || pending.length === 0) return;
+    if (!sock?.open || pending.length === 0) return;
     const events = pending.splice(0, pending.length);
     send({ type: 'batch', events });
   };
 
-  try {
-    ws = new WebSocket(url);
-  } catch {
-    ws = null; // no WebSocket global — sink stays installed but dead; close() cleans up
-  }
-  if (ws) {
-    ws.onopen = () => {
-      send({ type: 'hello', session });
-      flush();
+  const onOpen = () => {
+    send({ type: 'hello', session });
+    flush();
+  };
+
+  const isNode = typeof window === 'undefined' || typeof window.document === 'undefined';
+  if (typeof WebSocket !== 'undefined') {
+    const ws = new WebSocket(url);
+    sock = {
+      get open() {
+        return ws.readyState === ws.OPEN;
+      },
+      send: (t) => ws.send(t),
+      close: () => ws.close(),
     };
-    const timer = setInterval(flush, opts.flushMs ?? 100);
-    // Node: don't hold the process open for the flush interval.
-    (timer as unknown as { unref?: () => void }).unref?.();
+    ws.onopen = onOpen;
     ws.onclose = () => clearInterval(timer);
-    ws.onerror = () => ws?.close();
+    ws.onerror = () => ws.close();
+  } else if (isNode) {
+    // No global WebSocket (Node < 22) — dependency-free client, loaded lazily
+    // so node:net/crypto never enter a browser bundle. The specifier is
+    // computed: a literal would pull nodeWs.ts (and its node:* imports)
+    // into browser-app tsconfig programs and vite's static analysis.
+    const mod = './nodeWs.ts';
+    void import(/* @vite-ignore */ mod).then((m) => {
+      if (closed) return;
+      const ws = m.connectNodeWebSocket(url);
+      sock = ws;
+      ws.onOpen = onOpen;
+      ws.onClose = () => clearInterval(timer);
+    }).catch(() => {
+      /* no net available — sink stays installed but dead */
+    });
   }
+
+  const timer = setInterval(flush, opts.flushMs ?? 100);
+  // Node: don't hold the process open for the flush interval.
+  (timer as unknown as { unref?: () => void }).unref?.();
 
   if (opts.network !== false) installFetchProbe(globalThis);
   if (opts.memory !== false) installMemoryProbe(globalThis);
@@ -105,13 +165,14 @@ export function connectDevtools(opts: ConnectDevtoolsOptions = {}): DevtoolsConn
   return {
     session,
     get open() {
-      return ws?.readyState === ws?.OPEN;
+      return sock?.open ?? false;
     },
     close() {
       closed = true;
       setDevtoolsSink(null);
       flush();
-      ws?.close();
+      sock?.close();
+      clearInterval(timer);
     },
   };
 }

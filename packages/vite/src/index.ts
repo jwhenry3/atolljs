@@ -30,8 +30,9 @@
  *    aliases, tsconfig paths, and plugin resolvers apply inside the worker
  *    bundle the same way they do on the main thread.
  */
-import { existsSync } from 'node:fs';
-import { isAbsolute, resolve } from 'node:path';
+import { existsSync, readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { dirname, extname, join, resolve } from 'node:path';
 import type { Plugin, ViteDevServer } from 'vite';
 import type { Plugin as EsbuildPlugin } from 'esbuild';
 
@@ -85,12 +86,43 @@ const FALLBACK_MARKER = 'atoll-fallback:';
 
 const toPosix = (p: string) => p.replace(/\\/g, '/');
 
+/** The devtools dashboard, served on the app origin so BroadcastChannel
+ *  transport is structurally same-origin. */
+const ATOLL_MIME: Record<string, string> = {
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.json': 'application/json',
+  '.svg': 'image/svg+xml',
+  '.png': 'image/png',
+  '.ico': 'image/x-icon',
+};
+
+/** packages/devtools/app — resolved through vite's own resolver first so
+ *  workspace setups that alias @atolljs/devtools to sources (rather than
+ *  installing it) still find it; node resolution is the fallback. */
+async function devtoolsAppDir(server: ViteDevServer): Promise<string | null> {
+  const root = server.config.root;
+  try {
+    const r = await server.pluginContainer.resolveId('@atolljs/devtools');
+    if (r) return resolve(dirname(toFsPath(r.id.split('?')[0], root)), '../app');
+  } catch { /* fall through to node resolution */ }
+  try {
+    const req = createRequire(resolve(root, 'package.json'));
+    return resolve(dirname(req.resolve('@atolljs/devtools')), '../app');
+  } catch {
+    return null; // devtools not installed — /__atoll 404s
+  }
+}
+
 /** vite dev ids are posix paths, sometimes `/@fs/` or root-relative — unwrap to fs. */
 function toFsPath(id: string, root: string): string {
   let p = id.split('?')[0];
   if (p.startsWith('/@fs/')) p = p.slice(4);
   if (/^\/[A-Za-z]:\//.test(p)) p = p.slice(1); // '/C:/x' → 'C:/x'
-  if (isAbsolute(p)) return p;
+  // Drive-absolute or a posix path that exists on disk — win32 treats any
+  // leading-slash id as absolute, so root-relative dev URLs must fall through.
+  if (/^[A-Za-z]:[\\/]/.test(p) || (p.startsWith('/') && existsSync(p))) return p;
   // Root-relative dev id ('/src/x.ts') or plain relative — try root first,
   // since that's how vite expresses project files.
   const fromRoot = resolve(root, p.startsWith('/') ? `.${p}` : p);
@@ -231,6 +263,46 @@ export function atoll(options: AtollViteOptions = {}): Plugin {
     apply: 'serve',
 
     configureServer(server) {
+      // /__atoll/ — the devtools dashboard on the app's own origin. The
+      // injected flag switches it to BroadcastChannel transport: same
+      // origin as the app means the dashboard can only ever see this
+      // app's sessions — no server, no cross-app noise.
+      let appDirP: Promise<string | null> | undefined;
+      server.middlewares.use(async (req, res, next) => {
+        if (req.method !== 'GET' || !req.url?.startsWith('/__atoll')) return next();
+        const appDir = await (appDirP ??= devtoolsAppDir(server));
+        if (!appDir) return next();
+        const url = new URL(req.url, 'http://localhost');
+        const pathname = decodeURIComponent(url.pathname);
+        if (pathname === '/__atoll') {
+          res.statusCode = 302;
+          res.setHeader('Location', '/__atoll/');
+          return res.end();
+        }
+        const p = pathname.slice('/__atoll'.length).replace(/^[/\\]+/, '') || 'index.html';
+        const file = join(appDir, p);
+        if (!file.startsWith(appDir) || !existsSync(file)) {
+          res.statusCode = 404;
+          return res.end('not found');
+        }
+        let body: string | Buffer = readFileSync(file);
+        if (p === 'index.html') {
+          body = String(body).replace(
+            '</head>',
+            '<script>window.__ATOLL_TRANSPORT="broadcast"</script></head>',
+          );
+        }
+        res.statusCode = 200;
+        res.setHeader('Content-Type', ATOLL_MIME[extname(file)] ?? 'application/octet-stream');
+        // Echo the page's embedder policy — without matching COOP the
+        // overlay iframe lands in a separate browsing-context group and
+        // the parent's contentDocument access is severed.
+        for (const [k, v] of Object.entries(server.config.server.headers ?? {})) {
+          if (v !== undefined) res.setHeader(k, v);
+        }
+        res.end(body);
+      });
+
       // Intercepts BEFORE vite's transform middleware — worker entries never
       // enter the per-module pipeline, so no browser plugin (react refresh,
       // hot-context, SFC HMR) can leak into the worker graph.
@@ -239,7 +311,9 @@ export function atoll(options: AtollViteOptions = {}): Plugin {
 
         const url = new URL(req.url, 'http://localhost');
         const pathname = decodeURIComponent(url.pathname);
-        const absEntry = resolve(server.config.root, pathname.replace(/^[\\/]+/, ''));
+        // /@fs/ entries escape the project root (workspace-linked packages)
+        // — unwrap dev-URL prefixes before resolving to a filesystem path.
+        const absEntry = toFsPath(pathname, server.config.root);
         const format = url.searchParams.get('type') === 'classic' ? 'iife' : 'esm';
         const key = `${format}:${absEntry}`;
 

@@ -6,6 +6,7 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./node": "./src/node.ts",
     "./server": "./src/server.ts"
   },
   "bin": {
@@ -17,7 +18,8 @@
     "app"
   ],
   "scripts": {
-    "build": "node ../../scripts/build-lib.mjs && esbuild src/bin.ts --bundle --format=esm --platform=node --target=node20.12 --outfile=dist/bin.js"
+    "build": "node ../../scripts/build-lib.mjs && esbuild src/bin.ts --bundle --format=esm --platform=node --target=node20.12 --outfile=dist/bin.js",
+    "dev": "esbuild src/bin.ts --bundle --format=esm --platform=node --target=node20.12 --outfile=dist/bin.js && node dist/bin.js"
   },
   "publishConfig": {
     "access": "public",

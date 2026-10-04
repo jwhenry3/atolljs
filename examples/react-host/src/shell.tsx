@@ -15,7 +15,13 @@ import { Suspense, useState } from 'react';
 import type { ReactElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { islandComponent } from '@atolljs/react-island';
+import { initDevtools } from '@atolljs/devtools';
 import type { IslandHandle, Mode } from '@atolljs/islands';
+
+// Instrument before islands mount — the sink must exist when workers
+// spawn for their events to forward. No-op unless the URL carries
+// ?__atoll_devtools.
+initDevtools({ session: { name: 'islands-react-host' } });
 import counterContract from '../../mfe/contracts/counter.contract';
 import notesContract from '../../mfe/contracts/notes.contract';
 import tickerContract from '../../mfe/contracts/ticker.contract';

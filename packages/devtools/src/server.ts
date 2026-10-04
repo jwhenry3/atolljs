@@ -21,6 +21,10 @@ export interface DevtoolsServerOptions {
   appDir?: string;
   /** Batches kept for viewer replay (default 500). */
   replayBatches?: number;
+  /** Closed-session retention before auto-cleanup (default 30min). */
+  closedTtlMs?: number;
+  /** How often the retention sweep runs (default 60s — tests lower it). */
+  sweepMs?: number;
   onListen?: (url: string) => void;
 }
 
@@ -69,10 +73,24 @@ export function createDevtoolsServer(opts: DevtoolsServerOptions = {}): Promise<
   /** Recently-disconnected sessions — bounded, kept so replayed history stays attributed. */
   const closedSessions: SessionInfo[] = [];
   const closedCap = 20;
+  /** Closed sessions are evicted after this unless a viewer pinned them. */
+  const closedTtlMs = opts.closedTtlMs ?? 30 * 60 * 1000;
   /** Batches kept for replay — sessions updates aren't replayed (stale). */
   const tail: ViewerMessage[] = [];
 
   const sessionList = (): SessionInfo[] => [...sessions.values(), ...closedSessions];
+
+  /** Drop a closed session and its replay tail; returns whether it existed. */
+  const evictClosed = (sessionId: string): boolean => {
+    const i = closedSessions.findIndex((s) => s.id === sessionId);
+    if (i < 0) return false;
+    closedSessions.splice(i, 1);
+    for (let j = tail.length - 1; j >= 0; j--) {
+      const m = tail[j];
+      if (m.type === 'batch' && m.session.id === sessionId) tail.splice(j, 1);
+    }
+    return true;
+  };
 
   const broadcast = (msg: ViewerMessage) => {
     if (msg.type === 'batch') {
@@ -113,13 +131,13 @@ export function createDevtoolsServer(opts: DevtoolsServerOptions = {}): Promise<
         }
         if (msg.type === 'dismiss') {
           // Closed sessions only — a live app's next batch would resurrect it.
-          const i = closedSessions.findIndex((s) => s.id === msg.sessionId);
-          if (i < 0) return;
-          closedSessions.splice(i, 1);
-          for (let j = tail.length - 1; j >= 0; j--) {
-            const m = tail[j];
-            if (m.type === 'batch' && m.session.id === msg.sessionId) tail.splice(j, 1);
+          if (evictClosed(msg.sessionId)) {
+            broadcast({ type: 'sessions', sessions: sessionList() });
           }
+        } else if (msg.type === 'pin') {
+          const s = closedSessions.find((s) => s.id === msg.sessionId);
+          if (!s || s.pinned === msg.pinned) return;
+          s.pinned = msg.pinned;
           broadcast({ type: 'sessions', sessions: sessionList() });
         }
       };
@@ -151,12 +169,30 @@ export function createDevtoolsServer(opts: DevtoolsServerOptions = {}): Promise<
       const info = sessions.get(conn);
       if (sessions.delete(conn) && info) {
         info.closed = true;
+        info.closedAt = Date.now();
         closedSessions.push(info);
-        if (closedSessions.length > closedCap) closedSessions.shift();
+        if (closedSessions.length > closedCap) {
+          // cap applies to unpinned sessions — pins are retained
+          const i = closedSessions.findIndex((s) => !s.pinned);
+          if (i >= 0) evictClosed(closedSessions[i].id);
+        }
         broadcast({ type: 'sessions', sessions: sessionList() });
       }
     };
   });
+
+  // Retention sweep — unpinned closed sessions expire after closedTtlMs.
+  const sweep = setInterval(() => {
+    const cutoff = Date.now() - closedTtlMs;
+    let changed = false;
+    for (const s of [...closedSessions]) {
+      if (!s.pinned && s.closedAt !== undefined && s.closedAt < cutoff) {
+        changed = evictClosed(s.id) || changed;
+      }
+    }
+    if (changed) broadcast({ type: 'sessions', sessions: sessionList() });
+  }, opts.sweepMs ?? 60_000);
+  sweep.unref();
 
   return new Promise((resolve, reject) => {
     server.once('error', reject);
@@ -171,6 +207,7 @@ export function createDevtoolsServer(opts: DevtoolsServerOptions = {}): Promise<
         sessions: () => [...sessions.values()],
         close: () =>
           new Promise<void>((done) => {
+            clearInterval(sweep);
             for (const v of viewers) v.close();
             for (const c of sessions.keys()) c.close();
             server.close(() => done());

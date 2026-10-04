@@ -16,6 +16,7 @@ const pkg = (p: string): string =>
   fileURLToPath(new URL(p, import.meta.url)).replace(/\\/g, '/');
 const coreRoot = pkg('../../src/');
 const islandsRoot = pkg('../../packages/islands/src/');
+const devtoolsRoot = pkg('../../packages/devtools/src/');
 const reactIslandRoot = pkg('../../packages/react-island/src/');
 
 export default defineConfig(({ command }) => ({
@@ -24,6 +25,8 @@ export default defineConfig(({ command }) => ({
   resolve: {
     dedupe: ['react'],
     alias: [
+      { find: /^@atolljs\/devtools$/, replacement: `${devtoolsRoot}index.ts` },
+      { find: /^@atolljs\/devtools\//, replacement: devtoolsRoot },
       { find: /^@atolljs\/core$/, replacement: `${coreRoot}index.ts` },
       { find: /^@atolljs\/core\//, replacement: coreRoot },
       { find: /^@atolljs\/islands$/, replacement: `${islandsRoot}index.ts` },

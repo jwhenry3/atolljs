@@ -20,6 +20,8 @@
       "@atolljs/angular": ["../../packages/angular/src/index.ts"],
       "@angular/core": ["./node_modules/@angular/core"],
       "tslib": ["./node_modules/tslib"],
+      "@atolljs/devtools": ["../../packages/devtools/src/index.ts"],
+      "@atolljs/devtools/*": ["../../packages/devtools/src/*"],
       "@atolljs/incidents": ["../../packages/incidents/src/index.ts"],
       "@atolljs/incidents/*": ["../../packages/incidents/src/*"],
       "@atolljs/core": ["../../src/index.ts"],

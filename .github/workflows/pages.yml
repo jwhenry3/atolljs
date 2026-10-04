@@ -13,19 +13,14 @@
 # markdown under docs/ and don't deploy.)
 name: Deploy docs to GitHub Pages
 
+# Manual only — docs go live when the maintainer decides, not on push to
+# main. Two ways in, both deliberate: the publish workflow calls this after
+# the release's docs snapshot lands (the normal path — cut a release to
+# deploy), or run it standalone from the Actions tab ("Deploy docs to
+# GitHub Pages" → "Run workflow") to redeploy without a release.
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'assets/**'
-      - 'pages-landing/**'
-      - 'docs-consumer/**'
-      - 'examples/**'
-      - 'packages/**'
-      - 'src/**'
-      - 'scripts/**'
-      - '.github/workflows/pages.yml'
   workflow_dispatch:
+  workflow_call:
 
 permissions:
   contents: read

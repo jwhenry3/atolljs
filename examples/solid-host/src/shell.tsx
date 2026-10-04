@@ -14,7 +14,13 @@
 import { createSignal } from 'solid-js';
 import { render } from 'solid-js/web';
 import { islandComponent } from '@atolljs/solid-island';
+import { initDevtools } from '@atolljs/devtools';
 import type { IslandHandle } from '@atolljs/islands';
+
+// Instrument before islands mount — the sink must exist when workers
+// spawn for their events to forward. No-op unless the URL carries
+// ?__atoll_devtools.
+initDevtools({ session: { name: 'islands-solid-host' } });
 import counterContract from '../../mfe/contracts/counter.contract';
 import notesContract from '../../mfe/contracts/notes.contract';
 import tickerContract from '../../mfe/contracts/ticker.contract';

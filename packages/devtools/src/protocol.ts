@@ -22,6 +22,10 @@ export interface SessionInfo {
    * orphaning their pools/tasks/memory state.
    */
   closed?: boolean;
+  /** Server clock (ms) when the socket closed — drives the cleanup sweep. */
+  closedAt?: number;
+  /** Viewer-pinned closed sessions are exempt from the retention sweep. */
+  pinned?: boolean;
 }
 
 export interface HelloMessage {
@@ -45,4 +49,21 @@ export type ViewerMessage =
 /** What a dashboard viewer sends on /view. */
 export type ViewerRequest =
   /** Drop a closed session and its replayed history. Live sessions are ignored. */
-  | { type: 'dismiss'; sessionId: string };
+  | { type: 'dismiss'; sessionId: string }
+  /** Exempt a closed session from the retention sweep (or release it). */
+  | { type: 'pin'; sessionId: string; pinned: boolean };
+
+/**
+ * Pure-client transport: frames on a same-origin BroadcastChannel named
+ * 'atoll-devtools'. Origin scoping replaces the server's session list —
+ * a dashboard on the app's own origin sees exactly the apps on that origin.
+ */
+export const DEVTOOLS_CHANNEL = 'atoll-devtools';
+
+export type BroadcastMessage =
+  | { type: 'hello'; session: SessionInfo }
+  | { type: 'batch'; session: SessionInfo; events: EmittedDevtoolsEvent[] }
+  /** Posted on close/pagehide so dashboards can mark the session ended. */
+  | { type: 'bye'; sessionId: string }
+  /** Dashboard announcing itself — apps re-hello and replay their tail. */
+  | { type: 'view' };

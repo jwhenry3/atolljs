@@ -44,6 +44,11 @@ reload its module graph — any source change needs a respawn anyway.
    required: under COEP `require-corp`, Chrome blocks worker scripts whose
    response lacks the embedder policy (`ERR_BLOCKED_BY_RESPONSE`, surfaced as
    an opaque `worker error`). See [cross-origin-isolation.md](cross-origin-isolation.md).
+5. **Serves the devtools dashboard at `/__atoll/`** (`?mini=1` for the
+   overlay's compact layout), resolved through `pluginContainer.resolveId`
+   so workspace aliases find `@atolljs/devtools` even when it isn't in the
+   app's `node_modules`, with the same header echo (COOP decides whether the
+   flyout's iframe can even see its document). See [devtools.md](devtools.md).
 
 Worker graphs containing framework SFCs (`.vue`/`.svelte`/`.astro`/`.md`/
 `.mdx`) can't be bundled by esbuild — the middleware detects the marker and
@@ -58,6 +63,13 @@ to the vite error overlay.
 
 ## Notes for maintainers
 
+- **Worker entry URLs arrive as dev URLs, not fs paths.** A request path is
+  only root-relative when the file is inside the project root — vite serves
+  anything outside it (workspace-linked packages, `file:` deps) as
+  `/@fs/<abs>`. Always unwrap through `toFsPath`; resolving the raw path
+  against root produced `<root>/@fs/...` (`Could not resolve`, worker crash
+  loop). Note `win32.isAbsolute('/x')` is true, so the absolute check there
+  requires a drive letter rather than `isAbsolute()` alone.
 - **Ships compiled JS.** The plugin runs inside `node_modules` in consumer
   projects — `.ts` there hits `ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING`
   (same constraint as the CLI bin). `npm run build` emits `dist/index.js` +

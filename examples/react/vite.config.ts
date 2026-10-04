@@ -1,18 +1,19 @@
 import { fileURLToPath } from 'node:url';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
+import { atoll } from '../../packages/vite/src/index';
 
 // The sdk lives in the workspace root — alias the package name to its source
 // so the example runs against it without a build step.
 const coreRoot = fileURLToPath(new URL('../../src/', import.meta.url)).replace(/\\/g, '/');
 const incidentsRoot = fileURLToPath(new URL('../../packages/incidents/src/', import.meta.url)).replace(/\\/g, '/');
-const reactBindingsRoot = fileURLToPath(new URL('../../packages/react/src/', import.meta.url)).replace(/\\/g, '/');
 const devtoolsRoot = fileURLToPath(new URL('../../packages/devtools/src/', import.meta.url)).replace(/\\/g, '/');
+const reactBindingsRoot = fileURLToPath(new URL('../../packages/react/src/', import.meta.url)).replace(/\\/g, '/');
 
 export default defineConfig(({ command }) => ({
   // Built output is mounted at /react/ under the unified dist root; dev serves /.
   base: command === 'build' ? './' : '/',
-  plugins: [react()],
+  plugins: [react(), atoll()],
   resolve: {
     // The aliased @atolljs/react source resolves `react` from the
     // workspace root otherwise — two React copies get bundled and the

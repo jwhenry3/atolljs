@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { defineSharedMemory, field } from './contract/sharedMemory';
 import type { TaskContract } from './contract/types';
-import { setDevtoolsSink, type DevtoolsEvent, type EmittedDevtoolsEvent } from './devtools';
+import { installMemoryProbe, setDevtoolsSink, type DevtoolsEvent, type EmittedDevtoolsEvent } from './devtools';
 import { WorkerPool } from './pool/workerPool';
 
 /** Same stub shape as workerPool.test.ts — echoes taskId back as the result. */
@@ -128,6 +128,18 @@ describe('devtools events', () => {
     expect(types()).toContain('pool:terminate');
     expect(ofType('task:settle').at(-1)).toMatchObject({ taskId: 'a', outcome: 'crashed' });
     return pending;
+  });
+
+  it('memory probe falls back to process.memoryUsage when perf APIs are absent', async () => {
+    events = [];
+    setDevtoolsSink((e) => events.push(e));
+    // A scope with a performance object but neither memory nor
+    // measureUserAgentSpecificMemory — the Node shape.
+    installMemoryProbe({ performance: {} }, 20);
+    await new Promise((r) => setTimeout(r, 80));
+    const m = ofType('runtime:memory').at(-1);
+    expect(m?.heapBytes).toBeGreaterThan(0);
+    expect(m?.rssBytes).toBeGreaterThan(0);
   });
 
   it('is a no-op when no sink is installed', () => {

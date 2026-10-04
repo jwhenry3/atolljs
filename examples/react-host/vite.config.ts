@@ -11,6 +11,7 @@ const pkg = (p: string): string =>
   fileURLToPath(new URL(p, import.meta.url)).replace(/\\/g, '/');
 const coreRoot = pkg('../../src/');
 const islandsRoot = pkg('../../packages/islands/src/');
+const devtoolsRoot = pkg('../../packages/devtools/src/');
 
 export default defineConfig(({ command }) => ({
   // Relative base — the built output works at any mount depth.
@@ -19,6 +20,8 @@ export default defineConfig(({ command }) => ({
     // react-reconciler resolves `react` through its peer dep — force one copy.
     dedupe: ['react'],
     alias: [
+      { find: /^@atolljs\/devtools$/, replacement: `${devtoolsRoot}index.ts` },
+      { find: /^@atolljs\/devtools\//, replacement: devtoolsRoot },
       { find: /^@atolljs\/core$/, replacement: `${coreRoot}index.ts` },
       { find: /^@atolljs\/core\//, replacement: coreRoot },
       { find: /^@atolljs\/islands$/, replacement: `${islandsRoot}index.ts` },

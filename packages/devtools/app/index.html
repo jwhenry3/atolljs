@@ -33,6 +33,13 @@
     }
     .sess:hover .dismiss { display: block; }
     .sess .dismiss:hover { color: #f85149; background: #21262d; text-decoration: none; }
+    .sess .pin {
+      position: absolute; top: 3px; right: 22px; color: #8b949e; font-size: 10px;
+      line-height: 1.4; padding: 0 4px; border-radius: 4px; display: none;
+    }
+    .sess:hover .pin, .sess .pin.on { display: block; }
+    .sess .pin.on { color: #58a6ff; }
+    .sess .pin:hover { color: #58a6ff; background: #21262d; text-decoration: none; }
     .sess .rt { color: #8b949e; font-size: 10px; }
     .panels { padding: 10px 16px 30px; min-width: 0; display: flex; flex-direction: column; min-height: calc(100vh - 42px); box-sizing: border-box; }
     #scope { display: flex; align-items: baseline; gap: 8px; margin: 0 0 8px; font-size: 14px; color: #c9d1d9; }
@@ -133,6 +140,33 @@
     .chart-card canvas { width: 100%; height: 64px; display: block; margin-top: 4px; }
     .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
     @media (max-width: 900px) { .grid2 { grid-template-columns: 1fr; } }
+
+    /* ── broadcast (pure-client) mode — sessions are this origin's own
+       instances; the selector/scope title earn their space back. ── */
+    body.local main { grid-template-columns: 1fr; }
+    body.local aside, body.local #scope { display: none; }
+
+    /* ── mini mode (?mini=1) — the overlay flyout: single instance, so no
+       session sidebar/scope, and the redundant session columns go too. ── */
+    body.mini { font-size: 12px; }
+    body.mini header { padding: 6px 12px; position: static; }
+    body.mini header h1 { font-size: 12px; }
+    body.mini main { grid-template-columns: 1fr; min-height: 0; }
+    body.mini aside, body.mini #scope { display: none; }
+    body.mini .panels { padding: 6px 10px 20px; min-height: 0; }
+    body.mini .subview#tv-map.on { display: flex; flex-direction: column; height: calc(100vh - 96px); }
+    body.mini #appmap { flex: 1; min-height: 0; height: auto !important; }
+    body.mini .kpis { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); }
+    body.mini .kpi { padding: 6px 8px; }
+    body.mini .kpi .v { font-size: 15px; }
+    body.mini table { font-size: 11px; }
+    body.mini th, body.mini td { padding: 3px 6px; }
+    body.mini h2, body.mini section h2, body.mini .view h2 { margin: 8px 0 4px; }
+    body.mini tr.grp { display: none; }
+    body.mini #workers th:first-child, body.mini #workers td:first-child,
+    body.mini #pools th:first-child, body.mini #pools td:first-child { display: none; }
+    body.mini .grid2 { grid-template-columns: 1fr; gap: 8px; }
+    body.mini nav button { padding: 3px 8px; font-size: 11px; }
   </style>
 </head>
 <body>

@@ -12,6 +12,8 @@
     "paths": {
       "@atolljs/core": ["../../src/index.ts"],
       "@atolljs/core/*": ["../../src/*"],
+      "@atolljs/devtools": ["../../packages/devtools/src/index.ts"],
+      "@atolljs/devtools/*": ["../../packages/devtools/src/*"],
       "@atolljs/incidents": ["../../packages/incidents/src/index.ts"],
       "@atolljs/incidents/*": ["../../packages/incidents/src/*"],
       "@atolljs/node": ["../../packages/node/src/index.ts"],

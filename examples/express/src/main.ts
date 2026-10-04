@@ -1,3 +1,4 @@
+import './devtools'; // first — installs the sink before ./incidents spawns the pool
 import express from 'express';
 import { closePool, incidents, parseQueryArgs, readIncident, seedProgress } from './incidents';
 

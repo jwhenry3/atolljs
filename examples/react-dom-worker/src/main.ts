@@ -32,7 +32,7 @@ import {
   type IslandHandle,
   type Mode,
 } from '@atolljs/islands';
-import { connectDevtools } from '@atolljs/devtools';
+import { initDevtools } from '@atolljs/devtools';
 // Leaflet's stylesheet is shell-side: the worker fabricates the DOM Leaflet
 // builds (panes, tiles, controls) but CSS was always the shell's job.
 import 'leaflet/dist/leaflet.css';
@@ -61,10 +61,10 @@ const isolated =
 const initialMode: Mode = isolated ? 'push' : 'poll';
 
 // Install the devtools sink before any island mounts — pool INIT carries the
-// forwarding flag only when a sink already exists at spawn time.
-if (import.meta.env.DEV) {
-  connectDevtools({ session: { name: 'islands-demo' } });
-}
+// forwarding flag only when a sink already exists at spawn time. No-op
+// unless the URL carries ?__atoll_devtools — then broadcast transport +
+// overlay flyout come up together (/__atoll/ is the full-page view).
+initDevtools({ session: { name: 'islands-demo' } });
 
 const rootEl = document.getElementById('root');
 if (!rootEl) throw new Error('#root missing from index.html');

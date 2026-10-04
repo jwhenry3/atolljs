@@ -1,17 +1,19 @@
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
 import solid from 'vite-plugin-solid';
+import { atoll } from '../../packages/vite/src/index';
 
 // The sdk lives in the workspace root — alias the package name to its source
 // so the example runs against it without a build step.
 const coreRoot = fileURLToPath(new URL('../../src/', import.meta.url)).replace(/\\/g, '/');
 const incidentsRoot = fileURLToPath(new URL('../../packages/incidents/src/', import.meta.url)).replace(/\\/g, '/');
+const devtoolsRoot = fileURLToPath(new URL('../../packages/devtools/src/', import.meta.url)).replace(/\\/g, '/');
 const solidBindingsRoot = fileURLToPath(new URL('../../packages/solidjs/src/', import.meta.url)).replace(/\\/g, '/');
 
 export default defineConfig(({ command }) => ({
   // Built output is mounted at /solid/ under the unified dist root; dev serves /.
   base: command === 'build' ? './' : '/',
-  plugins: [solid()],
+  plugins: [solid(), atoll()],
   resolve: {
     // The aliased @atolljs/solidjs source resolves `solid-js` from the
     // workspace root otherwise — two reactive runtimes get bundled, and
@@ -21,6 +23,8 @@ export default defineConfig(({ command }) => ({
     alias: [
       { find: '@atolljs/solidjs', replacement: `${solidBindingsRoot}index.ts` },
       { find: '@atolljs/incidents', replacement: `${incidentsRoot}index.ts` },
+      { find: /^@atolljs\/devtools$/, replacement: `${devtoolsRoot}index.ts` },
+      { find: /^@atolljs\/devtools\//, replacement: devtoolsRoot },
       { find: /^@atolljs\/core$/, replacement: `${coreRoot}index.ts` },
       { find: /^@atolljs\/core\//, replacement: coreRoot },
     ],

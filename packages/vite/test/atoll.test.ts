@@ -89,6 +89,15 @@ describe('atoll vite plugin', () => {
     expect(code).not.toContain('import.meta.hot');
   });
 
+  it('bundles a worker entry outside the project root (/@fs/ URL)', async () => {
+    // Workspace-linked packages produce /@fs/ entry URLs — the middleware
+    // must unwrap the dev-URL prefix before resolving to a fs path.
+    const fsUrl = `/@fs/${fixture}/src/app.worker.ts`.replace(/\\/g, '/');
+    const res = await fetch(`${base}${fsUrl}?worker_file&type=module`);
+    expect(res.status).toBe(200);
+    expect(await res.text()).toContain('DEP_V1');
+  });
+
   it('falls back to vite per-module serving for SFC worker graphs', async () => {
     const res = await fetch(`${base}/src/sfc.worker.ts?worker_file&type=module`);
     expect(res.status).toBe(200);
