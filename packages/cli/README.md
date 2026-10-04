@@ -42,6 +42,10 @@ atoll add mfe <name>      publishable micro-frontend — framework-free
                           contract (defineIslandContract) + worker entry
                           attaching it + vite.mfe.config.ts publish build
                           → dist-mfe/<name>.worker.js behind CORS
+atoll add devtools [name] observability — src/atoll/devtools.ts init module
+                          (import first in the app entry) + @atolljs/devtools
+                          dev dep. Browser apps get the ?__atoll_devtools gate;
+                          node hosts get the /node entry + ATOLL_DEVTOOLS=1
 
 atoll doctor [--fix]      verify deps, lockfile, .npmrc policy,
                           worker-entry detectability, COOP/COEP headers

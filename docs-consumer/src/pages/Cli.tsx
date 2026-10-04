@@ -14,6 +14,7 @@ const KINDS: [string, string][] = [
   ['route', 'nextjs — app/api/<name>/ route pool — task or client variant'],
   ['component', "nextjs — 'use client' component bound to a pool via hooks"],
   ['instrumentation', 'nextjs — server bootstrap that warms route pools at boot'],
+  ['devtools', 'observability — devtools.ts init module + @atolljs/devtools dev dep (any host)'],
 ];
 
 export function Cli() {
@@ -127,6 +128,17 @@ atoll new my-mfe --framework vue --mfe  # publishable micro-frontend package`}
         a working CORS example. It warns when the project has no <code>vite</code>{' '}
         (e.g. Angular CLI apps — install it to use the publish build). See{' '}
         <a href={docHref('island-mfe')}>micro-frontends</a> for the full model.
+      </p>
+      <p>
+        <code>add devtools [session-name]</code> writes a{' '}
+        <code>src/atoll/devtools.ts</code> init module — import it first in your app
+        entry so the sink is installed before any pool spawns — and offers to install{' '}
+        <code>@atolljs/devtools</code> as a dev dependency. The emitted file matches
+        your host: browser apps get the <code>?__atoll_devtools</code> URL gate with
+        the BroadcastChannel transport + flyout overlay, Angular apps get the
+        aggregate-server variant (no <code>/__atoll/</code> mount), and Node hosts get
+        the <code>@atolljs/devtools/node</code> entry gated on{' '}
+        <code>ATOLL_DEVTOOLS=1</code>. See <a href={docHref('devtools')}>devtools</a>.
       </p>
 
       <h2>

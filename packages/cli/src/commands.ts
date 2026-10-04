@@ -145,6 +145,7 @@ const ADD_KINDS = [
   'route',
   'component',
   'instrumentation',
+  'devtools',
 ] as const;
 type AddKind = (typeof ADD_KINDS)[number];
 
@@ -161,6 +162,7 @@ const KIND_SCOPE: Record<AddKind, readonly Framework[] | null> = {
   route: ['nextjs'],
   component: ['nextjs'],
   instrumentation: ['nextjs'],
+  devtools: null,
 };
 
 /**
@@ -283,7 +285,12 @@ export async function runAdd(ctx: Ctx): Promise<number> {
     nameArg = rest[1];
   }
 
-  const name = await pickName(ctx, kind, nameArg);
+  // devtools writes a fixed devtools.ts — a positional/--name argument
+  // becomes the dashboard session label, not a file name.
+  const name =
+    kind === 'devtools'
+      ? (nameArg ?? flag(ctx.args, 'name') ?? project.pkg?.name?.split('/').pop() ?? 'app')
+      : await pickName(ctx, kind, nameArg);
   if (!name) return 1;
   const force = { force: hasFlag(ctx.args, 'force') };
   const atollDir = flag(ctx.args, 'dir') ?? rel(join(project.srcDir, 'atoll'));
@@ -477,6 +484,54 @@ export async function runAdd(ctx: Ctx): Promise<number> {
       ctx.io.print(
         `\npools warm at boot — extend register() as more routes appear.`,
       );
+      return 0;
+    }
+
+    case 'devtools': {
+      const host = hostOf(framework);
+      // Angular's CLI dev server mounts no /__atoll/ — stream to the
+      // aggregate server instead of the BroadcastChannel + flyout path.
+      const wsUrl = host === 'browser' && framework === 'angular'
+        ? 'ws://127.0.0.1:4780/events'
+        : undefined;
+      const file = `${atollDir}/devtools.ts`;
+      await writeTree(
+        ctx.io,
+        ctx.cwd,
+        [{ path: file, content: T.devtoolsSetup(name, host, wsUrl) }],
+        force,
+      );
+      if (missingDeps(project.pkg, ['@atolljs/devtools']).length) {
+        await offerInstall(ctx, project, ['-D', '@atolljs/devtools']);
+      }
+      // Print the specifier relative to srcDir — the import lands in the
+      // app entry (src/main.ts style), not in cwd.
+      const srcRel = rel(project.srcDir);
+      const spec = file.startsWith(`${srcRel}/`)
+        ? `./${file.slice(srcRel.length + 1).replace(/\.ts$/, '')}`
+        : `./${file.replace(/\.ts$/, '')}`;
+      ctx.io.print('');
+      ctx.io.print(ctx.io.fmt.strong('wire it:'));
+      ctx.io.print(`  import the module first in your entry — before any pool spawns:`);
+      ctx.io.print(ctx.io.fmt.accent(`  import '${spec}';`));
+      if (host === 'node') {
+        ctx.io.print(
+          `  ${ctx.io.fmt.accent('ATOLL_DEVTOOLS=1')} starts streaming · ${ctx.io.fmt.accent('atoll devtools')} serves the dashboard`,
+        );
+      } else if (wsUrl) {
+        ctx.io.print(
+          `  ${ctx.io.fmt.accent('atoll devtools')} serves the aggregate dashboard · open the app with ${ctx.io.fmt.accent('?__atoll_devtools')}`,
+        );
+      } else {
+        ctx.io.print(
+          `  open the app with ${ctx.io.fmt.accent('?__atoll_devtools')} — the flyout mounts and /__atoll/ serves the dashboard`,
+        );
+        ctx.io.print(
+          ctx.io.fmt.dim(
+            `  /__atoll/ needs the @atolljs/vite plugin (plugins: [atoll()]) — no plugin? run \`atoll devtools\` + pass transport: 'websocket'`,
+          ),
+        );
+      }
       return 0;
     }
 

@@ -38,6 +38,8 @@ const HELP = (fmt: Fmt) => `${fmt.strong('atoll')} — bootstrap multithreading 
       route       nextjs: api route pool — task | client variants
       component   nextjs: 'use client' hooks component over a pool
       instrumentation   nextjs: server bootstrap that warms route pools
+      devtools    observability — init module + @atolljs/devtools install
+                  (browser: ?__atoll_devtools + /__atoll/ · node: ATOLL_DEVTOOLS=1)
 
       Frameworks: react vue solid svelte angular nestjs nextjs node
       [--dir <path>] [--memory <name>|--no-memory] [--variant <v>] [--force]

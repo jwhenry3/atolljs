@@ -43,6 +43,7 @@ const DOC_ROUTES: Record<string, string> = {
   'islands-frameworks': 'island-apps',
   'islands-worker': 'island-proxy',
   'cross-origin-isolation': 'hosting',
+  'devtools': 'devtools',
   'porting': 'custom-bindings',
   'frameworks/node': 'fw-node',
   'frameworks/node-backends': 'fw-node/adapters',

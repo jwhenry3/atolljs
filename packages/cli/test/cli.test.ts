@@ -164,6 +164,62 @@ describe('atoll add', () => {
     await runCli(['add', 'memory', 'x', '--force'], scriptIo(), dir);
     expect(readFileSync(existing, 'utf8')).toContain('defineSharedMemory');
   });
+
+  it('add devtools writes the browser init module and offers the dev dep', async () => {
+    const dir = tmp();
+    mkdirSync(join(dir, 'src'));
+    writePkg(dir, { name: 'demo', dependencies: { react: '^19' } });
+    const io = scriptIo([false]); // decline install
+    const code = await runCli(['add', 'devtools'], io, dir);
+    expect(code).toBe(0);
+    const setup = readFileSync(join(dir, 'src/atoll/devtools.ts'), 'utf8');
+    expect(setup).toContain(`import { initDevtools } from '@atolljs/devtools';`);
+    expect(setup).toContain(`initDevtools({ session: { name: 'demo' } })`);
+    const out = io.output.join('\n');
+    expect(out).toContain(`import './atoll/devtools';`);
+    expect(out).toContain('?__atoll_devtools');
+    expect(out).toContain('npm install -D @atolljs/devtools');
+  });
+
+  it('add devtools emits the /node entry for node hosts', async () => {
+    const dir = tmp();
+    mkdirSync(join(dir, 'src'));
+    writePkg(dir, { name: 'api', dependencies: { express: '^5' } });
+    const io = scriptIo([false]);
+    const code = await runCli(['add', 'devtools'], io, dir);
+    expect(code).toBe(0);
+    const setup = readFileSync(join(dir, 'src/atoll/devtools.ts'), 'utf8');
+    expect(setup).toContain(`from '@atolljs/devtools/node'`);
+    expect(setup).toContain('ATOLL_DEVTOOLS');
+    expect(io.output.join('\n')).toContain('atoll devtools');
+  });
+
+  it('add devtools streams to the aggregate server on angular', async () => {
+    const dir = tmp();
+    mkdirSync(join(dir, 'src'));
+    writePkg(dir, { name: 'ng-app', dependencies: { '@angular/core': '^19' } });
+    const io = scriptIo([false]);
+    const code = await runCli(['add', 'devtools', 'my-ng'], io, dir);
+    expect(code).toBe(0);
+    const setup = readFileSync(join(dir, 'src/atoll/devtools.ts'), 'utf8');
+    expect(setup).toContain('overlay: false');
+    expect(setup).toContain('ws://127.0.0.1:4780/events');
+    expect(setup).toContain(`session: { name: 'my-ng' }`);
+  });
+
+  it('add devtools skips the install offer when already installed', async () => {
+    const dir = tmp();
+    mkdirSync(join(dir, 'src'));
+    writePkg(dir, {
+      name: 'demo',
+      dependencies: { react: '^19' },
+      devDependencies: { '@atolljs/devtools': 'latest' },
+    });
+    const io = scriptIo(); // no answers — an install prompt would eat none
+    const code = await runCli(['add', 'devtools'], io, dir);
+    expect(code).toBe(0);
+    expect(io.output.join('\n')).not.toContain('install dependencies?');
+  });
 });
 
 describe('atoll new', () => {

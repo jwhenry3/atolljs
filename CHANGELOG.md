@@ -47,6 +47,18 @@ and cross-app views. No breaking changes.
   instrumentation covers outbound `fetch()` only — inbound HTTP handled by a
   Nest/Express app isn't probed.
 
+### `@atolljs/cli` — `atoll add devtools`
+
+- New `add` kind scaffolds observability into an existing app: writes
+  `src/atoll/devtools.ts` — the init module you import first in your entry so
+  the sink exists before pools spawn — and offers `@atolljs/devtools` as a
+  dev dependency. The emitted file matches the detected host: browser apps
+  get the `?__atoll_devtools` BroadcastChannel + flyout form, Angular apps
+  get the aggregate-server variant (their dev server mounts no `/__atoll/`),
+  and Node hosts get the `@atolljs/devtools/node` entry gated on
+  `ATOLL_DEVTOOLS=1`. A positional/`--name` argument sets the dashboard
+  session label (default: the package name).
+
 ### `@atolljs/vite` — `/@fs/` worker entries, `/__atoll/` mount
 
 - Fix: `?worker_file` entry paths were resolved against the project root

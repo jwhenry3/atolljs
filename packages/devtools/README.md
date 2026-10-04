@@ -71,6 +71,11 @@ current and future viewers. Live sessions can't be dismissed.
 npx atoll-devtools          # or: atoll devtools [--port 4780]
 ```
 
+The quickest wire-up in an existing app is the scaffolder —
+`atoll add devtools` writes the right init module for your host (browser,
+Node, or the Angular aggregate-server variant) and installs the package.
+Or by hand:
+
 ```ts
 // in the app — one line. No-op unless the URL carries ?__atoll_devtools:
 // then the BroadcastChannel sink installs and the overlay flyout mounts.

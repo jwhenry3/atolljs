@@ -15,6 +15,11 @@ export function Devtools() {
       </p>
 
       <CodeBlock code={`npm install @atolljs/devtools`} language="bash" />
+      <p>
+        Or let the CLI do both steps —{' '}
+        <code>atoll add devtools</code> installs the package and writes the init
+        module for your host (browser, Node, or the Angular variant).
+      </p>
 
       <h2>Enable it</h2>
       <CodeBlock

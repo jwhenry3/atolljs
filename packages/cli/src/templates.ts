@@ -2163,3 +2163,66 @@ export async function register() {
   };
 }
 
+
+/**
+ * `add devtools` — the init module, imported first from the app entry so the
+ * sink is installed before any pool spawns (worker INIT carries the flag at
+ * spawn time; late installs leave existing workers silent).
+ *
+ * Three shapes:
+ *  - node host   → '@atolljs/devtools/node' entry, ATOLL_DEVTOOLS env gate
+ *  - browser     → '@atolljs/devtools', ?__atoll_devtools URL gate + overlay
+ *  - browser + wsUrl → same browser gate but streams to the aggregate server
+ *    (angular: nothing mounts /__atoll/)
+ */
+export function devtoolsSetup(name: string, host: 'browser' | 'node', wsUrl?: string): string {
+  if (host === 'node') {
+    return `import { initDevtools } from '@atolljs/devtools/node';
+
+/**
+ * Devtools sink — imported first from the entry so it's installed before any
+ * pool spawns (worker INIT carries the flag at spawn time; late installs
+ * leave existing workers silent).
+ *
+ * No-op unless the process was started with ATOLL_DEVTOOLS=1 — then events
+ * stream over WebSocket to the standalone dashboard (\`atoll devtools\`,
+ * http://127.0.0.1:4780). Node has no BroadcastChannel page context, so the
+ * aggregate server is the transport.
+ */
+initDevtools({ session: { name: '${name}' } });
+`;
+  }
+  if (wsUrl) {
+    return `import { initDevtools } from '@atolljs/devtools';
+
+/**
+ * Devtools sink — imported first from the app entry so it's installed before
+ * any pool spawns (worker INIT carries the flag at spawn time; late installs
+ * leave existing workers silent).
+ *
+ * No-op unless the page URL carries ?__atoll_devtools — then events stream
+ * over WebSocket to the standalone aggregate dashboard (\`atoll devtools\`,
+ * http://127.0.0.1:4780). This app's dev server doesn't mount /__atoll/, so
+ * the overlay is off and the aggregate server is the viewer.
+ */
+initDevtools({
+  session: { name: '${name}' },
+  overlay: false,
+  url: '${wsUrl}',
+});
+`;
+  }
+  return `import { initDevtools } from '@atolljs/devtools';
+
+/**
+ * Devtools sink — imported first from the app entry so it's installed before
+ * any pool spawns (worker INIT carries the flag at spawn time; late installs
+ * leave existing workers silent).
+ *
+ * No-op unless the page URL carries ?__atoll_devtools — then events stream
+ * over BroadcastChannel on the app's own origin and a flyout overlay mounts.
+ * /__atoll/ itself is served by the @atolljs/vite plugin (plugins: [atoll()]).
+ */
+initDevtools({ session: { name: '${name}' } });
+`;
+}

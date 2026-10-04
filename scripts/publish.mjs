@@ -1,4 +1,8 @@
-// Lockstep staged publish — `node scripts/publish.mjs <version|v*.*.*> [--dry-run]`.
+// Lockstep staged publish — `node scripts/publish.mjs <version|v*.*.*> [pkg] [--dry-run]`.
+//
+// An optional package positional (`@atolljs/devtools`, `devtools`, or
+// `packages/devtools`) narrows the run to that one package — its manifest
+// alone is stamped; internal deps still stamp to the release version.
 //
 // Stamps every publishable package.json (repo root = @atolljs/core, plus
 // packages/* — private packages are skipped) with the release version,
@@ -17,6 +21,10 @@
 // Without `--direct` the run pre-flights `npm view` on every package BEFORE
 // stamping or staging: a confirmed 404 (a new package staging can't create)
 // aborts immediately rather than leaving a release half-staged.
+//
+// Re-runs are safe: a package whose target version is already published (or
+// staged, pending approval) is skipped rather than hard-failing — so a
+// partially-completed release can just be run again.
 import { execFileSync, spawnSync } from 'node:child_process';
 import { appendFileSync, existsSync, readFileSync, writeFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
@@ -29,9 +37,15 @@ const direct = rest.includes('--direct');
 
 const version = tag?.replace(/^v/, '');
 if (!version || !/^\d+\.\d+\.\d+(-[\w.]+)?$/.test(version)) {
-  console.error(`usage: node scripts/publish.mjs <semver|vSemver> [--dry-run] — got "${tag ?? ''}"`);
+  console.error(
+    `usage: node scripts/publish.mjs <semver|vSemver> [package] [--direct] [--dry-run] — got "${tag ?? ''}"`,
+  );
   process.exit(1);
 }
+// Optional second positional narrows the run to one package — accepts the
+// scoped name (@atolljs/devtools), the unscoped part (devtools), or the
+// directory (packages/devtools). Internal deps still stamp to `version`.
+const only = rest.find((a) => !a.startsWith('--'));
 
 const REGISTRY = 'https://registry.npmjs.org';
 
@@ -47,6 +61,25 @@ for (const name of readdirSync(join(root, 'packages'))) {
 }
 const names = new Set(packages.map((p) => p.pkg.name));
 
+// The full `names` set stays needed for dep rewriting; `selected` is what
+// builds/stamps/stages this run.
+const selected = only
+  ? packages.filter(
+      ({ dir, pkg }) =>
+        pkg.name === only ||
+        pkg.name.replace(/^@[^/]+\//, '') === only ||
+        relative(root, dir) === only ||
+        relative(root, dir) === join('packages', only),
+    )
+  : packages;
+if (only && selected.length === 0) {
+  console.error(
+    `unknown package "${only}" — publishable:\n  ` +
+      packages.map((p) => p.pkg.name).join('\n  '),
+  );
+  process.exit(1);
+}
+
 /* ── Pre-flight: staging can't create packages ────────────────────────────
  * `npm stage publish` requires the package to already exist on the
  * registry. Discovering that MID-RUN leaves a partial stage — earlier
@@ -57,7 +90,7 @@ const names = new Set(packages.map((p) => p.pkg.name));
  */
 if (!direct) {
   const missing = [];
-  for (const { dir, pkg } of packages) {
+  for (const { dir, pkg } of selected) {
     const res = spawnSync('npm', ['view', pkg.name, 'name', '--registry', REGISTRY], {
       encoding: 'utf8',
       shell: process.platform === 'win32',
@@ -99,7 +132,7 @@ if (!direct) {
  * entry resolves to nothing — build (and smoke the cli bin) here, for real
  * runs and dry-runs (so pack --dry-run lists the bundles).
  */
-for (const { dir, pkg } of packages) {
+for (const { dir, pkg } of selected) {
   if (!pkg.scripts?.build) continue;
   console.log(`build: ${pkg.name} — npm run build`);
   try {
@@ -127,8 +160,9 @@ for (const { dir, pkg } of packages) {
  * build-lib.mjs so pack/verify flows exercise the same code.
  */
 
-// Stamp version + rewrite internal dep ranges to the release version.
-for (const { dir, pkg } of packages) {
+// Stamp version + rewrite internal dep ranges to the release version —
+// only the selected package's manifest changes on a single-package run.
+for (const { dir, pkg } of selected) {
   pkg.version = version;
   if (pkg.scripts?.build?.includes('build-lib.mjs') && pkg.exports) {
     pkg.exports = rewriteExports(dir, pkg.exports);
@@ -152,17 +186,40 @@ const order = [
   // devtools peers on core — stage after it so its stamped dep resolves.
   '@atolljs/devtools',
 ];
-const sorted = [...packages].sort(
+const sorted = [...selected].sort(
   (a, b) => (order.indexOf(a.pkg.name) === -1 ? 99 : order.indexOf(a.pkg.name)) -
             (order.indexOf(b.pkg.name) === -1 ? 99 : order.indexOf(b.pkg.name)),
 );
+
+// Single-package runs break the lockstep assumption: internal deps stamp to
+// `version` whether or not that version exists yet. Warn — a published
+// package whose @atolljs/* deps aren't out there can't be installed.
+if (only) {
+  for (const { pkg } of selected) {
+    for (const field of ['dependencies', 'peerDependencies']) {
+      for (const dep of Object.keys(pkg[field] ?? {})) {
+        if (!names.has(dep)) continue;
+        const res = spawnSync('npm', ['view', `${dep}@${version}`, 'version', '--registry', REGISTRY], {
+          encoding: 'utf8',
+          shell: process.platform === 'win32',
+        });
+        if (res.status !== 0) {
+          console.warn(
+            `WARN ${pkg.name} ${field} ${dep}@${version} isn't on npm yet — ` +
+              `this package won't be installable until ${dep} publishes too`,
+          );
+        }
+      }
+    }
+  }
+}
 
 /* ── Transparency preamble ──────────────────────────────────────────────── */
 
 // Declared destination per package — publishConfig.registry pins the
 // registry in the manifest itself so a stray ~/.npmrc scope mapping (or a
 // GitHub Packages config) can't silently redirect the publish.
-for (const { pkg } of packages) {
+for (const { pkg } of selected) {
   const reg = pkg.publishConfig?.registry;
   if (reg !== REGISTRY) {
     console.warn(
@@ -206,10 +263,46 @@ if (dryRun) {
   }
 }
 
-/* ── Stage (or publish) each package, recording the outcome ─────────────── */
+/* ── Skip versions that are already out there ─────────────────────────────
+ * Re-runs are the point: a partially-failed release, or a new package that
+ * got a one-time bootstrap `npm publish` (staging can't create packages)
+ * must not hard-fail the whole run. `npm view` answers "published";
+ * `npm stage list` answers "staged, pending approval" — best-effort, since
+ * its output shape isn't part of the CLI contract.
+ */
+const published = new Set();
+for (const { pkg } of sorted) {
+  const res = spawnSync('npm', ['view', `${pkg.name}@${version}`, 'version', '--registry', REGISTRY], {
+    encoding: 'utf8',
+    shell: process.platform === 'win32',
+  });
+  if (res.status === 0 && res.stdout.trim() === version) published.add(pkg.name);
+}
+let stagedLines = [];
+try {
+  const out = execFileSync('npm', ['stage', 'list'], {
+    encoding: 'utf8',
+    shell: process.platform === 'win32',
+  });
+  stagedLines = out.split('\n');
+} catch {
+  /* no stage-queue access in this environment — the publish check still applies */
+}
+const stagedPending = (name) =>
+  stagedLines.some((l) => l.includes(name) && l.includes(version));
 
 const results = [];
 for (const { dir, pkg } of sorted) {
+  if (published.has(pkg.name)) {
+    console.log(`skip ${pkg.name}@${version} — already published`);
+    results.push({ name: pkg.name, status: 'skipped — already published' });
+    continue;
+  }
+  if (stagedPending(pkg.name)) {
+    console.log(`skip ${pkg.name}@${version} — already staged, pending approval`);
+    results.push({ name: pkg.name, status: 'skipped — already staged' });
+    continue;
+  }
   // --direct: one-time bootstrap publish — staging requires an existing
   // package; --provenance is CI-only (needs Actions OIDC).
   const cmd = direct
