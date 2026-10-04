@@ -7,7 +7,9 @@ Read when: touching `packages/devtools/`, the `emitDevtools`/sink seam in
 
 The user-facing surface (options, views, URL gate) lives in
 `packages/devtools/README.md` and the consumer docs site. This doc covers
-the architecture and the invariants that are easy to break.
+the architecture and the invariants that are easy to break. Production
+deployment topologies (hosted dashboard, aggregate server, gating):
+[devtools-deploy.md](devtools-deploy.md).
 
 ## Architecture in one paragraph
 

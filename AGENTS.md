@@ -34,6 +34,11 @@ behavior is exercised via `InProcessWorker`
 
 ## Non-negotiable rules
 
+- **Do not write implementation details from memory.** Before putting an API
+  shape, command, config key, or number in docs, marketing copy, or code, read
+  the actual source, examples, and `docs/` and copy what's real. If you're
+  unsure, verify or leave it out: a hallucinated `worker({ render: task() })`
+  is worse than no snippet at all.
 - **Contracts are shared by both threads.** A `defineSharedMemory` spec must
   produce identical layout on main thread and worker — never fork the spec or
   hand-compute byte offsets. See `docs/shared-memory.md`.
@@ -55,6 +60,38 @@ behavior is exercised via `InProcessWorker`
   into any new project directory. See `SECURITY.md` for the full
   supply-chain policy and the `npm rebuild --ignore-scripts=false` escape
   hatch.
+
+## Docs, blog, and marketing formats
+
+- **`docs/blog/*.md` — the site blog.** Auto-discovered by `import.meta.glob`
+  in `docs-consumer/src/blog.ts`; no registry to update. Frontmatter is
+  optional YAML: `date` (sorts newest-first), `series` (groups under a
+  series heading), `title` (overrides the `#` heading), `pinned: true`
+  (standalone posts only). Posts open with a `> **Problem.** / > **Fix.**`
+  blockquote — that block is a site-blog convention; keep it off platform
+  copies.
+- **`docs/marketing/*.md` — platform adaptations**, one file per channel,
+  each opening with a `# <Platform>: <Title>` header, a note naming the
+  source post, and a `---`-delimited verbatim copy block:
+  - **LinkedIn** (`<topic>.md`, e.g. `devtools.md`, `atoll-release.md`):
+    plain-text copy — LinkedIn renders no markdown, so emojis and line
+    breaks carry the formatting. Ends with a `## Teaser variant` short post.
+  - **Dev.to** (`<topic>-devto.md`, e.g. `devtools-devto.md`): the article
+    verbatim with dev.to frontmatter (`title`, `published: false`,
+    `description`, `tags`, `cover_image`, `canonical_url`) — the paste is a
+    draft. No Problem/Fix block.
+- **Link rewriting for posts** (`docs-consumer/src/blog.ts`): relative
+  `.md` links resolve through `DOC_ROUTES` (doc filename → consumer route)
+  or `/blog/<slug>/` for sibling posts; anything unmapped falls back to the
+  GitHub blob URL *inside `docs/`*. For links outside `docs/` (e.g.
+  `packages/*/README.md`), write the absolute GitHub URL — a relative link
+  would rewrite to a dead `docs/packages/...` path. Add new doc pages to
+  `DOC_ROUTES` so links land on the site, not GitHub.
+- **Prose style**: no em dashes — rewrite them as `:` or `,` (swept across
+  `docs/` and `docs-consumer/src`; keep new content consistent). En dashes
+  in numeric ranges are hyphens.
+- **`docs-consumer/dist*`, `dist-ssg/` are build artifacts** — never edit;
+  `npm run build` regenerates them from `src`.
 
 ## Repo shape
 

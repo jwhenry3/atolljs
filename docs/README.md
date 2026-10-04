@@ -31,6 +31,7 @@ repository: internals, contracts, and conventions.
 | `packages/cli`, the `atoll` scaffold/doctor bin | `packages/cli/README.md` |
 | `packages/vite`: dev worker bundling (no refresh/HMR in workers) | [vite-plugin.md](vite-plugin.md) |
 | `packages/devtools`, `app/` dashboard, `emitDevtools`/sink seam, `ATOLL_DEVTOOLS` forwarding | [devtools.md](devtools.md) |
+| Dashboard outside `vite dev`, aggregate server hosting, production debugging | [devtools-deploy.md](devtools-deploy.md) |
 
 Framework bindings: **frontend**:
 
