@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.7
 
 New `@atolljs/devtools` package: live observability for pools, workers,
 islands, shared-memory traffic, and task lifecycles — a same-origin dashboard
