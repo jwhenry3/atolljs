@@ -49,7 +49,7 @@ jobs:
       - name: Typecheck — publishable packages
         run: |
           set -e
-          for pkg in react vue solidjs svelte angular nextjs node nestjs incidents islands react-island vue-island svelte-island solid-island angular-island cli; do
+          for pkg in react vue solidjs svelte angular nextjs node nestjs incidents islands react-island vue-island svelte-island solid-island angular-island cli vite devtools; do
             echo "--- packages/$pkg"
             npx tsc -p "packages/$pkg/tsconfig.json"
           done

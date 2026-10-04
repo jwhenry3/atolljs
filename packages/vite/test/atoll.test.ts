@@ -94,8 +94,22 @@ describe('atoll vite plugin', () => {
     // must unwrap the dev-URL prefix before resolving to a fs path.
     const fsUrl = `/@fs/${fixture}/src/app.worker.ts`.replace(/\\/g, '/');
     const res = await fetch(`${base}${fsUrl}?worker_file&type=module`);
-    expect(res.status).toBe(200);
-    expect(await res.text()).toContain('DEP_V1');
+    const code = await res.text();
+    // The 500 body is the bundle error message — include it on failure.
+    expect(res.status, code).toBe(200);
+    expect(code).toContain('DEP_V1');
+  });
+
+  it('bundles a worker entry via a doubled-slash /@fs// URL', async () => {
+    // /@fs/ + posix-absolute path emits '/@fs//home/…' on Linux/macOS —
+    // unwrapping must collapse the doubled slash or esbuild reads it as a
+    // protocol-relative URL and fails the build. (Same URL as the test
+    // above on posix; distinct on Windows where it's '/@fs//C:/…'.)
+    const fsUrl = `/@fs//${fixture}/src/app.worker.ts`.replace(/\\/g, '/');
+    const res = await fetch(`${base}${fsUrl}?worker_file&type=module`);
+    const code = await res.text();
+    expect(res.status, code).toBe(200);
+    expect(code).toContain('DEP_V1');
   });
 
   it('falls back to vite per-module serving for SFC worker graphs', async () => {

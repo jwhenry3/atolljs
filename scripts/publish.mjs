@@ -149,6 +149,8 @@ const order = [
   // react-island peers on islands — publish the dep first.
   '@atolljs/islands',
   '@atolljs/react-island',
+  // devtools peers on core — stage after it so its stamped dep resolves.
+  '@atolljs/devtools',
 ];
 const sorted = [...packages].sort(
   (a, b) => (order.indexOf(a.pkg.name) === -1 ? 99 : order.indexOf(a.pkg.name)) -

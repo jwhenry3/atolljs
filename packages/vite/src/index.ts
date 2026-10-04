@@ -118,7 +118,9 @@ async function devtoolsAppDir(server: ViteDevServer): Promise<string | null> {
 /** vite dev ids are posix paths, sometimes `/@fs/` or root-relative — unwrap to fs. */
 function toFsPath(id: string, root: string): string {
   let p = id.split('?')[0];
-  if (p.startsWith('/@fs/')) p = p.slice(4);
+  // /@fs/ + posix-absolute emits a doubled slash ('/@fs//home/x') — collapse
+  // leading slashes or esbuild reads the result as a protocol-relative URL.
+  if (p.startsWith('/@fs/')) p = p.slice(4).replace(/^\/+/, '/');
   if (/^\/[A-Za-z]:\//.test(p)) p = p.slice(1); // '/C:/x' → 'C:/x'
   // Drive-absolute or a posix path that exists on disk — win32 treats any
   // leading-slash id as absolute, so root-relative dev URLs must fall through.
