@@ -76,6 +76,7 @@ my-app/                   → zero cost, nothing installed`}
           <tr><td><code>overlay</code></td><td><code>boolean | object</code></td><td>Flyout, default on in a browser; <code>false</code> to skip it</td></tr>
           <tr><td><code>overlay.position</code></td><td><code>string</code></td><td><code>'topleft' | 'topcenter' | 'topright' | 'bottomleft' | 'bottomcenter' | 'bottomright'</code>, default <code>'bottomright'</code></td></tr>
           <tr><td><code>overlay.width / height</code></td><td><code>number</code></td><td>Initial flyout size, default 760×580</td></tr>
+          <tr><td><code>overlay.src</code></td><td><code>string</code></td><td>Dashboard URL the flyout iframes, default <code>/__atoll/?mini=1</code></td></tr>
           <tr><td><code>session.name</code></td><td><code>string</code></td><td>Session label shown in the dashboard</td></tr>
           <tr><td><code>transport</code></td><td><code>'auto' | 'broadcast' | 'websocket'</code></td><td>Default <code>'auto'</code>, BroadcastChannel in a browser, WebSocket elsewhere</td></tr>
           <tr><td><code>url</code></td><td><code>string</code></td><td>Aggregate server address, implies the WebSocket transport</td></tr>
@@ -108,6 +109,59 @@ connectDevtools({ url: 'ws://127.0.0.1:4780/events' });`}
         map, and post-mortem retention: ended sessions stay inspectable for
         30 minutes (pin one to keep it longer). The overlay still works; it
         always shows the local broadcast view.
+      </p>
+
+      <h2>Deploying in production</h2>
+      <p>
+        The dashboard is a static <code>index.html</code> +{' '}
+        <code>main.js</code> with no build step, so there are two ways to put
+        it in front of a deployed app:
+      </p>
+      <p>
+        <strong>Same-origin, zero backend.</strong> Ship the dashboard app as
+        part of your site at <code>/__atoll/</code> and tell it to listen on
+        BroadcastChannel, the same injection the vite plugin does in dev:
+      </p>
+      <CodeBlock
+        file="/__atoll/index.html"
+        code={`<script>window.__ATOLL_TRANSPORT="broadcast"</script>`}
+      />
+      <p>
+        Then <code>?__atoll_devtools</code> and the overlay work exactly like
+        development, and same-origin scoping is structural: the dashboard can
+        only hear apps on your origin. Serve your app's COOP/COEP headers on{' '}
+        <code>/__atoll/</code> too (the dev middleware echoes them for you; a
+        static host won't), or the flyout iframe lands in a separate
+        browsing-context group and renders blank.
+      </p>
+      <p>
+        <strong>Hosted aggregate.</strong> For cross-origin sessions and Node
+        processes in one view, run the standalone server where you can reach
+        it and point apps at it (<code>url</code> implies the WebSocket
+        transport):
+      </p>
+      <CodeBlock
+        code={`// devtools-server: behind your proxy's TLS + auth
+import { createDevtoolsServer } from '@atolljs/devtools/server';
+createDevtoolsServer({ host: '0.0.0.0', port: 4780 });
+
+// in each deployed app:
+initDevtools({
+  transport: 'websocket',
+  url: 'wss://devtools.internal.example.com/events',
+  session: { name: 'checkout-web' },
+  overlay: { src: 'https://devtools.internal.example.com/?mini=1' },
+});`}
+      />
+      <p>
+        The cross-origin <code>overlay.src</code> works because the aggregate
+        dashboard reads its own server's <code>/view</code> socket, not the
+        page's BroadcastChannel. Two cautions: the server ships with{' '}
+        <strong>no authentication</strong> (loopback is the designed
+        deployment: put auth and TLS in front when you host it), and{' '}
+        <code>?__atoll_devtools</code> still activates in production builds:
+        under the aggregate topology, gate on <code>enabled</code> instead so
+        visitors can't stream events to your server by appending the param.
       </p>
 
       <h2>Node.js apps</h2>
