@@ -1,7 +1,7 @@
 import { CodeBlock } from '../components/CodeBlock';
 import { docHref } from '../link';
 
-const CONTRACT = `// src/app/api/jobs/jobs.contract.ts — counters all routes share
+const CONTRACT = `// src/app/api/jobs/jobs.contract.ts: counters all routes share
 import { z } from 'zod';
 import { defineSharedMemory, field, type TaskContract } from '@atolljs/core';
 
@@ -17,13 +17,13 @@ export const ProcessJob: TaskContract<[id: number, workMs?: number], JobResult> 
   resultSchema: jobResult,
 };`;
 
-const ROUTE = `// src/app/api/jobs/route.ts — enqueue on the API thread, drain in workers
+const ROUTE = `// src/app/api/jobs/route.ts: enqueue on the API thread, drain in workers
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 let nextId = 0;
 
-// POST /api/jobs {"count": N, "workMs"?: number} — returns immediately;
+// POST /api/jobs {"count": N, "workMs"?: number}: returns immediately;
 // the pool queues dispatches internally when saturated.
 export async function POST(req: Request) {
   const { count = 1, workMs = 50 } = await req.json().catch(() => ({}));
@@ -36,7 +36,7 @@ export async function POST(req: Request) {
   return NextResponse.json({ accepted: count, queued: memory.queued.read() });
 }
 
-// GET /api/jobs — progress read straight off the buffer. No dispatch.
+// GET /api/jobs: progress read straight off the buffer. No dispatch.
 export async function GET() {
   const { memory } = getJobs();
   const queued = memory.queued.read();
@@ -46,7 +46,7 @@ export async function GET() {
     lastMs: memory.lastMs.read() });
 }`;
 
-const WORKER = `// src/app/api/jobs/jobs.worker.ts — each completion is a memory write
+const WORKER = `// src/app/api/jobs/jobs.worker.ts: each completion is a memory write
 import '@atolljs/node/shim';
 import '@atolljs/core/worker/workerBootstrap';
 import { TaskRegistry } from '@atolljs/core';
@@ -65,11 +65,11 @@ TaskRegistry.register(ProcessJob, (id, workMs = 50) => {
 export function NextjsJobs() {
   return (
     <article>
-      <h1>Next.js — job queue</h1>
+      <h1>Next.js, job queue</h1>
       <p className="lead">
         A background job queue with zero external infrastructure: POST
         enqueues work, the pool drains it on worker threads, and a progress
-        endpoint reads counters straight out of shared memory — no Redis, no
+        endpoint reads counters straight out of shared memory, no Redis, no
         database polling, no <code>postMessage</code> per status update.
       </p>
 
@@ -79,7 +79,7 @@ export function NextjsJobs() {
         counter contract, a pooled <code>process</code> task, and a route
         handler that writes <code>queued</code> before fire-and-forget
         dispatch. Because the queue state <em>is</em> shared memory, the GET
-        handler is a pure read — it never touches a worker.
+        handler is a pure read: it never touches a worker.
       </p>
       <CodeBlock code={CONTRACT} file="api/jobs/jobs.contract.ts" />
       <CodeBlock code={ROUTE} file="api/jobs/route.ts" />
@@ -90,7 +90,7 @@ export function NextjsJobs() {
         Awaiting a batch in POST couples response latency to total work time
         and invites platform timeouts. Writing the counter and releasing the
         dispatch means the handler answers in microseconds while workers
-        drain at their own pace — the client polls{' '}
+        drain at their own pace: the client polls{' '}
         <code>GET /api/jobs</code> (or binds the same fields with{' '}
         <code>useSharedValue</code> in a client component) for live progress.
       </p>
@@ -103,9 +103,9 @@ export function NextjsJobs() {
         long-lived process. One subtlety the example demonstrates: Next may
         evaluate a contract module in more than one bundle graph
         (instrumentation&apos;s import graph vs the route&apos;s), so handlers
-        read memory through <code>getJobs().memory</code> — the instance the
-        pool actually bound — instead of a second <code>jobsMemory</code>{' '}
-        import that could be unbound on this thread. On serverless the pool — and the queue state —
+        read memory through <code>getJobs().memory</code>, the instance the
+        pool actually bound, instead of a second <code>jobsMemory</code>{' '}
+        import that could be unbound on this thread. On serverless the pool, and the queue state,
         dies with the invocation, so this pattern targets self-hosted{' '}
         <code>next start</code> or standalone output, not per-request
         functions.

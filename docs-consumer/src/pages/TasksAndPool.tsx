@@ -13,7 +13,7 @@ export function TasksAndPool() {
       <p>
         A <code>serviceMethod</code> unit holds a method's wire schemas and its
         worker implementation together. The schemas type <code>run</code>'s
-        parameters, and validation happens inside the worker — the trust boundary
+        parameters, and validation happens inside the worker: the trust boundary
         is the message.
       </p>
       <CodeBlock
@@ -23,14 +23,14 @@ import { z } from 'zod';
 
 export const queryIncidents = serviceMethod({
   def: { argsSchema: z.tuple([queryArgsSchema]), resultSchema: queryResultSchema },
-  run(q) {                       // q: QueryArgs — inferred from the schema
+  run(q) {                       // q: QueryArgs: inferred from the schema
     // scan/sort shared list rows in place, return only the visible page
     return runQuery(q);
   },
 });`}
       />
 
-      <h2>Worker side — defineWorker owns the method list</h2>
+      <h2>Worker side: defineWorker owns the method list</h2>
       <CodeBlock
         file="incidents.worker.ts"
         code={`import { defineWorker } from '@atolljs/core';
@@ -46,7 +46,7 @@ export const incidentsWorker = defineWorker({
 export type IncidentsWorker = typeof incidentsWorker;   // all main ever imports`}
       />
 
-      <h2>Main thread — connectWorker, type-only import</h2>
+      <h2>Main thread: connectWorker, type-only import</h2>
       <CodeBlock
         file="incidents.ts"
         code={`import { connectWorker } from '@atolljs/core';
@@ -59,7 +59,7 @@ export const incidents = connectWorker<IncidentsWorker>({
   poolSize: 'auto',            // 'auto' = navigator.hardwareConcurrency ?? 4
 });
 
-// A Proxy typed by the worker's signatures — pool spawns on first call:
+// A Proxy typed by the worker's signatures: pool spawns on first call:
 const page = await incidents.queryIncidents({ offset: 0, limit: 50 });
 incidents.terminate();         // next call re-spawns
 
@@ -74,24 +74,24 @@ const api = workerClient<IncidentsWorker>(pool);`}
           <tr><th>Option</th><th>Meaning</th></tr>
         </thead>
         <tbody>
-          <tr><td><code>worker</code></td><td>Factory <code>() =&gt; new Worker(new URL(...))</code> — required for esbuild/webpack/turbopack to detect the entry. A <code>URL</code> also works where the bundler emits one (Vite).</td></tr>
-          <tr><td><code>sharedMemory</code></td><td><em>Optional.</em> A contract to bind on the main thread and ship to workers — type-checked against the worker's declaration. Omit for a message-only pool: no <code>SharedArrayBuffer</code>, no COOP/COEP headers required.</td></tr>
+          <tr><td><code>worker</code></td><td>Factory <code>() =&gt; new Worker(new URL(...))</code>: required for esbuild/webpack/turbopack to detect the entry. A <code>URL</code> also works where the bundler emits one (Vite).</td></tr>
+          <tr><td><code>sharedMemory</code></td><td><em>Optional.</em> A contract to bind on the main thread and ship to workers: type-checked against the worker's declaration. Omit for a message-only pool: no <code>SharedArrayBuffer</code>, no COOP/COEP headers required.</td></tr>
           <tr><td><code>poolSize</code></td><td>A number, or <code>'auto'</code> (default) for <code>navigator.hardwareConcurrency ?? 4</code>.</td></tr>
           <tr><td><code>concurrency</code></td><td>Max in-flight calls per worker (default 1). Dispatch is least-busy; when every worker is at the cap, calls queue FIFO.</td></tr>
-          <tr><td><code>maxQueue</code></td><td>Queue bound (default unbounded). A full queue rejects immediately with <code>PoolQueueFullError</code> — backpressure instead of unbounded growth.</td></tr>
+          <tr><td><code>maxQueue</code></td><td>Queue bound (default unbounded). A full queue rejects immediately with <code>PoolQueueFullError</code>: backpressure instead of unbounded growth.</td></tr>
           <tr><td><code>taskTimeout</code></td><td>Default per-call timeout in ms, measured from enqueue (queue wait + run). Rejects with <code>TaskTimeoutError</code>.</td></tr>
-          <tr><td><code>respawn</code></td><td>Default <code>true</code> — a crashed worker is replaced and its in-flight calls reject with <code>WorkerCrashedError</code>. <code>false</code> shrinks the pool instead.</td></tr>
+          <tr><td><code>respawn</code></td><td>Default <code>true</code>: a crashed worker is replaced and its in-flight calls reject with <code>WorkerCrashedError</code>. <code>false</code> shrinks the pool instead.</td></tr>
           <tr><td><code>memory</code></td><td>Buffer growth: <code>maximumPages</code> (default 16384 = 1 GB), <code>growthFactor</code>.</td></tr>
-          <tr><td><code>lazy</code></td><td>Default <code>true</code> — spawn on first call (SSR-safe import). <code>false</code> spawns at construction.</td></tr>
+          <tr><td><code>lazy</code></td><td>Default <code>true</code>: spawn on first call (SSR-safe import). <code>false</code> spawns at construction.</td></tr>
         </tbody>
       </table>
 
       <h2>Cancellation, timeouts, backpressure</h2>
       <CodeBlock
-        code={`// Per-call controls ride on .with() — the same typed surface
+        code={`// Per-call controls ride on .with(), the same typed surface
 const ctrl = new AbortController();
 const page = incidents.with({ signal: ctrl.signal, timeout: 2_000 }).queryIncidents(q);
-ctrl.abort();   // rejects with TaskAbortedError — queued → dropped;
+ctrl.abort();   // rejects with TaskAbortedError, queued → dropped;
                 // in-flight → rejects now, the worker's late reply is discarded
 
 // Observe the pool
@@ -107,14 +107,14 @@ await incidents.pool?.close();   // drain the queue, then terminate`}
         <code>PoolQueueFullError</code>, <code>TaskTimeoutError</code>, and{' '}
         <code>WorkerCrashedError</code>). JavaScript can't interrupt a running
         function, so an in-flight abort rejects the caller and holds the worker's
-        slot until its reply arrives — the next call goes to a genuinely free
+        slot until its reply arrives: the next call goes to a genuinely free
         worker. For a hard stop, call <code>terminate()</code>.
       </p>
 
       <p>
         Client members <code>start()</code>, <code>terminate()</code>,{' '}
         <code>with()</code>, <code>pool</code>, <code>sharedMemory</code> are
-        reserved — a worker method by those names is a compile error. Under the
+        reserved: a worker method by those names is a compile error. Under the
         hood <code>connectWorker</code> builds a <code>WorkerPool</code>; the
         explicit-contract API (<code>TaskContract</code> +{' '}
         <code>TaskRegistry.register</code> + <code>WorkerPool</code>'s{' '}
@@ -125,7 +125,7 @@ await incidents.pool?.close();   // drain the queue, then terminate`}
       <h2>Explicit service contracts (advanced)</h2>
       <p>
         <code>defineWorker</code>/<code>connectWorker</code> build on a lower,
-        framework-neutral layer — the same one the NestJS binding dispatches
+        framework-neutral layer: the same one the NestJS binding dispatches
         through. Reach for it when both threads need the contract object at
         runtime (a hand-built <code>WorkerPool</code>, a DI provider, a test
         stub):
@@ -135,15 +135,15 @@ await incidents.pool?.close();   // drain the queue, then terminate`}
           <tr><th>Export</th><th>What it does</th></tr>
         </thead>
         <tbody>
-          <tr><td><code>defineService(name, methods)</code></td><td>Declares the contract bundle once — <code>{'{ method: { argsSchema?, resultSchema? } }'}</code>. Wire ids derive as <code>service.method</code>; signatures infer from the schemas (<code>argsSchema: z.tuple(...)</code> → args, <code>resultSchema</code> → return type).</td></tr>
+          <tr><td><code>defineService(name, methods)</code></td><td>Declares the contract bundle once: <code>{'{ method: { argsSchema?, resultSchema? } }'}</code>. Wire ids derive as <code>service.method</code>; signatures infer from the schemas (<code>argsSchema: z.tuple(...)</code> → args, <code>resultSchema</code> → return type).</td></tr>
           <tr><td><code>implementService(service, handlers)</code></td><td>Worker-side registration; throws at bind time on a missing method.</td></tr>
-          <tr><td><code>createClient(service, runner)</code></td><td>Typed proxy over any <code>TaskRunner</code> — a pool, a SharedWorker client, or a test stub.</td></tr>
+          <tr><td><code>createClient(service, runner)</code></td><td>Typed proxy over any <code>TaskRunner</code>: a pool, a SharedWorker client, or a test stub.</td></tr>
           <tr><td><code>service.tasks</code></td><td>A <code>TaskMap</code> you can feed straight to <code>new WorkerPool({'{ tasks }'})</code>.</td></tr>
           <tr><td><code>rpc&lt;A, R&gt;({'{ taskId? }'})</code></td><td>Escape hatch for schema-less methods or explicit wire ids.</td></tr>
         </tbody>
       </table>
 
-      <h2>defineTask — latest-wins runners</h2>
+      <h2>defineTask: latest-wins runners</h2>
       <p>
         <code>defineTask(fn)</code> wraps an async call into an{' '}
         <code>AsyncTask</code>: latest-wins (stale results dropped), plus an
@@ -153,7 +153,7 @@ await incidents.pool?.close();   // drain the queue, then terminate`}
       </p>
       <CodeBlock
         code={`// Bindings accept any async function and wrap it per call site:
-const page = useTask(incidents.queryIncidents);     // React — taskState() in Angular/Svelte
+const page = useTask(incidents.queryIncidents);     // React: taskState() in Angular/Svelte
 page.run({ offset: 0, limit: 50 });                  // latest-wins
 page.data; page.pending; page.elapsedMs;
 
@@ -166,7 +166,7 @@ queryTask.subscribe((snap) => render(snap));`}
       <h2>Node workers</h2>
       <p>
         <code>WorkerPool</code>/<code>connectWorker</code> run on{' '}
-        <code>node:worker_threads</code> unchanged —{' '}
+        <code>node:worker_threads</code> unchanged :{' '}
         <code>@atolljs/node</code> adapts Node's <code>Worker</code> to
         the DOM surface the pool expects.{' '}
         <code>createNodePool({'{ workerFile | worker | createWorker, … }'})</code>{' '}
@@ -181,7 +181,7 @@ queryTask.subscribe((snap) => render(snap));`}
       </p>
       <p>
         A Node worker entry imports <code>@atolljs/node/shim</code>{' '}
-        first — it binds <code>self = parentPort</code> before{' '}
+        first: it binds <code>self = parentPort</code> before{' '}
         <code>defineWorker</code>'s bootstrap evaluates.{' '}
         <code>SharedArrayBuffer</code> works in Node with no headers: isolation
         is a browser-only requirement.

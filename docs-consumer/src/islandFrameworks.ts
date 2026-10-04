@@ -20,10 +20,10 @@ export const ISLAND_FRAMEWORKS: Record<string, IslandFramework> = {
     name: 'Vue islands',
     pkg: '@atolljs/vue-island',
     intro:
-      'A Vue 3 renderer running in the worker — a real RuntimeRenderer backed by the proxy DOM, with v-model emit equivalence, Teleport, transition stubs, and Vue\'s own scheduler (microtask queue + post queue). Shell side: a <AtollIsland> component or a useIsland() composable.',
+      'A Vue 3 renderer running in the worker: a real RuntimeRenderer backed by the proxy DOM, with v-model emit equivalence, Teleport, transition stubs, and Vue\'s own scheduler (microtask queue + post queue). Shell side: a <AtollIsland> component or a useIsland() composable.',
     componentCodeFile: 'Counter.vue (worker component)',
     componentCode: `<script setup lang="ts">
-// Ordinary Vue SFC — compiled for the worker bundle, mounted in the proxy
+// Ordinary Vue SFC: compiled for the worker bundle, mounted in the proxy
 // document. No DOM access; props must be serializable; emit() is the
 // island → shell channel.
 import { ref } from 'vue';
@@ -43,13 +43,13 @@ const count = ref(props.start);
     workerCodeFile: 'vue.worker.ts (worker entry)',
     workerCode: `import { defineVuePolyWorker, vueIslandApp } from '@atolljs/vue-island/worker';
 import { installDomShim } from '@atolljs/islands/worker';
-import Counter from './Counter.vue';  // SFC — needs @vitejs/plugin-vue in the worker build
+import Counter from './Counter.vue';  // SFC: needs @vitejs/plugin-vue in the worker build
 
 export const vueWorker = defineVuePolyWorker({
   apps: { counter: Counter },
 });
 
-// Or an imperative proxy-DOM app alongside — no Vue involved:
+// Or an imperative proxy-DOM app alongside: no Vue involved:
 vueIslandApp('hello', {
   imperative: (doc) => {
     installDomShim(doc);
@@ -75,9 +75,9 @@ const worker = () =>
   <!-- or the composable: useIsland(elRef, { client, app, props }) -->
 </template>`,
     notes: [
-      'v-model works end-to-end — form payloads stamp .value/.checked on the synthetic target before the handler runs.',
+      'v-model works end-to-end, form payloads stamp .value/.checked on the synthetic target before the handler runs.',
       'Teleport resolves "body"/selector targets to the instance doc; transition/transition-group render children with lifecycle hooks stubbed.',
-      'The Vue scheduler is preserved — flush-order semantics match main-thread Vue.',
+      'The Vue scheduler is preserved, flush-order semantics match main-thread Vue.',
       'defineVueMonoWorker(app) for a dedicated worker; defineVuePolyWorker({ apps }) for a registry.',
     ],
   },
@@ -86,8 +86,8 @@ const worker = () =>
     name: 'Svelte islands',
     pkg: '@atolljs/svelte-island',
     intro:
-      'Svelte 5 components mounting inside the worker through real mount()/unmount() against a proxy-DOM target — rune-compiled components only. Shell side: an island action or createIslandState() for rune-friendly wiring.',
-    // The real fixture the svelte-island suite runs — props are wire-driven,
+      'Svelte 5 components mounting inside the worker through real mount()/unmount() against a proxy-DOM target: rune-compiled components only. Shell side: an island action or createIslandState() for rune-friendly wiring.',
+    // The real fixture the svelte-island suite runs: props are wire-driven,
     // $state mutates through delegated handlers, emit() reaches the shell.
     componentCodeFile: 'packages/svelte-island/test/fixtures/Counter.svelte',
     componentCode: svelteCounter,
@@ -109,7 +109,7 @@ export const svelteWorker = defineSveltePolyWorker({
 <div use:island={{ worker, app: 'counter', props: { start: 0 } }} />
 <!-- or createIslandState(options) in rune mode for reactive props/events -->`,
     notes: [
-      'Components must be rune-compiled (compilerOptions.runes) — the worker renderer mounts the Svelte 5 component shape.',
+      'Components must be rune-compiled (compilerOptions.runes), the worker renderer mounts the Svelte 5 component shape.',
       'The worker-side wrapper resolves each app through real mount()/unmount(); flushSync() boundaries emit ops.',
       'defineSvelteMonoWorker(app) / defineSveltePolyWorker({ apps }) mirror the shared/mono topology split.',
     ],
@@ -119,12 +119,12 @@ export const svelteWorker = defineSveltePolyWorker({
     name: 'Solid islands',
     pkg: '@atolljs/solid-island',
     intro:
-      'Solid JSX rendering through the official solid-js/universal renderer — the same API surface frameworks like Three.js renderers use — so the worker keeps Solid\'s fine-grained reactivity: each signal update produces a minimal op batch. Shell side: a <Island> component or a createIsland() primitive.',
+      'Solid JSX rendering through the official solid-js/universal renderer, the same API surface frameworks like Three.js renderers use, so the worker keeps Solid\'s fine-grained reactivity: each signal update produces a minimal op batch. Shell side: a <Island> component or a createIsland() primitive.',
     componentCodeFile: 'Counter.tsx (worker component)',
     componentCode: `import { createSignal } from 'solid-js';
 import { emit } from '@atolljs/islands/worker';
 
-// Ordinary Solid JSX — compiled for solid-js/universal, so each signal
+// Ordinary Solid JSX: compiled for solid-js/universal, so each signal
 // write produces a minimal op batch. Serializable props; emit() talks
 // back to the shell.
 export function Counter(props: { start?: number }) {
@@ -151,13 +151,13 @@ const worker = () =>
   new Worker(new URL('./solid.worker.ts', import.meta.url), { type: 'module' });
 
 <Island worker={worker} app="counter" props={{ start: 0 }} />
-// or createIsland(el, options) — returns { props, events } signals` ,
+// or createIsland(el, options), returns { props, events } signals`,
     notes: [
-      'Fine-grained updates — signal writes map to minimal op batches; Solid is the highest-updates-per-commit workload of the four.',
+      'Fine-grained updates, signal writes map to minimal op batches; Solid is the highest-updates-per-commit workload of the four.',
       'Configure your bundler to compile worker JSX for the universal renderer (solid-js/universal), not dom-expressions.',
-      'Worker props arrive as getters — Solid props are signal-shaped; updates re-run derivations fine-grained.',
+      'Worker props arrive as getters, Solid props are signal-shaped; updates re-run derivations fine-grained.',
       'defineSolidMonoWorker(app) / defineSolidPolyWorker({ apps }) for the two topologies.',
-      'islandComponent<P>(\'name\') / lazyIsland(loader) proxy a worker app as a local-typed component — inline props, Suspense code-splitting, { app, worker } contract modules.',
+      'islandComponent<P>(\'name\') / lazyIsland(loader) proxy a worker app as a local-typed component, inline props, Suspense code-splitting, { app, worker } contract modules.',
     ],
   },
   angular: {
@@ -165,13 +165,13 @@ const worker = () =>
     name: 'Angular islands',
     pkg: '@atolljs/angular-island',
     intro:
-      'Angular\'s official Renderer2/RendererFactory2 extension point, implemented against the proxy DOM — worker components bootstrap through createComponent with a custom renderer. Zoneless change detection keeps the tree updated; shell side is a generated islandComponent facade typed off the worker component\'s own signal fields. Works with JIT or AOT-compiled components.',
+      'Angular\'s official Renderer2/RendererFactory2 extension point, implemented against the proxy DOM: worker components bootstrap through createComponent with a custom renderer. Zoneless change detection keeps the tree updated; shell side is a generated islandComponent facade typed off the worker component\'s own signal fields. Works with JIT or AOT-compiled components.',
     componentCodeFile: 'counter.component.ts (worker component)',
     componentCode: `import { Component, input, output, signal } from '@angular/core';
 import { AngularIsland } from '@atolljs/angular-island/worker';
 
 // @AngularIsland stamps the registry name and registers the component for
-// defineAngularPolyWorker(). Pass the key explicitly — the bare form
+// defineAngularPolyWorker(). Pass the key explicitly: the bare form
 // derives it from the class name, which minifiers mangle. Its signal
 // fields ARE the island contract: input()/model() → props keys,
 // output()/model() → island events bridged to the shell.
@@ -194,18 +194,18 @@ export class CounterComponent {
   }
 }`,
     workerCodeFile: 'angular.worker.ts (worker entry)',
-    workerCode: `import '@angular/compiler';  // JIT only — AOT-compiled components skip this
+    workerCode: `import '@angular/compiler';  // JIT only: AOT-compiled components skip this
 import { defineAngularPolyWorker } from '@atolljs/angular-island/worker';
 import './counter.component'; // registers via @AngularIsland
 
-// No apps map — every decorated component in the module graph is served.
+// No apps map: every decorated component in the module graph is served.
 export const angularWorker = defineAngularPolyWorker();`,
     shellCodeFile: 'Angular shell',
     shellCode: `import { Component } from '@angular/core';
 import { islandComponent, type IslandEventHandler } from '@atolljs/angular-island';
 import type { CounterComponent } from './counter.component'; // type-only!
 
-// A real standalone component — [props] types as { label?: string },
+// A real standalone component: [props] types as { label?: string },
 // onEvent narrows to ('incremented', number). The worker module itself
 // never enters this bundle.
 const CounterIsland = islandComponent<CounterComponent>({
@@ -228,12 +228,12 @@ export class AppComponent {
   };
 }`,
     notes: [
-      '@AngularIsland also takes { name, providers } — and undecorated components register via the apps array/record forms of defineAngularPolyWorker. The bare form derives the key from the class name, so pass it explicitly wherever code is minified (any production bundle).',
-      'Root output()/model() fields bridge onto the emit channel under their public names (x = model() → \'xChange\') — the adapter handles island-instance re-entry, so afterEveryRender-style emits just work.',
-      'JIT components need import \'@angular/compiler\' once in the worker entry — the JIT decorators compile at bootstrap. AOT-compiled components skip it; the generated facade carries a hand-authored ɵcmp so it resolves under both.',
+      '@AngularIsland also takes { name, providers }, and undecorated components register via the apps array/record forms of defineAngularPolyWorker. The bare form derives the key from the class name, so pass it explicitly wherever code is minified (any production bundle).',
+      'Root output()/model() fields bridge onto the emit channel under their public names (x = model() → \'xChange\'), the adapter handles island-instance re-entry, so afterEveryRender-style emits just work.',
+      'JIT components need import \'@angular/compiler\' once in the worker entry, the JIT decorators compile at bootstrap. AOT-compiled components skip it; the generated facade carries a hand-authored ɵcmp so it resolves under both.',
       'The low-level surface stays available: <atoll-island>/<div atollIsland> with [client] (shared) or [worker] (island-owned), [app] accepting a registry name or the stamped component class.',
-      'The worker renderer is a Renderer2 — @DomSanitizer flows through as passthrough; anything Angular sanitizes is already declared safe in a worker.',
-      'Forms and animations are untested/explored territory — (click)/(input) bindings work; TemplateRef renders into the proxy tree.',
+      'The worker renderer is a Renderer2, @DomSanitizer flows through as passthrough; anything Angular sanitizes is already declared safe in a worker.',
+      'Forms and animations are untested/explored territory, (click)/(input) bindings work; TemplateRef renders into the proxy tree.',
       'defineAngularMonoWorker(component) for the 1:1 topology.',
     ],
   },

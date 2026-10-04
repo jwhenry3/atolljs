@@ -1,8 +1,8 @@
 /**
  * Route-depth plumbing for the prerendered site.
  *
- * Docs pages are emitted one level (or more) below the consumer root —
- * `fw-node/clustering` becomes `fw-node/clustering/index.html` — so every
+ * Docs pages are emitted one level (or more) below the consumer root,
+ * `fw-node/clustering` becomes `fw-node/clustering/index.html`, so every
  * relative link needs `../` steps matching the depth of the page currently
  * being rendered. Renders are sequential (one page per renderToString call,
  * and dev re-renders never interleave), so a module-level depth is safe and
@@ -18,7 +18,7 @@ export function routeDepth() {
   return currentDepth;
 }
 
-/** `../` × the current page's depth — resolves to the consumer site root. */
+/** `../` × the current page's depth: resolves to the consumer site root. */
 export function consumerRootHref() {
   return '../'.repeat(currentDepth);
 }

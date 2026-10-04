@@ -11,7 +11,9 @@
     "skipLibCheck": true,
     "paths": {
       "@atolljs/core": ["../../src/index.ts"],
-      "@atolljs/core/*": ["../../src/*"]
+      "@atolljs/core/*": ["../../src/*"],
+      "@atolljs/devtools": ["./src/index.ts"],
+      "@atolljs/devtools/*": ["./src/*"]
     }
   },
   "include": ["src", "test"]

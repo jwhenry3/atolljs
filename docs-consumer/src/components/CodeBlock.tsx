@@ -31,7 +31,7 @@ const JS_LANGS = new Set(['ts', 'tsx', 'typescript', 'js', 'jsx', 'javascript'])
 
 /**
  * hljs' JSX support delegates tag markup to the xml grammar, which bails at
- * the first `>` — including the `>` of `=>` inside prop expressions — leaving
+ * the first `>`, including the `>` of `=>` inside prop expressions, leaving
  * `prop={...}` bodies as unstyled plain text. Post-pass: find top-level `{`
  * in unstyled regions preceded by `=` (JSX prop expressions, object literals)
  * and re-highlight the balanced brace region, recursively.
@@ -54,13 +54,13 @@ function highlightJsxExpressions(html: string, language: string): string {
       break;
     }
     // `{` exprs worth re-highlighting are plain text nodes whose innermost
-    // enclosing span is the JSX tag markup — hljs wraps xml sublanguage
+    // enclosing span is the JSX tag markup: hljs wraps xml sublanguage
     // output in `language-xml`, and emits `hljs-tag` for the delimiters.
     const top = stack[stack.length - 1];
     const inTagCtx =
       stack.length === 0 || top === 'hljs-tag' || top === 'language-xml';
     if (first === nextBrace && inTagCtx) {
-      // only `prop={` — walk back over whitespace for `=`
+      // only `prop={`, walk back over whitespace for `=`
       let p = nextBrace - 1;
       while (p >= 0 && (html[p] === ' ' || html[p] === '\n' || html[p] === '\t')) p--;
       if (p < 0 || html[p] !== '=') {
@@ -68,7 +68,7 @@ function highlightJsxExpressions(html: string, language: string): string {
         i = nextBrace + 1;
         continue;
       }
-      // scan to matching } — braces in the region are source text even where
+      // scan to matching }, braces in the region are source text even where
       // they sit inside leaf spans, so a plain char count is sufficient
       let depth = 0;
       let k = nextBrace;
@@ -103,7 +103,7 @@ function highlightJsxExpressions(html: string, language: string): string {
       i = nextClose + '</span>'.length;
       continue;
     }
-    // plain `{` inside a non-tag span — emit and move on
+    // plain `{` inside a non-tag span: emit and move on
     out += html.slice(i, nextBrace + 1);
     i = nextBrace + 1;
   }
@@ -122,7 +122,7 @@ export function CodeBlock({ code, language = 'typescript', file, side }: CodeBlo
       return hljs.highlight(trimmed, { language }).value;
     }
     // hljs delegates JSX tags to the xml grammar, which ends a tag at the
-    // first `>` — including the `>` of `=>` in prop expressions. Shield `=>`
+    // first `>`: including the `>` of `=>` in prop expressions. Shield `=>`
     // behind a sentinel so tags survive, then restore it in the output.
     const shielded = trimmed.replace(/=>/g, '=»');
     const highlighted = hljs.highlight(shielded, { language }).value;

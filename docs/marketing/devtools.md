@@ -1,14 +1,14 @@
-# LinkedIn — AtollJS Devtools
+# LinkedIn: AtollJS Devtools
 
 Feature post adapted from [`../blog/devtools.md`](../blog/devtools.md).
-Copy the block between the rules verbatim — LinkedIn renders no markdown,
+Copy the block between the rules verbatim: LinkedIn renders no markdown,
 so the emojis and line breaks are the formatting.
 
 ---
 
-**Once real work moves into a worker pool, your app becomes a black box — console.log across eight threads is a scramble, and the question that matters (*which worker is slow, and doing what?*) has no answer.**
+**Once real work moves into a worker pool, your app becomes a black box: console.log across eight threads is a scramble, and the question that matters (*which worker is slow, and doing what?*) has no answer.**
 
-So I built devtools for **AtollJS** — one line to turn on, zero cost when off:
+So I built devtools for **AtollJS**: one line to turn on, zero cost when off:
 
 ```ts
 import { initDevtools } from '@atolljs/devtools';
@@ -18,23 +18,23 @@ initDevtools({ session: { name: 'my-app' } });
 
 What you get:
 
-🗺️ **The app map** — a live canvas drawn like the atoll it's named for: session at the center, pools on the rim, workers mid-orbit, islands on the outer orbit as framework marks. Zoom, drill, inspect.
+🗺️ **The app map**: a live canvas drawn like the atoll it's named for: session at the center, pools on the rim, workers mid-orbit, islands on the outer orbit as framework marks. Zoom, drill, inspect.
 
-🌊 **A task waterfall** — one swimlane per worker slot, queued→dispatched→settled, with per-task p95s and failure counts.
+🌊 **A task waterfall**: one swimlane per worker slot, queued→dispatched→settled, with per-task p95s and failure counts.
 
-📡 **Real network + memory** — `fetch()` logging from main thread *and* workers, per-field shared-memory write rates, per-worker heaps.
+📡 **Real network + memory**: `fetch()` logging from main thread *and* workers, per-field shared-memory write rates, per-worker heaps.
 
-🔍 **Post-mortem sessions** — a disconnected page is retained as an ended session, so history stays attributed after the crash.
+🔍 **Post-mortem sessions**: a disconnected page is retained as an ended session, so history stays attributed after the crash.
 
 The design choices that make it cheap:
 
-⚡ **A sink, not a wire** — `emitDevtools` is one branch on a module sink; nothing transports until something installs one. "Off" costs nothing.
+⚡ **A sink, not a wire**: `emitDevtools` is one branch on a module sink; nothing transports until something installs one. "Off" costs nothing.
 
-🧵 **One transport per app, never per worker** — a `poolSize: 32` pool still costs one connection; workers forward events over the task channel the pool already owns.
+🧵 **One transport per app, never per worker**: a `poolSize: 32` pool still costs one connection; workers forward events over the task channel the pool already owns.
 
-🔒 **The transport is the scoping** — BroadcastChannel in the browser means same-origin isolation by spec. No filter, a guarantee.
+🔒 **The transport is the scoping**: BroadcastChannel in the browser means same-origin isolation by spec. No filter, a guarantee.
 
-🖥️ **Node too** — `ATOLL_DEVTOOLS=1` + `npx atoll-devtools` and your Express/Nest pools show up on the same dashboard.
+🖥️ **Node too**: `ATOLL_DEVTOOLS=1` + `npx atoll-devtools` and your Express/Nest pools show up on the same dashboard.
 
 Docs + live demos: https://jwhenry3.github.io/atolljs/
 
@@ -44,9 +44,9 @@ Docs + live demos: https://jwhenry3.github.io/atolljs/
 
 ## Teaser variant (short post)
 
-Worker pools make your app a black box — AtollJS devtools make it a map.
+Worker pools make your app a black box: AtollJS devtools make it a map.
 One gated line of code, zero cost when off: app map, task waterfall,
-fetch log, per-field shared-memory writes, per-worker heaps — browser
+fetch log, per-field shared-memory writes, per-worker heaps: browser
 and Node on one dashboard.
 
 Docs → https://jwhenry3.github.io/atolljs/

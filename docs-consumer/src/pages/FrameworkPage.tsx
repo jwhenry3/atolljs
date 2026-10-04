@@ -8,7 +8,7 @@ export function FrameworkPage({ fw }: { fw: FrameworkDoc }) {
     <article>
       <h1>{fw.name}</h1>
       <p className="lead">
-        <PkgLink name={fw.pkg} /> — {fw.summary}
+        <PkgLink name={fw.pkg} />: {fw.summary}
       </p>
 
       <h2>Install</h2>

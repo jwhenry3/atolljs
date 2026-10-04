@@ -14,13 +14,13 @@ export function Quickstart() {
       <h2>1 · Install</h2>
       <CodeBlock code="npm install @atolljs/core @atolljs/react" language="bash" />
 
-      <h2>2 · Declare shared memory — imported by both threads</h2>
+      <h2>2 · Declare shared memory: imported by both threads</h2>
       <CodeBlock file="counter.memory.ts" code={SHARED_MEMORY} />
 
-      <h2>3 · Define the worker — methods live here</h2>
+      <h2>3 · Define the worker: methods live here</h2>
       <CodeBlock file="counter.worker.ts" code={SHARED_WORKER} />
 
-      <h2>4 · Connect from the main thread — type only</h2>
+      <h2>4 · Connect from the main thread: type only</h2>
       <CodeBlock file="counter.ts" code={SHARED_CONNECT} />
 
       <h2>5 · Bind it in your framework</h2>
@@ -40,11 +40,11 @@ export function App() {
 }`}
       />
       <p>
-        That's the whole loop — <code>increment.run(1)</code> posts the call to a
+        That's the whole loop: <code>increment.run(1)</code> posts the call to a
         worker, the worker writes <code>count</code> in place, and the binding
         re-renders on the next field write. No serialization of the value itself.
         Need validation at the boundary? Swap the plain function for a{' '}
-        <code>serviceMethod({'{ def: { argsSchema, resultSchema }, run }'})</code> unit —
+        <code>serviceMethod({'{ def: { argsSchema, resultSchema }, run }'})</code> unit:
         see <a href={docHref('tasks')}>Worker pool &amp; tasks</a>.
       </p>
 
@@ -52,7 +52,7 @@ export function App() {
       <p>
         Leave <code>sharedMemory</code> out of both <code>defineWorker</code> and{' '}
         <code>connectWorker</code> and you have a typed, pooled, cancellable
-        worker RPC that runs anywhere Workers do — no isolation headers needed.
+        worker RPC that runs anywhere Workers do: no isolation headers needed.
         Add the contract when a worker owns state the UI should observe without
         copying.
       </p>
@@ -74,7 +74,7 @@ export function App() {
 });`}
       />
       <p>
-        Production hosting needs the same headers — see{' '}
+        Production hosting needs the same headers: see{' '}
         <a href={docHref('hosting')}>Hosting &amp; headers</a>.
       </p>
     </article>

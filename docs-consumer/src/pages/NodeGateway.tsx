@@ -7,7 +7,7 @@ const apiBase = () =>
     ? `http://localhost:${port}`
     : `${window.location.protocol}//${window.location.hostname}:${port}`;
 
-const GATEWAY = `// :3204 — gateway: split one listener by route prefix (any Node)
+const GATEWAY = `// :3204: gateway: split one listener by route prefix (any Node)
 import { routeHttpGateway } from '@atolljs/node/http';
 
 routeHttpGateway({
@@ -20,12 +20,12 @@ routeHttpGateway({
   handler: mainHandler, // everything else stays on the API thread
 });`;
 
-const WORKER_LISTEN = `// worker entry — listen on an internal port and announce it
+const WORKER_LISTEN = `// worker entry: listen on an internal port and announce it
 import { serveHttp } from '@atolljs/node/http';
 
 serveHttp(createApp(), { listen: 0 }); // → parent gets {type:'HTTP_PORT',port}`;
 
-const EMBED = `// Embedding into a host framework — mountable pieces instead of
+const EMBED = `// Embedding into a host framework: mountable pieces instead of
 // the standalone gateway:
 import { workerHttpPorts, proxyToWorker } from '@atolljs/node/http';
 
@@ -35,27 +35,27 @@ app.use('/api/housed', proxyToWorker({
   worker: (w) => w[i++ % w.length],             // or a slot index to pin
 }));`;
 
-const SHARED = `// Two pools, one buffer — a message-only pool reading another
+const SHARED = `// Two pools, one buffer: a message-only pool reading another
 // pool's contract memory (the housed-API pattern):
 import { withSharedBuffer } from '@atolljs/node';
 
 const housed = createNodePool({
-  // NO sharedMemory here — a second pool would allocate a second buffer.
+  // NO sharedMemory here: a second pool would allocate a second buffer.
   worker: withSharedBuffer(
     () => new Worker(new URL('../dist/housed.worker.js', import.meta.url)),
-    () => pool.sharedBuffer,   // resolved per spawn — respawns included
+    () => pool.sharedBuffer,   // resolved per spawn: respawns included
   ),
   poolSize: 2,
 });
 
-// housed.worker.ts — receive + bind before serving:
+// housed.worker.ts: receive + bind before serving:
 import { bindSharedBuffer } from '@atolljs/node';
 await bindSharedBuffer(); // same SharedArrayBuffer as the incidents pool`;
 
 export function NodeGateway() {
   return (
     <article>
-      <h1>Node.js — gateway routing</h1>
+      <h1>Node.js: gateway routing</h1>
       <p className="lead">
         Path-level ownership on any Node version: the main thread parses HTTP
         once and proxies matched URL prefixes to worker-owned internal
@@ -66,7 +66,7 @@ export function NodeGateway() {
       <h2>Worker side</h2>
       <p>
         <code>serveHttp(app, {'{'} listen: 0 {'}'})</code> binds an internal{' '}
-        <code>127.0.0.1</code> port and announces it to the parent — the
+        <code>127.0.0.1</code> port and announces it to the parent: the
         gateway owns the only public port.
       </p>
       <CodeBlock code={WORKER_LISTEN} file="offload.worker.ts" />
@@ -74,10 +74,10 @@ export function NodeGateway() {
       <h2>Main thread</h2>
       <CodeBlock code={GATEWAY} file="main.ts" />
       <ul>
-        <li><code>worker:</code> is a slot index into the live <code>pool.workers</code> snapshot (or a selector fn) — a respawned worker re-announces its port and takes over its routes automatically.</li>
-        <li><code>to:</code> rewrites the prefix — <code>/api/a/incidents/query</code> reaches the worker as <code>/api/incidents/query</code>; the prefix only names the owner.</li>
+        <li><code>worker:</code> is a slot index into the live <code>pool.workers</code> snapshot (or a selector fn), a respawned worker re-announces its port and takes over its routes automatically.</li>
+        <li><code>to:</code> rewrites the prefix, <code>/api/a/incidents/query</code> reaches the worker as <code>/api/incidents/query</code>; the prefix only names the owner.</li>
         <li>A route whose worker hasn&apos;t announced yet gets a 503.</li>
-        <li>WebSocket upgrades match the same prefix table and tunnel end-to-end — see <a href={docHref('fw-node/websockets')}>WebSockets</a>.</li>
+        <li>WebSocket upgrades match the same prefix table and tunnel end-to-end: see <a href={docHref('fw-node/websockets')}>WebSockets</a>.</li>
       </ul>
 
       <h2>Embedding in a host framework</h2>
@@ -92,14 +92,14 @@ export function NodeGateway() {
       </p>
       <CodeBlock code={EMBED} file="main.ts" />
       <p>
-        The NestJS version of this pattern — a whole Nest application housed
-        inside workers — is <a href={docHref('fw-nestjs/housed')}>Backend → NestJS →
+        The NestJS version of this pattern, a whole Nest application housed
+        inside workers, is <a href={docHref('fw-nestjs/housed')}>Backend → NestJS →
         Housed APIs</a>.
       </p>
 
       <h2>Two pools, one shared buffer</h2>
       <p>
-        Worker-housed routes get their own pool and worker entry — but a
+        Worker-housed routes get their own pool and worker entry, but a
         pool&apos;s <code>sharedMemory</code> config allocates a{' '}
         <em>new</em> buffer. To let a message-only pool read another
         pool&apos;s contract memory, hand each spawned worker the existing
@@ -113,10 +113,10 @@ export function NodeGateway() {
         Start it via <code>npm run serve:all</code>, then hit:
       </p>
       <ul>
-        <li><a href={`${apiBase()}/api/whoami`} target="_blank" rel="noreferrer" data-port={port}><code>{apiBase()}/api/whoami</code></a> — answered by the API thread</li>
-        <li><a href={`${apiBase()}/api/a/whoami`} target="_blank" rel="noreferrer" data-port={port}><code>{apiBase()}/api/a/whoami</code></a> — always worker A</li>
-        <li><a href={`${apiBase()}/api/b/incidents/stats`} target="_blank" rel="noreferrer" data-port={port}><code>{apiBase()}/api/b/incidents/stats</code></a> — worker-computed aggregates inside worker B</li>
-        <li><a href={`${apiBase()}/api/incidents/42`} target="_blank" rel="noreferrer" data-port={port}><code>{apiBase()}/api/incidents/42</code></a> — direct shared-memory read, zero dispatch</li>
+        <li><a href={`${apiBase()}/api/whoami`} target="_blank" rel="noreferrer" data-port={port}><code>{apiBase()}/api/whoami</code></a>, answered by the API thread</li>
+        <li><a href={`${apiBase()}/api/a/whoami`} target="_blank" rel="noreferrer" data-port={port}><code>{apiBase()}/api/a/whoami</code></a>, always worker A</li>
+        <li><a href={`${apiBase()}/api/b/incidents/stats`} target="_blank" rel="noreferrer" data-port={port}><code>{apiBase()}/api/b/incidents/stats</code></a>, worker-computed aggregates inside worker B</li>
+        <li><a href={`${apiBase()}/api/incidents/42`} target="_blank" rel="noreferrer" data-port={port}><code>{apiBase()}/api/incidents/42</code></a>, direct shared-memory read, zero dispatch</li>
       </ul>
       <p>
         For zero main-thread parsing on Node ≥ 26, see{' '}

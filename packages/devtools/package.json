@@ -1,22 +1,13 @@
 {
   "name": "@atolljs/devtools",
-  "version": "0.1.7",
+  "version": "0.0.0",
   "description": "Devtools transport + local dashboard server for AtollJS instrumentation events",
   "homepage": "https://jwhenry3.github.io/atolljs/consumer/quickstart/",
   "type": "module",
   "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "default": "./dist/index.js"
-    },
-    "./node": {
-      "types": "./dist/node.d.ts",
-      "default": "./dist/node.js"
-    },
-    "./server": {
-      "types": "./dist/server.d.ts",
-      "default": "./dist/server.js"
-    }
+    ".": "./src/index.ts",
+    "./node": "./src/node.ts",
+    "./server": "./src/server.ts"
   },
   "bin": {
     "atoll-devtools": "./dist/bin.js"
@@ -35,7 +26,7 @@
     "registry": "https://registry.npmjs.org"
   },
   "peerDependencies": {
-    "@atolljs/core": "0.1.7"
+    "@atolljs/core": "0.0.0"
   },
   "repository": {
     "type": "git",

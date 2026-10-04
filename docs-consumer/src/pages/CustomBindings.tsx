@@ -6,7 +6,7 @@ export function CustomBindings() {
       <h1>Custom bindings</h1>
       <p className="lead">
         A binding package (<code>@atolljs/&lt;fw&gt;</code>) is three thin
-        adapters over core primitives — <code>observe()</code> for
+        adapters over core primitives: <code>observe()</code> for
         shared-memory fields, <code>toTask()</code> for task state, and{' '}
         <code>ObservableValue</code> underneath both. The whole Vue binding is
         ~40 lines; a port's real work is choosing the right reactive primitive
@@ -15,7 +15,7 @@ export function CustomBindings() {
 
       <h2>The contract you adapt</h2>
       <CodeBlock
-        code={`// @atolljs/core — everything a binding wraps:
+        code={`// @atolljs/core: everything a binding wraps:
 interface ObservableValue<T> {
   get(): T;                                  // latest snapshot, sync
   subscribe(fn: (v: T) => void): () => void; // returns unsubscribe
@@ -26,7 +26,7 @@ toTask(asyncFnOrTask)                    // → AsyncTask, itself an ObservableV
       />
       <p>
         <code>get()</code> returns <code>undefined</code> until the contract is
-        bound and the field written (or the task first runs) — keep the{' '}
+        bound and the field written (or the task first runs): keep the{' '}
         <code>| undefined</code> in your public types, it's the SSR fallback
         story too. <code>subscribe</code> fires on every write, local or
         remote; your adapter's job is to push each emission into a
@@ -36,11 +36,11 @@ toTask(asyncFnOrTask)                    // → AsyncTask, itself an ObservableV
 
       <h2>The three adapters</h2>
       <p>
-        The canonical minimal port is Vue's —{' '}
+        The canonical minimal port is Vue's :{' '}
         <code>packages/vue/src/index.ts</code> in full:
       </p>
       <CodeBlock
-        file="packages/vue/src/index.ts — the template to copy"
+        file="packages/vue/src/index.ts: the template to copy"
         code={`import { onScopeDispose, ref, type Ref } from 'vue';
 import { observe, toTask } from '@atolljs/core';
 
@@ -60,7 +60,7 @@ export function useSharedValue(memory, key, select?, options?) {
 
 // 3) Task → snapshot cell + the trigger pair, passed through untouched.
 export function useTask(source) {
-  const task = toTask(source);    // AsyncTask | plain async fn — both
+  const task = toTask(source);    // AsyncTask | plain async fn: both
   return { state: useObservable(task), run: task.run, runOnce: task.runOnce };
 }`}
       />
@@ -121,32 +121,32 @@ export function useTask(source) {
           <b>Subscribe once per binding, dispose on scope death.</b> One
           <code>subscribe</code> per hook call; teardown via the framework's
           lifecycle (<code>onScopeDispose</code>, <code>onCleanup</code>,{' '}
-          <code>$effect</code> cleanup, <code>DestroyRef</code>) — never a
+          <code>$effect</code> cleanup, <code>DestroyRef</code>): never a
           manual <code>.destroy()</code> the consumer has to remember.
         </li>
         <li>
           <b><code>select</code> + <code>SliceOptions</code> pass straight
-          through.</b> Selectors run on every write — document that they must
+          through.</b> Selectors run on every write: document that they must
           be pure; <code>options.equals</code> is the rerender gate. React
           ships <code>shallowEqual</code>; port it if your ecosystem expects
           object slices.
         </li>
         <li>
           <b><code>run</code>/<code>runOnce</code> keep their identity.</b>{' '}
-          Return the task's own methods — never wrap in fresh closures per
+          Return the task's own methods: never wrap in fresh closures per
           render, or memoized children/API calls destabilize.
         </li>
         <li>
           <b>Sources are created at call time.</b>{' '}
           <code>observe()</code>/<code>toTask()</code> inside the adapter (or
-          memoized on first use) — a fresh observable per binding, never a
+          memoized on first use): a fresh observable per binding, never a
           shared one at module scope unless the pattern is explicitly
           module-scope state.
         </li>
         <li>
           <b><code>undefined</code> is a legal render.</b> Components mount
           before workers bind; templates must tolerate it. On SSR the
-          observable never binds — the fallback <em>is</em> the SSR output.
+          observable never binds: the fallback <em>is</em> the SSR output.
         </li>
       </ul>
 
@@ -156,7 +156,7 @@ export function useTask(source) {
         Angular's <code>AtollModule.forRoot</code>/<code>injectAtollPool</code>,
         React/Vue examples' context-passed clients. The primitives are{' '}
         <code>connectWorker</code> (<code>defineWorker</code> contracts) and{' '}
-        <code>connectIslandWorker</code> (island workers) — pass the pool
+        <code>connectIslandWorker</code> (island workers): pass the pool
         through the framework's own provider mechanism and keep the worker
         entry bundler-detectable:{' '}
         <code>new Worker(new URL('./x.worker.ts', import.meta.url))</code>{' '}
@@ -177,7 +177,7 @@ export function useTask(source) {
 }`}
       />
       <p>
-        One entry, no build config — packages ship <code>src/</code> as
+        One entry, no build config: packages ship <code>src/</code> as
         TypeScript and the consumer's bundler compiles it. Binding code is
         main-thread only: <code>import type</code> worker definitions, never
         the module.
@@ -192,7 +192,7 @@ InProcessWorker.handlerModules = [() => import('./my.worker')];
 // flushObservers() settles pending notifications between assertions.`}
       />
       <p>
-        Port a real demo screen (the counter, then a data layer) — the unit
+        Port a real demo screen (the counter, then a data layer): the unit
         tests catch subscription leaks, but only an app catches{" "}
         "re-renders but stale" and "teardown order" bugs.
       </p>

@@ -7,7 +7,7 @@ series: Server-side Atoll
 
 ## `node:worker_threads`, HTTP offload, and gateway routing
 
-> **Problem.** A CPU-bound route on Node parks the event loop — every
+> **Problem.** A CPU-bound route on Node parks the event loop: every
 > concurrent request queues behind the current serialization, hashing, or
 > aggregation.
 >
@@ -18,12 +18,12 @@ series: Server-side Atoll
 
 Everything so far assumed a browser. The backend has the same story with
 higher stakes: an endpoint that aggregates a million records parks the
-event loop for tens of milliseconds per request — and while it runs,
+event loop for tens of milliseconds per request, and while it runs,
 *every other request on that process waits*. One slow route is a denial
 of service on your own server.
 
-`@atolljs/node` is the same framework — shared memory, typed pools, task
-dispatch — running on `worker_threads`. Same API, different host.
+`@atolljs/node` is the same framework, shared memory, typed pools, task
+dispatch, running on `worker_threads`. Same API, different host.
 
 ## Three topologies, pick your depth
 
@@ -33,7 +33,7 @@ Works on every Node version, zero HTTP plumbing.
 
 **Gateway.** `routeHttpGateway` (or the narrower `proxyToWorker`) keeps
 the HTTP server on the main thread but forwards matching requests into
-the pool — the worker's handler owns the response end-to-end:
+the pool: the worker's handler owns the response end-to-end:
 
 ```ts
 import { proxyToWorker, workerHttpPorts } from '@atolljs/node';
@@ -48,13 +48,13 @@ The edge cases are handled rather than documented away: a
 gateway's tracker sees them, and respawned workers reclaim their
 prefixes on re-announce.
 
-**Framework adapters.** Express, Fastify, Hono, Koa — thin plugins that
+**Framework adapters.** Express, Fastify, Hono, Koa: thin plugins that
 attach the pool and contract to the app you already have. You don't
 port your server to Atoll; the pool joins your server.
 
 ## What's deliberately not here
 
-No DOM, no islands — `worker_threads` has no rendering surface and
+No DOM, no islands: `worker_threads` has no rendering surface and
 doesn't need one. The server story is *compute placement*: which event
 loop pays for a request, and how shared state stays live in memory
 instead of being re-fetched per request.

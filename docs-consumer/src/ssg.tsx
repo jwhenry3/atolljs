@@ -3,7 +3,7 @@ import { App, allRoutes } from './App';
 import { metaFor } from './routeMeta';
 
 /**
- * Build-time entry for `prerender.mjs` — bundled with `vite build --ssr`, so
+ * Build-time entry for `prerender.mjs`: bundled with `vite build --ssr`, so
  * `?raw` source imports, the __BUILD_ID__ define, and TSX all behave exactly
  * like the client build. The emitted site is pure static HTML; React never
  * loads in the browser.

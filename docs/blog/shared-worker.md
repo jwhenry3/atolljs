@@ -17,18 +17,18 @@ series: Inside Atoll
 
 Open your app in three tabs and count what you just paid for: three
 pools, three copies of the same dataset, three workers running the same
-queries. Every tab pays full price because `Worker` is per-page — that's
+queries. Every tab pays full price because `Worker` is per-page: that's
 the API, not your design.
 
 For dashboards and multi-window tools that's waste squared.
-`SharedWorker` exists for exactly this — but famously ships with
+`SharedWorker` exists for exactly this, but famously ships with
 `onconnect`, a `MessagePort`, and nothing else. No shared state model,
 no protocol.
 
 Atoll's version:
 
 ```ts
-// worker entry — installs onconnect → attachSharedPort(port)
+// worker entry: installs onconnect → attachSharedPort(port)
 import { sharedWorkerHost } from '@atolljs/core';
 import './task.handlers';   // TaskRegistry.register(...) calls
 sharedWorkerHost();
@@ -45,23 +45,23 @@ const worker = await connectSharedWorker({
 
 await worker.queryIncidents({ offset: 0, limit: 50 }); // typed task
 worker.sharedMemory.metrics.read();                    // same buffer as every tab
-worker.disconnect();                                   // this client only — worker stays up
+worker.disconnect();                                   // this client only: worker stays up
 ```
 
 One `SharedWorker` owns **one** `SharedArrayBuffer`. Each tab attaches a
 port, binds the same contract, and gets views over the *same* memory.
-The host allocates the buffer lazily on first attach — tabs that join
+The host allocates the buffer lazily on first attach: tabs that join
 later bind to what's already there, sized by the contract's
 `memoryBytes`.
 
 The detail that makes this more than port plumbing: a write in one tab
 bumps the shared version counter and resolves every *other* tab's
 `Atomics` waiters. Cross-tab reactivity with zero messages and zero
-broadcast channels — same mechanism as single-page reactivity, wider
+broadcast channels: same mechanism as single-page reactivity, wider
 scope.
 
-And `disconnect()` closes one client's port while the worker — and the
-memory — stay up for the rest. That's lifecycle semantics a per-tab
+And `disconnect()` closes one client's port while the worker, and the
+memory, stay up for the rest. That's lifecycle semantics a per-tab
 `Worker` simply can't express, and it's the difference between a
 multi-tab feature and a multi-tab bug farm.
 

@@ -16,7 +16,7 @@ const DIAGRAM = `main thread                                    worker(s)
         │  contract: list rows · strings · objects · numbers    │
         └─────────────────────────────────────────────────────────┘`;
 
-/** Import-paths table — `pkg` links to npm; the Bundlephobia column links the size report. */
+/** Import-paths table: `pkg` links to npm; the Bundlephobia column links the size report. */
 const IMPORT_PATHS: { pkg: string; contents: ReactNode }[] = [
   {
     pkg: '@atolljs/core',
@@ -24,63 +24,63 @@ const IMPORT_PATHS: { pkg: string; contents: ReactNode }[] = [
   },
   {
     pkg: '@atolljs/react',
-    contents: <><code>useObservable</code>, <code>useSharedValue</code>, <code>useTask</code> — React hooks</>,
+    contents: <><code>useObservable</code>, <code>useSharedValue</code>, <code>useTask</code>, React hooks</>,
   },
   {
     pkg: '@atolljs/vue',
-    contents: <><code>useObservable</code>, <code>useSharedValue</code>, <code>useTask</code> — Ref-producing composables</>,
+    contents: <><code>useObservable</code>, <code>useSharedValue</code>, <code>useTask</code>, Ref-producing composables</>,
   },
   {
     pkg: '@atolljs/solidjs',
-    contents: <><code>createObservable</code>, <code>createSharedValue</code>, <code>createTask</code> — Accessors</>,
+    contents: <><code>createObservable</code>, <code>createSharedValue</code>, <code>createTask</code>, Accessors</>,
   },
   {
     pkg: '@atolljs/svelte',
-    contents: <><code>observableValue</code>, <code>sharedValue</code>, <code>taskState</code> — rune-backed state</>,
+    contents: <><code>observableValue</code>, <code>sharedValue</code>, <code>taskState</code>, rune-backed state</>,
   },
   {
     pkg: '@atolljs/angular',
-    contents: <><code>observableSignal</code>, <code>sharedValue</code>, <code>taskState</code> — Signals</>,
+    contents: <><code>observableSignal</code>, <code>sharedValue</code>, <code>taskState</code>, Signals</>,
   },
   {
     pkg: '@atolljs/nextjs',
-    contents: <>Re-exports the React binding — App Router safe, SSR-ready</>,
+    contents: <>Re-exports the React binding, App Router safe, SSR-ready</>,
   },
   {
     pkg: '@atolljs/node',
-    contents: <><code>createNodePool</code>, <code>createNodeWorker</code>, <code>/shim</code>, <code>withSharedBuffer</code>/<code>bindSharedBuffer</code>; <code>/http</code> adds <code>createHttpCluster</code>, <code>serveHttp</code>, <code>routeHttpGateway</code>, <code>proxyToWorker</code> — HTTP served from inside workers</>,
+    contents: <><code>createNodePool</code>, <code>createNodeWorker</code>, <code>/shim</code>, <code>withSharedBuffer</code>/<code>bindSharedBuffer</code>; <code>/http</code> adds <code>createHttpCluster</code>, <code>serveHttp</code>, <code>routeHttpGateway</code>, <code>proxyToWorker</code>, HTTP served from inside workers</>,
   },
   {
     pkg: '@atolljs/nestjs',
-    contents: <><code>AtollModule</code>, <code>@AtollService</code>, <code>@AtollTask</code>, <code>runAtollWorker</code> — pools and housed APIs on <code>node:worker_threads</code></>,
+    contents: <><code>AtollModule</code>, <code>@AtollService</code>, <code>@AtollTask</code>, <code>runAtollWorker</code>, pools and housed APIs on <code>node:worker_threads</code></>,
   },
   {
     pkg: '@atolljs/islands',
-    contents: <><code>mountIsland</code>, <code>connectIslandWorker</code>, <code>callbackProp</code>, <code>islandApp</code> — main-thread mounting; <code>/worker</code> exports <code>definePolyWorker</code>/<code>defineMonoWorker</code>, the proxy DOM, <code>emit</code> — framework-neutral, no renderer built in</>,
+    contents: <><code>mountIsland</code>, <code>connectIslandWorker</code>, <code>callbackProp</code>, <code>islandApp</code>, main-thread mounting; <code>/worker</code> exports <code>definePolyWorker</code>/<code>defineMonoWorker</code>, the proxy DOM, <code>emit</code>, framework-neutral, no renderer built in</>,
   },
   {
     pkg: '@atolljs/react-island',
-    contents: <>React island shell — <code>&lt;Island&gt;</code>, <code>islandComponent</code>, <code>lazyIsland</code> + <code>react-reconciler</code> worker renderer</>,
+    contents: <>React island shell, <code>&lt;Island&gt;</code>, <code>islandComponent</code>, <code>lazyIsland</code> + <code>react-reconciler</code> worker renderer</>,
   },
   {
     pkg: '@atolljs/vue-island',
-    contents: <>Vue island shell — <code>AtollIsland</code>, <code>useIsland</code> + <code>createRenderer</code> worker renderer</>,
+    contents: <>Vue island shell, <code>AtollIsland</code>, <code>useIsland</code> + <code>createRenderer</code> worker renderer</>,
   },
   {
     pkg: '@atolljs/svelte-island',
-    contents: <>Svelte island shell — <code>island</code> action, <code>createIslandState</code> + Svelte 5 worker renderer</>,
+    contents: <>Svelte island shell, <code>island</code> action, <code>createIslandState</code> + Svelte 5 worker renderer</>,
   },
   {
     pkg: '@atolljs/solid-island',
-    contents: <>SolidJS island shell — <code>&lt;Island&gt;</code>, <code>createIsland</code>, <code>islandComponent</code>, <code>lazyIsland</code> + <code>solid-js/universal</code> worker renderer</>,
+    contents: <>SolidJS island shell, <code>&lt;Island&gt;</code>, <code>createIsland</code>, <code>islandComponent</code>, <code>lazyIsland</code> + <code>solid-js/universal</code> worker renderer</>,
   },
   {
     pkg: '@atolljs/angular-island',
-    contents: <>Angular island shell — <code>islandComponent</code> facades, <code>atollIsland</code> directive + <code>Renderer2</code> worker renderer</>,
+    contents: <>Angular island shell, <code>islandComponent</code> facades, <code>atollIsland</code> directive + <code>Renderer2</code> worker renderer</>,
   },
   {
     pkg: '@atolljs/vite',
-    contents: <>Dev-server plugin — worker entries served as esbuild bundles; rebuild + respawn on change, so browser transforms (fast-refresh, <code>@vite/client</code>) never reach a worker</>,
+    contents: <>Dev-server plugin, worker entries served as esbuild bundles; rebuild + respawn on change, so browser transforms (fast-refresh, <code>@vite/client</code>) never reach a worker</>,
   },
 ];
 
@@ -91,18 +91,18 @@ export function Overview() {
       <p className="lead">
         A worker atoll: pools and shared workers joined to your app through one
         shared-memory fabric. Threads share a fixed-layout{' '}
-        <code>SharedArrayBuffer</code> contract; work is offloaded two ways —
+        <code>SharedArrayBuffer</code> contract; work is offloaded two ways,
         task <em>commands</em> (dispatch → result) and <em>state reactivity</em>{' '}
-        (field changes drive behavior) — a fluid model that would deadlock or
+        (field changes drive behavior), a fluid model that would deadlock or
         serialize in a single-threaded app.
       </p>
 
       <h2>Install</h2>
       <CodeBlock code={`npm install @atolljs/core`} language="bash" />
       <p>
-        The core package ships the SDK — imported as{' '}
+        The core package ships the SDK: imported as{' '}
         <code>@atolljs/core</code>. Framework bindings are separate,
-        independently published packages — <code>@atolljs/&lt;framework&gt;</code> —
+        independently published packages, <code>@atolljs/&lt;framework&gt;</code>,
         so you only install the framework you actually use.
       </p>
 
@@ -135,13 +135,13 @@ export function Overview() {
         </tbody>
       </table>
       <p>
-        Bindings contain zero domain code — they adapt the SDK's observable
+        Bindings contain zero domain code: they adapt the SDK's observable
         primitives to each framework's reactivity model. Your app owns the
         domain: contracts, worker handlers, and composition. The islands layer
-        is separate: it moves the whole render tree into a worker — see{' '}
+        is separate: it moves the whole render tree into a worker: see{' '}
         <a href={docHref('islands')}>Islands</a> for when that's the right trade.
         On the server, <code>@atolljs/node/http</code> moves HTTP itself into
-        workers — see <a href={docHref('fw-node/clustering')}>Node.js → Clustering</a>.
+        workers: see <a href={docHref('fw-node/clustering')}>Node.js → Clustering</a>.
       </p>
     </article>
   );

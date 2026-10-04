@@ -1,7 +1,7 @@
 import { consumerRootHref, routeDepth } from '../link';
 
 /**
- * Sticky top bar — brand, site-level tabs, version switcher, and external
+ * Sticky top bar: brand, site-level tabs, version switcher, and external
  * icon links. Pure markup (no client JS needed): the same HTML works in the
  * dev app and in the prerendered Pages artifact, where docs.js drives the
  * switcher. Hrefs resolve relative to the consumer root so the artifact
@@ -13,7 +13,7 @@ import { consumerRootHref, routeDepth } from '../link';
 const VERSION = import.meta.env.VITE_DOCS_VERSION || 'latest';
 const versioned = VERSION !== 'latest';
 
-// Computed per render — consumerRootHref() depends on the route depth the
+// Computed per render: consumerRootHref() depends on the route depth the
 // prerender currently emits, so module-level constants would bake depth-0
 // links into every page.
 const hrefs = () =>
@@ -26,7 +26,7 @@ const hrefs = () =>
       };
 
 // Dev-mode handler for the version select (docs.js handles the prerendered
-// site) — same segment-swap math: climb to the consumer root, then back down
+// site): same segment-swap math: climb to the consumer root, then back down
 // through the chosen version dir, preserving the current route.
 function versionHref(v: string) {
   const up = '../'.repeat(routeDepth() + (versioned ? 1 : 0));
@@ -46,7 +46,7 @@ export function SiteHeader({ active }: { active: 'docs' | 'blog' }) {
     <header className="site-header">
       <a className="site-brand" href={href.docs}>
         {/* The horizontal lockup packs a tagline that's illegible at header
-            height — icon + real text stays crisp at any size. */}
+            height: icon + real text stays crisp at any size. */}
         <img src={`${consumerRootHref()}atoll-icon-dark.svg`} alt="" />
         <span className="site-brand-name">
           ATOLL<span className="site-brand-js">JS</span>
@@ -61,14 +61,14 @@ export function SiteHeader({ active }: { active: 'docs' | 'blog' }) {
           Blog
         </a>
       </nav>
-      {/* Versioned snapshots (consumer/v<x.y.z>/) — docs.js repopulates the
+      {/* Versioned snapshots (consumer/v<x.y.z>/): docs.js repopulates the
           options from the live versions.json and drives navigation; the
           baked options are the no-JS floor. */}
       <select
         className="version-switch"
         aria-label="Docs version"
         defaultValue={VERSION}
-        // One baked option can't switch anything — docs.js reveals the
+        // One baked option can't switch anything: docs.js reveals the
         // select once versions.json proves snapshots exist.
         hidden={!versioned}
         onChange={(e) => {

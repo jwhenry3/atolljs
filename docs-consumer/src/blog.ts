@@ -3,7 +3,7 @@ import hljs from './hl';
 
 /**
  * Blog posts are authored in `docs/blog/*.md` (in-repo markdown, same tree as
- * the internals docs) and compiled to HTML here at build time — one statically
+ * the internals docs) and compiled to HTML here at build time: one statically
  * prerendered page per post, styled with the site's own `figure.code` /
  * `.doc-table` chrome.
  */
@@ -20,10 +20,10 @@ const escapeHtml = (s: string) => s.replace(/[&<>"]/g, (c) => ESCAPE[c]);
  * Posts cite sources two ways, both repo-relative so they resolve correctly
  * when the markdown is read on GitHub:
  *
- *   ../tasks-and-pool.md   — a doc in docs/          → consumer route
- *   worker-pools.md        — a sibling post in docs/blog/ → /blog/<slug>/
+ *   ../tasks-and-pool.md  : a doc in docs/          → consumer route
+ *   worker-pools.md       : a sibling post in docs/blog/ → /blog/<slug>/
  *
- * At compile time they're rewritten to absolute consumer-site paths —
+ * At compile time they're rewritten to absolute consumer-site paths:
  * `/consumer/<r>/` for local serves and `/atolljs/consumer/<r>/` in the Pages
  * deployment (VITE_CONSUMER_BASE set by scripts/build-pages.mjs / pages.yml).
  * Anything unmapped falls back to the GitHub blob URL rather than a dead link.
@@ -62,7 +62,7 @@ function rewriteDocLinks(html: string): string {
   return html.replace(DOC_LINK, (_m, up: string | undefined, path: string, _frag, anchor: string) => {
     const suffix = anchor ? `#${anchor}` : '';
     if (up === undefined || up === './') {
-      // Same-directory link — a sibling blog post in docs/blog/.
+      // Same-directory link: a sibling blog post in docs/blog/.
       return POST_SLUGS.has(path)
         ? `href="${CONSUMER_BASE}blog/${path}/${suffix}"`
         : `href="https://github.com/jwhenry3/atolljs/blob/main/docs/blog/${path}.md${suffix}"`;
@@ -113,10 +113,10 @@ const POST_SLUGS = new Set(raw.map((p) => p.slug));
  * small table above the article):
  *
  *   ---
- *   date: 2026-09-30        — sorts posts/series newest-first in nav + index
- *   series: Facades         — groups the post under a series heading
- *   title: ...              — overrides the `#` heading as the post title
- *   pinned: true            — standalone posts only: sorts above all groups
+ *   date: 2026-09-30       , sorts posts/series newest-first in nav + index
+ *   series: Facades        , groups the post under a series heading
+ *   title: ...             , overrides the `#` heading as the post title
+ *   pinned: true           , standalone posts only: sorts above all groups
  *   ---
  */
 interface FrontMatter {
@@ -145,17 +145,17 @@ function splitFrontMatter(md: string): { fm: FrontMatter; body: string } {
 export interface BlogPostMeta {
   slug: string;
   title: string;
-  /** First `<h2>` after the title — used as the post's subtitle on the index. */
+  /** First `<h2>` after the title: used as the post's subtitle on the index. */
   subtitle?: string;
-  /** First body paragraph, inline markdown stripped — index excerpt. */
+  /** First body paragraph, inline markdown stripped: index excerpt. */
   excerpt: string;
   /** Compiled, site-styled HTML for the post body (title h1 included). */
   html: string;
-  /** Front matter — `YYYY-MM-DD`, absent if undated. */
+  /** Front matter: `YYYY-MM-DD`, absent if undated. */
   date?: string;
-  /** Front matter — series the post belongs to, absent if standalone. */
+  /** Front matter: series the post belongs to, absent if standalone. */
   series?: string;
-  /** Front matter — `pinned: true` floats the post above every series group. */
+  /** Front matter: `pinned: true` floats the post above every series group. */
   pinned?: boolean;
 }
 
@@ -207,7 +207,7 @@ export const POSTS: BlogPostMeta[] = raw
 export const postBySlug = (slug: string) => POSTS.find((p) => p.slug === slug);
 
 /**
- * Sidebar order — series groups and standalone articles interleaved by
+ * Sidebar order: series groups and standalone articles interleaved by
  * recency: each series sits where its newest post lands, standalone posts
  * fill the rest of the timeline. Within a series, newest first.
  */

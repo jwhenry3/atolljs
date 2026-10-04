@@ -1,4 +1,4 @@
-/* Dark-only site — the palette below is the single theme. */
+/* Dark-only site: the palette below is the single theme. */
 :root {
   color-scheme: dark;
   --bg: #0a1724;
@@ -41,7 +41,7 @@ code { font-family: 'Cascadia Code', 'JetBrains Mono', Consolas, monospace; font
   z-index: -1;
 }
 
-/* Sticky top bar — brand, site tabs, external icons. */
+/* Sticky top bar: brand, site tabs, external icons. */
 .site-header {
   position: sticky;
   top: 0;
@@ -81,7 +81,7 @@ code { font-family: 'Cascadia Code', 'JetBrains Mono', Consolas, monospace; font
 }
 .site-tabs a:hover { color: var(--text); background: var(--panel); }
 .site-tabs a.active { color: var(--accent); background: var(--panel); }
-/* Version select — right-packed against the icon links; the auto margin
+/* Version select: right-packed against the icon links; the auto margin
    lives here so tabs stay left and select+icons cluster on the right. */
 .version-switch {
   margin-left: auto;
@@ -293,7 +293,7 @@ figure.code pre.hljs {
 @media (min-width: 1760px) {
   .demo-frame {
     position: fixed;
-    /* Clear the 52px sticky site header — it sits above the rail (z 20 > 10). */
+    /* Clear the 52px sticky site header: it sits above the rail (z 20 > 10). */
     top: 68px;
     right: 24px;
     bottom: 24px;
@@ -336,10 +336,10 @@ figure.code pre.hljs {
   overflow-x: auto;
   align-self: flex-end;
   /* docs.js removes the label and drops the tablist in as the bar's first
-     child — flex: 1 pushes the ↗ link to the right edge. */
+     child: flex: 1 pushes the ↗ link to the right edge. */
   flex: 1;
   /* Drop the strip below the bar's bottom edge so the active tab's bottom
-     border covers the pane's top border — a real attached tab. */
+     border covers the pane's top border: a real attached tab. */
   margin-bottom: -7px;
   position: relative;
   z-index: 1;
@@ -412,7 +412,7 @@ figure.code pre.hljs {
 .loadbar-cell { width: 1%; }  /* let the share column take the slack */
 .loadbar {
   display: flex;
-  width: 160px;               /* fixed — every bar is the same 0–100% scale */
+  width: 160px;               /* fixed, every bar is the same 0-100% scale */
   height: 10px;
   border-radius: 4px;
   overflow: hidden;
@@ -420,7 +420,7 @@ figure.code pre.hljs {
   border: 1px solid var(--border);
 }
 .loadbar-main { background: var(--accent); }
-/* Near-white solid — lightness separates the segments even for color-blind
+/* Near-white solid, lightness separates the segments even for color-blind
    viewers (blue vs lavender at similar lightness collapsed to one fill). */
 .loadbar-worker { background: var(--lb-light); }
 /* Three-way worker-side split: the app/renderer share keeps the light worker

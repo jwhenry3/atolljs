@@ -10,7 +10,7 @@ export function SharedWorker() {
         runtime alongside <code>WorkerPool</code>. Its purpose is{' '}
         <strong>shared state</strong>, not messaging: one worker owns one{' '}
         <code>SharedArrayBuffer</code>, and every page, tab, and iframe that
-        connects binds its contract to that same buffer — writes in one are
+        connects binds its contract to that same buffer: writes in one are
         readable and observable in all.
       </p>
 
@@ -56,11 +56,11 @@ worker.disconnect();                                   // close this port only`}
           <tr><th>Option</th><th>Type</th><th>Notes</th></tr>
         </thead>
         <tbody>
-          <tr><td><code>workerUrl</code></td><td><code>URL</code></td><td>Worker entry URL — one of the three connect options is required</td></tr>
-          <tr><td><code>createWorker</code></td><td><code>() =&gt; SharedWorker</code></td><td>Preferred — bundlers only emit the chunk when <code>new SharedWorker(new URL(...))</code> appears inline</td></tr>
-          <tr><td><code>port</code></td><td><code>MessagePort</code></td><td>Pre-opened port — tests or custom plumbing</td></tr>
+          <tr><td><code>workerUrl</code></td><td><code>URL</code></td><td>Worker entry URL, one of the three connect options is required</td></tr>
+          <tr><td><code>createWorker</code></td><td><code>() =&gt; SharedWorker</code></td><td>Preferred, bundlers only emit the chunk when <code>new SharedWorker(new URL(...))</code> appears inline</td></tr>
+          <tr><td><code>port</code></td><td><code>MessagePort</code></td><td>Pre-opened port, tests or custom plumbing</td></tr>
           <tr><td><code>sharedMemory</code></td><td><code>SharedMemory</code></td><td>Contract; bound to the worker's buffer on connect</td></tr>
-          <tr><td><code>memory</code></td><td><code>MemoryConfig</code></td><td>Buffer sizing hint — <em>first connected client wins</em>; later clients share that buffer</td></tr>
+          <tr><td><code>memory</code></td><td><code>MemoryConfig</code></td><td>Buffer sizing hint, <em>first connected client wins</em>; later clients share that buffer</td></tr>
           <tr><td><code>tasks</code></td><td><code>TaskMap</code></td><td>Named contracts → first-class methods</td></tr>
           <tr><td><code>connectTimeoutMs</code></td><td><code>number</code></td><td>Handshake timeout, default 10s</td></tr>
         </tbody>
@@ -74,7 +74,7 @@ worker.disconnect();                                   // close this port only`}
         <tbody>
           <tr><td><code>runTask(contract, ...args)</code></td><td>Compute dispatch; resolves with the validated result for this client</td></tr>
           <tr><td><code>clientIndex</code></td><td>Connection order reported by the host</td></tr>
-          <tr><td><code>sharedMemory</code></td><td>The bound contract — <code>observe()</code> and framework bindings work unchanged</td></tr>
+          <tr><td><code>sharedMemory</code></td><td>The bound contract: <code>observe()</code> and framework bindings work unchanged</td></tr>
           <tr><td><code>disconnect()</code></td><td>Closes this port; the worker and buffer live on for other clients</td></tr>
         </tbody>
       </table>
@@ -85,14 +85,14 @@ worker.disconnect();                                   // close this port only`}
         version counter (<code>Atomics.add</code> + <code>notify</code>), and
         each client's <code>observe()</code>/<code>watch()</code> subscribers
         wait on that counter (<code>Atomics.waitAsync</code>). A write in one
-        tab resolves every other tab's observer directly — the port only carries
+        tab resolves every other tab's observer directly: the port only carries
         the connect handshake and task dispatch.
       </p>
       <CodeBlock
         code={`// tab A writes
 memory.metrics.write((m) => ({ ...m, critical: m.critical + 1 }));
 
-// tab B observes — fires on tab A's write, no postMessage involved
+// tab B observes: fires on tab A's write, no postMessage involved
 observe(memory, 'metrics').subscribe(render);`}
       />
 
@@ -103,7 +103,7 @@ observe(memory, 'metrics').subscribe(render);`}
         </thead>
         <tbody>
           <tr><td><code>WorkerPool</code></td><td>CPU parallelism in one page; per-page private memory</td></tr>
-          <tr><td><code>connectSharedWorker</code></td><td>One shared dataset across tabs/iframes — state syncs through memory</td></tr>
+          <tr><td><code>connectSharedWorker</code></td><td>One shared dataset across tabs/iframes: state syncs through memory</td></tr>
         </tbody>
       </table>
 
@@ -115,17 +115,17 @@ observe(memory, 'metrics').subscribe(render);`}
           <code>{`typeof SharedWorker === 'undefined'`}</code>.
         </li>
         <li>
-          <strong>Same cross-origin isolation rules</strong> — it's still
+          <strong>Same cross-origin isolation rules</strong>: it's still
           SharedArrayBuffer; see <a href={docHref('hosting')}>Hosting &amp; headers</a>.
           Iframed clients need the full embedding chain there.
         </li>
         <li>
-          <strong>One worker, serialized work</strong> — a SharedWorker is a
+          <strong>One worker, serialized work</strong>: a SharedWorker is a
           single thread. State sync costs nothing (it's just shared memory),
           but task execution is one-at-a-time; use WorkerPool for CPU parallelism.
         </li>
         <li>
-          <strong>No <code>terminate()</code></strong> — the browser owns the
+          <strong>No <code>terminate()</code></strong>: the browser owns the
           worker lifecycle; clients only disconnect.
         </li>
       </ul>

@@ -46,11 +46,11 @@ interface Route {
   id: string;
   label: string;
   page: () => ReactNode;
-  /** Sub-pages — rendered indented under this link in the sidebar. */
+  /** Sub-pages: rendered indented under this link in the sidebar. */
   children?: RouteChild[];
 }
 
-/** A named group of sub-pages — renders a subhead in the sidebar (blog series). */
+/** A named group of sub-pages: renders a subhead in the sidebar (blog series). */
 interface RouteGroup {
   group: string;
   children: Route[];
@@ -137,7 +137,7 @@ const SECTIONS: { label: string; routes: Route[] }[] = [
       label: fw.name,
       // Bespoke pages (e.g. Next.js) opt in via FRAMEWORK_PAGE_COMPONENTS.
       page: FRAMEWORK_PAGE_COMPONENTS[fw.id] ?? (() => <FrameworkPage key={fw.id} fw={fw} />),
-      // Framework-specific sub-pages opt in via FRAMEWORK_PAGES — see
+      // Framework-specific sub-pages opt in via FRAMEWORK_PAGES: see
       // frameworkPages.tsx (React gets the worker-islands page).
       children: FRAMEWORK_PAGES[fw.id]?.map((sub) => ({
         id: `fw-${fw.id}/${sub.id}`,
@@ -160,7 +160,7 @@ const SECTIONS: { label: string; routes: Route[] }[] = [
 ];
 
 /**
- * The blog is a separate menu tree — on blog pages the sidebar swaps the
+ * The blog is a separate menu tree: on blog pages the sidebar swaps the
  * package-docs sections for the post list (series groups, newest first).
  */
 const BLOG_SECTION: { label: string; routes: Route[] } = {
@@ -204,7 +204,7 @@ const routeIds = new Set(allRoutes.map((r) => r.id));
  * Resolve the active route from `location.pathname`. Routes are emitted as
  * `<id>/index.html`, so the route id is always the trailing path segment(s)
  * under whatever mount point the site lives at (`/` in dev, `/consumer/` in
- * production) — match the longest trailing suffix that is a known id.
+ * production): match the longest trailing suffix that is a known id.
  */
 function routeFromPathname(pathname: string): string | null {
   const segs = pathname.split('/').filter(Boolean);
@@ -228,20 +228,20 @@ export function App({ route }: { route?: string }) {
   const isBlog = !notFound && (shown.id === 'blog' || shown.id.startsWith('blog/'));
 
   // Links, iframe srcs, and the site switcher are relative to the page's own
-  // depth under the consumer root — publish it for the whole render. The
+  // depth under the consumer root: publish it for the whole render. The
   // overview page lives AT the root (dist/index.html), so depth 0.
   setRouteDepth(shown.id === 'overview' ? 0 : shown.id.split('/').length);
 
   useEffect(() => {
-    document.title = notFound ? 'Atoll docs — page not found' : metaFor(shown.id, shown.label).title;
-    // Legacy `#/route` URLs (old npm homepages, bookmarks) — bounce to the
+    document.title = notFound ? 'Atoll docs, page not found' : metaFor(shown.id, shown.label).title;
+    // Legacy `#/route` URLs (old npm homepages, bookmarks), bounce to the
     // real path. docs.js does the same in the prerendered site; this covers
     // the dev server where docs.js isn't loaded.
     const legacy = window.location.hash.slice(2);
     if (legacy && routeIds.has(legacy)) {
       window.location.replace(docHref(legacy));
     }
-    // Keep the active section in view — mirrors the same reveal in docs.js
+    // Keep the active section in view: mirrors the same reveal in docs.js
     // for the prerendered site (which runs no React).
     const sidebar = document.querySelector('.sidebar');
     const activeLink = sidebar?.querySelector<HTMLElement>('.nav-link.active');

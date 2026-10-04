@@ -6,14 +6,14 @@ export function Hosting() {
       <h1>Hosting &amp; headers</h1>
       <p className="lead">
         <code>SharedArrayBuffer</code> is only exposed when{' '}
-        <code>window.crossOriginIsolated === true</code>. That flag — not CORS —
+        <code>window.crossOriginIsolated === true</code>. That flag, not CORS,
         is the gate, and your host must opt the document into it on every
         response.
       </p>
       <p>
         This page applies only when your pool uses <code>sharedMemory</code>. A
         message-only <code>connectWorker</code>/<code>WorkerPool</code> (no{' '}
-        <code>sharedMemory</code> contract) needs none of these headers —{' '}
+        <code>sharedMemory</code> contract) needs none of these headers :{' '}
         <code>SharedArrayBuffer</code> is never touched.
       </p>
 
@@ -79,7 +79,7 @@ add_header Cross-Origin-Resource-Policy "same-site" always;`}
 
       <h2>Embedding your app in an iframe</h2>
       <p>
-        Cross-origin embedding requires four independent pieces — if any one is
+        Cross-origin embedding requires four independent pieces: if any one is
         missing, Chrome blocks the navigation (
         <code>ERR_BLOCKED_BY_RESPONSE</code>) or the child loads without
         isolation:
@@ -92,12 +92,12 @@ add_header Cross-Origin-Resource-Policy "same-site" always;`}
           fully-configured child is still blocked.
         </li>
         <li>
-          The <strong>child sends COEP + COOP</strong> — a cross-origin document
+          The <strong>child sends COEP + COOP</strong>: a cross-origin document
           embedded under a <code>require-corp</code> parent must be capable of
           isolation itself.
         </li>
         <li>
-          The <strong>child sends CORP</strong> —{' '}
+          The <strong>child sends CORP</strong> :{' '}
           <code>same-site</code> suffices when embedder and app share a site
           (e.g. different <code>localhost</code> ports);{' '}
           <code>cross-origin</code> for arbitrary embedders.
@@ -121,7 +121,7 @@ add_header Cross-Origin-Resource-Policy "same-site" always;`}
           <tr>
             <td>COEP + COOP + CORP same-site</td>
             <td>loads, isolated, <code>SharedArrayBuffer</code> live in-frame</td>
-            <td>—</td>
+            <td>-</td>
           </tr>
           <tr>
             <td>COEP + COOP, no CORP</td>
@@ -142,7 +142,7 @@ add_header Cross-Origin-Resource-Policy "same-site" always;`}
       </table>
       <p>
         Separately, <code>frame-ancestors</code> CSP controls <em>who may
-        embed</em> your app — an independent axis from CORP:
+        embed</em> your app: an independent axis from CORP:
       </p>
       <CodeBlock
         code={`Content-Security-Policy: frame-ancestors 'self' https://docs.example.com`}
@@ -152,11 +152,11 @@ add_header Cross-Origin-Resource-Policy "same-site" always;`}
       <h2>Static hosts that can't set headers (GitHub Pages)</h2>
       <p>
         When the server can't send headers at all, a <strong>service
-        worker</strong> can inject them — it intercepts every response in its
+        worker</strong> can inject them: it intercepts every response in its
         scope and rewrites headers before the document parses. This repo's
         Pages deploy ships <code>coi-sw.js</code> (same idea as{' '}
         <code>coi-serviceworker</code>): each entry page registers{' '}
-        <code>./coi-sw.js</code> inline and reloads once after first install —
+        <code>./coi-sw.js</code> inline and reloads once after first install:
         a document is only isolated if it was fetched while controlled.
       </p>
       <ul>
@@ -169,14 +169,14 @@ add_header Cross-Origin-Resource-Policy "same-site" always;`}
         </li>
         <li>
           <strong>Degrade, don't break:</strong> islands can run fully without
-          SAB — <code>mode: 'poll'</code> on <code>mountIsland</code>/
+          SAB: <code>mode: 'poll'</code> on <code>mountIsland</code>/
           <code>&lt;Island&gt;</code> (or <code>doorbell: false</code> on{' '}
           <code>connectIslandWorker</code>) skips the doorbell contract so the
           pool never touches <code>SharedArrayBuffer</code>. Check{' '}
           <code>window.crossOriginIsolated</code> and pick the mode.
         </li>
         <li>
-          Workloads that <em>are</em> shared memory can't degrade — show a
+          Workloads that <em>are</em> shared memory can't degrade: show a
           notice instead of failing on worker bootstrap.
         </li>
       </ul>
@@ -191,19 +191,19 @@ add_header Cross-Origin-Resource-Policy "same-site" always;`}
           child, or use <code>CORP: cross-origin</code>.
         </li>
         <li>
-          <strong>Avoid <code>credentialless</code> iframes</strong> — a
+          <strong>Avoid <code>credentialless</code> iframes</strong>: a
           credentialless frame can never be cross-origin isolated, so{' '}
           <code>SharedArrayBuffer</code> is undefined inside it.
         </li>
         <li>
-          <strong>Dev servers don't hot-reload header config</strong> — restart
+          <strong>Dev servers don't hot-reload header config</strong>: restart
           after editing <code>angular.json</code>, <code>next.config.ts</code>,
           etc.
         </li>
         <li>
           <strong>Serve <code>index.html</code> with{' '}
           <code>Cache-Control: no-store</code></strong> (or stamp its URL with a
-          per-build <code>?v=</code>) — assets are content-hashed, but the
+          per-build <code>?v=</code>): assets are content-hashed, but the
           stable document URL is exactly what stale caches hold onto.
         </li>
       </ul>

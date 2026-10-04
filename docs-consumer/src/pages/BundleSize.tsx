@@ -13,24 +13,24 @@ const pkgs: readonly Pkg[] = bundleStats.packages;
 
 const find = (id: string): Pkg => {
   const p = pkgs.find((p) => p.id === id);
-  if (!p) throw new Error(`bundleStats is missing ${id} — rerun scripts/bundle-stats.mjs`);
+  if (!p) throw new Error(`bundleStats is missing ${id}: rerun scripts/bundle-stats.mjs`);
   return p;
 };
 
 /** A named stack: which packages land on each thread. */
 const STACKS: { label: string; main: string[]; worker: string[] }[] = [
   {
-    label: 'React app — worker pool + hooks',
+    label: 'React app, worker pool + hooks',
     main: ['@atolljs/core', '@atolljs/react'],
     worker: ['@atolljs/core'],
   },
   {
-    label: 'Vue / Solid / Svelte app — worker pool + bindings',
+    label: 'Vue / Solid / Svelte app, worker pool + bindings',
     main: ['@atolljs/core', '@atolljs/vue'],
     worker: ['@atolljs/core'],
   },
   {
-    label: 'React islands app — shell proxies on main, reconciler in worker',
+    label: 'React islands app, shell proxies on main, reconciler in worker',
     main: ['@atolljs/core', '@atolljs/islands', '@atolljs/react-island'],
     worker: ['@atolljs/core', '@atolljs/islands', '@atolljs/react-island'],
   },
@@ -55,7 +55,7 @@ const STACKS: { label: string; main: string[]; worker: string[] }[] = [
     worker: ['@atolljs/core', '@atolljs/islands', '@atolljs/angular-island'],
   },
   {
-    label: 'NestJS backend — pool + worker_threads adapter',
+    label: 'NestJS backend, pool + worker_threads adapter',
     main: ['@atolljs/core', '@atolljs/nestjs', '@atolljs/node'],
     worker: ['@atolljs/core', '@atolljs/nestjs', '@atolljs/node'],
   },
@@ -66,7 +66,7 @@ export function BundleSize() {
     <article>
       <h1>Bundle size &amp; load split</h1>
       <p className="lead">
-        Every <code>@atolljs/*</code> package publishes source — your bundler
+        Every <code>@atolljs/*</code> package publishes source: your bundler
         does the final tree-shaking, so the numbers below are the{' '}
         <em>full entry surface</em> of each published export, bundled with
         rolldown (the Vite 8 bundler) and minified. Dependencies and peer
@@ -79,7 +79,7 @@ export function BundleSize() {
         Atoll splits each package's weight across two bundles: the{' '}
         <strong>main-thread</strong> surface (imported by your app) and the{' '}
         <strong>worker-thread</strong> surface (imported inside the worker
-        entry — a separate fetch that never blocks your app bundle). The bar
+        entry: a separate fetch that never blocks your app bundle). The bar
         shows each package's gzip share per thread.
       </p>
       <p className="loadbar-legend">
@@ -110,7 +110,7 @@ export function BundleSize() {
                     <span className="muted">({kb(pkg.worker.gzip)} gz)</span>
                   </>
                 ) : (
-                  '—'
+                  '-'
                 )}
               </td>
               <td className="loadbar-cell">
@@ -124,7 +124,7 @@ export function BundleSize() {
                 {pkg.worker ? (
                   `${workerShare(pkg.main.gzip, pkg.worker.gzip)}%`
                 ) : (
-                  <span className="muted">—</span>
+                  <span className="muted">-</span>
                 )}
               </td>
             </tr>
@@ -133,14 +133,14 @@ export function BundleSize() {
       </table>
       <ul>
         <li>
-          <strong><code>core</code> is loaded on both threads</strong> — the
+          <strong><code>core</code> is loaded on both threads</strong>: the
           contract layer (<code>defineSharedMemory</code>, <code>field.*</code>,
           codecs, reactivity) is counted on each side because each thread parses
           its own copy. Main adds the pool/client; the worker adds{' '}
           <code>defineWorker</code> + bootstrap.
         </li>
         <li>
-          <strong>Framework bindings are near-free</strong> (0.1–2.3 kB) — they
+          <strong>Framework bindings are near-free</strong> (0.1-2.3 kB): they
           adapt the core observables to each framework's reactivity and carry no
           domain code. The framework itself (<code>react</code>,{' '}
           <code>vue</code>, …) is a peer you already ship.
@@ -148,7 +148,7 @@ export function BundleSize() {
         <li>
           <strong>Islands invert the split</strong>: ~78% of{' '}
           <code>@atolljs/islands</code> lives in the worker entry (proxy DOM,
-          app registry, op pump) — main thread only pays for the mount driver
+          app registry, op pump): main thread only pays for the mount driver
           + op replay. The framework renderers are separate per-framework
           packages (<code>react-island/worker</code>,{' '}
           <code>vue-island/worker</code>, …) so a Vue-only worker never parses
@@ -159,7 +159,7 @@ export function BundleSize() {
       <h2>Typical stacks</h2>
       <p>
         What an app actually pays per thread, summed from the table above
-        (gzip). Framework and peer packages stay out of the sums — the
+        (gzip). Framework and peer packages stay out of the sums: the
         React islands worker additionally pulls{' '}
         <code>react-reconciler</code> (~39 kB gz, below).
       </p>
@@ -194,7 +194,7 @@ export function BundleSize() {
 
       <h2>Processing load</h2>
       <p>
-        Bundle size says what each thread <em>loads</em> — this says where
+        Bundle size says what each thread <em>loads</em>: this says where
         the JS time actually <em>goes</em>. Measured, not estimated: the same
         200-row tree was mounted through every island adapter, then a
         prop-driven update and a click→state-commit. <strong>Worker</strong>{' '}
@@ -253,25 +253,25 @@ export function BundleSize() {
       </table>
       <ul>
         <li>
-          <strong>Mount is the closest split</strong> — building the tree is
-          mostly op <em>emission</em>, and emitting ~2–3k ops isn't free on
-          the main thread either. Frameworks still land 55–60% of mount work
+          <strong>Mount is the closest split</strong>: building the tree is
+          mostly op <em>emission</em>, and emitting ~2-3k ops isn't free on
+          the main thread either. Frameworks still land 55-60% of mount work
           in the worker.
         </li>
         <li>
-          <strong>Updates are where islands pay off</strong> — a framework
+          <strong>Updates are where islands pay off</strong>: a framework
           diff turns a label rename into ~200 ops while the worker does
-          85–99% of the JS. The imperative baseline has no diff:{' '}
+          85-99% of the JS. The imperative baseline has no diff:{' '}
           <code>updateProps</code> is an honest clear+rebuild (~2,600 ops),
           an even split between writing and replaying it.
         </li>
         <li>
-          <strong>Clicks are ~all worker</strong> — dispatch runs the handler
+          <strong>Clicks are ~all worker</strong>: dispatch runs the handler
           in the island, the framework invalidates, and typically one op
           crosses back.
         </li>
         <li>
-          Numbers are one happy-dom run on one machine — treat the ratios,
+          Numbers are one happy-dom run on one machine: treat the ratios,
           not the decimals, as the data. In-process transport is ~free; real
           workers add structuredClone marshalling to the worker side.
         </li>
@@ -279,7 +279,7 @@ export function BundleSize() {
 
       <h2>Runtime dependencies</h2>
       <p>
-        These install alongside the packages above — same measurement, browser
+        These install alongside the packages above: same measurement, browser
         builds, minified. All are only pulled when your bundler sees them
         imported: unused connectors tree-shake away (e.g. no{' '}
         <code>msgpackrCodec</code> import → no msgpackr).
@@ -306,20 +306,20 @@ export function BundleSize() {
       </table>
       <ul>
         <li>
-          <strong>zod isn't a dependency at all</strong> — <code>reef()</code>{' '}
+          <strong>zod isn't a dependency at all</strong>: <code>reef()</code>{' '}
           and <code>listSchema()</code> run on a vendored schema engine that
           speaks zod's <code>_zod.def</code> vocabulary, so the table has no
           zod row. Your own <code>import {'{ z }'} from 'zod'</code> still
-          works wherever a schema is accepted — the compiler introspects it
-          the same way — but installing zod is now your choice, not ours.
+          works wherever a schema is accepted, the compiler introspects it
+          the same way, but installing zod is now your choice, not ours.
         </li>
         <li>
-          <strong>react-reconciler is worker-side only</strong> — React island
+          <strong>react-reconciler is worker-side only</strong>: React island
           apps pay it inside the worker bundle, off the critical path.
         </li>
         <li>
           <strong>solid-js is a runtime dep of core</strong> (the reactive
-          primitives) and a peer of <code>@atolljs/solidjs</code> — Solid apps
+          primitives) and a peer of <code>@atolljs/solidjs</code>: Solid apps
           pay it once, either way.
         </li>
       </ul>
@@ -331,7 +331,7 @@ export function BundleSize() {
         bundled with rolldown in library mode (deps/peers external, ES output,
         minified), then measured raw and gzipped. Worker entries are bundled
         from their published <code>/worker</code> (or shim) exports. Real-world
-        numbers are typically lower — tree-shaking drops the exports your app
+        numbers are typically lower: tree-shaking drops the exports your app
         never touches, and gzip is what crosses the wire.
       </p>
       <p>

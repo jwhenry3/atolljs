@@ -1,4 +1,4 @@
-// Shared atoll quickstart files — the counter's memory/worker/connect trio is
+// Shared atoll quickstart files: the counter's memory/worker/connect trio is
 // identical for every framework, so it lives once here and feeds both the
 // top-level Quickstart page and each framework's quickstart sub-page.
 // Only the install command and the binding step differ per framework.
@@ -19,7 +19,7 @@ export const counterWorker = defineWorker({
   methods: {
     increment(delta: number) {
       const next = counterMemory.count.read() + delta;
-      counterMemory.count.write(next);  // write in place — no postMessage
+      counterMemory.count.write(next);  // write in place: no postMessage
       return next;
     },
   },
@@ -32,7 +32,7 @@ import type { CounterWorker } from './counter.worker';  // no worker code in thi
 
 export const counter = connectWorker<CounterWorker>({
   sharedMemory: counterMemory,
-  // Inline new Worker(new URL(..., import.meta.url)) — every bundler's
+  // Inline new Worker(new URL(..., import.meta.url)): every bundler's
   // worker transform can see the entry point this way.
   worker: () => new Worker(new URL('./counter.worker.ts', import.meta.url), { type: 'module' }),
   poolSize: 'auto',   // navigator.hardwareConcurrency, or pass a number

@@ -5,12 +5,12 @@ import { docHref } from '../link';
 export function Islands() {
   return (
     <article>
-      <h1>Islands — overview</h1>
+      <h1>Islands: overview</h1>
       <p className="lead">
         <PkgLink name="@atolljs/islands" /> renders a framework tree{' '}
         <em>inside</em> a Atoll worker: the worker owns the render loop and every
         commit serializes to an op stream the main thread replays as real DOM
-        mutations into your element. Opt-in DOM rendering off the main thread —
+        mutations into your element. Opt-in DOM rendering off the main thread:
         the shell keeps events, layout, and slots; the worker keeps the app.
       </p>
 
@@ -22,19 +22,19 @@ export function Islands() {
         <tbody>
           <tr>
             <td><strong>Island</strong></td>
-            <td>The mounted unit — <code>mountIsland()</code> puts one instance of a registered app into a container element. Each mount mints an <code>app@N</code> instance key scoping its op queue, document, and events.</td>
+            <td>The mounted unit: <code>mountIsland()</code> puts one instance of a registered app into a container element. Each mount mints an <code>app@N</code> instance key scoping its op queue, document, and events.</td>
           </tr>
           <tr>
             <td><strong>PolyWorker</strong></td>
-            <td><code>definePolyWorker({'{ apps }'})</code> — one worker hosting a registry of named apps; several islands can share it.</td>
+            <td><code>definePolyWorker({'{ apps }'})</code>, one worker hosting a registry of named apps; several islands can share it.</td>
           </tr>
           <tr>
             <td><strong>MonoWorker</strong></td>
-            <td><code>defineMonoWorker(app)</code> — one worker pinned to a single app; own bundle, own failure domain.</td>
+            <td><code>defineMonoWorker(app)</code>, one worker pinned to a single app; own bundle, own failure domain.</td>
           </tr>
           <tr>
             <td><strong>Shell</strong></td>
-            <td>Your main-thread app — plain DOM via <code>mountIsland</code>, or a framework via the <code>*-island</code> packages.</td>
+            <td>Your main-thread app: plain DOM via <code>mountIsland</code>, or a framework via the <code>*-island</code> packages.</td>
           </tr>
         </tbody>
       </table>
@@ -46,10 +46,10 @@ export function Islands() {
 
       <h2>Live demo</h2>
       <p>
-        Eight islands on a framework-free shell — plain{' '}
+        Eight islands on a framework-free shell: plain{' '}
         <code>mountIsland</code> calls, no framework on the main thread at
         all. The React apps ride the registry worker script (
-        <code>data-table</code> mounts twice — same app, separate workers),{' '}
+        <code>data-table</code> mounts twice: same app, separate workers),{' '}
         <code>vue-notes</code> runs a real Vue createRenderer, and the
         imperative islands get dedicated instance workers running a
         hand-written proxy-DOM app and unmodified Leaflet 1.9.
@@ -58,11 +58,11 @@ export function Islands() {
 
       <h2>Which workloads belong in an island</h2>
       <p>
-        Every event costs one postMessage round trip — <code>pointermove</code>,
+        Every event costs one postMessage round trip: <code>pointermove</code>,
         per-keystroke input, and scroll handlers re-render on worker latency,
         and <code>preventDefault</code> can't work (the real event already
-        dispatched). Keep high-frequency input on the main thread — slots exist
-        for exactly this — and put coarse interactions (clicks, toggles, form
+        dispatched). Keep high-frequency input on the main thread, slots exist
+        for exactly this, and put coarse interactions (clicks, toggles, form
         submits) behind the island. Main-thread replay scales with op{' '}
         <em>count</em>, not tree size, so fine-grained framework updates are
         cheap while whole-tree rebuilds cost an order of magnitude more per

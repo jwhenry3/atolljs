@@ -1,5 +1,5 @@
 /**
- * Framework-specific sub-pages — keyed by FRAMEWORKS id, each entry becomes
+ * Framework-specific sub-pages: keyed by FRAMEWORKS id, each entry becomes
  * a child nav route under that framework (`fw-<id>/<sub.id>`). This is the
  * seam for per-framework docs that don't fit the generic binding template:
  * React gets the worker-islands page; other frameworks opt in the same way.
@@ -20,21 +20,21 @@ export interface FrameworkSubPage {
   page: () => ReactNode;
 }
 
-/** The data-driven Examples sub-page — content lives in fw.examples. */
+/** The data-driven Examples sub-page: content lives in fw.examples. */
 const examples = (id: string): FrameworkSubPage => ({
   id: 'examples',
   label: 'Examples',
   page: () => <FrameworkExamples fw={FRAMEWORKS.find((f) => f.id === id)!} />,
 });
 
-/** The shared atoll steps + this framework's binding — fw.install/usage/quickstartNote. */
+/** The shared atoll steps + this framework's binding: fw.install/usage/quickstartNote. */
 const quickstart = (id: string): FrameworkSubPage => ({
   id: 'quickstart',
   label: 'Quickstart',
   page: () => <FrameworkQuickstart fw={FRAMEWORKS.find((f) => f.id === id)!} />,
 });
 
-/** The data-driven Advanced sub-page — content lives in fw.advanced. */
+/** The data-driven Advanced sub-page: content lives in fw.advanced. */
 const advanced = (id: string): FrameworkSubPage => ({
   id: 'advanced',
   label: 'Advanced',
@@ -42,7 +42,7 @@ const advanced = (id: string): FrameworkSubPage => ({
 });
 
 /**
- * Bespoke main pages — replace the generic FrameworkPage for frameworks
+ * Bespoke main pages: replace the generic FrameworkPage for frameworks
  * whose doc doesn't fit the binding template. Next.js needs the server-side
  * route-handler section and the static-host demo explanation.
  */

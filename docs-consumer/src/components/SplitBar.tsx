@@ -24,19 +24,19 @@ export function SplitBar({
         {
           value: main,
           className: 'loadbar-main',
-          title: `main thread — ${100 - workerPct}% of ${label}`,
+          title: `main thread, ${100 - workerPct}% of ${label}`,
         },
         {
           value: worker,
           className: 'loadbar-worker',
-          title: `worker thread — ${workerPct}% of ${label}`,
+          title: `worker thread, ${workerPct}% of ${label}`,
         },
       ]}
     />
   );
 }
 
-/** N-way bar — each segment's width is its share of the segment total. */
+/** N-way bar: each segment's width is its share of the segment total. */
 export function Segments({ segments }: { segments: Segment[] }) {
   const total = segments.reduce((a, s) => a + s.value, 0) || 1;
   return (

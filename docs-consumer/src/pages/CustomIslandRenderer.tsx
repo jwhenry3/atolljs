@@ -10,18 +10,18 @@ export function CustomIslandRenderer() {
         into an island's proxy document, and a <b>shell surface</b> that mounts
         worker islands as ordinary elements in a main-thread app. The op
         protocol, event dispatch, and doorbell all live in{' '}
-        <code>@atolljs/islands</code> — you never touch them.
+        <code>@atolljs/islands</code>: you never touch them.
       </p>
 
       <h2>The contract: RenderedIslandApp</h2>
       <CodeBlock
-        file="@atolljs/islands/worker — defineWorkers.ts"
-        code={`// What your adapter produces — the registry value shape:
+        file="@atolljs/islands/worker, defineWorkers.ts"
+        code={`// What your adapter produces, the registry value shape:
 interface RenderedIslandApp {
   mount(ctx: RenderContext): RenderedHandle | void;
 }
 interface RenderContext {
-  instance: string;                    // wire key — scopes emit() and ops
+  instance: string;                    // wire key, scopes emit() and ops
   doc: ProxyDocument;                  // mutations here already emit ops
   props: Record<string, unknown>;      // the serialized mount props
 }
@@ -29,12 +29,12 @@ interface RenderedHandle {
   update?(props): void;   // fine-grained patch; omit → clear+remount fallback
   sync?(fn): void;        // run fn in your sync-commit lane (React: flushSync)
   flush?(): void;         // drain work scheduled outside tasks (effects)
-  dispose?(): void;       // teardown — runs BEFORE the proxy doc dies
+  dispose?(): void;       // teardown, runs BEFORE the proxy doc dies
 }`}
       />
       <p>
         <code>mount</code> renders the component's output into{' '}
-        <code>ctx.doc</code> — every proxy mutation serializes to ops on its
+        <code>ctx.doc</code>: every proxy mutation serializes to ops on its
         own, so the adapter is only a bridge between your framework's host-op
         interface and the proxy DOM facade. Return a handle for fine-grained
         updates; omit <code>update</code> and the runtime falls back to
@@ -90,10 +90,10 @@ export const defineFwMonoWorker = (c, opts) =>
       <ul>
         <li>
           <b>Realm resolution.</b> Module-level renderers call your create* host
-          ops with no node argument — the instance isn't in scope. Resolve the
+          ops with no node argument: the instance isn't in scope. Resolve the
           document through the chain{' '}
           <code>getActiveInstance() || getLastActiveInstance() ||{' '}
-          getLastTouchedInstance()</code> then <code>docForInstance()</code> —
+          getLastTouchedInstance()</code> then <code>docForInstance()</code>:
           see <code>docForRender</code> in{' '}
           <code>packages/vue-island/src/worker.ts</code>. This keeps async
           scheduler flushes (microtask commits after the dispatch task
@@ -101,7 +101,7 @@ export const defineFwMonoWorker = (c, opts) =>
         </li>
         <li>
           <b>Event invokers.</b> Attach one stable invoker per (element, event)
-          whose <code>.value</code> is the current handler — prop diffs swap
+          whose <code>.value</code> is the current handler: prop diffs swap
           the closure without re-pushing a <code>listen</code> op. Modifier
           changes (capture/once/passive) are a different listener: detach and
           re-attach with new opts.
@@ -109,7 +109,7 @@ export const defineFwMonoWorker = (c, opts) =>
         <li>
           <b>Form props are property writes.</b>{' '}
           <code>value</code>/<code>checked</code>/<code>disabled</code> are
-          reflected accessors on the proxy — write the property, don't{' '}
+          reflected accessors on the proxy: write the property, don't{' '}
           <code>setAttribute</code>, or the shadow state and wire ops diverge.
         </li>
         <li>
@@ -118,7 +118,7 @@ export const defineFwMonoWorker = (c, opts) =>
         </li>
         <li>
           <b>update() replaces props.</b> Merge semantics keep stale keys
-          alive — Vue's adapter cloneVNodes then overwrites{' '}
+          alive: Vue's adapter cloneVNodes then overwrites{' '}
           <code>vnode.props</code> wholesale for exactly this reason.
         </li>
         <li>
@@ -126,14 +126,14 @@ export const defineFwMonoWorker = (c, opts) =>
           continuations mutating DOM must wrap in{' '}
           <code>runInInstance(instance, fn)</code> +{' '}
           <code>bumpOpsVersion()</code>, or their ops flush to the wrong queue
-          — or never.
+          : or never.
         </li>
       </ul>
 
       <h2>The shell half</h2>
       <p>
         Main-thread side is a <code>useIsland</code>-equivalent returning{' '}
-        <code>{'{ host, handle, status, error }'}</code> — the template is{' '}
+        <code>{'{ host, handle, status, error }'}</code>: the template is{' '}
         <code>packages/vue-island/src/index.ts</code>:
       </p>
       <ul>
@@ -144,12 +144,12 @@ export const defineFwMonoWorker = (c, opts) =>
         </li>
         <li>
           <b>Reactive props → <code>handle.updateProps</code></b>, deduped by{' '}
-          <code>JSON.stringify</code> identity — the serialized form is the
+          <code>JSON.stringify</code> identity: the serialized form is the
           honest equality since props cross the wire serialized anyway.
         </li>
         <li>
           <b>Mount-stable inputs.</b> <code>client</code>/<code>worker</code>/
-          <code>app</code>/<code>slots</code> are read once — document
+          <code>app</code>/<code>slots</code> are read once: document
           "swap via key" rather than mid-life remount.
         </li>
         <li>
@@ -176,7 +176,7 @@ export const defineFwMonoWorker = (c, opts) =>
         code={`{
   "name": "@atolljs/<fw>-island",
   "exports": {
-    ".": "./src/index.ts",      // shell surface — no framework renderer here
+    ".": "./src/index.ts",      // shell surface: no framework renderer here
     "./worker": "./src/worker.ts"
   },
   "peerDependencies": {
@@ -200,23 +200,23 @@ export const defineFwMonoWorker = (c, opts) =>
         <tbody>
           <tr>
             <td>has a custom-renderer API (<code>createRenderer</code>-style host ops)</td>
-            <td><code>packages/vue-island</code> — smallest, single file</td>
+            <td><code>packages/vue-island</code>, smallest, single file</td>
           </tr>
           <tr>
             <td>renders via fine-grained signals / universal renderer</td>
-            <td><code>packages/solid-island</code> — per-key signal props box for update()</td>
+            <td><code>packages/solid-island</code>, per-key signal props box for update()</td>
           </tr>
           <tr>
             <td>compiles to imperative DOM calls with a programmatic mount()</td>
-            <td><code>packages/svelte-island</code> — <code>$state</code> props box</td>
+            <td><code>packages/svelte-island</code>, <code>$state</code> props box</td>
           </tr>
           <tr>
             <td>abstracts the DOM behind a Renderer2-style interface + DI</td>
-            <td><code>packages/angular-island</code> — <code>setInput</code> + manual CD</td>
+            <td><code>packages/angular-island</code>, <code>setInput</code> + manual CD</td>
           </tr>
           <tr>
             <td>needs a full reconciler host config</td>
-            <td><code>packages/react-island</code> — hardest: hostConfig + instance records + sync/flush lanes</td>
+            <td><code>packages/react-island</code>: hardest: hostConfig + instance records + sync/flush lanes</td>
           </tr>
         </tbody>
       </table>

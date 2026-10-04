@@ -21,7 +21,7 @@ export interface FrameworkDoc {
   usageLanguage: string;
   /** Extra patterns/use cases beyond the minimal usage snippet. */
   examples: FrameworkExample[];
-  /** Escape hatches past the binding layer — pool tuning, abort/timeout, lifecycle. */
+  /** Escape hatches past the binding layer: pool tuning, abort/timeout, lifecycle. */
   advanced?: FrameworkExample[];
   /** One-line binding note rendered above the usage block in the quickstart. */
   quickstartNote?: string;
@@ -36,11 +36,11 @@ export const FRAMEWORKS: FrameworkDoc[] = [
     pkg: '@atolljs/react',
     install: 'npm install @atolljs/core @atolljs/react',
     summary:
-      'Hooks over useSyncExternalStore. SSR-safe — field reads return undefined until the contract binds on the client.',
+      'Hooks over useSyncExternalStore. SSR-safe: field reads return undefined until the contract binds on the client.',
     apis: [
       { name: 'useObservable', signature: 'useObservable(source: ObservableValue<T>): T', desc: 'Subscribe to any observable snapshot (task or field).' },
       { name: 'useSharedValue', signature: 'useSharedValue(memory, key, select?, options?): T | undefined', desc: 'Bind one shared-memory field to React state; optional selector + equality to slice updates.' },
-      { name: 'useTask', signature: 'useTask(task | asyncFn): { data, pending, settled, elapsedMs, error, run, runOnce }', desc: 'Bind an AsyncTask — or any async fn (e.g. a client method, wrapped via toTask) — to state and get its triggers.' },
+      { name: 'useTask', signature: 'useTask(task | asyncFn): { data, pending, settled, elapsedMs, error, run, runOnce }', desc: 'Bind an AsyncTask, or any async fn (e.g. a client method, wrapped via toTask): to state and get its triggers.' },
     ],
     usageFile: 'App.tsx',
     usageLanguage: 'tsx',
@@ -61,7 +61,7 @@ export function App() {
     examples: [
       {
         title: 'A data-layer hook',
-        desc: 'The incidents demo\'s pattern — compose the bindings once, return plain values. seed.runOnce() ignores repeat triggers while pending/settled; the page query re-runs latest-wins whenever the spec changes.',
+        desc: 'The incidents demo\'s pattern: compose the bindings once, return plain values. seed.runOnce() ignores repeat triggers while pending/settled; the page query re-runs latest-wins whenever the spec changes.',
         file: 'useIncidents.ts',
         code: `export function useIncidents(query: QueryArgs) {
   const seed = useTask(initIncidents);             // one-shot bootstrap
@@ -85,11 +85,11 @@ export function App() {
 }`,
       },
       {
-        title: 'Slice a field — render less often',
+        title: 'Slice a field: render less often',
         desc: 'useSharedValue re-renders on every write; a selector + equals limits that to the slice you actually render.',
         code: `import { shallowEqual } from '@atolljs/core';
 
-// Re-renders only when the {open, critical} pair changes — the other six
+// Re-renders only when the {open, critical} pair changes: the other six
 // metrics fields can churn without touching this component.
 const pressure = useSharedValue(
   incidentsMemory,
@@ -100,7 +100,7 @@ const pressure = useSharedValue(
       },
       {
         title: 'Task state in the UI',
-        desc: 'run/runOnce trigger; the snapshot fields — pending, settled, error, elapsedMs — drive the view.',
+        desc: 'run/runOnce trigger; the snapshot fields, pending, settled, error, elapsedMs, drive the view.',
         code: `const refresh = useTask(incidents.queryIncidents);
 
 return (
@@ -119,7 +119,7 @@ return (
     advanced: [
       {
         title: 'Tuning the pool',
-        desc: 'connectWorker folds the WorkerPool config into the client declaration — size, queueing, timeouts, crash respawn.',
+        desc: 'connectWorker folds the WorkerPool config into the client declaration, size, queueing, timeouts, crash respawn.',
         file: 'incidents.ts',
         language: 'ts',
         code: `export const incidents = connectWorker<IncidentsWorker>({
@@ -132,13 +132,13 @@ return (
   concurrency: 1,      // in-flight tasks per worker; excess queue FIFO
   maxQueue: 1_000,     // a full queue rejects with PoolQueueFullError
   respawn: true,       // replace crashed workers (default)
-  taskTimeout: 5_000,  // default per-call budget — with({timeout}) overrides
+  taskTimeout: 5_000,  // default per-call budget, with({timeout}) overrides
   // lazy: false,      // spawn immediately instead of on first call
 });`,
       },
       {
         title: 'Abort & timeout per call',
-        desc: 'with() returns the same client surface with RunOptions attached. A queued call drops outright; an in-flight call is orphaned — the worker finishes it and the reply is discarded.',
+        desc: 'with() returns the same client surface with RunOptions attached. A queued call drops outright; an in-flight call is orphaned: the worker finishes it and the reply is discarded.',
         code: `import { TaskAbortedError, TaskTimeoutError } from '@atolljs/core';
 
 const ac = new AbortController();
@@ -155,7 +155,7 @@ try {
       },
       {
         title: 'One observable, many components',
-        desc: 'Each useSharedValue call builds a fresh observe(). Hoist it to module scope and bind via useObservable — every subscriber shares one field watch, which stops when the last unsubscribes.',
+        desc: 'Each useSharedValue call builds a fresh observe(). Hoist it to module scope and bind via useObservable: every subscriber shares one field watch, which stops when the last unsubscribes.',
         file: 'metrics.ts',
         language: 'ts',
         code: `import { observe, shallowEqual } from '@atolljs/core';
@@ -169,11 +169,11 @@ export const pressure = observe(
   { equals: shallowEqual },
 );
 
-// In any component: useObservable(pressure) — no new watch per mount.`,
+// In any component: useObservable(pressure), no new watch per mount.`,
       },
       {
         title: 'Lifecycle & pool stats',
-        desc: 'terminate() kills the pool — the next method call re-spawns it lazily. pool.stats() exposes queue/dispatch aggregates for telemetry.',
+        desc: 'terminate() kills the pool, the next method call re-spawns it lazily. pool.stats() exposes queue/dispatch aggregates for telemetry.',
         code: `import { useEffect } from 'react';
 
 // A feature panel that only keeps its pool while open:
@@ -185,11 +185,11 @@ const stats = incidents.pool?.stats();
       },
     ],
     quickstartNote:
-      'Hooks subscribe via useSyncExternalStore — field reads return undefined until the contract binds on the client.',
+      'Hooks subscribe via useSyncExternalStore, field reads return undefined until the contract binds on the client.',
     notes: [
-      'counter.increment is typed from the worker\'s defineWorker methods — no task contract to declare.',
+      'counter.increment is typed from the worker\'s defineWorker methods, no task contract to declare.',
       'Pass a selector to useSharedValue to re-render only when a slice changes: useSharedValue(memory, \'metrics\', m => m.total, { equals: shallowEqual }).',
-      'Worker-hosted React trees (islands) live in the companion package @atolljs/react-island — see the Islands page under this section.',
+      'Worker-hosted React trees (islands) live in the companion package @atolljs/react-island: see the Islands page under this section.',
     ],
   },
   {
@@ -203,7 +203,7 @@ const stats = incidents.pool?.stats();
     apis: [
       { name: 'useObservable', signature: 'useObservable(source: ObservableValue<T>): Ref<T>', desc: 'Subscribe to any observable snapshot.' },
       { name: 'useSharedValue', signature: 'useSharedValue(memory, key, select?, options?): Ref<T | undefined>', desc: 'Bind one shared-memory field to a Ref; optional selector + equality.' },
-      { name: 'useTask', signature: 'useTask(task | asyncFn): { state: Ref<TaskSnapshot>, run, runOnce }', desc: 'Bind an AsyncTask — or any async fn — to a Ref and get its triggers.' },
+      { name: 'useTask', signature: 'useTask(task | asyncFn): { state: Ref<TaskSnapshot>, run, runOnce }', desc: 'Bind an AsyncTask, or any async fn, to a Ref and get its triggers.' },
     ],
     usageFile: 'App.vue',
     usageLanguage: 'vue',
@@ -224,7 +224,7 @@ const increment = useTask(counter.increment);
     examples: [
       {
         title: 'A composable data layer',
-        desc: 'Refs in, computed views out — watch() on the seed task\'s settled flag re-runs the latest-wins page query whenever the spec changes.',
+        desc: 'Refs in, computed views out: watch() on the seed task\'s settled flag re-runs the latest-wins page query whenever the spec changes.',
         file: 'useIncidents.ts',
         language: 'ts',
         code: `export function useIncidents(query: Ref<QueryArgs>) {
@@ -248,7 +248,7 @@ const increment = useTask(counter.increment);
       },
       {
         title: 'Slice a field into a Ref',
-        desc: 'select + equals — the Ref only emits when the slice changes.',
+        desc: 'select + equals: the Ref only emits when the slice changes.',
         language: 'ts',
         code: `import { shallowEqual } from '@atolljs/core';
 
@@ -261,7 +261,7 @@ const pressure = useSharedValue(
       },
       {
         title: 'React to a task settling',
-        desc: 'state is a Ref<TaskSnapshot> — watch its fields for follow-up work.',
+        desc: 'state is a Ref<TaskSnapshot>: watch its fields for follow-up work.',
         language: 'ts',
         code: `const page = useTask(incidents.queryIncidents);
 
@@ -273,7 +273,7 @@ watch(() => page.state.value.settled, (ok) => {
     advanced: [
       {
         title: 'One observable, many components',
-        desc: 'Each useSharedValue builds its own observe(). Hoist it to module scope and wrap with useObservable — all subscribers share one field watch; onScopeDispose still unsubscribes per scope.',
+        desc: 'Each useSharedValue builds its own observe(). Hoist it to module scope and wrap with useObservable: all subscribers share one field watch; onScopeDispose still unsubscribes per scope.',
         file: 'metrics.ts',
         language: 'ts',
         code: `import { observe, shallowEqual } from '@atolljs/core';
@@ -290,8 +290,8 @@ export const pressure = observe(
 // in <script setup>: const p = useObservable(pressure); // shared watch`,
       },
       {
-        title: 'Imperative watch — outside components',
-        desc: 'watch() on a field connector fires on every write, local or remote — for logging, analytics, or bridging to non-reactive code. Dispose the returned function yourself.',
+        title: 'Imperative watch, outside components',
+        desc: 'watch() on a field connector fires on every write, local or remote, for logging, analytics, or bridging to non-reactive code. Dispose the returned function yourself.',
         language: 'ts',
         code: `import { watch } from '@atolljs/core';
 import { incidentsMemory } from '@atolljs/incidents';
@@ -305,7 +305,7 @@ stop();   // when the feature unloads`,
       },
       {
         title: 'Abort & timeout per call',
-        desc: 'with() attaches RunOptions to the same client surface. A queued call drops outright; an in-flight call is orphaned — the worker finishes it and the reply is discarded.',
+        desc: 'with() attaches RunOptions to the same client surface. A queued call drops outright; an in-flight call is orphaned: the worker finishes it and the reply is discarded.',
         language: 'ts',
         code: `import { TaskAbortedError, TaskTimeoutError } from '@atolljs/core';
 
@@ -318,7 +318,7 @@ ac.abort();   // rejects with TaskAbortedError`,
       },
       {
         title: 'Pool lifecycle under HMR',
-        desc: 'terminate() kills the pool — the next method call re-spawns it lazily. Without a dispose hook, Vite hot reloads would leak workers.',
+        desc: 'terminate() kills the pool: the next method call re-spawns it lazily. Without a dispose hook, Vite hot reloads would leak workers.',
         language: 'ts',
         code: `if (import.meta.hot) {
   import.meta.hot.dispose(() => incidents.terminate());
@@ -328,10 +328,10 @@ incidents.pool?.stats();   // { workers, idle, inFlight, queued, … }`,
       },
     ],
     quickstartNote:
-      'The composables return Refs — subscriptions release via onScopeDispose when the component unmounts.',
+      'The composables return Refs, subscriptions release via onScopeDispose when the component unmounts.',
     notes: [
       'watch() the task\'s settled Ref to trigger follow-up work after a run.',
-      'Worker-hosted Vue trees (islands) live in the companion package @atolljs/vue-island — see the Islands page under this section.',
+      'Worker-hosted Vue trees (islands) live in the companion package @atolljs/vue-island, see the Islands page under this section.',
     ],
   },
   {
@@ -341,11 +341,11 @@ incidents.pool?.stats();   // { workers, idle, inFlight, queued, … }`,
     pkg: '@atolljs/solidjs',
     install: 'npm install @atolljs/core @atolljs/solidjs',
     summary:
-      'Signal adapter — the sdk uses solid-js internally for its reactive core, so shared values are natively tracked.',
+      'Signal adapter: the sdk uses solid-js internally for its reactive core, so shared values are natively tracked.',
     apis: [
       { name: 'createObservable', signature: 'createObservable(source: ObservableValue<T>): Accessor<T>', desc: 'Subscribe to any observable snapshot.' },
       { name: 'createSharedValue', signature: 'createSharedValue(memory, key, select?, options?): Accessor<T | undefined>', desc: 'Bind one shared-memory field to an Accessor; optional selector + equality.' },
-      { name: 'createTask', signature: 'createTask(task | asyncFn): { state: Accessor<TaskSnapshot>, run, runOnce }', desc: 'Bind an AsyncTask — or any async fn — to a signal and get its triggers.' },
+      { name: 'createTask', signature: 'createTask(task | asyncFn): { state: Accessor<TaskSnapshot>, run, runOnce }', desc: 'Bind an AsyncTask, or any async fn, to a signal and get its triggers.' },
     ],
     usageFile: 'App.tsx',
     usageLanguage: 'tsx',
@@ -366,7 +366,7 @@ export function App() {
     examples: [
       {
         title: 'A reactive data layer',
-        desc: 'createEffect tracks both the query accessor and the seed task\'s settled flag — the page query re-runs latest-wins on any change after seeding.',
+        desc: 'createEffect tracks both the query accessor and the seed task\'s settled flag: the page query re-runs latest-wins on any change after seeding.',
         file: 'incidents.ts',
         language: 'ts',
         code: `export function createIncidents(query: Accessor<QueryArgs>) {
@@ -392,7 +392,7 @@ export function App() {
       },
       {
         title: 'Gate the UI on task state',
-        desc: 'state() is an Accessor<TaskSnapshot> — Show/Switch track pending natively, no isPending flag to manage.',
+        desc: 'state() is an Accessor<TaskSnapshot>: Show/Switch track pending natively, no isPending flag to manage.',
         code: `const page = createTask(incidents.queryIncidents);
 
 return (
@@ -403,7 +403,7 @@ return (
       },
       {
         title: 'Slice a field into an Accessor',
-        desc: 'select + equals — the Accessor only emits when the slice changes.',
+        desc: 'select + equals: the Accessor only emits when the slice changes.',
         language: 'ts',
         code: `import { shallowEqual } from '@atolljs/core';
 
@@ -418,7 +418,7 @@ const pressure = createSharedValue(
     advanced: [
       {
         title: 'One observable, many components',
-        desc: 'Each createSharedValue builds its own observe(). Hoist it to module scope and wrap with createObservable — all subscribers share one field watch; onCleanup still disposes per owner.',
+        desc: 'Each createSharedValue builds its own observe(). Hoist it to module scope and wrap with createObservable: all subscribers share one field watch; onCleanup still disposes per owner.',
         file: 'metrics.ts',
         language: 'ts',
         code: `import { observe, shallowEqual } from '@atolljs/core';
@@ -436,7 +436,7 @@ export const pressure = observe(
       },
       {
         title: 'Write back to shared memory',
-        desc: 'reactive() wraps a connector as a signal-tracked view whose set() writes through to the buffer — the worker reads it on its side. observeRemote() tracks writes coming back.',
+        desc: 'reactive() wraps a connector as a signal-tracked view whose set() writes through to the buffer: the worker reads it on its side. observeRemote() tracks writes coming back.',
         language: 'ts',
         code: `import { reactive } from '@atolljs/core';
 import { incidentsMemory } from '@atolljs/incidents';
@@ -449,7 +449,7 @@ seedProgress.set(0);                              // main → worker`,
       },
       {
         title: 'Abort & timeout per call',
-        desc: 'with() attaches RunOptions to the same client surface. A queued call drops outright; an in-flight call is orphaned — the worker finishes it and the reply is discarded.',
+        desc: 'with() attaches RunOptions to the same client surface. A queued call drops outright; an in-flight call is orphaned: the worker finishes it and the reply is discarded.',
         language: 'ts',
         code: `import { TaskAbortedError, TaskTimeoutError } from '@atolljs/core';
 
@@ -462,7 +462,7 @@ ac.abort();   // rejects with TaskAbortedError`,
       },
       {
         title: 'Pool lifecycle & stats',
-        desc: 'terminate() kills the pool — the next method call re-spawns it lazily. pool.stats() exposes queue/dispatch aggregates.',
+        desc: 'terminate() kills the pool: the next method call re-spawns it lazily. pool.stats() exposes queue/dispatch aggregates.',
         language: 'ts',
         code: `import { onCleanup } from 'solid-js';
 
@@ -472,10 +472,10 @@ incidents.pool?.stats();   // { workers, idle, inFlight, queued, … }`,
       },
     ],
     quickstartNote:
-      'The create* factories return Accessors — subscriptions dispose with the owner via onCleanup.',
+      'The create* factories return Accessors, subscriptions dispose with the owner via onCleanup.',
     notes: [
       'Subscriptions auto-dispose via onCleanup when the owner is destroyed.',
-      'Worker-hosted Solid trees (islands) live in the companion package @atolljs/solid-island — see the Islands page under this section.',
+      'Worker-hosted Solid trees (islands) live in the companion package @atolljs/solid-island, see the Islands page under this section.',
     ],
   },
   {
@@ -489,7 +489,7 @@ incidents.pool?.stats();   // { workers, idle, inFlight, queued, … }`,
     apis: [
       { name: 'observableValue', signature: 'observableValue(source): { value: T }', desc: 'Subscribe to any observable snapshot as rune-backed state.' },
       { name: 'sharedValue', signature: 'sharedValue(memory, key, select?, options?): { value: T | undefined }', desc: 'Bind one shared-memory field as rune state; optional selector + equality.' },
-      { name: 'taskState', signature: 'taskState(task | asyncFn): { data, pending, settled, elapsedMs, error, run, runOnce }', desc: 'Bind an AsyncTask — or any async fn — snapshot getters plus triggers.' },
+      { name: 'taskState', signature: 'taskState(task | asyncFn): { data, pending, settled, elapsedMs, error, run, runOnce }', desc: 'Bind an AsyncTask, or any async fn, snapshot getters plus triggers.' },
     ],
     usageFile: 'App.svelte',
     usageLanguage: 'svelte',
@@ -508,7 +508,7 @@ incidents.pool?.stats();   // { workers, idle, inFlight, queued, … }`,
     examples: [
       {
         title: 'A .svelte.ts data layer',
-        desc: 'Factories run during component init (or in a .svelte.ts module) so runes compile — the returned object exposes plain getters that stay reactive in the template.',
+        desc: 'Factories run during component init (or in a .svelte.ts module) so runes compile: the returned object exposes plain getters that stay reactive in the template.',
         file: 'incidents.svelte.ts',
         language: 'ts',
         code: `export function createIncidents(getQuery: () => QueryArgs) {
@@ -534,7 +534,7 @@ incidents.pool?.stats();   // { workers, idle, inFlight, queued, … }`,
       },
       {
         title: 'Drive the template',
-        desc: 'The getters read rune-backed state — conditionals and progress bars update on every worker write.',
+        desc: 'The getters read rune-backed state: conditionals and progress bars update on every worker write.',
         code: `<script lang="ts">
   import { createIncidents } from './incidents.svelte';
   const data = createIncidents(() => query);
@@ -552,7 +552,7 @@ incidents.pool?.stats();   // { workers, idle, inFlight, queued, … }`,
     advanced: [
       {
         title: 'One observable, many components',
-        desc: 'Each sharedValue builds its own observe(). Hoist it to module scope and wrap with observableValue — subscribers share one field watch; each still tears down with its owning effect.',
+        desc: 'Each sharedValue builds its own observe(). Hoist it to module scope and wrap with observableValue: subscribers share one field watch; each still tears down with its owning effect.',
         file: 'metrics.svelte.ts',
         language: 'ts',
         code: `import { observe, shallowEqual } from '@atolljs/core';
@@ -570,7 +570,7 @@ export const pressure = () => observableValue(pressureSource);`,
       },
       {
         title: 'Abort & timeout per call',
-        desc: 'with() attaches RunOptions to the same client surface. A queued call drops outright; an in-flight call is orphaned — the worker finishes it and the reply is discarded.',
+        desc: 'with() attaches RunOptions to the same client surface. A queued call drops outright; an in-flight call is orphaned: the worker finishes it and the reply is discarded.',
         language: 'ts',
         code: `import { TaskAbortedError, TaskTimeoutError } from '@atolljs/core';
 
@@ -582,8 +582,8 @@ const request = incidents
 ac.abort();   // rejects with TaskAbortedError`,
       },
       {
-        title: 'Imperative watch — outside components',
-        desc: 'watch() on a field connector fires on every write, local or remote — for logging or bridging to non-rune code. Dispose the returned function yourself.',
+        title: 'Imperative watch, outside components',
+        desc: 'watch() on a field connector fires on every write, local or remote, for logging or bridging to non-rune code. Dispose the returned function yourself.',
         language: 'ts',
         code: `import { watch } from '@atolljs/core';
 import { incidentsMemory } from '@atolljs/incidents';
@@ -597,19 +597,19 @@ stop();   // when the feature unloads`,
       },
       {
         title: 'Pool lifecycle & stats',
-        desc: 'terminate() kills the pool — the next method call re-spawns it lazily. pool.stats() exposes queue/dispatch aggregates.',
+        desc: 'terminate() kills the pool: the next method call re-spawns it lazily. pool.stats() exposes queue/dispatch aggregates.',
         language: 'ts',
-        code: `// $effect cleanup / onDestroy — wherever the feature tears down:
+        code: `// $effect cleanup / onDestroy: wherever the feature tears down:
 incidents.terminate();
 
 incidents.pool?.stats();   // { workers, idle, inFlight, queued, … }`,
       },
     ],
     quickstartNote:
-      'Call the factories during component init — they are rune-backed; teardown happens in an $effect cleanup.',
+      'Call the factories during component init, they are rune-backed; teardown happens in an $effect cleanup.',
     notes: [
       'Factories must run in a .svelte.ts module or during component init so runes compile correctly.',
-      'Worker-hosted Svelte trees (islands) live in the companion package @atolljs/svelte-island — see the Islands page under this section.',
+      'Worker-hosted Svelte trees (islands) live in the companion package @atolljs/svelte-island, see the Islands page under this section.',
     ],
   },
   {
@@ -619,19 +619,19 @@ incidents.pool?.stats();   // { workers, idle, inFlight, queued, … }`,
     pkg: '@atolljs/angular',
     install: 'npm install @atolljs/core @atolljs/angular',
     summary:
-      'Signal adapter for zoneless Angular. Call in an injection context (field initializer or constructor) so subscriptions release on destroy. NgModule apps get the same pools through AtollModule — the NestJS binding\'s forRoot/registerPool vocabulary.',
+      'Signal adapter for zoneless Angular. Call in an injection context (field initializer or constructor) so subscriptions release on destroy. NgModule apps get the same pools through AtollModule, the NestJS binding\'s forRoot/registerPool vocabulary.',
     apis: [
-      { name: 'provideAtoll', signature: 'provideAtoll({ pools: AtollPoolDeclaration[] }, ...features)', desc: 'Register worker pools or connectWorker clients ({ name, client }) as environment providers — terminated on injector destroy; also usable at route level.' },
+      { name: 'provideAtoll', signature: 'provideAtoll({ pools: AtollPoolDeclaration[] }, ...features)', desc: 'Register worker pools or connectWorker clients ({ name, client }) as environment providers, terminated on injector destroy; also usable at route level.' },
       { name: 'injectAtollPool', signature: 'injectAtollPool<T>(name): T', desc: 'Inject a pool registered by provideAtoll inside an injection context; mockable via TestBed.' },
-      { name: 'AtollModule', signature: 'AtollModule.forRoot({pools?}) / forRootAsync / registerPool(decl) / registerPoolAsync', desc: 'NgModule alternative to provideAtoll — same pool tokens + lifecycle, declared on the importing module; async forms resolve their factory before bootstrap.' },
+      { name: 'AtollModule', signature: 'AtollModule.forRoot({pools?}) / forRootAsync / registerPool(decl) / registerPoolAsync', desc: 'NgModule alternative to provideAtoll: same pool tokens + lifecycle, declared on the importing module; async forms resolve their factory before bootstrap.' },
       { name: 'InjectAtollPool', signature: '@InjectAtollPool(name)', desc: 'Constructor-parameter decorator form of injectAtollPool for @Injectable() classes.' },
       { name: 'observableSignal', signature: 'observableSignal(source: ObservableValue<T>): Signal<T>', desc: 'Subscribe to any observable snapshot.' },
       { name: 'sharedValue', signature: 'sharedValue(memory, key, select?, options?): Signal<T | undefined>', desc: 'Bind one shared-memory field to a Signal; optional selector + equality.' },
-      { name: 'taskState', signature: 'taskState(task | asyncFn): { state: Signal<TaskSnapshot>, run, runOnce }', desc: 'Bind an AsyncTask — or any async fn — to a Signal and get its triggers.' },
+      { name: 'taskState', signature: 'taskState(task | asyncFn): { state: Signal<TaskSnapshot>, run, runOnce }', desc: 'Bind an AsyncTask, or any async fn, to a Signal and get its triggers.' },
     ],
     usageFile: 'main.ts + app.component.ts',
     usageLanguage: 'typescript',
-    usage: `// main.ts — the connectWorker client registers as a DI provider,
+    usage: `// main.ts: the connectWorker client registers as a DI provider,
 // terminated on app teardown (it re-spawns lazily on the next call)
 bootstrapApplication(AppComponent, {
   providers: [
@@ -662,7 +662,7 @@ export class AppComponent {
 }`,
     examples: [
       {
-        title: 'Component wiring — DI client + signals',
+        title: 'Component wiring: DI client + signals',
         desc: 'injectAtollPool returns the provideAtoll-registered client; taskState/sharedValue release their subscriptions on destroy. effect() re-runs the latest-wins query once seeded.',
         file: 'app.component.ts',
         code: `private readonly incidents = injectAtollPool<IncidentsClient>('incidents');
@@ -683,8 +683,8 @@ constructor() {
 }`,
       },
       {
-        title: 'NgModule apps — AtollModule',
-        desc: 'The NgModule equivalent of provideAtoll — same pool declarations and lifecycle, plus constructor-parameter injection via @InjectAtollPool.',
+        title: 'NgModule apps, AtollModule',
+        desc: 'The NgModule equivalent of provideAtoll, same pool declarations and lifecycle, plus constructor-parameter injection via @InjectAtollPool.',
         file: 'app.module.ts',
         code: `@NgModule({
   imports: [
@@ -704,7 +704,7 @@ export class ReportsService {
       },
       {
         title: 'Inline worker pools',
-        desc: 'Declarations can build the pool directly — the bundler-detectable new Worker(new URL(...)) stays inline so the worker entry is emitted as its own chunk.',
+        desc: 'Declarations can build the pool directly: the bundler-detectable new Worker(new URL(...)) stays inline so the worker entry is emitted as its own chunk.',
         file: 'main.ts',
         code: `provideAtoll({
   pools: [{
@@ -723,7 +723,7 @@ export class ReportsService {
     advanced: [
       {
         title: 'Route-scoped pools',
-        desc: 'provideAtoll works in Route.providers — the pool spawns when the route injector is created and terminates when it is destroyed. Lazy features get lazy pools.',
+        desc: 'provideAtoll works in Route.providers: the pool spawns when the route injector is created and terminates when it is destroyed. Lazy features get lazy pools.',
         file: 'app.routes.ts',
         language: 'ts',
         code: `const routes: Routes = [{
@@ -736,7 +736,7 @@ export class ReportsService {
       },
       {
         title: 'Async pool declarations',
-        desc: 'registerPoolAsync/forRootAsync resolve the spec from injected deps during APP_INITIALIZER — name stays static so the ATOLL_POOL:<name> token is injectable throughout.',
+        desc: 'registerPoolAsync/forRootAsync resolve the spec from injected deps during APP_INITIALIZER, name stays static so the ATOLL_POOL:<name> token is injectable throughout.',
         file: 'app.module.ts',
         language: 'ts',
         code: `AtollModule.registerPoolAsync({
@@ -751,8 +751,8 @@ export class ReportsService {
 })`,
       },
       {
-        title: 'Testing — stub the pool token',
-        desc: 'Each pool is a plain InjectionToken (ATOLL_POOL:<name>) — override it in TestBed with a stub; the component never touches a real worker.',
+        title: 'Testing, stub the pool token',
+        desc: 'Each pool is a plain InjectionToken (ATOLL_POOL:<name>): override it in TestBed with a stub; the component never touches a real worker.',
         language: 'ts',
         code: `await TestBed.configureTestingModule({
   providers: [
@@ -762,7 +762,7 @@ export class ReportsService {
       },
       {
         title: 'Abort & timeout per call',
-        desc: 'with() attaches RunOptions to the same client surface. A queued call drops outright; an in-flight call is orphaned — the worker finishes it and the reply is discarded.',
+        desc: 'with() attaches RunOptions to the same client surface. A queued call drops outright; an in-flight call is orphaned: the worker finishes it and the reply is discarded.',
         language: 'ts',
         code: `import { TaskAbortedError, TaskTimeoutError } from '@atolljs/core';
 
@@ -778,7 +778,7 @@ ac.abort();   // rejects with TaskAbortedError`,
       'provideAtoll registers the client as a DI provider (terminated on app teardown); the signal factories must run in an injection context.',
     notes: [
       'Works with OnPush + zoneless change detection out of the box.',
-      'Worker-hosted Angular trees (islands) live in the companion package @atolljs/angular-island — see the Islands page under this section.',
+      'Worker-hosted Angular trees (islands) live in the companion package @atolljs/angular-island, see the Islands page under this section.',
     ],
   },
   {
@@ -788,19 +788,19 @@ ac.abort();   // rejects with TaskAbortedError`,
     pkg: '@atolljs/nextjs',
     install: 'npm install @atolljs/core @atolljs/nextjs',
     summary:
-      'The React hooks re-exported for App Router apps — same signatures, imported by client components under a \'use client\' boundary.',
+      'The React hooks re-exported for App Router apps, same signatures, imported by client components under a \'use client\' boundary.',
     apis: [
       { name: 'useObservable', signature: 'useObservable(source: ObservableValue<T>): T', desc: 'Subscribe to any observable snapshot (task or field).' },
       { name: 'useSharedValue', signature: 'useSharedValue(memory, key, select?, options?): T | undefined', desc: 'Bind one shared-memory field to React state; optional selector + equality to slice updates.' },
-      { name: 'useTask', signature: 'useTask(task | asyncFn): { data, pending, settled, elapsedMs, error, run, runOnce }', desc: 'Bind an AsyncTask — or any async fn (e.g. a client method, wrapped via toTask) — to state and get its triggers.' },
+      { name: 'useTask', signature: 'useTask(task | asyncFn): { data, pending, settled, elapsedMs, error, run, runOnce }', desc: 'Bind an AsyncTask, or any async fn (e.g. a client method, wrapped via toTask): to state and get its triggers.' },
     ],
-    usageFile: 'components/Counter.tsx — a client component',
+    usageFile: 'components/Counter.tsx, a client component',
     usageLanguage: 'tsx',
-    usage: `'use client';   // required — the hooks read browser-side state
+    usage: `'use client';   // required, the hooks read browser-side state
 
 import { useSharedValue, useTask } from '@atolljs/nextjs';
 import { counterMemory } from '../counter.memory';
-import { counter } from '../counter';   // connectWorker client — safe to import under SSR
+import { counter } from '../counter';   // connectWorker client: safe to import under SSR
 
 export function Counter() {
   const count = useSharedValue(counterMemory, 'count');
@@ -815,7 +815,7 @@ export function Counter() {
     examples: [
       {
         title: 'A data-layer hook',
-        desc: 'The same incidents pattern as the React demo — the hook is a client-boundary module; seed.runOnce() ignores repeats while pending/settled and the page query re-runs latest-wins on spec change.',
+        desc: 'The same incidents pattern as the React demo: the hook is a client-boundary module; seed.runOnce() ignores repeats while pending/settled and the page query re-runs latest-wins on spec change.',
         file: 'src/useIncidents.ts',
         code: `'use client';
 
@@ -841,7 +841,7 @@ export function useIncidents(query: QueryArgs) {
       },
       {
         title: 'Live fields in any client component',
-        desc: 'Any number of client components can bind the same shared field — each subscribes independently and tracks the worker\'s writes.',
+        desc: 'Any number of client components can bind the same shared field: each subscribes independently and tracks the worker\'s writes.',
         file: 'components/SeedProgress.tsx',
         code: `'use client';
 
@@ -857,7 +857,7 @@ export function SeedProgress() {
     advanced: [
       {
         title: 'SSR: fields read undefined on the server',
-        desc: 'The contract only binds in the browser — render fallbacks and let hydration fill in. Trigger run()/runOnce() from event handlers or effects, never during render.',
+        desc: 'The contract only binds in the browser: render fallbacks and let hydration fill in. Trigger run()/runOnce() from event handlers or effects, never during render.',
         file: 'components/Counter.tsx',
         code: `'use client';
 
@@ -867,7 +867,7 @@ return <span>{count ?? '…'}</span>;`,
       },
       {
         title: 'Abort & timeout per call',
-        desc: 'with() attaches RunOptions to the same client surface. A queued call drops outright; an in-flight call is orphaned — the worker finishes it and the reply is discarded.',
+        desc: 'with() attaches RunOptions to the same client surface. A queued call drops outright; an in-flight call is orphaned: the worker finishes it and the reply is discarded.',
         language: 'ts',
         code: `import { TaskAbortedError, TaskTimeoutError } from '@atolljs/core';
 
@@ -880,7 +880,7 @@ ac.abort();   // rejects with TaskAbortedError`,
       },
       {
         title: 'One observable, many components',
-        desc: 'Each useSharedValue call builds a fresh observe(). Hoist it to module scope and bind via useObservable — subscribers share one field watch.',
+        desc: 'Each useSharedValue call builds a fresh observe(). Hoist it to module scope and bind via useObservable: subscribers share one field watch.',
         file: 'metrics.ts',
         language: 'ts',
         code: `import { observe, shallowEqual } from '@atolljs/core';
@@ -896,7 +896,7 @@ export const pressure = observe(
       },
       {
         title: 'Worker entries under webpack/turbopack',
-        desc: 'Both bundlers emit a worker chunk only when new Worker(new URL(\'./x.worker.ts\', import.meta.url)) appears inline — never hoist or compute the URL. Contracts imported from workspace sources need resolve aliases + experimental.externalDir (see examples/nextjs/next.config.ts).',
+        desc: 'Both bundlers emit a worker chunk only when new Worker(new URL(\'./x.worker.ts\', import.meta.url)) appears inline: never hoist or compute the URL. Contracts imported from workspace sources need resolve aliases + experimental.externalDir (see examples/nextjs/next.config.ts).',
         file: 'next.config.ts',
         language: 'ts',
         code: `experimental: { externalDir: true },
@@ -911,10 +911,10 @@ turbopack: {
       },
     ],
     quickstartNote:
-      'The \'use client\' directive is required on components calling the hooks; the connectWorker client is safe to import under SSR — the pool spawns lazily on the first call.',
+      'The \'use client\' directive is required on components calling the hooks; the connectWorker client is safe to import under SSR, the pool spawns lazily on the first call.',
     notes: [
       '\'use client\' is required on any component calling the hooks; app/page.tsx can stay a server component that just renders it.',
-      'The connectWorker client is SSR-safe to import — its pool spawns lazily on the first method call, never during a server render.',
+      'The connectWorker client is SSR-safe to import, its pool spawns lazily on the first method call, never during a server render.',
       'COOP/COEP in next.config.ts headers() is only needed when the pool uses sharedMemory; a message-only pool needs neither headers nor SharedArrayBuffer.',
     ],
   },

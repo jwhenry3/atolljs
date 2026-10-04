@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 
 /**
  * A package name rendered as a code span linking to its package page.
- * `site` picks the destination — 'npm' (default) for the package page,
+ * `site` picks the destination: 'npm' (default) for the package page,
  * 'bundlephobia' for the size report (matches what the docs measure).
  */
 export function PkgLink({

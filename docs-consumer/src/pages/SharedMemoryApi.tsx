@@ -15,7 +15,7 @@ export function SharedMemoryApi() {
         file="memory.contract.ts"
         code={`import { defineSharedMemory, field, reef } from '@atolljs/core';
 
-// Fields may group by intent — lists / state / signals nest one level and
+// Fields may group by intent, lists / state / signals nest one level and
 // every surface mirrors it: memory.signals.count, spec.signals.count, …
 export const memory = defineSharedMemory({
   signals: {
@@ -25,7 +25,7 @@ export const memory = defineSharedMemory({
   state: {
     label:   field.string({ schema: reef.string(128) }),        // budget derives from the schema
     metrics: field.object({ schema: metricsSchema }),         // reef.object → inline record, no maxBytes
-    payload: field.object({ maxBytes: 2048 }),                // codec blob — the escape hatch for dynamic data
+    payload: field.object({ maxBytes: 2048 }),                // codec blob, the escape hatch for dynamic data
     samples: field.float64Array({ length: 1024 }),            // typed view, zero-copy
   },
   lists: {
@@ -47,19 +47,19 @@ export const memory = defineSharedMemory({
           <tr><td><code>field.string({'{ maxBytes }'})</code></td><td>4-byte length + payload</td><td><code>read() / write(v)</code></td></tr>
           <tr><td><code>field.object({'{ maxBytes, schema? }'})</code></td><td>codec-encoded blob</td><td><code>read() / write(v)</code></td></tr>
           <tr><td><code>field.array({'{ maxBytes, schema? }'})</code></td><td>codec-encoded blob</td><td><code>read() / write(v)</code></td></tr>
-          <tr><td><code>field.int32Array({'{ length }'})</code> · <code>float64Array({'{ length }'})</code> · <code>bigInt64Array({'{ length }'})</code> · <code>uint8Array({'{ length }'})</code></td><td>n × element size</td><td>typed-array views — direct indexed access, zero copy</td></tr>
+          <tr><td><code>field.int32Array({'{ length }'})</code> · <code>float64Array({'{ length }'})</code> · <code>bigInt64Array({'{ length }'})</code> · <code>uint8Array({'{ length }'})</code></td><td>n × element size</td><td>typed-array views, direct indexed access, zero copy</td></tr>
           <tr><td><code>field.list({'{ schema, count }'})</code></td><td>fixed-size records</td><td><code>readAt(i)</code>, <code>writeAt(i, rec)</code>, <code>commit()</code></td></tr>
         </tbody>
       </table>
       <p>
-        List scalar kinds: <code>i8 u8 i16 u16 i32 u32 f32 f64 i64 u64</code> — or
+        List scalar kinds: <code>i8 u8 i16 u16 i32 u32 f32 f64 i64 u64</code>, or
         declare members as <code>reef</code>/zod schemas (<code>reef.u32()</code>,{' '}
         <code>reef.int(0, 3)</code> → narrowest covering kind,{' '}
         <code>reef.string(10)</code>) and the same declaration becomes both layout
-        and validation schema — full vocabulary on{' '}
+        and validation schema: full vocabulary on{' '}
         <a href={docHref('reef')}>Reef schemas</a>.
-        A field is accessed on the contract object —{' '}
-        <code>memory.state.metrics.read()</code> — identical API on both threads,
+        A field is accessed on the contract object :{' '}
+        <code>memory.state.metrics.read()</code>: identical API on both threads,
         and observers address fields by path:{' '}
         <code>observe(memory, 'signals.count')</code>.
       </p>
@@ -68,7 +68,7 @@ export const memory = defineSharedMemory({
       <p>
         Structured fields (<code>object</code>, <code>array</code>,{' '}
         <code>string</code>) encode through the contract's codec. The default is{' '}
-        <code>msgpackrCodec</code> — MessagePack with structure sharing, the
+        <code>msgpackrCodec</code>: MessagePack with structure sharing, the
         fastest option for uniform records. Alternatives:{' '}
         <code>jsonCodec</code> or any{' '}
         <code>{'{ encode, decode }'}</code> object:
@@ -83,7 +83,7 @@ defineSharedMemory(spec, { codec: jsonCodec });  // opt out of the default`}
       <p>
         <code>WorkerPool</code> binds the contract on the main thread and ships
         the buffer to workers in <code>INIT_MEMORY</code>. Reads before bind
-        throw — <code>memory.bound</code> / <code>memory.onBound(cb)</code> tell
+        throw: <code>memory.bound</code> / <code>memory.onBound(cb)</code> tell
         you when it's safe. The <code>observe()</code>-based bindings handle
         this automatically: values stay <code>undefined</code> until bound, so
         SSR and early renders are safe.
@@ -91,7 +91,7 @@ defineSharedMemory(spec, { codec: jsonCodec });  // opt out of the default`}
 
       <h2>Capacity</h2>
       <p>
-        The pool sizes the shared buffer from the contract —{' '}
+        The pool sizes the shared buffer from the contract :{' '}
         <code>memory.totalBytes</code>. Configure growth via{' '}
         <code>WorkerPoolConfig.memory</code> (<code>maximumPages</code>,{' '}
         <code>growthFactor</code>).
@@ -110,14 +110,14 @@ defineSharedMemory(spec, { codec: jsonCodec });  // opt out of the default`}
         overrides per contract.
       </p>
       <p>
-        Underneath the pool sits <code>MemoryManager</code> — the allocator it
+        Underneath the pool sits <code>MemoryManager</code>: the allocator it
         wraps when <code>sharedMemory</code> is configured. It owns a shared{' '}
         <code>WebAssembly.Memory</code> (<code>initialPages</code> 16 = 1 MB,{' '}
         <code>maximumPages</code> 16384 = 1 GB by default), grows it via{' '}
         <code>ensureCapacity(bytes)</code>, and exposes the storage with{' '}
         <code>getView(type, byteOffset?, length?)</code> and{' '}
         <code>getBuffer()</code>. Reach for it directly only when you manage the
-        buffer yourself — e.g. a SharedWorker host allocating once for all
+        buffer yourself: e.g. a SharedWorker host allocating once for all
         clients.
       </p>
     </article>
