@@ -317,7 +317,7 @@ describe('installFetchProbe', () => {
     events = [];
     setDevtoolsSink((e) => events.push(e));
     noResourceTiming();
-    const scope = { fetch: vi.fn(async () => jsonResponse()) };
+    const scope = { fetch: vi.fn<typeof fetch>(async () => jsonResponse()) };
     installFetchProbe(scope as unknown as { fetch: typeof fetch });
 
     const res = await scope.fetch('https://api.test/data', { method: 'post', body: 'q=1' });
@@ -337,7 +337,7 @@ describe('installFetchProbe', () => {
   it('emits net:fetch with the error and rethrows on failure', async () => {
     events = [];
     setDevtoolsSink((e) => events.push(e));
-    const scope = { fetch: vi.fn(async () => { throw new TypeError('boom'); }) };
+    const scope = { fetch: vi.fn<typeof fetch>(async () => { throw new TypeError('boom'); }) };
     installFetchProbe(scope as unknown as { fetch: typeof fetch });
 
     await expect(scope.fetch('https://api.test/x')).rejects.toThrow('boom');
@@ -350,7 +350,7 @@ describe('installFetchProbe', () => {
     events = [];
     setDevtoolsSink((e) => events.push(e));
     noResourceTiming();
-    const scope = { fetch: vi.fn(async () => jsonResponse()) };
+    const scope = { fetch: vi.fn<typeof fetch>(async () => jsonResponse()) };
     installFetchProbe(scope as unknown as { fetch: typeof fetch });
 
     const req = new Request('https://api.test/r', {
@@ -372,7 +372,7 @@ describe('installFetchProbe', () => {
     events = [];
     setDevtoolsSink((e) => events.push(e));
     noResourceTiming();
-    const scope = { fetch: vi.fn(async () => jsonResponse()) };
+    const scope = { fetch: vi.fn<typeof fetch>(async () => jsonResponse()) };
     installFetchProbe(scope as unknown as { fetch: typeof fetch });
 
     await scope.fetch('https://a/1', { method: 'post', body: new URLSearchParams('a=1') });
@@ -389,7 +389,7 @@ describe('installFetchProbe', () => {
   });
 
   it('is idempotent — a probed fetch is never wrapped twice', () => {
-    const scope = { fetch: vi.fn(async () => jsonResponse()) };
+    const scope = { fetch: vi.fn<typeof fetch>(async () => jsonResponse()) };
     installFetchProbe(scope as unknown as { fetch: typeof fetch });
     const wrapped = scope.fetch;
     installFetchProbe(scope as unknown as { fetch: typeof fetch });
@@ -399,7 +399,7 @@ describe('installFetchProbe', () => {
   it('attaches resource-timing stage data when the entry exists', async () => {
     events = [];
     setDevtoolsSink((e) => events.push(e));
-    const scope = { fetch: vi.fn(async () => jsonResponse()) };
+    const scope = { fetch: vi.fn<typeof fetch>(async () => jsonResponse()) };
     installFetchProbe(scope as unknown as { fetch: typeof fetch });
     const t0 = performance.now();
     const entry = {
