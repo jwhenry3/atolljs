@@ -8,7 +8,7 @@
 //
 // Used by assemble-pages.mjs (mounts into dist-pages/consumer/) and
 // snapshot-docs.mjs (mounts into dist-snapshot/ for the release tarball).
-import { cpSync, copyFileSync, existsSync } from 'node:fs';
+import { cpSync, copyFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 // Demo mount name → dist dir (same order as assemble-pages' original list).
@@ -38,6 +38,26 @@ export const CONSUMER_PROJECTS = [
   ...DEMOS.map(([name, dir]) => [name, dir.replace(/\/dist.*$/, '')]),
 ];
 
+/**
+ * Ship the devtools dashboard inside a mounted demo: <demoDest>/__atoll/
+ * gets a copy of packages/devtools/app with the broadcast flag injected —
+ * the same script tag the vite plugin adds when it serves /__atoll/ in dev
+ * (topology A in docs/devtools-deploy.md). Demos iframe it via the relative
+ * overlay src '__atoll/?mini=1', which resolves inside their own mount no
+ * matter how deep the docs tree sits under the site root.
+ */
+export function mountDevtoolsApp(root, demoDest) {
+  const appSrc = join(root, 'packages/devtools/app');
+  const dest = join(demoDest, '__atoll');
+  cpSync(appSrc, dest, { recursive: true });
+  const index = join(dest, 'index.html');
+  const html = readFileSync(index, 'utf8');
+  writeFileSync(
+    index,
+    html.replace('</head>', '<script>window.__ATOLL_TRANSPORT="broadcast"</script></head>'),
+  );
+}
+
 /** Copy docs-consumer/dist + demo dists + coi-sw.js copies into `dest`. */
 export function mountConsumerTree(root, dest) {
   const consumerSrc = join(root, 'docs-consumer/dist');
@@ -63,5 +83,6 @@ export function mountConsumerTree(root, dest) {
   copyFileSync(coiSw, join(dest, 'coi-sw.js'));
   for (const [name] of DEMOS) {
     copyFileSync(coiSw, join(dest, name, 'coi-sw.js'));
+    mountDevtoolsApp(root, join(dest, name));
   }
 }

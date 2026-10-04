@@ -67,12 +67,12 @@ port into the worker, it gets *transcluded* around it.
 op protocol doesn't care what the shell is made of. `index.html` +
 `src/main.ts` is framework-free: `mountIsland({ el, app, props })` calls
 plus hand-wired `island.updateProps` mediation — its bundle is ~4 kB.
-`react-shell.html` + `src/shell.tsx` is the same seven islands through
+`react-shell.html` + `src/shell.tsx` mounts five islands through
 `<Island/>` (`@atolljs/react-island`): each `mountIsland` call
-becomes a component, badges ride `onReady` → state, and the
-controls→table mediation is literally `onEvent → setState →
+becomes a component, badges ride `onReady` → state, and
+island→shell mediation is literally `onEvent → setState →
 <Island props={…}>` — the component's deduped `updateProps` replaces the
-hand-wiring. All seven islands mount through **`lazyIsland` proxies**, so
+hand-wiring. All five mount through **`lazyIsland` proxies**, so
 the worker app types like a local component with props inline —
 `<TableIsland filter={f} desc/>` — and every dynamic import is a code-split
 boundary covered by `<Suspense>` (react-shell chunk ~230 kB; recharts,
@@ -84,6 +84,22 @@ needs the container in the DOM.
 For shells that want zero worker-module imports, `islandComponent<P>('name')`
 builds the same proxy from a registry key + type-only props contract.
 And plain `<Island app="vanilla"/>` string mounting stays supported.
+
+**An island inside an island.** The `nestedhost` panel is the nesting
+proof: its worker-side React tree renders `<SubIsland/>`
+(`@atolljs/react-island`), which spawns `nested.worker.tsx` — a real
+sub-worker created *inside* `react.worker.tsx` — and mounts the `nested`
+counter app into a proxy element of the parent instance. The surface is
+the same `mountIsland` the shell uses: a proxy `el` switches the driver
+to a nested mounter that replays the sub-worker's ops into the parent's
+shadow tree, so the inner DOM tunnels upward through the outer island's
+own op stream (the page sees one flat batch). Clicks round-trip two hops:
+real event → outer dispatch → proxy listener → sub-worker handler → ops
+back up — and the sub-worker's `emit` lands in the outer island's
+`onEvent`, which re-emits to the shell status line. The sub-instance keys
+hierarchically (`nestedhost@1~nested@1`), push and poll transports both
+work, and the devtools app map draws the parent→sub-worker→sub-island
+branch.
 
 **Worker-side proxy DOM — the "WorkerDOM" pattern.** Transclusion covers
 libraries that must run on the main thread; `src/worker/proxyDom.ts` covers
@@ -177,6 +193,7 @@ controls island: emit('countChanged') ─→ shell status line
 vanilla island: emit('colorPicked') ───→ shell status line
 map island: emit('markerClicked' / 'placeSelected' / 'zoomChanged') → shell status line
 charts island: emit('chartClicked') ─────────────────────────────────────────→ shell status line
+nestedhost island: emit('nestedIncremented') ── relayed from the SUB-worker ──→ shell status line
 ```
 
 Each island's header shows its `whoami()` pid — a random per-instance id proving
@@ -193,6 +210,8 @@ heavy lifting: `definePolyWorker` (instances, reconcilers, op queues),
 keeps:
 
 - `src/worker/render.worker.ts` — ~20 lines: `definePolyWorker({ apps })` mapping island app names to components/imperative builders
+- `src/worker/react.worker.tsx` — the React shell's registry worker: counter/notes/incidents plus `nestedhost`, a React app whose tree mounts `<SubIsland/>` (an island inside the island)
+- `src/worker/nested.worker.tsx` — the nested island's entry: an ordinary `defineReactPolyWorker` spawned *inside* react.worker (worker → sub-worker)
 - `src/worker/apps.tsx` — the four React island apps: `ControlsApp` (emits filter/sort/counter events), `TableApp` (2000-row memoized table, props-driven, emits rowSelected/rowsChanged), `StatsApp` (row count + busy-loop compute), `ChartsApp` (real recharts 3.x `ComposedChart`, fixed dims, emits `chartClicked` on bar click)
 - `src/worker/vanilla.ts` — the imperative island app: a hand-written swatch picker + log on the proxy DOM, AND the vendored MiniWidget running on `installDomShim`'s globals (no React import)
 - `src/worker/map.ts` — the map island app: `installDomShim` + dynamic `import('leaflet')`, then unmodified Leaflet 1.9 (`L.map`, tile layer, divIcon markers, a `L.Control.extend` place picker) on the proxy DOM

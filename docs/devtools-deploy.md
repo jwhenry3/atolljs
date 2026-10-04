@@ -46,6 +46,14 @@ origin. Two production-only details:
   host that's your job. Without COOP `same-origin` the flyout iframe
   lands in a separate browsing-context group and the overlay goes blank.
   If your app ships `SharedArrayBuffer` the headers exist anyway.
+- **Apps mounted under a sub-path can't use the absolute default.** If
+  the dashboard copy sits inside the app's own mount (`/<base>/<app>/__atoll/`),
+  pass a relative overlay src: `overlay: { src: '__atoll/?mini=1' }` resolves
+  it next to the app's page, where an absolute `/__atoll/` would escape the
+  mount. The `full page ↗` link derives from the same `src`, so it stays
+  correct either way. This repo's docs demos do exactly this:
+  `mountDevtoolsApp` in `scripts/pages-lib.mjs` plants a flag-injected
+  `__atoll/` copy inside every demo mount.
 - **This mode is browser-only and single-origin.** Node sessions and
   other origins can't join a BroadcastChannel: use topology B for those.
 

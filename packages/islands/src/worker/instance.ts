@@ -237,10 +237,14 @@ export const proxyInstanceStats = (): {
   liveNodes: number;
   handlers: number;
   queuedOps: number;
+  queuedByInstance: Record<string, number>;
 } => ({
   liveNodes: instances.size,
   handlers: handlers.size,
   queuedOps: [...opsByInstance.values()].reduce((a, q) => a + q.length, 0),
+  queuedByInstance: Object.fromEntries(
+    [...opsByInstance.entries()].map(([k, q]) => [k, q.length]),
+  ),
 });
 
 export const getHandler = (id: number): HandlerEntry | undefined => handlers.get(id);

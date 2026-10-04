@@ -5,7 +5,7 @@ pinned: true
 
 # Introducing AtollJS
 
-## A worker atoll: pools, shared memory, and worker-rendered UI: under one contract
+## Islands-based multithreading: pools, shared memory, and worker-rendered UI under one contract
 
 > **Problem.** Web workers are the only real threads the browser gives
 > you, and the platform hands you the pieces, `Worker`, `postMessage`,

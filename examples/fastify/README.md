@@ -1,6 +1,6 @@
 # Telecom Incident Explorer — Fastify
 
-The worker atoll on the server side, no framework adapter needed: a Fastify
+Islands-based multithreading on the server side, no framework adapter needed: a Fastify
 REST API backed by a `WorkerPool` of `node:worker_threads` workers
 (`@atolljs/node`), all bound to the same 1M-record shared-memory contract.
 

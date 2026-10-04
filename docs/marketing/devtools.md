@@ -6,7 +6,9 @@ so the emojis and line breaks are the formatting.
 
 ---
 
-**Once real work moves into a worker pool, your app becomes a black box: console.log across eight threads is a scramble, and the question that matters (*which worker is slow, and doing what?*) has no answer.**
+**Every worker, every task, every island: one live map.** 🗺️
+
+Your worker pool is a black box. Console.log across eight threads is a scramble, the browser's own devtools barely admit workers exist, and the question that matters (*which worker is slow, and doing what?*) has no answer.
 
 So I built devtools for **AtollJS**: one line to turn on, zero cost when off:
 
@@ -44,9 +46,9 @@ Docs + live demos: https://jwhenry3.github.io/atolljs/
 
 ## Teaser variant (short post)
 
-Worker pools make your app a black box: AtollJS devtools make it a map.
-One gated line of code, zero cost when off: app map, task waterfall,
-fetch log, per-field shared-memory writes, per-worker heaps: browser
-and Node on one dashboard.
+Your worker pool is a black box. One URL param opens it.
+AtollJS devtools: one gated line of code, zero cost when off: app map,
+task waterfall, fetch log, per-field shared-memory writes, per-worker
+heaps: browser and Node on one dashboard.
 
 Docs → https://jwhenry3.github.io/atolljs/

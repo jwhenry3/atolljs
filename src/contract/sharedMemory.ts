@@ -870,15 +870,12 @@ export class SharedMemory<S extends SharedSpec = SharedSpec> {
   }
 
   /**
-   * Fires when the contract is bound on this thread — immediately if already
-   * bound. Returns an unsubscribe function.
+   * Fires when the contract is bound on this thread — on every bind, and
+   * immediately if already bound. Returns an unsubscribe function.
    */
   public onBound(cb: () => void): () => void {
-    if (this.isBound) {
-      cb();
-      return () => {};
-    }
     this.boundListeners.add(cb);
+    if (this.isBound) cb();
     return () => this.boundListeners.delete(cb);
   }
 

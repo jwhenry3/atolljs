@@ -52,6 +52,8 @@ import { createReactInstance } from './reactInstance';
 // island→shell channel — `import { emit } from '@atolljs/react-island/worker'`.
 export { emit, runInInstance } from '@atolljs/islands/worker';
 export { Slot } from './slot';
+export { SubIsland } from './subIsland';
+export type { SubIslandProps } from './subIsland';
 
 type AnyComponent = ComponentType<Record<string, unknown>>;
 

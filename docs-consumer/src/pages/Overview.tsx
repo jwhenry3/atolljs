@@ -89,8 +89,8 @@ export function Overview() {
     <article>
       <h1>Overview</h1>
       <p className="lead">
-        A worker atoll: pools and shared workers joined to your app through one
-        shared-memory fabric. Threads share a fixed-layout{' '}
+        Islands-based multithreading: pools and shared workers joined to your
+        app through one shared-memory fabric. Threads share a fixed-layout{' '}
         <code>SharedArrayBuffer</code> contract; work is offloaded two ways,
         task <em>commands</em> (dispatch → result) and <em>state reactivity</em>{' '}
         (field changes drive behavior), a fluid model that would deadlock or

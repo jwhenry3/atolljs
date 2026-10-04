@@ -173,7 +173,7 @@ export function NodeBackends() {
     <article>
       <h1>Node.js backends: Express, Fastify, Hono, Koa</h1>
       <p className="lead">
-        <PkgLink name="@atolljs/node" /> puts the worker atoll on any Node HTTP
+        <PkgLink name="@atolljs/node" /> puts islands-based multithreading on any Node HTTP
         framework, no adapter package needed: a{' '}
         <code>WorkerPool</code> of <code>node:worker_threads</code> workers
         shares one buffer with the API thread, heavy scans dispatch to the

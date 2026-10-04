@@ -168,6 +168,87 @@ describe('devtools events', () => {
     expect(posted[0].event.thread).toBe('main'); // stamped at emit time, not by forwarding
   });
 
+  it('qualifies nested-pool ids through the emitting worker when forwarding', () => {
+    // A worker that lets the test push raw ATOLL_DEVTOOLS frames as if a
+    // nested pool inside it had emitted them.
+    let lastW: ChattyWorker | undefined;
+    class ChattyWorker extends EchoWorker {
+      private inbox = new Set<(e: { data: any }) => void>();
+      constructor(url: URL, o: any) {
+        super(url, o);
+        lastW = this;
+      }
+      addEventListener(t: string, l: (e: { data: any }) => void) {
+        if (t === 'message') this.inbox.add(l);
+      }
+      say(msg: any) {
+        for (const l of this.inbox) l({ data: msg });
+      }
+    }
+    vi.stubGlobal('Worker', ChattyWorker);
+    events = [];
+    setDevtoolsSink((e) => events.push(e));
+    const pool = new WorkerPool({ workerUrl: new URL('https://example.test/w.ts'), poolSize: 1 });
+    const parent = `${pool.poolId}#0`;
+
+    // A sub-pool minted 'pool-1' inside the worker — the forwarder
+    // qualifies it so it can't collide with a main-thread 'pool-1'.
+    lastW!.say({
+      type: 'ATOLL_DEVTOOLS',
+      event: { type: 'worker:spawn', poolId: 'pool-1', slot: 0, at: 1, thread: 'worker' },
+    });
+    const spawn = ofType('worker:spawn').at(-1)!;
+    expect(spawn.poolId).toBe(`${parent}~pool-1`);
+    expect(spawn.worker).toEqual({ poolId: pool.poolId, slot: 0 });
+
+    // An already-stamped event (multi-hop: emitted in the sub-worker, then
+    // re-forwarded) keeps its slot and qualifies the worker path the same
+    // way — attribution stays pinned to the deepest emitting worker.
+    lastW!.say({
+      type: 'ATOLL_DEVTOOLS',
+      event: {
+        type: 'memory:write', path: 'n', version: 1,
+        at: 2, thread: 'worker', worker: { poolId: 'pool-1', slot: 0 },
+      },
+    });
+    const write = ofType('memory:write').at(-1)!;
+    expect(write.worker).toEqual({ poolId: `${parent}~pool-1`, slot: 0 });
+    pool.terminate();
+  });
+
+  it('qualifies a worker-forwarded poolId even when it textually matches the outer pool', () => {
+    // A worker-side island client stamps its own pool — minted in the
+    // worker's local id space (also 'pool-1'), not the outer pool it
+    // happens to share a name with. Qualification must still apply: the
+    // worker can't see the parent's ids, so every forwarded poolId is
+    // local to the worker. Skipping it collapses the nested pool onto the
+    // outer one and the sub-worker/sub-island vanish from the app map.
+    let lastW: ChattyWorker | undefined;
+    class ChattyWorker extends EchoWorker {
+      private inbox = new Set<(e: { data: any }) => void>();
+      constructor(url: URL, o: any) {
+        super(url, o);
+        lastW = this;
+      }
+      addEventListener(t: string, l: (e: { data: any }) => void) {
+        if (t === 'message') this.inbox.add(l);
+      }
+      say(msg: any) {
+        for (const l of this.inbox) l({ data: msg });
+      }
+    }
+    vi.stubGlobal('Worker', ChattyWorker);
+    events = [];
+    setDevtoolsSink((e) => events.push(e));
+    const pool = new WorkerPool({ workerUrl: new URL('https://example.test/w.ts'), poolSize: 1 });
+    lastW!.say({
+      type: 'ATOLL_DEVTOOLS',
+      event: { type: 'island:mount', instance: 'app@1', poolId: 'pool-1', at: 1, thread: 'worker' },
+    });
+    expect(ofType('island:mount').at(-1)!.poolId).toBe(`${pool.poolId}#0~pool-1`);
+    pool.terminate();
+  });
+
   it('nextDevtoolsId yields sequential process-unique ids', () => {
     const a = nextDevtoolsId('pool');
     const b = nextDevtoolsId('pool');

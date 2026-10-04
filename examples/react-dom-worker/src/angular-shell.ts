@@ -34,6 +34,7 @@ import {
 } from '@atolljs/angular-island';
 import { connectIslandWorker } from '@atolljs/islands';
 import type { IslandHandle, Mode } from '@atolljs/islands';
+import { initDevtools } from '@atolljs/devtools';
 // import type — the component classes carry the props/events contract; the
 // worker module (and the Angular bundle it pulls) never enters this chunk.
 import type {
@@ -54,6 +55,13 @@ const isolated =
   typeof SharedArrayBuffer !== 'undefined' &&
   (typeof window.crossOriginIsolated === 'undefined' || window.crossOriginIsolated);
 const initialMode: Mode = isolated ? 'push' : 'poll';
+
+// Sink before any island mounts — workers only forward events when the
+// flag reaches them at INIT. No-op without ?__atoll_devtools.
+initDevtools({
+  session: { name: 'islands-angular-shell' },
+  overlay: { src: '__atoll/?mini=1' },
+});
 
 /* ── Island facades ───────────────────────────────────────────────────────
  * `islandComponent<C>` generates a standalone component whose inputs are

@@ -58,6 +58,17 @@ export interface WorkerPoolConfig<S extends SharedSpec = SharedSpec, T extends T
    */
   sharedMemory?: SharedMemory<S> & Prettify<SharedAccess<S>>;
   /**
+   * Hand an existing SharedArrayBuffer to every spawned worker instead of
+   * allocating a fresh `WebAssembly.Memory` — the worker-shell case: a worker
+   * already bound to a contract spawns sub-workers on the SAME buffer
+   * (`sharedBuffer: contract.buffer`), or a second pool shares the first
+   * pool's `pool.sharedBuffer`. A thunk is resolved once, when the pool
+   * constructs. With `sharedMemory` the contract binds locally to this
+   * buffer; without it the buffer still ships via INIT_MEMORY and the
+   * workers bind their own defined contracts.
+   */
+  sharedBuffer?: SharedArrayBuffer | (() => SharedArrayBuffer | undefined);
+  /**
    * Persistence adapter for `sharedMemory` — invoked with the contract right
    * after the pool binds it, and its `stop()` runs on `terminate()`.
    * `redisMemoryAdapter(client)` from '@atolljs/node/redis' produces one.

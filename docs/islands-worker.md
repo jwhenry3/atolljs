@@ -193,6 +193,60 @@ for worker-initiated work is `runInInstance(instance, fn)`, and after mutating
 outside a dispatch task, `bumpOpsVersion()` rings the doorbell so the driver
 flushes the queued ops.
 
+## Islands inside islands: nested `mountIsland`
+
+A worker-rendered island can mount a *real* sub-worker inside itself —
+an island inside an island. The surface is the SAME function:
+`mountIsland` discriminates on its mount target, so a **proxy** `el`
+(anything `ctx.doc` or a React ref produced inside the parent instance)
+takes the nested path while a real element takes the main-thread driver.
+The nested mounter lives in `worker/subIsland.ts` and registers itself at
+module load — every worker entry already imports this module, so nested
+mounting is always armed inside island workers (and the main-thread
+bundle never loads the proxy DOM).
+
+```ts
+import { mountIsland } from '@atolljs/islands/worker';
+
+const sub = await mountIsland({
+  el: hostProxyEl,                    // a ProxyElement from ctx.doc / a React ref
+  worker: () => new Worker(new URL('./inner.worker.ts', import.meta.url),
+                           { type: 'module' }),  // stays bundler-detectable
+  app: 'counter',
+  props: { label: 'nested' },
+  onEvent: (name, payload) => emit(name, payload), // relay to the shell
+});
+```
+
+Every proxy mutation serializes to an op on the parent instance's queue,
+so the sub-island's DOM tunnels upward through the parent's own op
+stream — the main thread sees one flat op batch and can't tell which
+worker produced it. No new wire format. Options, handle (`IslandHandle`
+with `instance` reading `parent~app@N`), transport, callback props, and
+shared-client semantics are identical to a top-level mount.
+
+- **Instance keys are hierarchical**: the sub-instance mints as
+  `parent~app@N` (`'nestedhost@1~nested@1'`), unique across the topology;
+  the registry still resolves the app name off the last `~`/`@`.
+- **Events round-trip two hops**: a `listen` on a replayed node becomes a
+  proxy `addEventListener`, emits a `listen` op to the page, and the real
+  event's payload dispatches back down to the sub-worker — with
+  `targetId` translated between the two proxy id spaces.
+- **Geometry forwards**: the parent instance's pushed container size is
+  forwarded as the sub-island's `setSize`, and re-pushed on resize.
+- **Platform limit**: nested `new Worker` needs an engine that supports
+  it — Chrome/Firefox/Node. Safari workers can't spawn workers, so design
+  the nesting depth by capability, not aesthetics.
+
+For React islands, `@atolljs/react-island` exports `<SubIsland worker app
+props onEvent mode/>`: it renders a `<div data-atoll-sub-island>` in the
+parent tree, mounts through the same `mountIsland` on first ref, forwards
+prop changes through `updateProps`, and destroys the sub-island on
+unmount. `worker`/`app` are mount-identity — swap them with a React
+`key`. Reference:
+`examples/react-dom-worker/src/worker/react.worker.tsx` (`nestedhost` →
+`nested` via `nested.worker.tsx`).
+
 ## Channels: emit, callbackProp, slots
 
 ```ts

@@ -101,6 +101,17 @@ Static `index.html` + `main.js`, no build step, no dependencies.
   `state.inspectWorker`, `state.sel` drive the accent-ring highlight;
   every selection path ends in `render()` → `drawAppMap` so the ring
   paints immediately.
+- Nested workers: a pool spawned inside a worker (`mountIsland` on a proxy
+  element / `connectSubWorker`) forwards its events through the parent
+  worker, which qualifies every forwarded pool id as
+  `outerPool#slot~childPool`. Ids are minted per context, so a sub-pool is
+  typically *also* named `pool-1` — qualification is unconditional because
+  a worker only ever sees its own local id space. The map draws each
+  qualified pool's workers on a violet mini-orbit outside the island ring,
+  linked back to the host worker's dot, and orbits each sub-worker's
+  islands around it — recursively for deeper nesting. Nested island
+  instance keys (`parent~app@N`) keep islands attached to the right
+  worker.
 - Framework icons are drawn once via `drawFwMark` into offscreen
   canvases → cached data URLs → `<img class="fwicon">` everywhere tables
   need an icon. One icon implementation feeds map + tables: don't fork

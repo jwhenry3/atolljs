@@ -148,6 +148,15 @@ constructor throws on `sharedMemory` without `SharedArrayBuffer`, so this is
 `setMode('push')` on such a client just polls). The `worker:`-shorthand form
 of `mountIsland` does this implicitly when `mode: 'poll'` is passed.
 
+**Islands can nest.** A worker-rendered island can mount a sub-worker inside
+itself with the same `mountIsland` call: a proxy `el` (inside the parent's
+shadow tree) switches the driver to a nested mounter that replays the inner
+island's ops into proxy nodes, so the inner DOM rides the parent's op
+stream to the page. Nested instance keys are hierarchical —
+`parent~app@N` (`'nestedhost@1~nested@1'`) — and the devtools app map
+draws the parent→sub-worker→sub-island branch. See
+[islands-worker.md](islands-worker.md#islands-inside-islands-nested-mountisland).
+
 ## Island contracts
 
 `defineIslandContract({ app, props, events, worker? })` publishes a

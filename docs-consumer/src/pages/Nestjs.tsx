@@ -120,7 +120,7 @@ export function Nestjs() {
     <article>
       <h1>NestJS</h1>
       <p className="lead">
-        <PkgLink name="@atolljs/nestjs" />: the worker atoll on the server.
+        <PkgLink name="@atolljs/nestjs" />: islands-based multithreading on the server.
         Named pools of <code>node:worker_threads</code> workers share memory
         with the API thread, and <code>@AtollService</code>/<code>@AtollTask</code>{' '}
         move a service method's body into a worker: with real dependency

@@ -65,6 +65,14 @@ my-app/                   → zero cost, nothing installed`}
           attributed to the exact worker that did it.
         </li>
       </ul>
+      <p>
+        <strong>Try it here.</strong> Every live demo embedded in these docs
+        runs with devtools on: look for the <code>atoll devtools</code>{' '}
+        button in a demo's corner, click it, and the flyout opens the app map
+        for that demo (each demo ships its own <code>__atoll/</code>{' '}
+        dashboard inside its mount). The demo's <code>↗</code> link opens it
+        full-page with devtools active too.
+      </p>
 
       <h2>Options</h2>
       <table className="doc-table">

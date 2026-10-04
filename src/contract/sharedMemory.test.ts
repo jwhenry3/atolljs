@@ -603,4 +603,21 @@ describe('edge coverage', () => {
     unbound.bind(new SharedArrayBuffer(unbound.totalBytes));
     expect(called).toBe(0);
   });
+
+  it('onBound re-fires on rebind for listeners registered while bound', () => {
+    // Rebinds happen in-process (each pool's INIT_MEMORY rebinds every
+    // contract) and on worker respawn — a listener added after the first
+    // bind must still see later ones, or observes pin a dead buffer.
+    const mem = bound({ n: field.number() });
+    let fired = 0;
+    const off = mem.onBound(() => fired++);
+    expect(fired).toBe(1);
+
+    mem.bind(new SharedArrayBuffer(mem.totalBytes));
+    expect(fired).toBe(2);
+
+    off();
+    mem.bind(new SharedArrayBuffer(mem.totalBytes));
+    expect(fired).toBe(2);
+  });
 });

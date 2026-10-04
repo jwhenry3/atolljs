@@ -7,6 +7,7 @@
 import { cpSync, copyFileSync, existsSync, mkdirSync, rmSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
+import { mountDevtoolsApp } from './pages-lib.mjs';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 
@@ -49,6 +50,9 @@ for (const [name, dir] of mounts) {
   }
   rmSync(dest, { recursive: true, force: true });
   cpSync(src, dest, { recursive: true });
+  // Each demo ships its own devtools dashboard at <name>/__atoll/ so the
+  // overlay's relative '__atoll/?mini=1' src resolves inside the mount.
+  if (name !== 'consumer') mountDevtoolsApp(root, dest);
   console.log(`mounted ${dir} -> dist/${name}/`);
 }
 
@@ -62,6 +66,7 @@ for (const site of docsSites) {
     const dest = join(root, 'dist', site, name);
     rmSync(dest, { recursive: true, force: true });
     cpSync(src, dest, { recursive: true });
+    mountDevtoolsApp(root, dest);
   }
   console.log(`mounted demos -> dist/${site}/<name>/`);
 }

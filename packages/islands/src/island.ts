@@ -31,6 +31,7 @@ import {
 } from './ops';
 
 import { marshalCallbackProps, CALLBACK_EVENT } from './callbackProps';
+import type { ProxyElement } from './worker/dom/element';
 
 export type Mode = 'push' | 'poll';
 
@@ -84,8 +85,13 @@ export const connectIslandWorker = <W extends IslandWorkerDefinition = IslandWor
   });
 
 interface MountIslandBaseOptions {
-  /** Container element the island's ops are applied into. */
-  el: HTMLElement;
+  /**
+   * Container element the island's ops are applied into — a real element on
+   * the shell side, or a `ProxyElement` inside a worker-rendered island
+   * (nested mount: the sub-island's ops replay into the parent instance's
+   * shadow tree and tunnel upward through its op stream). Required.
+   */
+  el: HTMLElement | ProxyElement;
   /**
    * Registry app name — a key of the `apps` map passed to
    * `definePolyWorker`. Optional against a instance worker
@@ -155,6 +161,11 @@ export interface IslandHandle {
   readonly app: string;
   /** The worker-side instance's random id — proof each island is a distinct worker. */
   readonly pid: string;
+  /**
+   * The wire instance key — `app@N` for a top-level island, `parent~app@N`
+   * when mounted into a proxy element inside a worker island.
+   */
+  readonly instance: string;
   readonly mode: Mode;
   opsApplied: number;
   flushCalls: number;
@@ -296,7 +307,7 @@ const uncloneablePath = (value: unknown, path: string): string => {
   return path;
 };
 
-const assertCloneableProps = (props: Record<string, unknown>, context: string): void => {
+export const assertCloneableProps = (props: Record<string, unknown>, context: string): void => {
   if (canClone(props)) return;
   const path = uncloneablePath(props, '');
   throw new Error(
@@ -327,8 +338,10 @@ const UNITLESS_CSS = new Set([
 ]);
 
 /** Coerce a wire style value to a CSS string — px-suffixes bare numbers
- *  on non-unitless keys (custom properties pass verbatim). */
-const cssStyleValue = (key: string, value: unknown): string => {
+ *  on non-unitless keys (custom properties pass verbatim). Exported for the
+ *  worker-side nested driver (worker/subIsland.ts), which applies the same
+ *  unit semantics when replaying style values into proxy elements. */
+export const cssStyleValue = (key: string, value: unknown): string => {
   if (
     typeof value === 'number' &&
     value !== 0 &&
@@ -340,12 +353,48 @@ const cssStyleValue = (key: string, value: unknown): string => {
   return String(value);
 };
 
+/**
+ * The worker-side mounter — registered by `@atolljs/islands/worker`
+ * (`worker/subIsland.ts`) so `mountIsland` serves BOTH mount targets with
+ * one signature: a proxy `el` (inside a worker-rendered island) takes the
+ * nested path, which replays the sub-worker's ops into the parent
+ * instance's shadow tree. Kept behind a registration slot rather than an
+ * import so the main-thread bundle never loads the proxy DOM.
+ */
+let subMounter: ((opts: MountIslandOptions) => Promise<IslandHandle>) | null = null;
+export const registerSubIslandMounter = (
+  fn: (opts: MountIslandOptions) => Promise<IslandHandle>,
+): void => {
+  subMounter = fn;
+};
+
+/**
+ * Structural discriminant — a proxy element's `doc.instance` is the parent
+ * instance key, a real element has no `doc` property at all. Type beats
+ * environment sniffing: in-process harnesses run worker and shell in one
+ * module graph where globals lie, but the mount target never does.
+ */
+const isProxyMountTarget = (el: unknown): el is ProxyElement =>
+  typeof (el as { doc?: { instance?: unknown } } | null)?.doc?.instance === 'string';
+
 export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandle> {
   const {
-    el, onEvent, onActivity, onOps, slots, mode: initialMode, mountTimeout,
+    el: target, onEvent, onActivity, onOps, slots, mode: initialMode, mountTimeout,
     client: givenClient, worker, app: givenApp, props: givenProps, framework,
     ...workerConfig
   } = opts;
+  if (isProxyMountTarget(target)) {
+    if (subMounter === null) {
+      throw new Error(
+        'mountIsland: a proxy-element mount target means a nested island — ' +
+          'the worker entry (`@atolljs/islands/worker`) must be loaded to register the sub-mounter.',
+      );
+    }
+    return subMounter(opts);
+  }
+  // Real DOM from here on (the proxy path delegated above) — the declared
+  // type keeps closures honest; the guard did the proving.
+  const el = target as HTMLElement;
   // Shell→worker callables: callbackProp() markers marshal to {__cb:id}
   // wire handles; the island's table keeps the real functions and the
   // driver's emit-case routes worker-side invocations back here.
@@ -941,6 +990,7 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
   const handle: IslandHandle = {
     app,
     pid,
+    instance,
     get mode() {
       return mode;
     },

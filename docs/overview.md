@@ -1,7 +1,7 @@
-# Overview: atoll, the Worker Atoll
+# Overview: atoll, islands-based multithreading
 
-A worker atoll: worker pools and shared workers joined to your app through one
-shared-memory fabric. Threads share a fixed-layout `SharedArrayBuffer`
+Islands-based multithreading: worker pools and shared workers joined to your
+app through one shared-memory fabric. Threads share a fixed-layout `SharedArrayBuffer`
 contract; workers scan, sort, and write in place; work is offloaded two ways,
 task *commands* and *state reactivity*, while only method inputs and explicit
 results cross `postMessage`.

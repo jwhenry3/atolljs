@@ -80,7 +80,10 @@ export function mountDevtoolsOverlay(opts: DevtoolsOverlayOptions = {}): Devtool
   head.textContent = 'atoll devtools';
 
   const pop = document.createElement('a');
-  pop.href = '/__atoll/';
+  // Full-page dashboard = src minus its query — stays relative when the
+  // caller passes a relative src (e.g. '__atoll/?mini=1' under a mounted
+  // base path where absolute /__atoll/ would escape the mount).
+  pop.href = src.split('?')[0];
   pop.target = '_blank';
   pop.rel = 'noopener';
   pop.textContent = 'full page ↗';

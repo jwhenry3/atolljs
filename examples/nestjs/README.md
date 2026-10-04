@@ -1,6 +1,6 @@
 # Telecom Incident Explorer — NestJS
 
-The worker atoll on the server side: a NestJS REST API backed by a `WorkerPool`
+Islands-based multithreading on the server side: a NestJS REST API backed by a `WorkerPool`
 of `node:worker_threads` workers, all bound to the same 1M-record shared-memory
 contract. Services marked `@AtollTask` execute **inside a worker's own Nest
 application context** — one module, symmetric boundaries, RPC-style calls.

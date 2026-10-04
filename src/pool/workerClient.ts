@@ -93,6 +93,13 @@ export interface ConnectWorkerConfig<S extends SharedSpec> {
   /** Omit for a message-only pool — the SharedArrayBuffer check is skipped. */
   sharedMemory?: SharedMemory<S> & Prettify<SharedAccess<S>>;
   /**
+   * Ship an existing SharedArrayBuffer to every worker instead of
+   * allocating one — e.g. `sharedBuffer: anotherPool.sharedBuffer`, or a
+   * bound contract's `contract.buffer` inside a worker shell. A thunk is
+   * resolved once at pool construction.
+   */
+  sharedBuffer?: SharedArrayBuffer | (() => SharedArrayBuffer | undefined);
+  /**
    * Bundler-detectable factory `() => new Worker(new URL('./x.worker.ts', import.meta.url), { type: 'module' })`,
    * or a URL.
    */
@@ -149,6 +156,7 @@ export function connectWorker<
   const spawn = (): WorkerPool<S> =>
     (pool ??= new WorkerPool<S>({
       sharedMemory: config.sharedMemory,
+      sharedBuffer: config.sharedBuffer,
       createWorker:
         typeof config.worker === 'function'
           ? config.worker

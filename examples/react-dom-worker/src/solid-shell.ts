@@ -25,6 +25,7 @@ import html from 'solid-js/html';
 import { Island } from '@atolljs/solid-island';
 import { connectIslandWorker } from '@atolljs/islands';
 import type { IslandHandle, Mode } from '@atolljs/islands';
+import { initDevtools } from '@atolljs/devtools';
 
 /** The registry worker — one script serving all Solid apps. */
 const solidWorker = (): Worker =>
@@ -38,6 +39,13 @@ const isolated =
   typeof SharedArrayBuffer !== 'undefined' &&
   (typeof window.crossOriginIsolated === 'undefined' || window.crossOriginIsolated);
 const initialMode: Mode = isolated ? 'push' : 'poll';
+
+// Sink before any island mounts — workers only forward events when the
+// flag reaches them at INIT. No-op without ?__atoll_devtools.
+initDevtools({
+  session: { name: 'islands-solid-shell' },
+  overlay: { src: '__atoll/?mini=1' },
+});
 
 /**
  * Three clients = three OS workers running the same script. The counters

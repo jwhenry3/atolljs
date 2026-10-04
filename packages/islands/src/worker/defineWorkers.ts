@@ -266,10 +266,13 @@ const resolveApp = (name: string): IslandApp | undefined =>
 
 const newPid = (): string => `w-${Math.random().toString(36).slice(2, 8)}`;
 
-/** 'controls' or 'data-table@7' → 'data-table' — registry name part of a instance key. */
+/** 'controls' or 'data-table@7' → 'data-table' — registry name part of a instance key.
+ *  Nested keys ('host@1~counter@1', one '~' per level) resolve the last segment. */
 const appNameOf = (instance: string): string => {
   const at = instance.lastIndexOf('@');
-  return at === -1 ? instance : instance.slice(0, at);
+  const name = at === -1 ? instance : instance.slice(0, at);
+  const tilde = name.lastIndexOf('~');
+  return tilde === -1 ? name : name.slice(tilde + 1);
 };
 
 /**

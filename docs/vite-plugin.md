@@ -77,8 +77,15 @@ to the vite error overlay.
   before staging.
 - **`esbuild` is a real dependency** (not peer): vite 8 no longer carries
   esbuild internally.
-- **Nested workers aren't re-detected** inside a bundle: `new Worker(new
-  URL(...))` belongs on the main thread per the repo's bundler-detection rule.
+- **Nested workers recurse through the same middleware**: a
+  `new Worker(new URL('./sub.worker.ts', import.meta.url))` literal inside a
+  bundled module is re-anchored to an absolute `/@fs/…?worker_file` URL at
+  bundle time (the bundle's `import.meta.url` is the entry's URL, so a
+  relative spec would resolve against the wrong directory and miss the
+  interception). The nested request bundles identically — arbitrary depth,
+  `new SharedWorker(…)` included. The same literal-only contract applies:
+  hoisted/computed/spec'd URLs are left alone, and `vite build` emits nested
+  worker chunks through rollup's own detection.
 - `AtollViteOptions.jsxImportSource` covers non-React JSX runtimes: the CLI
   emits `atoll({ jsxImportSource: 'solid-js' })` for solid scaffolds.
 - The functional test (`packages/vite/test/atoll.test.ts`) runs a real vite

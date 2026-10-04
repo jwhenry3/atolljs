@@ -64,7 +64,13 @@ const initialMode: Mode = isolated ? 'push' : 'poll';
 // forwarding flag only when a sink already exists at spawn time. No-op
 // unless the URL carries ?__atoll_devtools — then broadcast transport +
 // overlay flyout come up together (/__atoll/ is the full-page view).
-initDevtools({ session: { name: 'islands-demo' } });
+initDevtools({
+  session: { name: 'islands-demo' },
+  // Relative dashboard path — mounted hosts (the docs demo tree) ship
+  // __atoll/ inside the app's own folder; absolute /__atoll/ would escape
+  // a sub-path mount like consumer/<demo>/.
+  overlay: { src: '__atoll/?mini=1' },
+});
 
 const rootEl = document.getElementById('root');
 if (!rootEl) throw new Error('#root missing from index.html');

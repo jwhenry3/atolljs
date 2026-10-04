@@ -12,7 +12,7 @@
  * `runInInstance` re-entry (see TableApp's `rowsChanged` in apps.tsx).
  */
 import { useLayoutEffect, useRef, useState } from 'react';
-import { defineReactPolyWorker, emit } from '@atolljs/react-island/worker';
+import { defineReactPolyWorker, emit, SubIsland } from '@atolljs/react-island/worker';
 import { islandApp, type EventPayload } from '@atolljs/islands/worker';
 
 /**
@@ -189,6 +189,50 @@ const IncidentsApp = islandApp('incidents', function IncidentsApp({
   );
 });
 
+/**
+ * 'nestedhost' — an island that hosts an island INSIDE itself. This
+ * component renders in `react.worker` (already a worker); <SubIsland/>
+ * spawns `nested.worker` as a sub-worker of this one and replays its ops
+ * into this instance's shadow tree — so the inner counter's DOM lands
+ * inside the outer island, three tiers deep (page → worker → worker).
+ *
+ * The `new Worker(new URL(...))` literal lives HERE (inside the worker
+ * bundle) — bundler detection applies recursively: vite's worker pipeline
+ * rewrites it to a nested `?worker_file` request.
+ */
+const nestedWorker = (): Worker =>
+  new Worker(new URL('./nested.worker.tsx', import.meta.url), { type: 'module' });
+
+const NestedHostApp = islandApp('nestedhost', function NestedHostApp({
+  label = 'inner',
+}: {
+  label?: string;
+}) {
+  const [report, setReport] = useState('inner island not clicked yet');
+  return (
+    <div className="react-nested">
+      <h3 className="vanilla-heading">
+        outer island <em style={{ color: '#6e7f94' }}>(this worker)</em>
+      </h3>
+      <SubIsland
+        worker={nestedWorker}
+        app="nested"
+        props={{ label }}
+        onEvent={(name, payload) => {
+          const p = payload as { count?: number; label?: string };
+          // The inner island's emit surfaces HERE as a plain worker-side
+          // call — re-emit so the shell's status line sees it too.
+          if (name === 'incremented') {
+            setReport(`inner island → ${p.count}`);
+            emit('nestedIncremented', { count: p.count, label: p.label });
+          }
+        }}
+      />
+      <div className="vanilla-readout">{report} — relayed two hops to the shell</div>
+    </div>
+  );
+});
+
 export const reactWorker = defineReactPolyWorker({
-  apps: { counter: CounterApp, notes: NotesApp, incidents: IncidentsApp },
+  apps: { counter: CounterApp, notes: NotesApp, incidents: IncidentsApp, nestedhost: NestedHostApp },
 });

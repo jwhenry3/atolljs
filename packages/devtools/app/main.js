@@ -1046,6 +1046,21 @@ function renderTopology() {
   window.__topo = topo; // exposed for tests/debugging
 }
 
+/**
+ * The worker that spawned a qualified pool: 'h1#s1~h2#s2~local' is a pool
+ * minted inside worker h2#s2, whose own (qualified) pool is 'h1#s1~h2'.
+ * Returns the `${sess}|${poolId}|${slot}` key or null for top-level ids.
+ */
+function parentWorkerKey(sid, qpid) {
+  const segs = qpid.split('~');
+  if (segs.length < 2) return null;
+  const host = segs[segs.length - 2];
+  const hi = host.lastIndexOf('#');
+  if (hi < 0) return null;
+  const parentPool = [...segs.slice(0, -2), host.slice(0, hi)].join('~');
+  return `${sid}|${parentPool}|${host.slice(hi + 1)}`;
+}
+
 /** World-space layout: each session is one atoll cluster in a loose grid. */
 function layoutWorld(sids) {
   const clusters = [];
@@ -1064,23 +1079,36 @@ function layoutWorld(sids) {
       } else orphans.push({ ik, i });
     }
     // rim positions belong to pools, not workers — a size-N pool is one
-    // socket containing N worker dots
+    // socket containing N worker dots. Nested pools (poolIds qualified as
+    // 'hostPool#slot~localPool' by sub-worker forwarding) don't take rim
+    // sockets — they hang off their host worker instead.
     const pools = [];
+    const nested = new Map();  // parent worker key → [pool group]
     const byPool = new Map();
     for (const w of workers) {
       const pk = w[0].slice(0, w[0].lastIndexOf('|'));
       let g = byPool.get(pk);
       if (!g) {
-        g = { pk, poolId: pk.split('|')[1], workers: [] };
+        g = { pk, poolId: pk.split('|')[1], workers: [], nested: pk.split('|')[1].includes('~') };
         byPool.set(pk, g);
         pools.push(g);
       }
       g.workers.push(w);
     }
+    for (const g of [...pools]) {
+      if (!g.nested) continue;
+      pools.splice(pools.indexOf(g), 1);
+      const pkey = parentWorkerKey(sid, g.poolId);
+      const l = nested.get(pkey) ?? [];
+      if (!l.length) nested.set(pkey, l);
+      l.push(g);
+    }
     const rimN = Math.max(pools.length + orphans.length, 1);
     const rimR = Math.max(110, rimN * 15);
-    maxR = Math.max(maxR, rimR);
-    clusters.push({ sid, workers, pools, islands, hosted, orphans, rimN, rimR });
+    // nested worker clusters hang ~170 world units outside the island ring
+    // per nesting level (orbit link + sub-orbit + island orbit)
+    maxR = Math.max(maxR, rimR + (nested.size ? 170 : 0));
+    clusters.push({ sid, workers, pools, islands, hosted, orphans, nested, rimN, rimR });
   }
   const cell = maxR * 2 + 280;
   const cols = Math.min(Math.max(clusters.length, 1), 4);
@@ -1283,6 +1311,66 @@ function drawAppMap(canvas, sids) {
     }
 
     const font = (px) => `${px * inv}px ui-monospace, monospace`;
+
+    /**
+     * Nested workers: a pool minted inside a worker draws as a violet
+     * mini-orbit centered ON the host worker's dot — the same
+     * ring-around-parent grammar as session → pools → workers → islands.
+     * Sub-workers fan to the sides of that orbit (perpendicular to the
+     * host's radial ray) so they sit between the worker and island rings
+     * instead of colliding with ring islands; each sub-worker's islands
+     * get their own mini-orbit, and deeper pools recurse the same way.
+     */
+    const drawBranch = (pwKey, px, py, a) => {
+      const ws = (cl.nested.get(pwKey) ?? [])
+        .flatMap((g) => g.workers.map(([k, w]) => ({ k, w, g })));
+      if (!ws.length) return;
+      const br = 34;   // sub-worker orbit radius, centered on the parent
+      ctx.beginPath(); ctx.arc(px, py, br, 0, 7);
+      ctx.strokeStyle = '#a371f72e'; ctx.lineWidth = inv; ctx.stroke();
+      ws.forEach(({ k, w, g }, j) => {
+        // lateral slots: ±90° off the ray first, then further around
+        const side = j % 2 === 0 ? 1 : -1;
+        const step = Math.floor(j / 2) + 1;
+        const th = a + side * (Math.PI / 2) * step * 0.8;
+        const nx = px + br * Math.cos(th), ny = py + br * Math.sin(th);
+        // spawn link — violet, distinct from pool→worker gray
+        ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(nx, ny);
+        ctx.strokeStyle = '#a371f766'; ctx.lineWidth = 1.4 * inv; ctx.stroke();
+        const r = 6 * inv;
+        ctx.beginPath(); ctx.arc(nx, ny, r, 0, 7);
+        ctx.fillStyle = w.dead ? '#484f58' : '#a371f7'; ctx.fill();
+        ctx.strokeStyle = '#a371f7aa'; ctx.lineWidth = inv; ctx.stroke();
+        if (full) {
+          ctx.font = font(10); ctx.fillStyle = '#a371f7';
+          ctx.fillText(`${g.poolId.split('~').pop()}#${k.split('|').pop()}`, nx, ny + r + 2 * inv);
+        }
+        nodes.push({ x: nx, y: ny, r: r + 4 * inv, kind: 'worker', key: k });
+        // this sub-worker's islands orbit it — a child ring, not the main one
+        const isl = cl.hosted.get(k) ?? [];
+        if (isl.length) {
+          ctx.beginPath(); ctx.arc(nx, ny, 28, 0, 7);
+          ctx.strokeStyle = '#3fb9502a'; ctx.lineWidth = inv; ctx.stroke();
+        }
+        isl.forEach(({ ik, i }, jj) => {
+          // fan along the spoke from the host's center to this sub-worker
+          const th2 = th + (jj - (isl.length - 1) / 2) * 0.7;
+          const ix = nx + 28 * Math.cos(th2), iy = ny + 28 * Math.sin(th2);
+          ctx.beginPath(); ctx.moveTo(nx, ny); ctx.lineTo(ix, iy);
+          ctx.strokeStyle = `${i.ended ? '#484f58' : '#3fb950'}55`;
+          ctx.lineWidth = 1.4 * inv; ctx.stroke();
+          const r = drawIslandDot(ctx, i, ix, iy, inv);
+          if (full) {
+            ctx.fillStyle = '#8b949e';
+            ctx.fillText(ik.split('|').slice(1).join('|'), ix, iy + r + 2 * inv);
+          }
+          nodes.push({ x: ix, y: iy, r: r + 4 * inv, kind: 'island', key: ik });
+        });
+        // deeper pools orbit this sub-worker the same way
+        drawBranch(k, nx, ny, th);
+      });
+    };
+
     for (const p of ppos) {
       const mark = Math.max(inv, 1);
       // pool — a gray socket on the rim, the container for its workers
@@ -1336,6 +1424,8 @@ function drawAppMap(canvas, sids) {
           }
           nodes.push({ x: ix, y: iy, r: r + 4 * inv, kind: 'island', key: ik });
         });
+        // nested pools branch off this worker — sub-workers + their islands
+        drawBranch(k, wx, wy, a2);
       });
     }
     cl.orphans.forEach(({ ik, i }, j) => {

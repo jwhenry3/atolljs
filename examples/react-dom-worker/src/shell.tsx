@@ -24,6 +24,7 @@ import { createRoot } from 'react-dom/client';
 import { Island, islandComponent, lazyIsland } from '@atolljs/react-island';
 import { connectIslandWorker } from '@atolljs/islands';
 import type { IslandHandle, Mode } from '@atolljs/islands';
+import { initDevtools } from '@atolljs/devtools';
 
 /** The registry worker — one script serving all three React apps. */
 const reactWorker = (): Worker =>
@@ -37,6 +38,13 @@ const isolated =
   typeof SharedArrayBuffer !== 'undefined' &&
   (typeof window.crossOriginIsolated === 'undefined' || window.crossOriginIsolated);
 const initialMode: Mode = isolated ? 'push' : 'poll';
+
+// Sink before any island mounts — workers only forward events when the
+// flag reaches them at INIT. No-op without ?__atoll_devtools.
+initDevtools({
+  session: { name: 'islands-react-shell' },
+  overlay: { src: '__atoll/?mini=1' },
+});
 
 /**
  * Two clients = two OS workers running the same script. The counters share
@@ -164,6 +172,28 @@ export function Shell(): ReactElement {
         badge={pids.counter2}
       >
         <Island {...counterOpts('beta', 'counter2')} className="island-root" />
+      </IslandPanel>
+
+      <IslandPanel
+        title="app: nestedhost — an island INSIDE an island (worker → sub-worker)"
+        badge={pids.nestedhost}
+      >
+        <Island
+          client={counterClient}
+          app="nestedhost"
+          props={{ label: 'inner counter' }}
+          mode={initialMode}
+          onReady={ready('nestedhost')}
+          onActivity={bump}
+          onEvent={(name, payload) => {
+            const p = payload as { count?: number; label?: string };
+            if (name === 'nestedIncremented')
+              setStatus(
+                `nested island → ${p.count} — emitted in the SUB-worker, relayed through the parent island`,
+              );
+          }}
+          className="island-root"
+        />
       </IslandPanel>
 
       <IslandPanel

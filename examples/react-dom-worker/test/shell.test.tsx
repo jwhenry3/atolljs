@@ -35,8 +35,13 @@ vi.mock('react-dom/client', async () => {
 
 vi.stubGlobal('Worker', InProcessWorker);
 // In-process workers share one module graph — the registry worker entry
-// registers its counter/notes/incidents apps into it.
-InProcessWorker.handlerModules = [() => import('../src/worker/react.worker')];
+// registers its counter/notes/incidents/nestedhost apps into it, and the
+// nested island entry registers 'nested' (the sub-worker <SubIsland/>
+// spawns inside react.worker is in-process too).
+InProcessWorker.handlerModules = [
+  () => import('../src/worker/react.worker'),
+  () => import('../src/worker/nested.worker'),
+];
 
 const waitFor = async (fn: () => unknown, timeoutMs = 15_000): Promise<void> => {
   const start = Date.now();
@@ -71,9 +76,9 @@ describe('React shell', () => {
     createRoot(host).render(<Shell />);
   });
 
-  it('mounts all four islands through the component APIs', async () => {
-    await waitFor(() => realDoc.querySelectorAll('.island-root').length === 4);
-    await waitFor(() => realDoc.querySelectorAll('.island-head .badge').length === 4);
+  it('mounts all five islands through the component APIs', async () => {
+    await waitFor(() => realDoc.querySelectorAll('.island-root').length === 5);
+    await waitFor(() => realDoc.querySelectorAll('.island-head .badge').length === 5);
     await waitFor(() =>
       [...realDoc.querySelectorAll('.island-head .badge')].every((b) =>
         /^worker w-/.test(b.textContent ?? ''),
@@ -127,6 +132,34 @@ describe('React shell', () => {
       ),
     );
   }, 60_000);
+
+  it('the nested island renders inside the outer island and round-trips events two hops deep', async () => {
+    // <SubIsland/> inside nestedhost spawned nested.worker inside
+    // react.worker — its ops replayed through the outer island's shadow
+    // tree and landed inside the host div on the page.
+    await waitFor(
+      () => realDoc.querySelector('[data-atoll-sub-island] .react-counter'),
+      60_000,
+    );
+    const nested = realDoc.querySelector('[data-atoll-sub-island] .react-counter')!;
+    expect(nested.textContent).toContain('inner counter: 0');
+    expect(nested.textContent).toContain('two workers deep');
+
+    // Click → outer dispatch → proxy listener → sub-worker handler →
+    // text op back up through the proxy DOM → real DOM update, plus an
+    // emit relayed through the outer island to the shell status line.
+    nested.querySelector('.mw-btn')!.dispatchEvent(
+      new MouseEvent('click', { bubbles: true }),
+    );
+    await waitFor(() => /nested island → 1/.test(status()), 30_000);
+    await waitFor(
+      () => nested.textContent!.includes('inner counter: 1'),
+      30_000,
+    );
+    // The outer island's own readout shows the relayed event too.
+    const host = realDoc.querySelector('[data-atoll-sub-island]')!.parentElement!;
+    await waitFor(() => /inner island → 1/.test(host.textContent ?? ''), 30_000);
+  }, 120_000);
 
   it('transport stats aggregate in React-rendered DOM', async () => {
     const stats = realDoc.getElementById('transport-stats')!;

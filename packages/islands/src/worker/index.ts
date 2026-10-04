@@ -47,6 +47,7 @@ export {
   instances,
   newElement,
   newText,
+  proxyInstanceStats,
   pushOp,
   registerHandler,
   ROOT_CONTAINER,
@@ -85,3 +86,19 @@ export type { EventPayload, IslandWorkerMethods, Op, WireProps } from '../ops';
 export { isEventRef } from '../ops';
 export { renderMemory } from '../memory';
 export type { DoorbellSpec } from '../memory';
+
+export { mountSubIsland } from './subIsland';
+export type { MountSubIslandOptions, SubIslandHandle } from './subIsland';
+
+// Nested-island clients: `connectIslandWorker` is thread-agnostic — a worker
+// shell calls it to spawn a sub-worker. `mountIsland` is the ONE surface:
+// a proxy `el` (inside a worker-rendered tree) delegates to the registered
+// sub-mounter in ./subIsland; a real `el` drives the main-thread applier.
+export { connectIslandWorker, mountIsland } from '../island';
+export type {
+  ConnectIslandWorkerConfig,
+  IslandClient,
+  IslandHandle,
+  Mode,
+  MountIslandOptions,
+} from '../island';

@@ -42,11 +42,12 @@ behavior is exercised via `InProcessWorker`
 - **Contracts are shared by both threads.** A `defineSharedMemory` spec must
   produce identical layout on main thread and worker — never fork the spec or
   hand-compute byte offsets. See `docs/shared-memory.md`.
-- **Worker entries must stay bundler-detectable**: `new Worker(new URL('./x.worker.ts', import.meta.url), { type: 'module' })` inline — never hoist or compute the URL.
+- **Worker entries must stay bundler-detectable**: `new Worker(new URL('./x.worker.ts', import.meta.url), { type: 'module' })` inline — never hoist or compute the URL. Applies inside worker entries too: a worker spawning sub-workers (`connectSubWorker`, see `docs/tasks-and-pool.md`) uses the same inline-literal form.
 - **`import type` the worker definition** on the main thread; the client is a
   Proxy typed by `typeof worker` — worker code must not leak into main-thread
   bundles.
-- **Islands: one instance per `app@N` key.** Worker-initiated DOM work outside
+- **Islands: one instance per `app@N` key** — nested islands namespace as
+  `parent~app@N` (`nestedhost@1~nested@1`). Worker-initiated DOM work outside
   a task must re-enter via `runInInstance(instance, fn)` + `bumpOpsVersion()`;
   ambient `document`/`window` resolution is a heuristic, not a contract.
   See `docs/islands-worker.md`.

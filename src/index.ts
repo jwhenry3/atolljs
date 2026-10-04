@@ -69,6 +69,8 @@ export type {
   WorkerClient,
   WorkerMethods,
 } from './pool/workerClient';
+export { connectSubWorker } from './pool/subWorkerClient';
+export type { ConnectSubWorkerConfig } from './pool/subWorkerClient';
 
 /* ── SharedWorker — one worker (and one buffer) across tabs/iframes ──────── */
 

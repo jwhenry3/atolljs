@@ -87,6 +87,8 @@ class WorkerPoolImpl<S extends SharedSpec = SharedSpec> {
   private nextMessageId = 0;
   private queue: TaskEntry[] = [];
   private memoryManager?: MemoryManager;
+  /** A caller-supplied buffer shipped via INIT_MEMORY (sub-worker / second-pool sharing). */
+  private injectedBuffer?: SharedArrayBuffer;
   private workerUrl?: URL;
   private spawn: () => Worker;
   private readonly concurrency: number;
@@ -112,7 +114,7 @@ class WorkerPoolImpl<S extends SharedSpec = SharedSpec> {
   public readonly persistence: MemoryPersistence | undefined;
 
   constructor(config: WorkerPoolConfig<S, TaskMap>) {
-    if (config.sharedMemory) {
+    if (config.sharedMemory || config.sharedBuffer !== undefined) {
       if (typeof SharedArrayBuffer === 'undefined' || (typeof crossOriginIsolated !== 'undefined' && !crossOriginIsolated)) {
         throw new Error(
           'WorkerPool requires SharedArrayBuffer in a cross-origin isolated context — serve the page with COOP/COEP headers.'
@@ -130,22 +132,42 @@ class WorkerPoolImpl<S extends SharedSpec = SharedSpec> {
     this.taskTimeout = config.taskTimeout;
     this.label = config.name;
 
+    // A caller-supplied buffer is resolved once here — the contract's local
+    // binding and every spawned worker must share the same bytes.
+    if (config.sharedBuffer !== undefined) {
+      this.injectedBuffer =
+        typeof config.sharedBuffer === 'function' ? config.sharedBuffer() : config.sharedBuffer;
+      if (!this.injectedBuffer) {
+        throw new Error(
+          'WorkerPool: `sharedBuffer` resolved to an empty buffer — the producing pool or contract has no bound memory yet.'
+        );
+      }
+    }
+
     if (config.sharedMemory) {
       this.sharedMemory = config.sharedMemory;
-      this.memoryManager = new MemoryManager(config.memory);
-      this.memoryManager.ensureCapacity(this.sharedMemory.totalBytes);
-      this.sharedMemory.bind(this.memoryManager.getBuffer());
+      if (this.injectedBuffer) {
+        this.sharedMemory.bind(this.injectedBuffer);
+      } else {
+        this.memoryManager = new MemoryManager(config.memory);
+        this.memoryManager.ensureCapacity(this.sharedMemory.totalBytes);
+        this.sharedMemory.bind(this.memoryManager.getBuffer());
+      }
       this.persistence = config.persistence?.(config.sharedMemory);
     }
 
     const requestedSize = config.poolSize ?? 'auto';
     const poolSize =
-      requestedSize === 'auto' ? (navigator.hardwareConcurrency ?? 4) : requestedSize;
+      requestedSize === 'auto'
+        ? (typeof navigator !== 'undefined' ? navigator.hardwareConcurrency ?? 4 : 4)
+        : requestedSize;
 
     poolLog.info(
       this.sharedMemory
         ? `spawning ${poolSize} worker(s) with ${fmtBytes(this.sharedMemory.totalBytes)} shared buffer`
-        : `spawning ${poolSize} worker(s), message-only`,
+        : this.injectedBuffer
+          ? `spawning ${poolSize} worker(s) with ${fmtBytes(this.injectedBuffer.byteLength)} inherited buffer`
+          : `spawning ${poolSize} worker(s), message-only`,
       { workerUrl: config.workerUrl ? String(config.workerUrl) : 'createWorker()' },
     );
     poolLog.debug(`tip: setLogLevel('trace') for per-task detail`);
@@ -156,7 +178,7 @@ class WorkerPoolImpl<S extends SharedSpec = SharedSpec> {
       label: this.label,
       poolSize,
       concurrency: this.concurrency,
-      memoryBytes: this.sharedMemory?.totalBytes,
+      memoryBytes: this.sharedMemory?.totalBytes ?? this.injectedBuffer?.byteLength,
     });
 
     for (let i = 0; i < poolSize; i++) {
@@ -190,9 +212,28 @@ class WorkerPoolImpl<S extends SharedSpec = SharedSpec> {
       // slot produced it so worker-side fetches/heap/memory writes
       // attribute to a specific worker.
       if (data.type === 'ATOLL_DEVTOOLS' && data.event) {
+        const ev = data.event as EmittedDevtoolsEvent & { poolId?: string };
+        const slotIndex = this.slots.indexOf(slot);
+        // A pool constructed inside a worker mints ids ('pool-1', 'task-1')
+        // on that context's own counters — they collide textually with
+        // same-named ids minted on the parent thread. Every poolId arriving
+        // from a worker refers to the worker's local id space (worker-side
+        // island clients, sub-pools, sub-workers), never to this pool: the
+        // emitting context can't even see the parent's ids. Qualify
+        // unconditionally so the id encodes the spawn path
+        // ('pool-1#0~pool-1' = pool-1 minted inside worker pool-1#0) —
+        // dashboards then key nested pools/workers unambiguously and draw
+        // parent→child edges. `worker` stamps that already exist (multi-hop
+        // forwarding) are qualified the same way so attribution stays pinned
+        // to the deepest emitting worker.
+        const qualify = (id: string): string => `${this.poolId}#${slotIndex}~${id}`;
         forwardDevtools({
-          ...data.event,
-          worker: { poolId: this.poolId, slot: this.slots.indexOf(slot) },
+          ...ev,
+          ...(ev.poolId !== undefined ? { poolId: qualify(ev.poolId) } : {}),
+          worker:
+            ev.worker === undefined
+              ? { poolId: this.poolId, slot: slotIndex }
+              : { poolId: qualify(ev.worker.poolId), slot: ev.worker.slot },
         });
         return;
       }
@@ -205,11 +246,13 @@ class WorkerPoolImpl<S extends SharedSpec = SharedSpec> {
     // on this channel (ATOLL_DEVTOOLS) — only when a sink is live at spawn.
     if (this.memoryManager) {
       worker.postMessage({ type: 'INIT_MEMORY', memory: this.memoryManager.memory, devtools: devtoolsEnabled() });
+    } else if (this.injectedBuffer) {
+      worker.postMessage({ type: 'INIT_MEMORY', buffer: this.injectedBuffer, devtools: devtoolsEnabled() });
     } else {
       worker.postMessage({ type: 'INIT', devtools: devtoolsEnabled() });
     }
     this.slots.push(slot);
-    poolLog.debug(`worker spawned, ${this.memoryManager ? 'INIT_MEMORY' : 'INIT'} sent`);
+    poolLog.debug(`worker spawned, ${this.memoryManager || this.injectedBuffer ? 'INIT_MEMORY' : 'INIT'} sent`);
     emitDevtools({ type: 'worker:spawn', poolId: this.poolId, slot: this.slots.indexOf(slot) });
     return slot;
   }
@@ -422,7 +465,7 @@ class WorkerPoolImpl<S extends SharedSpec = SharedSpec> {
    * (e.g. a second pool of HTTP workers via withSharedBuffer).
    */
   public get sharedBuffer(): SharedArrayBuffer | undefined {
-    return this.memoryManager?.getBuffer();
+    return this.memoryManager?.getBuffer() ?? this.injectedBuffer;
   }
 
   /**

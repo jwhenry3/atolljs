@@ -1,6 +1,6 @@
 # Telecom Incident Explorer — Hono
 
-The worker atoll on the server side, no framework adapter needed: a Hono
+Islands-based multithreading on the server side, no framework adapter needed: a Hono
 REST API backed by a `WorkerPool` of `node:worker_threads` workers
 (`@atolljs/node`), all bound to the same 1M-record shared-memory contract.
 

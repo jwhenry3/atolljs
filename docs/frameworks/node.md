@@ -196,7 +196,10 @@ none (message-only) and hand each worker `pool.sharedBuffer` with
 feeds a buffer (or thunk, evaluated per spawn) into every spawned worker's
 message channel, and the worker entry `await`s `bindSharedBuffer()`, which
 binds all defined contracts: before booting. `bindSharedBuffer` also accepts
-a manual `workerData.buffer`.
+a manual `workerData.buffer`. When the second consumer is itself a pool, the
+`sharedBuffer` pool config does it directly (`sharedBuffer: pool.sharedBuffer`
+or a thunk) — and inside a worker shell it's how sub-workers inherit the
+shell's buffer (see [../tasks-and-pool.md](../tasks-and-pool.md)).
 
 Reference implementation: `examples/http-offload`: gateway on :3204 (any
 Node) plus the clustered listener on :3205 (Node ≥ 26); e2e asserts

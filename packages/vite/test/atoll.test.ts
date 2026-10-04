@@ -170,6 +170,22 @@ describe('atoll vite plugin', () => {
     expect(await res.text()).toContain('virtual:sfc-link');
   });
 
+  it('rewrites nested worker entries back onto the bundling path', async () => {
+    const res = await fetch(`${base}/src/nested.worker.ts?worker_file&type=module`);
+    expect(res.status).toBe(200);
+    const code = await res.text();
+    // The nested `new Worker(new URL('./sub.worker.ts', …))` spec resolves
+    // against the bundle's served URL — it must be re-anchored to an
+    // absolute /@fs/ path flagged ?worker_file.
+    expect(code).toMatch(/\/@fs\/.+sub\.worker\.ts\?worker_file/);
+    // …and that request bundles recursively through the same middleware.
+    const sub = await fetch(`${base}/@fs/${fixture.replace(/\\/g, '/')}/src/sub.worker.ts?worker_file&type=module`);
+    expect(sub.status, await sub.clone().text()).toBe(200);
+    const subCode = await sub.text();
+    expect(subCode).toContain('SUB_');
+    expect(subCode).toContain('DEP_V');
+  });
+
   it('returns 500 for a missing worker entry', async () => {
     const res = await fetch(`${base}/src/nope.worker.ts?worker_file&type=module`);
     expect(res.status).toBe(500);

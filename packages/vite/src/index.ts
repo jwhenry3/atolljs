@@ -84,6 +84,30 @@ const OPTIMIZED_DEP = /(^|\/)node_modules\/\.vite\//;
  *  detects this via the message marker, not instanceof. */
 const FALLBACK_MARKER = 'atoll-fallback:';
 
+// Nested worker entries inside a worker bundle. A `new Worker(new URL(
+// './sub.worker.ts', import.meta.url))` literal inside a bundled module
+// resolves against the BUNDLE's served URL — which lacks `?worker_file` and
+// would land on vite's per-module pipeline (raw TS or react-refresh inside a
+// worker → crash). Rewrite the literal to an absolute `/@fs/…?worker_file`
+// URL so nested entries hit this middleware and bundle recursively — the
+// same detectable-literal contract as the main thread. Scheme'd URLs
+// (`https:`, `data:`, …) and templates are left untouched.
+const NESTED_WORKER_URL =
+  /\bnew\s+(Shared)?Worker\s*\(\s*new\s+URL\(\s*(['"])([^'"]+)\2\s*,\s*import\.meta\.url\s*\)/g;
+const NESTED_WORKER_TEST =
+  /\bnew\s+(?:Shared)?Worker\s*\(\s*new\s+URL\(\s*['"][^'"]+['"]\s*,\s*import\.meta\.url\s*\)/;
+
+const JS_LOADERS: Record<string, 'js' | 'ts' | 'jsx' | 'tsx'> = {
+  '.js': 'js',
+  '.mjs': 'js',
+  '.cjs': 'js',
+  '.ts': 'ts',
+  '.mts': 'ts',
+  '.cts': 'ts',
+  '.jsx': 'jsx',
+  '.tsx': 'tsx',
+};
+
 const toPosix = (p: string) => p.replace(/\\/g, '/');
 
 /** The devtools dashboard, served on the app origin so BroadcastChannel
@@ -192,6 +216,37 @@ async function buildWorkerBundle(
         // Virtual / plugin-owned module — no fs path; load through vite's
         // plugin container (load hooks only — no browser-side transforms).
         return { path: file, namespace: 'atoll-vite-load' };
+      });
+
+      // Nested worker entries: modules that spawn their own workers get
+      // their `new URL(…)` spec re-anchored to an absolute /@fs/ path with
+      // `?worker_file`, because `import.meta.url` inside the single-file
+      // bundle is the ENTRY's URL — a relative spec would resolve against
+      // the wrong directory and miss the middleware entirely.
+      build.onLoad({ filter: /\.[cm]?[jt]sx?$/ }, (args) => {
+        if (args.namespace !== 'file') return undefined;
+        const code = readFileSync(args.path, 'utf8');
+        if (!NESTED_WORKER_TEST.test(code)) return undefined;
+        const rewritten = code.replace(
+          NESTED_WORKER_URL,
+          (m, shared: string | undefined, q: string, spec: string) => {
+            if (/worker_file/.test(spec)) return m;
+            if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(spec)) return m;
+            const qIdx = spec.indexOf('?');
+            const pathPart = qIdx >= 0 ? spec.slice(0, qIdx) : spec;
+            const queryPart = qIdx >= 0 ? spec.slice(qIdx) : '';
+            const abs = pathPart.startsWith('/')
+              ? pathPart
+              : `/@fs/${toPosix(resolve(dirname(args.path), pathPart))}`;
+            const flag = shared ? 'sharedworker_file' : 'worker_file';
+            return m.replace(
+              `${q}${spec}${q}`,
+              `${q}${abs}${queryPart}${queryPart ? '&' : '?'}${flag}${q}`,
+            );
+          },
+        );
+        if (rewritten === code) return undefined;
+        return { contents: rewritten, loader: JS_LOADERS[extname(args.path).toLowerCase()] ?? 'js' };
       });
 
       build.onLoad({ filter: /.*/, namespace: 'atoll-empty' }, () => ({

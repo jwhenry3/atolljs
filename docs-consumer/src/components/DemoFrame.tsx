@@ -26,7 +26,11 @@ export function DemoFrame({ id, port, name, path = '' }: DemoFrameProps) {
     : `${consumerRootHref()}${id}/`;
   // ?v=<build stamp>: index.html keeps a stable name, so a fresh stamp per
   // build forces browsers past aggressively cached documents.
-  const src = `${base}${path.replace(/^\//, '')}?v=${__BUILD_ID__}`;
+  // __atoll_devtools arms initDevtools() inside the demo: every embedded
+  // app streams to BroadcastChannel and shows the floating overlay button —
+  // the flyout iframes <demo>/__atoll/, mounted next to each demo in the
+  // built tree (pages-lib.mjs mountDevtoolsApp / assemble.mjs).
+  const src = `${base}${path.replace(/^\//, '')}?v=${__BUILD_ID__}&__atoll_devtools`;
   const label = import.meta.env.DEV
     ? `${window.location.hostname}:${port}${path}`
     : `${id}/${path.replace(/^\//, '')}`;

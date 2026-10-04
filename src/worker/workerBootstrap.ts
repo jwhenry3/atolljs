@@ -42,11 +42,20 @@ export function installWorkerListener(): void {
     }
 
     if (data.type === 'INIT_MEMORY') {
-      const memory = data.memory as WebAssembly.Memory;
-      bindSharedMemories(memory.buffer as unknown as SharedArrayBuffer);
+      // `memory` is the pool-allocated WebAssembly.Memory; `buffer` is an
+      // existing SharedArrayBuffer the caller ships directly (sub-worker
+      // shell, second pool sharing a buffer).
+      const buffer =
+        (data.memory as WebAssembly.Memory | undefined)?.buffer ??
+        (data.buffer as SharedArrayBuffer | undefined);
+      if (!buffer) {
+        workerLog.warn('INIT_MEMORY arrived without a buffer — contracts stay unbound');
+        return;
+      }
+      bindSharedMemories(buffer as unknown as SharedArrayBuffer);
       memoryInitialized = true;
       if (data.devtools) enableWorkerDevtoolsForwarding();
-      workerLog.info(`shared memory initialized (${fmtBytes(memory.buffer.byteLength)})`);
+      workerLog.info(`shared memory initialized (${fmtBytes(buffer.byteLength)})`);
       return;
     }
 

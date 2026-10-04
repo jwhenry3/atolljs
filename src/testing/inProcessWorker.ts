@@ -72,9 +72,10 @@ export class InProcessWorker {
       return;
     }
     if (data.type === 'INIT_MEMORY') {
-      this.ready ??= this.boot().then(() =>
-        bindSharedMemories((data.memory as WebAssembly.Memory).buffer as unknown as SharedArrayBuffer),
-      );
+      const buffer = (data.memory as WebAssembly.Memory | undefined)?.buffer ?? data.buffer;
+      this.ready ??= this.boot().then(() => {
+        if (buffer) bindSharedMemories(buffer as SharedArrayBuffer);
+      });
       try {
         await this.ready;
       } catch (err) {

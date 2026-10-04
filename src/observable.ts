@@ -67,7 +67,9 @@ export function observe<S extends SharedSpec, K extends SpecPath<S>, Sel>(
     } catch {
       // Not bound on this thread yet — activate when it is.
       pendingBind = memory.onBound(() => {
+        const un = pendingBind;
         pendingBind = null;
+        un?.();
         activate();
       });
       return;
