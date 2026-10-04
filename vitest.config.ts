@@ -100,9 +100,16 @@ export default mergeConfig(
         reporter: ['text', 'lcov'],
         // The publishable surface: core sdk + every atoll-* binding package.
         // packages/cli is tooling, not runtime — its interactive shell
-        // (readline, process.argv guard) isn't meaningfully coverable.
+        // (readline, process.argv guard) isn't meaningfully coverable; the
+        // devtools bin is the same shape (argv → createDevtoolsServer).
         include: ['src/**', 'packages/*/src/**'],
-        exclude: ['**/*.test.*', '**/test/**', '**/testing/**', 'packages/cli/**'],
+        exclude: [
+          '**/*.test.*',
+          '**/test/**',
+          '**/testing/**',
+          'packages/cli/**',
+          'packages/devtools/src/bin.ts',
+        ],
         // Floor slightly below the current baseline — regresses fail CI.
         thresholds: { statements: 92, branches: 85, functions: 93, lines: 96 },
       },

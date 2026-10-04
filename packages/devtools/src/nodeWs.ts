@@ -57,6 +57,7 @@ export function connectNodeWebSocket(url: string): NodeWebSocket {
       } catch {
         /* already gone */
       }
+      open = false;
       conn.onClose?.();
     },
     onOpen: null,
@@ -66,6 +67,7 @@ export function connectNodeWebSocket(url: string): NodeWebSocket {
   const die = () => {
     if (!closed) {
       closed = true;
+      open = false;
       conn.onClose?.();
     }
   };

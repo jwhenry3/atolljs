@@ -51,6 +51,13 @@ beforeAll(async () => {
         // Bare specifier that resolves to an SFC — the fallback marker must
         // fire from the *resolved* path, not just the raw import.
         { find: /^widget-sfc$/, replacement: `${fixture}/src/Widget.vue` },
+        // Workspace-style aliasing: @atolljs/devtools resolves to sources,
+        // not node_modules — /__atoll/ must still find app/ (via
+        // pluginContainer.resolveId, then ../app).
+        {
+          find: /^@atolljs\/devtools$/,
+          replacement: `${fileURLToPath(new URL('../../devtools/src/index.ts', import.meta.url)).replace(/\\/g, '/')}`,
+        },
       ],
     },
     server: {
@@ -110,6 +117,22 @@ describe('atoll vite plugin', () => {
     const code = await res.text();
     expect(res.status, code).toBe(200);
     expect(code).toContain('DEP_V1');
+  });
+
+  it('serves the devtools dashboard at /__atoll/ with the broadcast flag', async () => {
+    const res = await fetch(`${base}/__atoll/`);
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).toContain('atoll devtools');
+    // The transport flag is injected — broadcast mode is what makes the
+    // same-origin dashboard see this app's sessions.
+    expect(html).toContain('__ATOLL_TRANSPORT');
+  });
+
+  it('redirects the extensionless /__atoll to the trailing-slash URL', async () => {
+    const res = await fetch(`${base}/__atoll`, { redirect: 'manual' });
+    expect(res.status).toBe(302);
+    expect(res.headers.get('location')).toBe('/__atoll/');
   });
 
   it('falls back to vite per-module serving for SFC worker graphs', async () => {
