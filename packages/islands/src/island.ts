@@ -14,7 +14,7 @@
  * is least-busy round-robin, so a second worker would receive dispatches for
  * a tree it doesn't hold (sticky routing is future work).
  */
-import { connectWorker, observe } from '@atolljs/core';
+import { connectWorker, emitDevtools, observe } from '@atolljs/core';
 import type {
   ConnectWorkerConfig,
   SharedSpec,
@@ -121,6 +121,13 @@ interface MountIslandBaseOptions {
    * cross-origin isolation requirement. Switch later with `handle.setMode`.
    */
   mode?: Mode;
+  /**
+   * Optional renderer/framework tag — pure observability metadata forwarded
+   * to devtools on `island:mount` ('react', 'vue', 'svelte', …). Framework
+   * shell bindings can set it automatically; direct mountIsland callers
+   * declare it themselves.
+   */
+  framework?: string;
   /**
    * Milliseconds the mount handshake (mount + whoami) may take before the
    * returned promise rejects — default 15_000, `0` disables. A worker entry
@@ -336,7 +343,7 @@ const cssStyleValue = (key: string, value: unknown): string => {
 export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandle> {
   const {
     el, onEvent, onActivity, onOps, slots, mode: initialMode, mountTimeout,
-    client: givenClient, worker, app: givenApp, props: givenProps,
+    client: givenClient, worker, app: givenApp, props: givenProps, framework,
     ...workerConfig
   } = opts;
   // Shell→worker callables: callbackProp() markers marshal to {__cb:id}
@@ -442,9 +449,8 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
       );
       // The whole point: an event = one postMessage round-trip. The worker
       // re-renders, we apply whatever ops come back.
-      void client
-        .dispatch(handlerId, payload)
-        .then(applyOps)
+      void islandCall('dispatch', client.dispatch(handlerId, payload))
+        .then((ops) => applyOps(ops, 'dispatch'))
         .catch((err) => console.error(`[island ${instance}] dispatch failed`, err));
     };
   }
@@ -771,24 +777,53 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
           break;
         }
         // Not a DOM mutation — the island→shell channel.
+        emitDevtools({ type: 'island:event', instance, name: op.name });
         onEvent?.(op.name, op.payload);
         break;
       }
     }
   }
 
-  function applyOps(ops: Op[]): void {
+  function applyOps(ops: Op[], via: 'mount' | 'updateProps' | 'dispatch' | 'setSize' | 'flush'): void {
     opsApplied += ops.length;
     onActivity?.();
-    const t0 = onOps !== undefined ? performance.now() : 0;
+    const t0 = performance.now();
     for (const op of ops) applyOp(op);
-    onOps?.(ops, performance.now() - t0);
+    const replayMs = performance.now() - t0;
+    emitDevtools({ type: 'island:ops', instance, via, count: ops.length, replayMs });
+    onOps?.(ops, replayMs);
   }
+
+  /** Times a main→worker round-trip for the devtools inspector. */
+  const islandCall = <T>(
+    method: 'mount' | 'whoami' | 'dispatch' | 'setSize' | 'updateProps' | 'flush' | 'unmount',
+    p: Promise<T>,
+  ): Promise<T> => {
+    const t0 = performance.now();
+    return p.then(
+      (r) => {
+        emitDevtools({
+          type: 'island:task', instance, method,
+          ms: performance.now() - t0,
+          ops: Array.isArray(r) ? r.length : undefined,
+        });
+        return r;
+      },
+      (err) => {
+        emitDevtools({
+          type: 'island:task', instance, method,
+          ms: performance.now() - t0,
+          error: err instanceof Error ? err.message : String(err),
+        });
+        throw err;
+      },
+    );
+  };
 
   const doFlush = (): void => {
     if (destroyed) return;
     flushCalls++;
-    void client.flush(instance).then(applyOps);
+    void islandCall('flush', client.flush(instance)).then((ops) => applyOps(ops, 'flush'));
   };
 
   /* ── Transport: push (shared-memory doorbell) vs poll ─────────────────── */
@@ -842,15 +877,16 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
 
   let pid: string;
   try {
-    applyOps(await raced(client.mount(instance, props)));
-    pid = await raced(client.whoami(instance));
+    applyOps(await raced(islandCall('mount', client.mount(instance, props))), 'mount');
+    pid = await raced(islandCall('whoami', client.whoami(instance)));
+    emitDevtools({ type: 'island:mount', instance, app, pid, poolId: client.pool?.poolId, framework });
   } catch (err) {
     // The instance may exist worker-side with ops we never applied — release it.
     // An island-owned client also terminates (stops a crash→respawn loop on
     // a permanently-broken entry); a shared client just drops the instance.
     clientMounts.set(client, (clientMounts.get(client) ?? 1) - 1);
     if (givenClient === undefined) client.terminate();
-    else void client.unmount(instance).catch(() => {});
+    else void islandCall('unmount', client.unmount(instance)).catch(() => {});
     throw err;
   }
 
@@ -879,7 +915,7 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
     if (w === lastW && h === lastH) return;
     lastW = w;
     lastH = h;
-    void client.setSize(instance, w, h).then(applyOps);
+    void islandCall('setSize', client.setSize(instance, w, h)).then((ops) => applyOps(ops, 'setSize'));
   };
   const resizeObserver =
     typeof ResizeObserver === 'function'
@@ -918,13 +954,14 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
     updateProps: async (next: Record<string, unknown>) => {
       const marshalled = marshalCallbackProps(next, registerCb) as Record<string, unknown>;
       assertCloneableProps(marshalled, `updateProps(${app})`);
-      applyOps(await client.updateProps(instance, marshalled));
+      applyOps(await islandCall('updateProps', client.updateProps(instance, marshalled)), 'updateProps');
     },
     flush: async () => {
-      applyOps(await client.flush(instance));
+      applyOps(await islandCall('flush', client.flush(instance)), 'flush');
     },
     destroy: () => {
       destroyed = true;
+      emitDevtools({ type: 'island:unmount', instance });
       unsubscribe?.();
       resizeObserver?.disconnect();
       if (pollTimer !== null) clearInterval(pollTimer);
@@ -936,7 +973,7 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
         // detach ops are irrelevant if our element is already gone, so the
         // return batch is dropped. Best-effort: the instance map and its
         // handlers release regardless.
-        void client.unmount(instance).catch(() => {});
+        void islandCall('unmount', client.unmount(instance)).catch(() => {});
       } else {
         // Last island — still run the instance's teardown first so the app's
         // dispose hook cancels deferred work (library timers, animation
@@ -944,8 +981,7 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
         // kill the thread before unmount lands — equally fine, process
         // death is teardown — but in-process workers need this or the
         // instance zombies on and its pending callbacks mutate foreign docs.
-        void client
-          .unmount(instance)
+        void islandCall('unmount', client.unmount(instance))
           .catch(() => {})
           .finally(() => {
             // A remount may have registered while teardown was in flight

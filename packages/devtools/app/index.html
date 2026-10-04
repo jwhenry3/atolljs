@@ -1,0 +1,354 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>atoll devtools</title>
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; font: 13px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      background: #0d1117; color: #c9d1d9;
+    }
+    header {
+      display: flex; align-items: baseline; gap: 12px; padding: 10px 16px;
+      border-bottom: 1px solid #21262d; position: sticky; top: 0; background: #0d1117; z-index: 5;
+    }
+    header h1 { font-size: 14px; margin: 0; color: #58a6ff; }
+    #conn { font-size: 11px; }
+    #conn.on { color: #3fb950; } #conn.off { color: #f85149; }
+    main { display: grid; grid-template-columns: 220px 1fr; min-height: calc(100vh - 42px); }
+    aside { border-right: 1px solid #21262d; padding: 10px; }
+    aside h2, section h2, .view h2 {
+      font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: #8b949e; margin: 12px 0 6px;
+    }
+    .sess { padding: 6px 8px; border: 1px solid #21262d; border-radius: 6px; margin-bottom: 6px; cursor: pointer; position: relative; }
+    .sess.sel { border-color: #58a6ff; background: #161b22; }
+    .sess:hover { border-color: #30363d; }
+    .sess:hover .nm { text-decoration: underline; }
+    .sess .dismiss {
+      position: absolute; top: 3px; right: 6px; color: #8b949e; font-size: 12px;
+      line-height: 1; padding: 1px 4px; border-radius: 4px; display: none;
+    }
+    .sess:hover .dismiss { display: block; }
+    .sess .dismiss:hover { color: #f85149; background: #21262d; text-decoration: none; }
+    .sess .rt { color: #8b949e; font-size: 10px; }
+    .panels { padding: 10px 16px 30px; min-width: 0; display: flex; flex-direction: column; min-height: calc(100vh - 42px); box-sizing: border-box; }
+    #scope { display: flex; align-items: baseline; gap: 8px; margin: 0 0 8px; font-size: 14px; color: #c9d1d9; }
+    #scope .nm { font-weight: 600; }
+    #scope .meta { color: #8b949e; font-size: 11px; }
+    .panels > .view { flex: none; }
+    /* flex:1 fills the panels column; max-height keeps tall logs inside the
+       viewport (42px header + ~80px nav/padding) so #log scrolls internally. */
+    #view-log.on { display: flex; flex-direction: column; flex: 1; min-height: 0; max-height: calc(100vh - 122px); }
+    nav { display: flex; gap: 4px; margin: 4px 0 10px; }
+    /* main nav reads as folder tabs — the active tab shares the content
+       background and overlaps the baseline so it looks attached */
+    .panels > nav { gap: 0; border-bottom: 1px solid #21262d; margin-bottom: 12px; }
+    nav button {
+      background: none; border: 1px solid #21262d; color: #8b949e; border-radius: 6px;
+      padding: 4px 12px; cursor: pointer; font: inherit; font-size: 12px;
+    }
+    .panels > nav button {
+      border-color: transparent; border-bottom: none; border-radius: 6px 6px 0 0;
+      padding: 6px 14px; margin-bottom: -1px;
+    }
+    .panels > nav button:hover { color: #c9d1d9; }
+    .panels > nav button.on {
+      color: #c9d1d9; background: #0d1117; border-color: #21262d;
+    }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { text-align: left; padding: 3px 8px; border-bottom: 1px solid #21262d; font-weight: normal; }
+    th { color: #8b949e; font-size: 11px; cursor: pointer; user-select: none; }
+    th:hover { text-decoration: underline; }
+    tbody tr[data-drill] { cursor: pointer; }
+    tbody tr[data-drill]:hover { background: #161b22; }
+    tbody tr[data-inspect], tbody tr[data-winspect], tbody tr[data-fetch] { cursor: pointer; }
+    tbody tr[data-inspect]:hover, tbody tr[data-winspect]:hover, tbody tr[data-fetch]:hover { background: #161b22; }
+    tbody tr[data-drill]:hover td:first-child,
+    tbody tr[data-inspect]:hover td:first-child,
+    tbody tr[data-fetch]:hover td.url,
+    tbody tr[data-winspect]:hover td:nth-child(2),
+    tbody tr[data-winspect]:hover td:nth-child(3) { text-decoration: underline; }
+    .ok { color: #3fb950; } .error, .crashed { color: #f85149; }
+    .aborted, .timeout, .queue-full { color: #d29922; }
+    .muted { color: #8b949e; }
+    tr.grp td {
+      background: #161b22; color: #8b949e; font-size: 10px;
+      text-transform: uppercase; letter-spacing: .06em; padding: 4px 8px;
+    }
+    .pill { display: inline-block; padding: 0 6px; border-radius: 8px; background: #21262d; font-size: 10px; margin-left: 6px; }
+    .kpis { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
+    .kpi { border: 1px solid #21262d; border-radius: 8px; padding: 8px 10px; }
+    .kpi .v { font-size: 20px; }
+    .kpi .l { color: #8b949e; font-size: 10px; text-transform: uppercase; letter-spacing: .05em; }
+    .kpi.bad .v { color: #f85149; } .kpi.warn .v { color: #d29922; } .kpi.good .v { color: #3fb950; }
+    #alerts { border: 1px solid #21262d; border-radius: 8px; padding: 6px 10px; max-height: 150px; overflow-y: auto; }
+    #alerts div { padding: 2px 0; border-bottom: 1px dashed #21262d; }
+    #waterfall { width: 100%; height: 240px; display: block; border: 1px solid #21262d; border-radius: 8px; background: #010409; cursor: crosshair; }
+    #tip {
+      position: fixed; pointer-events: none; background: #161b22; border: 1px solid #30363d;
+      border-radius: 6px; padding: 6px 8px; font-size: 11px; display: none; z-index: 10; max-width: 320px;
+    }
+    .legend span { display: inline-block; margin-right: 12px; font-size: 11px; }
+    .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; }
+    #drill { display: none; margin: 6px 0; }
+    #drill.on { display: inline-block; }
+    #log { flex: 1; min-height: 0; overflow-y: auto; border: 1px solid #21262d; border-radius: 6px; padding: 6px 8px; }
+    #log div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .logts { color: #484f58; font-size: 10px; }
+    canvas.spark { display: inline-block; vertical-align: middle; }
+    td.url { max-width: 380px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .wlink { color: #58a6ff; cursor: pointer; text-decoration: none; } .wlink:hover { text-decoration: underline; }
+    nav button:hover, .subnav button:hover { text-decoration: underline; }
+    #drill { cursor: pointer; } #drill:hover { text-decoration: underline; }
+    .subnav { display: flex; gap: 4px; margin: 0 0 10px; }
+    .subnav button {
+      background: none; border: 1px solid #21262d; color: #8b949e; border-radius: 6px;
+      padding: 3px 10px; cursor: pointer; font: inherit; font-size: 11px;
+    }
+    .subnav button.on { color: #c9d1d9; border-color: #58a6ff; background: #161b22; }
+    .fwicon { width: 16px; height: 16px; vertical-align: middle; margin-top: -2px; }
+    .subview { display: none; } .subview.on { display: block; }
+    pre.body {
+      max-height: 220px; overflow: auto; white-space: pre-wrap; word-break: break-all;
+      border: 1px solid #21262d; border-radius: 6px; padding: 6px 8px; font-size: 11px;
+      background: #010409; margin: 0;
+    }
+    .tbar { display: flex; height: 18px; border-radius: 4px; overflow: hidden; border: 1px solid #21262d; }
+    .tbar div { min-width: 0; }
+    .tkv td { font-size: 11px; }
+    .tkv td:first-child { color: #8b949e; white-space: nowrap; width: 1%; }
+    canvas.topo {
+      width: 100%; height: 320px; display: block; margin-bottom: 10px;
+      border: 1px solid #21262d; border-radius: 8px; background: #010409; cursor: pointer;
+    }
+    .view { display: none; }
+    .view.on { display: block; }
+    .charts { display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); gap: 10px; }
+    .chart-card { border: 1px solid #21262d; border-radius: 8px; padding: 8px 10px; }
+    .chart-card .lbl { display: flex; justify-content: space-between; align-items: baseline; font-size: 10px; color: #8b949e; text-transform: uppercase; letter-spacing: .05em; }
+    .chart-card .lbl b { font-size: 15px; }
+    .chart-card canvas { width: 100%; height: 64px; display: block; margin-top: 4px; }
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    @media (max-width: 900px) { .grid2 { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>atoll devtools</h1>
+    <span id="conn" class="off">connecting…</span>
+    <span class="muted" id="counts"></span>
+  </header>
+  <main>
+    <aside>
+      <h2>Sessions</h2>
+      <div id="sessions"><div class="muted">none</div></div>
+    </aside>
+    <div class="panels">
+      <div id="scope"></div>
+      <nav>
+        <button data-view="dashboard" class="on">Dashboard</button>
+        <button data-view="tasks">Tasks</button>
+        <button data-view="network">Network</button>
+        <button data-view="memory">Memory</button>
+        <button data-view="log">Log</button>
+      </nav>
+
+      <section class="view on" id="view-dashboard">
+        <h2>App map <span class="muted">— scroll to zoom · drag to pan · double-click to fit · click a node to inspect · click a session disc to drill in</span></h2>
+        <canvas id="appmap" class="topo" style="height:420px"></canvas>
+        <nav class="subnav" style="margin-top:10px">
+          <button class="on" data-sub="tv-dash">Overview</button>
+          <button data-sub="tv-pools">Pools</button>
+          <button data-sub="tv-workers">Workers</button>
+          <button data-sub="tv-islands">Islands</button>
+          <button data-sub="tv-worker" id="navTopoW" style="display:none">Worker</button>
+          <button data-sub="tv-island" id="navTopoI" style="display:none">Island</button>
+        </nav>
+        <div class="subview on" id="tv-dash">
+          <div class="kpis" id="kpis"></div>
+          <div class="grid2" style="margin-top:14px">
+            <div>
+              <h2>Task throughput <span class="muted">/s, last 60s</span></h2>
+              <canvas id="tput" width="560" height="80" style="width:100%"></canvas>
+            </div>
+            <div>
+              <h2>Attention needed</h2>
+              <div id="alerts"><div class="muted">nothing flagged</div></div>
+            </div>
+          </div>
+        </div>
+        <div class="subview" id="tv-pools">
+          <h2>Pools</h2>
+          <table id="pools"><thead><tr>
+            <th>session</th><th>pool</th><th>size</th><th>memory</th><th>workers</th><th>tasks</th><th>failed</th>
+          </tr></thead><tbody></tbody></table>
+        </div>
+        <div class="subview" id="tv-workers">
+          <h2>Workers <span class="muted">— every pool slot; click a row to inspect</span></h2>
+          <table id="workers"><thead><tr>
+            <th>session</th><th>worker</th><th>tasks</th><th>failed</th><th>respawns</th><th>errors</th><th>heap</th><th>islands</th><th>last task</th><th>state</th>
+          </tr></thead><tbody></tbody></table>
+        </div>
+        <div class="subview" id="tv-islands">
+          <h2>Islands <span class="muted">— click a row to inspect</span></h2>
+          <table id="islands"><thead><tr>
+            <th>instance</th><th>app</th><th>fw</th><th>pid</th><th>host</th><th>round-trips</th><th>op batches</th><th>ops</th><th>replay ms</th><th>events</th><th>state</th>
+          </tr></thead><tbody></tbody></table>
+        </div>
+        <div class="subview" id="tv-worker">
+          <h2 id="wkTitle">Worker inspector</h2>
+          <div class="kpis" id="wkKpis"></div>
+          <h2 style="margin-top:14px">Task lane <span class="muted" id="wkrange"></span></h2>
+          <canvas id="wklane" style="width:100%;height:120px;display:block;border:1px solid #21262d;border-radius:8px;background:#010409;cursor:crosshair"></canvas>
+          <div class="grid2" style="margin-top:14px">
+            <div>
+              <h2>Tasks on this worker <span class="muted">(latest 150)</span></h2>
+              <table id="wkTasks"><thead><tr>
+                <th>call</th><th>task</th><th>wait ms</th><th>run ms</th><th>outcome</th><th>error</th>
+              </tr></thead><tbody></tbody></table>
+            </div>
+            <div>
+              <h2>JS heap <span class="muted">— live (2s samples)</span></h2>
+              <canvas id="wkheap" style="width:100%;height:80px;display:block;border:1px solid #21262d;border-radius:8px;background:#010409"></canvas>
+              <h2 style="margin-top:14px">Fetches from this worker <span class="muted">(latest 50)</span></h2>
+              <table id="wkFetch"><thead><tr>
+                <th>ms</th><th>status</th><th>method</th><th>url</th><th>bytes</th>
+              </tr></thead><tbody></tbody></table>
+              <h2 style="margin-top:14px">Worker errors</h2>
+              <div id="wkErrors" style="border:1px solid #21262d;border-radius:8px;padding:6px 10px;max-height:220px;overflow-y:auto"></div>
+            </div>
+          </div>
+        </div>
+        <div class="subview" id="tv-island">
+          <h2 id="inspTitle">Island inspector</h2>
+          <div class="kpis" id="inspKpis"></div>
+          <div class="grid2" style="margin-top:14px">
+            <div>
+              <h2>Op traffic <span class="muted">— batch size over time, colored by call</span></h2>
+              <canvas id="optraffic" style="width:100%;height:140px;display:block;border:1px solid #21262d;border-radius:8px;background:#010409"></canvas>
+              <div class="legend">
+                <span><i style="background:#58a6ff"></i>mount</span>
+                <span><i style="background:#3fb950"></i>dispatch</span>
+                <span><i style="background:#8b949e"></i>flush</span>
+                <span><i style="background:#d29922"></i>setSize</span>
+                <span><i style="background:#a371f7"></i>updateProps</span>
+                <span><i style="background:#f85149"></i>unmount</span>
+              </div>
+            </div>
+            <div>
+              <h2>By call</h2>
+              <table id="inspVia"><thead><tr>
+                <th>via</th><th>batches</th><th>ops</th><th>replay ms</th>
+              </tr></thead><tbody></tbody></table>
+              <h2 style="margin-top:14px">Event channel <span class="muted">(worker → shell emits)</span></h2>
+              <table id="inspEvents"><thead><tr><th>name</th><th>count</th></tr></thead><tbody></tbody></table>
+            </div>
+          </div>
+          <h2>Round-trips <span class="muted">— every main→worker call (latest 150)</span></h2>
+          <table id="inspTasks"><thead><tr>
+            <th>#</th><th>method</th><th>ms</th><th>ops back</th><th>result</th><th>error</th>
+          </tr></thead><tbody></tbody></table>
+        </div>
+      </section>
+
+      <section class="view" id="view-tasks">
+        <h2>Task waterfall <span class="muted">— wait (gray) → run (colored) per worker slot</span></h2>
+        <div class="legend">
+          <span><i style="background:#58a6ff"></i>ok</span>
+          <span><i style="background:#f85149"></i>error/crash</span>
+          <span><i style="background:#d29922"></i>abort/timeout</span>
+          <span><i style="background:#8b949e"></i>queued / in-flight</span>
+          <span class="muted" id="wfrange"></span>
+          <span id="drill" class="pill"></span>
+        </div>
+        <canvas id="waterfall"></canvas>
+        <div id="tip"></div>
+        <h2>By task <span class="muted">— click a row to drill into its calls</span></h2>
+        <table id="taskAgg"><thead><tr>
+          <th>task</th><th>calls</th><th>fail</th><th>wait avg</th><th>run avg</th><th>run p95</th><th>run max</th>
+        </tr></thead><tbody></tbody></table>
+        <h2>Calls <span class="muted">(latest 200)</span></h2>
+        <table id="tasks"><thead><tr>
+          <th>call</th><th>task</th><th>pool</th><th>slot</th><th>wait ms</th><th>run ms</th><th>outcome</th><th>error</th>
+        </tr></thead><tbody></tbody></table>
+      </section>
+
+      <section class="view" id="view-network">
+        <nav class="subnav">
+          <button class="on" data-sub="nv-traffic">Traffic</button>
+          <button data-sub="nv-req" id="navNetReq" style="display:none">Request</button>
+        </nav>
+        <div class="subview on" id="nv-traffic">
+          <h2>Network <span class="muted">— live channel traffic (per-second, last 60s)</span></h2>
+          <div class="charts" id="charts"></div>
+          <h2 style="margin-top:14px">Fetch log <span class="muted">— real HTTP traffic, latest 150 — click a row for detail</span></h2>
+          <table id="fetchlog"><thead><tr>
+            <th>session</th><th>ms</th><th>status</th><th>method</th><th>url</th><th>from</th><th>bytes</th>
+          </tr></thead><tbody></tbody></table>
+        </div>
+        <div class="subview" id="nv-req">
+          <div id="reqTitle" class="muted" style="margin-bottom:8px"></div>
+          <div class="kpis" id="reqKpis" style="margin-bottom:12px"></div>
+          <h2>Timing</h2>
+          <div id="reqTiming" style="margin-bottom:12px"></div>
+          <div class="grid2">
+            <div>
+              <h2>Request headers</h2>
+              <table id="reqReqH"><tbody></tbody></table>
+              <h2 style="margin-top:12px">Request body</h2>
+              <pre class="body" id="reqReqB"></pre>
+            </div>
+            <div>
+              <h2>Response headers</h2>
+              <table id="reqResH"><tbody></tbody></table>
+              <h2 style="margin-top:12px">Response body</h2>
+              <pre class="body" id="reqResB"></pre>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="view" id="view-memory">
+        <nav class="subnav">
+          <button class="on" data-sub="mv-fields">Shared-memory writes</button>
+          <button data-sub="mv-heap">JS heap</button>
+        </nav>
+        <div class="subview on" id="mv-fields">
+          <div class="grid2">
+            <div>
+              <h2>Field writes /s</h2>
+              <canvas id="memrate" style="width:100%;height:80px;display:block;border:1px solid #21262d;border-radius:8px;background:#010409"></canvas>
+            </div>
+            <div>
+              <h2>Top fields /s</h2>
+              <canvas id="memtop" style="width:100%;height:80px;display:block;border:1px solid #21262d;border-radius:8px;background:#010409"></canvas>
+              <div class="legend" id="memtopLegend"></div>
+            </div>
+          </div>
+          <table id="mem" style="margin-top:10px"><thead><tr>
+            <th>field</th><th>session</th><th>writes</th><th>writes/s</th><th>version</th><th>last writer</th><th>rate</th>
+          </tr></thead><tbody></tbody></table>
+        </div>
+        <div class="subview" id="mv-heap">
+          <h2>JS heap <span class="muted">— per-session total, live</span></h2>
+          <canvas id="heapline" style="width:100%;height:110px;display:block;border:1px solid #21262d;border-radius:8px;background:#010409"></canvas>
+          <div class="legend" id="heaplineLegend" style="margin-top:4px"></div>
+          <h2 style="margin-top:14px">JS heap by context <span class="muted">— measureUserAgentSpecificMemory attribution</span></h2>
+          <table id="heapctx"><thead><tr>
+            <th>session</th><th>context</th><th>heap</th>
+          </tr></thead><tbody></tbody></table>
+        </div>
+      </section>
+
+      <section class="view" id="view-log">
+        <h2>Event log</h2>
+        <div id="log"></div>
+      </section>
+    </div>
+  </main>
+  <script type="module" src="./main.js"></script>
+</body>
+</html>

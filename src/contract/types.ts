@@ -65,6 +65,8 @@ export interface WorkerPoolConfig<S extends SharedSpec = SharedSpec, T extends T
   persistence?: (memory: SharedMemory<S>) => MemoryPersistence | undefined;
   /** Worker count — a number, or 'auto' (the default) for navigator.hardwareConcurrency ?? 4. */
   poolSize?: number | 'auto';
+  /** Display label for devtools/dashboards — falls back to a generated id. */
+  name?: string;
   memory?: MemoryConfig;
   /** Max in-flight tasks per worker (default 1); excess tasks queue FIFO. */
   concurrency?: number;

@@ -7,6 +7,7 @@ import { defineConfig } from 'vite';
 const coreRoot = fileURLToPath(new URL('../../src/', import.meta.url)).replace(/\\/g, '/');
 const incidentsRoot = fileURLToPath(new URL('../../packages/incidents/src/', import.meta.url)).replace(/\\/g, '/');
 const reactBindingsRoot = fileURLToPath(new URL('../../packages/react/src/', import.meta.url)).replace(/\\/g, '/');
+const devtoolsRoot = fileURLToPath(new URL('../../packages/devtools/src/', import.meta.url)).replace(/\\/g, '/');
 
 export default defineConfig(({ command }) => ({
   // Built output is mounted at /react/ under the unified dist root; dev serves /.
@@ -20,6 +21,8 @@ export default defineConfig(({ command }) => ({
     alias: [
       { find: '@atolljs/react', replacement: `${reactBindingsRoot}index.ts` },
       { find: '@atolljs/incidents', replacement: `${incidentsRoot}index.ts` },
+      { find: /^@atolljs\/devtools$/, replacement: `${devtoolsRoot}index.ts` },
+      { find: /^@atolljs\/devtools\//, replacement: devtoolsRoot },
       { find: /^@atolljs\/core$/, replacement: `${coreRoot}index.ts` },
       { find: /^@atolljs\/core\//, replacement: coreRoot },
     ],

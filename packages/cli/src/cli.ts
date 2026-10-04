@@ -12,7 +12,7 @@
  */
 import { consoleIo, type Fmt, type Io } from './io.ts';
 import { hasFlag, parseArgs } from './parse.ts';
-import { runAdd, runCreate, runDoctor, runInit, type Ctx } from './commands.ts';
+import { runAdd, runCreate, runDevtools, runDoctor, runInit, type Ctx } from './commands.ts';
 
 const HELP = (fmt: Fmt) => `${fmt.strong('atoll')} — bootstrap multithreading ${fmt.dim('(experimental)')}
 
@@ -46,6 +46,10 @@ const HELP = (fmt: Fmt) => `${fmt.strong('atoll')} — bootstrap multithreading 
       Check the setup — deps, lockfile, .npmrc policy, bundler-detectable
       worker entries, COOP/COEP headers. --fix writes a hardened .npmrc.
 
+  ${fmt.accent('atoll devtools')} [--port 4780]
+      Serve the local devtools dashboard — pools, task timings, shared-memory
+      writes, island traffic. Apps connect via connectDevtools().
+
   ${fmt.dim(`flags: --yes/-y accepts defaults, --force overwrites existing files,
          --no-install skips dependency installation`)}
 `;
@@ -72,6 +76,8 @@ export async function runCli(argv: readonly string[], io: Io, cwd: string): Prom
         return await runAdd(ctx);
       case 'doctor':
         return runDoctor(ctx);
+      case 'devtools':
+        return await runDevtools(ctx);
       case 'help':
       case undefined:
         io.print(HELP(io.fmt));

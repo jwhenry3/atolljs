@@ -1,5 +1,6 @@
 import { TaskRegistry } from './registry';
 import { bindSharedMemories, getDefinedSharedMemoryCount } from '../contract/sharedMemory';
+import { enableWorkerDevtoolsForwarding } from '../devtools';
 import { fmtBytes, scoped } from '../log';
 
 const workerLog = scoped('worker');
@@ -30,6 +31,7 @@ export function installWorkerListener(): void {
 
     if (data.type === 'INIT') {
       memoryInitialized = true;
+      if (data.devtools) enableWorkerDevtoolsForwarding();
       if (getDefinedSharedMemoryCount() > 0) {
         workerLog.warn(
           'pool sent INIT without memory, but shared-memory contracts are defined — field access will throw until bound',
@@ -43,6 +45,7 @@ export function installWorkerListener(): void {
       const memory = data.memory as WebAssembly.Memory;
       bindSharedMemories(memory.buffer as unknown as SharedArrayBuffer);
       memoryInitialized = true;
+      if (data.devtools) enableWorkerDevtoolsForwarding();
       workerLog.info(`shared memory initialized (${fmtBytes(memory.buffer.byteLength)})`);
       return;
     }

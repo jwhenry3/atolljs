@@ -29,6 +29,10 @@ export default defineConfig(({ command }) => ({
       { find: /^@atolljs\/islands$/, replacement: `${islandsRoot}index.ts` },
       { find: /^@atolljs\/islands\/worker$/, replacement: `${islandsRoot}worker/index.ts` },
       {
+        find: /^@atolljs\/devtools$/,
+        replacement: `${fileURLToPath(new URL('../../packages/devtools/src/', import.meta.url)).replace(/\\/g, '/')}index.ts`,
+      },
+      {
         find: /^@atolljs\/react-island$/,
         replacement: `${fileURLToPath(new URL('../../packages/react-island/src/', import.meta.url)).replace(/\\/g, '/')}index.tsx`,
       },

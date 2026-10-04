@@ -69,6 +69,12 @@ Framework bindings — **backend**:
 - [islands-frameworks.md](islands-frameworks.md) — the `*-island` packages, mixed registries, bundle composition, real-library limits
 - [islands-remote.md](islands-remote.md) — worker bundles served from another origin (CORS/COEP, versioned URLs, contract pairing)
 
+## Deferred work
+
+- `docs/plans/` — non-binding roadmap and idea capture (deferred use cases,
+  tools not yet designed). Consult when planning features; unlike the rest
+  of `docs/` these do **not** describe the code as it exists.
+
 ## Conventions for agents
 
 - Prefer linking file paths (`packages/islands/src/island.ts`) over copying

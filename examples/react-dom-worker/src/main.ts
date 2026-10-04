@@ -32,6 +32,7 @@ import {
   type IslandHandle,
   type Mode,
 } from '@atolljs/islands';
+import { connectDevtools } from '@atolljs/devtools';
 // Leaflet's stylesheet is shell-side: the worker fabricates the DOM Leaflet
 // builds (panes, tiles, controls) but CSS was always the shell's job.
 import 'leaflet/dist/leaflet.css';
@@ -58,6 +59,12 @@ const isolated =
   typeof SharedArrayBuffer !== 'undefined' &&
   (typeof window.crossOriginIsolated === 'undefined' || window.crossOriginIsolated);
 const initialMode: Mode = isolated ? 'push' : 'poll';
+
+// Install the devtools sink before any island mounts — pool INIT carries the
+// forwarding flag only when a sink already exists at spawn time.
+if (import.meta.env.DEV) {
+  connectDevtools({ session: { name: 'islands-demo' } });
+}
 
 const rootEl = document.getElementById('root');
 if (!rootEl) throw new Error('#root missing from index.html');
@@ -148,6 +155,7 @@ async function main(): Promise<void> {
     client: connectIslandWorker({ worker: islandWorker, doorbell: isolated }),
     el: $('island-stats'),
     app: 'stats',
+    framework: 'react',
     props: { visible: 2000, total: 2000, spark: 'wave' },
     slots: { wave: mountSparkline },
     onActivity: renderStats,
@@ -159,6 +167,7 @@ async function main(): Promise<void> {
     client: connectIslandWorker({ worker: islandWorker, doorbell: isolated }),
     el: $('island-table'),
     app: 'data-table',
+    framework: 'react',
     props: { filter: state.filter, desc: state.desc },
     onEvent: (name, payload) => {
       const p = payload as { count?: number; id?: number };
@@ -175,6 +184,7 @@ async function main(): Promise<void> {
     client: connectIslandWorker({ worker: islandWorker, doorbell: isolated }),
     el: $('island-controls'),
     app: 'controls',
+    framework: 'react',
     onEvent: (name, payload) => {
       const p = payload as { filter?: string; desc?: boolean; count?: number };
       if (name === 'filterChanged') {
@@ -203,6 +213,7 @@ async function main(): Promise<void> {
     client: connectIslandWorker({ worker: islandWorker, doorbell: isolated }),
     el: $('island-table-2'),
     app: 'data-table',
+    framework: 'react',
     props: { filter: 'eu-central', desc: true },
     onEvent: (name, payload) => {
       const p = payload as { id?: number };
@@ -221,6 +232,7 @@ async function main(): Promise<void> {
     client: connectIslandWorker({ worker: vanillaWorker, doorbell: isolated }),
     el: $('island-vanilla'),
     app: 'vanilla',
+    framework: 'vanilla',
     props: { title: 'vanilla island — imperative proxy DOM' },
     onEvent: (name, payload) => {
       const p = payload as { color?: string; x?: number; y?: number };
@@ -242,6 +254,7 @@ async function main(): Promise<void> {
     mode: initialMode,
     el: $('island-vue'),
     app: 'vue-notes',
+    framework: 'vue',
     props: { title: 'vue-notes — Vue createRenderer on the proxy DOM' },
     onEvent: (name, payload) => {
       const p = payload as { text?: string; total?: number };
@@ -261,6 +274,7 @@ async function main(): Promise<void> {
     client: connectIslandWorker({ worker: mapWorker, doorbell: isolated }),
     el: $('island-map'),
     app: 'map',
+    framework: 'leaflet',
     onEvent: (name, payload) => {
       const p = payload as { label?: string; name?: string; zoom?: number };
       if (name === 'markerClicked') setStatus(`map island emitted markerClicked → ${p.label}`);
@@ -280,6 +294,7 @@ async function main(): Promise<void> {
     client: connectIslandWorker({ worker: islandWorker, doorbell: isolated }),
     el: $('island-charts'),
     app: 'charts',
+    framework: 'react',
     props: { width: 600, height: 260 },
     onEvent: (name, payload) => {
       const p = payload as { region?: string; incidents?: number };

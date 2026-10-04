@@ -557,6 +557,39 @@ export async function runCreate(ctx: Ctx): Promise<number> {
   return 0;
 }
 
+/* ── atoll devtools ─────────────────────────────────────────────────────── */
+
+/**
+ * `atoll devtools [--port N]` — boot the local devtools server + dashboard.
+ * The server lives in @atolljs/devtools: resolved as an installed package in
+ * consumer projects, with a relative fallback so `npm run atoll devtools`
+ * works inside the atoll monorepo where the package isn't installed.
+ *
+ * Never resolves — the process serves until SIGINT.
+ */
+export async function runDevtools(ctx: Ctx): Promise<number> {
+  const { io } = ctx;
+  const spec = '@atolljs/devtools/server';
+  const mod: { createDevtoolsServer?: (o: { port: number }) => Promise<{ url: string }> } | null =
+    await import(spec).catch(async () => {
+      // In-repo fallback: the workspace package's built dist (extensionless
+      // sources can't run under type stripping — `npm run build` there first).
+      const local = new URL('../../devtools/dist/server.js', import.meta.url).href;
+      return import(local).catch(() => null);
+    });
+  if (!mod?.createDevtoolsServer) {
+    io.error(`@atolljs/devtools isn't installed — ${io.fmt.accent('npm i -D @atolljs/devtools')}`);
+    return 1;
+  }
+  const port = Number(flag(ctx.args, 'port') ?? 4780);
+  const server = await mod.createDevtoolsServer({ port: Number.isFinite(port) ? port : 4780 });
+  io.print(`atoll devtools → ${io.fmt.accent(server.url)}`);
+  io.print(io.fmt.dim('  ingest endpoint: ' + server.url.replace('http://', 'ws://') + '/events'));
+  io.print(io.fmt.dim("  in the app: connectDevtools() from '@atolljs/devtools'"));
+  io.warn('serving — Ctrl+C to stop');
+  return new Promise<number>(() => {});
+}
+
 /* ── atoll doctor ───────────────────────────────────────────────────────── */
 
 interface Check {

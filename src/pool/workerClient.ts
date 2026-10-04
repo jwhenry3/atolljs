@@ -98,6 +98,8 @@ export interface ConnectWorkerConfig<S extends SharedSpec> {
    */
   worker: (() => Worker) | URL;
   poolSize?: number | 'auto';
+  /** Display label for devtools/dashboards — falls back to a generated id. */
+  name?: string;
   memory?: MemoryConfig;
   /** Max in-flight tasks per worker (default 1); excess calls queue FIFO. */
   concurrency?: number;
@@ -152,6 +154,7 @@ export function connectWorker<
           ? config.worker
           : () => new Worker(config.worker as URL, { type: 'module' }),
       poolSize: config.poolSize,
+      name: config.name,
       memory: config.memory,
       concurrency: config.concurrency,
       maxQueue: config.maxQueue,

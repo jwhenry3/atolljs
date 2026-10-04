@@ -114,3 +114,11 @@ export { defineTask, isAsyncTask, toTask } from './task';
 export type { AsyncTask, TaskSnapshot } from './task';
 export { getLogLevel, log, scoped, setLogLevel, setLogSink } from './log';
 export type { LogEntry, LogLevel, LogSink } from './log';
+export { emitDevtools, installFetchProbe, installMemoryProbe, setDevtoolsSink } from './devtools';
+export type {
+  DevtoolsEvent,
+  DevtoolsSink,
+  DevtoolsThread,
+  EmittedDevtoolsEvent,
+  TaskSettleOutcome,
+} from './devtools';

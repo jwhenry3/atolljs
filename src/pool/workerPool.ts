@@ -2,6 +2,7 @@ import { MemoryManager } from './memory';
 import { PoolQueueFullError, TaskAbortedError, TaskTimeoutError, WorkerCrashedError } from './errors';
 import { SharedAccess, SharedMemory, SharedSpec } from '../contract/sharedMemory';
 import { MemoryPersistence, PoolTasks, TaskContract, TaskMap, TaskResult, WorkerPoolConfig } from '../contract/types';
+import { devtoolsEnabled, emitDevtools, forwardDevtools, nextDevtoolsId, type EmittedDevtoolsEvent } from '../devtools';
 import { fmtBytes, scoped } from '../log';
 
 const poolLog = scoped('pool');
@@ -59,6 +60,8 @@ export interface PoolStats {
 interface TaskEntry {
   contract: TaskContract<any[], any>;
   args: any[];
+  /** Per-pool sequence — correlates a call's devtools events across its lifecycle. */
+  callId: number;
   enqueuedAt: number;
   resolve: (v: any) => void;
   reject: (e: unknown) => void;
@@ -100,6 +103,10 @@ class WorkerPoolImpl<S extends SharedSpec = SharedSpec> {
     waitMs: agg(),
     runMs: agg(),
   };
+  /** Devtools correlation id ('pool-N') — stamped on every event this pool emits. */
+  readonly poolId = nextDevtoolsId('pool');
+  private readonly label?: string;
+  private nextCallId = 0;
   public readonly sharedMemory: (SharedMemory<S> & SharedAccess<S>) | undefined;
   /** The attached memory-persistence adapter, if the config supplied one. */
   public readonly persistence: MemoryPersistence | undefined;
@@ -121,6 +128,7 @@ class WorkerPoolImpl<S extends SharedSpec = SharedSpec> {
     this.maxQueue = config.maxQueue ?? Infinity;
     this.respawn = config.respawn ?? true;
     this.taskTimeout = config.taskTimeout;
+    this.label = config.name;
 
     if (config.sharedMemory) {
       this.sharedMemory = config.sharedMemory;
@@ -141,6 +149,15 @@ class WorkerPoolImpl<S extends SharedSpec = SharedSpec> {
       { workerUrl: config.workerUrl ? String(config.workerUrl) : 'createWorker()' },
     );
     poolLog.debug(`tip: setLogLevel('trace') for per-task detail`);
+
+    emitDevtools({
+      type: 'pool:init',
+      poolId: this.poolId,
+      label: this.label,
+      poolSize,
+      concurrency: this.concurrency,
+      memoryBytes: this.sharedMemory?.totalBytes,
+    });
 
     for (let i = 0; i < poolSize; i++) {
       this.addWorker(this.spawn());
@@ -167,18 +184,33 @@ class WorkerPoolImpl<S extends SharedSpec = SharedSpec> {
   private addWorker(worker: Worker): WorkerSlot {
     const slot: WorkerSlot = { worker, inFlight: 0 };
     worker.addEventListener('message', (event: MessageEvent) => {
-      this.handleReply(slot, event.data as TaskResult & { messageId?: number });
+      const data = event.data as TaskResult & { messageId?: number; type?: string; event?: EmittedDevtoolsEvent };
+      // Worker-side instrumentation forwarded on the task channel — re-emit
+      // into the local sink so one sink sees the whole app. Stamp which
+      // slot produced it so worker-side fetches/heap/memory writes
+      // attribute to a specific worker.
+      if (data.type === 'ATOLL_DEVTOOLS' && data.event) {
+        forwardDevtools({
+          ...data.event,
+          worker: { poolId: this.poolId, slot: this.slots.indexOf(slot) },
+        });
+        return;
+      }
+      this.handleReply(slot, data);
     });
     worker.addEventListener('error', (event: unknown) => {
       this.handleWorkerError(slot, event);
     });
+    // `devtools` tells the worker to forward its instrumentation events back
+    // on this channel (ATOLL_DEVTOOLS) — only when a sink is live at spawn.
     if (this.memoryManager) {
-      worker.postMessage({ type: 'INIT_MEMORY', memory: this.memoryManager.memory });
+      worker.postMessage({ type: 'INIT_MEMORY', memory: this.memoryManager.memory, devtools: devtoolsEnabled() });
     } else {
-      worker.postMessage({ type: 'INIT' });
+      worker.postMessage({ type: 'INIT', devtools: devtoolsEnabled() });
     }
     this.slots.push(slot);
     poolLog.debug(`worker spawned, ${this.memoryManager ? 'INIT_MEMORY' : 'INIT'} sent`);
+    emitDevtools({ type: 'worker:spawn', poolId: this.poolId, slot: this.slots.indexOf(slot) });
     return slot;
   }
 
@@ -192,14 +224,17 @@ class WorkerPoolImpl<S extends SharedSpec = SharedSpec> {
     // stats and settlement — the caller was already rejected.
     if (!entry.done) {
       entry.done = true;
-      this.statsAgg.runMs.add(performance.now() - (entry.sentAt ?? entry.enqueuedAt));
+      const runMs = performance.now() - (entry.sentAt ?? entry.enqueuedAt);
+      this.statsAgg.runMs.add(runMs);
       if (data.success) {
         this.statsAgg.completed++;
         taskLog.debug(`← ${entry.contract.taskId} ok`);
+        emitDevtools({ type: 'task:settle', poolId: this.poolId, callId: entry.callId, taskId: entry.contract.taskId, outcome: 'ok', runMs });
         entry.resolve(data.result);
       } else {
         this.statsAgg.failed++;
         taskLog.warn(`← ${entry.contract.taskId} failed: ${data.error}`);
+        emitDevtools({ type: 'task:settle', poolId: this.poolId, callId: entry.callId, taskId: entry.contract.taskId, outcome: 'error', runMs, error: data.error });
         entry.reject(new Error(data.error));
       }
     }
@@ -212,6 +247,8 @@ class WorkerPoolImpl<S extends SharedSpec = SharedSpec> {
     const e = event as { message?: string; error?: Error } | undefined;
     const message = e?.message ?? (e?.error ? String(e.error) : 'worker error');
     poolLog.warn(`worker error: ${message}`);
+    const idx = this.slots.indexOf(slot);
+    emitDevtools({ type: 'worker:error', poolId: this.poolId, slot: idx, message });
 
     // Reject the dead worker's in-flight tasks. Orphaned (already
     // aborted/timed-out) entries are dropped without re-counting.
@@ -222,23 +259,25 @@ class WorkerPoolImpl<S extends SharedSpec = SharedSpec> {
         if (entry.done) continue;
         entry.done = true;
         this.statsAgg.failed++;
+        emitDevtools({ type: 'task:settle', poolId: this.poolId, callId: entry.callId, taskId: entry.contract.taskId, outcome: 'crashed', error: message });
         entry.reject(new WorkerCrashedError(message));
       }
     }
 
-    const idx = this.slots.indexOf(slot);
     if (idx >= 0) this.slots.splice(idx, 1);
     slot.worker.terminate();
 
     if (this.respawn) {
       poolLog.info('respawning crashed worker');
       this.addWorker(this.spawn());
+      emitDevtools({ type: 'worker:respawn', poolId: this.poolId, slot: this.slots.length - 1 });
     } else if (this.slots.length === 0) {
       // No workers left to ever serve the queue.
       for (const entry of this.queue.splice(0)) {
         entry.done = true;
         this.detach(entry);
         this.statsAgg.failed++;
+        emitDevtools({ type: 'task:settle', poolId: this.poolId, callId: entry.callId, taskId: entry.contract.taskId, outcome: 'crashed', error: message });
         entry.reject(new WorkerCrashedError(message));
       }
     }
@@ -270,10 +309,13 @@ class WorkerPoolImpl<S extends SharedSpec = SharedSpec> {
     entry.messageId = messageId;
     entry.slot = slot;
     entry.sentAt = performance.now();
-    this.statsAgg.waitMs.add(performance.now() - entry.enqueuedAt);
+    const waitMs = entry.sentAt - entry.enqueuedAt;
+    this.statsAgg.waitMs.add(waitMs);
     slot.inFlight++;
     this.pending.set(messageId, entry);
-    taskLog.debug(`→ ${entry.contract.taskId}`, { worker: this.slots.indexOf(slot), args: entry.args });
+    const slotIndex = this.slots.indexOf(slot);
+    taskLog.debug(`→ ${entry.contract.taskId}`, { worker: slotIndex, args: entry.args });
+    emitDevtools({ type: 'task:dispatch', poolId: this.poolId, callId: entry.callId, taskId: entry.contract.taskId, slot: slotIndex, waitMs });
     slot.worker.postMessage({
       type: 'EXECUTE_TASK',
       messageId,
@@ -302,6 +344,7 @@ class WorkerPoolImpl<S extends SharedSpec = SharedSpec> {
     entry.done = true;
     this.detach(entry);
     this.statsAgg.aborted++;
+    emitDevtools({ type: 'task:settle', poolId: this.poolId, callId: entry.callId, taskId: entry.contract.taskId, outcome: err instanceof TaskTimeoutError ? 'timeout' : 'aborted' });
     entry.reject(err);
     this.drainQueue();
     this.checkDrained();
@@ -333,6 +376,7 @@ class WorkerPoolImpl<S extends SharedSpec = SharedSpec> {
       const entry: TaskEntry = {
         contract,
         args: args as any[],
+        callId: ++this.nextCallId,
         enqueuedAt: performance.now(),
         resolve,
         reject,
@@ -348,12 +392,14 @@ class WorkerPoolImpl<S extends SharedSpec = SharedSpec> {
         entry.timer = setTimeout(() => this.cancel(entry, new TaskTimeoutError()), timeout);
       }
 
+      emitDevtools({ type: 'task:enqueue', poolId: this.poolId, callId: entry.callId, taskId: contract.taskId });
       const slot = this.pickWorker();
       if (slot) {
         this.send(slot, entry);
       } else if (this.queue.length >= this.maxQueue) {
         entry.done = true;
         this.detach(entry);
+        emitDevtools({ type: 'task:settle', poolId: this.poolId, callId: entry.callId, taskId: contract.taskId, outcome: 'queue-full' });
         reject(new PoolQueueFullError()); // never dispatched — stats untouched
         return;
       } else {
@@ -425,12 +471,14 @@ class WorkerPoolImpl<S extends SharedSpec = SharedSpec> {
       poolLog.warn('memory persistence stop failed', e),
     );
     poolLog.info(`terminating ${this.slots.length} worker(s)`);
+    emitDevtools({ type: 'pool:terminate', poolId: this.poolId });
     const crashed = new WorkerCrashedError('pool terminated');
     for (const [, entry] of this.pending) {
       this.detach(entry);
       if (entry.done) continue; // orphaned — already counted as aborted
       entry.done = true;
       this.statsAgg.failed++;
+      emitDevtools({ type: 'task:settle', poolId: this.poolId, callId: entry.callId, taskId: entry.contract.taskId, outcome: 'crashed', error: 'pool terminated' });
       entry.reject(crashed);
     }
     this.pending.clear();
@@ -438,6 +486,7 @@ class WorkerPoolImpl<S extends SharedSpec = SharedSpec> {
       entry.done = true;
       this.detach(entry);
       this.statsAgg.failed++;
+      emitDevtools({ type: 'task:settle', poolId: this.poolId, callId: entry.callId, taskId: entry.contract.taskId, outcome: 'crashed', error: 'pool terminated' });
       entry.reject(crashed);
     }
     for (const slot of this.slots) {

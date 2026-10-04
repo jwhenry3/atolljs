@@ -25,7 +25,7 @@ describe('workerPool — message-only (no sharedMemory)', () => {
     });
     expect((p as { sharedMemory?: unknown }).sharedMemory).toBeUndefined();
     expect(InProcessWorker.created).toHaveLength(1);
-    expect(sent).toHaveBeenCalledWith({ type: 'INIT' });
+    expect(sent).toHaveBeenCalledWith({ type: 'INIT', devtools: false });
     await expect(p.runTask({ taskId: 'greet' }, 'atoll')).resolves.toBe('hi atoll');
     p.terminate();
   });

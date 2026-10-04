@@ -72,6 +72,10 @@ packages/vite/        vite dev plugin — worker entries served as esbuild
                       bundles (rebuild + respawn, no per-module HMR); ships
                       dist/ like cli, see docs/vite-plugin.md
 packages/node/        node:worker_threads adapter (+ ./http socket routing)
+packages/devtools/    instrumentation dashboard — core event bus
+                      (src/devtools.ts emits, pool/memory/islands instrumented),
+                      WS client + dependency-free local server + static app,
+                      `atoll devtools` subcommand; Node-facing dist conventions
 packages/nestjs/      NestJS module + decorators
                       — node/nestjs/nextjs/incidents are Node-facing: they ship
                       compiled dist/ (esbuild + real .d.ts, scripts/build-lib.mjs)
