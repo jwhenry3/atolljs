@@ -38,10 +38,9 @@ initDevtools({ session: { name: 'my-app', framework: 'react' } });`}
       <p>
         That's the whole setup, and it costs nothing until invited.{' '}
         <code>initDevtools</code> is a no-op unless the page was opened with{' '}
-        <code>?__atoll_devtools</code> in the URL. With the param it connects
-        the event sink <em>and</em> mounts the floating overlay; without it no
-        sink, no broadcast, no overlay, and workers don't even install their
-        forwarding probes.
+        <code>?__atoll_devtools</code> in the URL. With the param it starts
+        collecting events <em>and</em> mounts the floating overlay; without it no
+        collection, no broadcast, no overlay, and workers install no probes.
       </p>
       <CodeBlock
         code={`my-app/?__atoll_devtools   → devtools on
@@ -63,8 +62,9 @@ my-app/                   → zero cost, nothing installed`}
         </li>
         <li>
           <strong>The full page</strong>: open <code>/__atoll/</code> on your
-          dev server (or <em>full page ↗</em> from the flyout, which opens on
-          the view you were looking at) for the complete dashboard: task
+          dev server or built app (or <em>full page ↗</em> from the flyout,
+          which opens on the view you were looking at) for the complete
+          dashboard: task
           waterfalls, main-thread jank, fetch inspection, live shared-memory
           values, the reactivity graph, audits, and the raw event log.
         </li>
@@ -74,19 +74,17 @@ my-app/                   → zero cost, nothing installed`}
           props, set watchpoints on shared memory.
         </li>
         <li>
-          <strong>Worker correlation for free</strong>: worker-side events
-          ride the existing task channel and arrive stamped{' '}
-          <code>poolId#slot</code>, so a fetch, a memory write, or a crash is
-          attributed to the exact worker that did it.
+          <strong>Worker correlation for free</strong>: a fetch, a memory
+          write, or a crash inside a worker is attributed to the exact worker
+          that did it, with no devtools code in your worker files.
         </li>
       </ul>
       <p>
         <strong>Try it here.</strong> Every live demo embedded in these docs
         runs with devtools on: look for the <code>atoll devtools</code>{' '}
         button in a demo's corner, click it, and the flyout opens the app map
-        for that demo (each demo ships its own <code>__atoll/</code>{' '}
-        dashboard inside its mount). The demo's <code>↗</code> link opens it
-        full-page with devtools active too.
+        for that demo. The demo's <code>↗</code> link opens it full-page with
+        devtools active too.
       </p>
 
       <h2>Options</h2>
@@ -154,6 +152,9 @@ my-app/                   → zero cost, nothing installed`}
           slowest scripts, frame rate over the last 60 seconds, and{' '}
           <em>message cost</em>: the estimated size of task arguments, task
           results, and island op batches crossing <code>postMessage</code>.
+          While the tab is hidden, only frames with at least 100ms of script
+          are kept; they're drawn gray as <em>background work</em> and don't
+          count as jank.
         </li>
         <li>
           <strong>Network</strong>: per-second channel traffic plus a log of
@@ -173,11 +174,15 @@ my-app/                   → zero cost, nothing installed`}
           that read it, one lane per thread.
         </li>
         <li>
-          <strong>Audits</strong>: live recommendations (oversized messages,
-          saturated or idle pools, main-thread blocking, error and timeout
-          rates, crash loops, heap pressure, a page that isn't cross-origin
-          isolated), each with the evidence, a fix, and links to the entities
-          involved. Mute a rule you don't care about.
+          <strong>Audits</strong>: live recommendations (oversized messages
+          and island batches, saturated, idle or oversized pools, main-thread
+          blocking, heavy work while the tab is hidden, low frame rate, task
+          errors, timeouts and queue-full rejections, crash loops, heap
+          pressure, shared-memory write storms, slow or failing requests,
+          pools spawned before devtools, untagged islands, islands on a page
+          that isn't cross-origin isolated), each with the evidence, a fix,
+          and links to the entities involved. Mute a rule you don't care
+          about.
         </li>
         <li>
           <strong>Log</strong>: the raw event stream with text, session and
@@ -268,7 +273,7 @@ my-app/                   → zero cost, nothing installed`}
       </table>
       <p>
         The address hash tracks the current view and inspector, for example{' '}
-        <code>/__atoll/#/dashboard/tv-island?island=…</code>, so a reload or a
+        <code>/__atoll/#/memory?session=…</code>, so a reload or a
         shared link opens the same spot. In the flyout the hash never adds
         entries to your page's history.
       </p>
@@ -288,11 +293,12 @@ my-app/                   → zero cost, nothing installed`}
         atoll devtools channel. Tabs that were already open when you
         installed it need a reload before the panel can connect.
       </p>
-      <CodeBlock code={`npm run build:extension   # → packages/devtools-extension/dist`} language="bash" />
       <p>
-        Open <code>chrome://extensions</code>, enable Developer mode, choose{' '}
-        <em>Load unpacked</em>, and pick that folder. Your app still needs
-        devtools on (<code>?__atoll_devtools</code> with{' '}
+        The extension isn't on the Chrome Web Store yet: it's built from the
+        atoll repository and loaded unpacked, as described in its{' '}
+        <a href="https://github.com/jwhenry3/atolljs/blob/main/packages/devtools-extension/README.md">README</a>.
+        It works in Chrome 114+ and other Chromium browsers such as Edge.
+        Your app still needs devtools on (<code>?__atoll_devtools</code> with{' '}
         <code>initDevtools()</code>). Inside DevTools the palette also opens
         with <code>Ctrl+Shift+K</code>, since DevTools claims{' '}
         <code>Ctrl+K</code>. Sessions from the aggregate server and Node apps
@@ -344,9 +350,8 @@ connectDevtools({ url: 'ws://127.0.0.1:4780/events' });`}
 
       <h2>Deploying in production</h2>
       <p>
-        The dashboard is a static <code>index.html</code> +{' '}
-        <code>main.js</code> with no build step, so there are two ways to put
-        it in front of a deployed app:
+        The dashboard is a static page, so there are two ways to put it in
+        front of a deployed app:
       </p>
       <p>
         <strong>Same-origin, zero backend.</strong> Ship the dashboard app as
@@ -363,8 +368,8 @@ connectDevtools({ url: 'ws://127.0.0.1:4780/events' });`}
 atoll({ devtools: { build: true, dir: 'debug/devtools' } })`}
       />
       <p>
-        Without vite, copy <code>packages/devtools/app/</code> to{' '}
-        <code>/__atoll/</code> yourself and add the flag before{' '}
+        Without vite, copy <code>node_modules/@atolljs/devtools/app/</code>{' '}
+        to <code>/__atoll/</code> yourself and add the flag before{' '}
         <code>&lt;/head&gt;</code>:
       </p>
       <CodeBlock
@@ -375,9 +380,11 @@ atoll({ devtools: { build: true, dir: 'debug/devtools' } })`}
         Then <code>?__atoll_devtools</code> and the overlay work exactly like
         development, and same-origin scoping is structural: the dashboard can
         only hear apps on your origin. Serve your app's COOP/COEP headers on{' '}
-        <code>/__atoll/</code> too (the dev middleware echoes them for you; a
-        static host won't), or the flyout iframe lands in a separate
-        browsing-context group and renders blank.
+        <code>/__atoll/</code> too (the vite dev server does this for you; a
+        static host or <code>vite preview</code> needs them configured, the
+        latter via <code>preview.headers</code>), or the flyout renders
+        blank. If your app is served under a sub-path, point the flyout at
+        it: <code>overlay: {'{'} src: import.meta.env.BASE_URL + '__atoll/?mini=1' {'}'}</code>.
       </p>
       <p>
         <strong>Hosted aggregate.</strong> For cross-origin sessions and Node
@@ -417,7 +424,7 @@ initDevtools({
       </p>
       <CodeBlock
         code={`// src/devtools.ts: a dedicated module, imported FIRST from
-// your entry so the sink exists before any pool spawns.
+// your entry so devtools is on before any pool spawns.
 import { initDevtools } from '@atolljs/devtools/node';
 initDevtools({ session: { name: 'my-api' } });
 
@@ -453,15 +460,15 @@ ATOLL_DEVTOOLS=1 npm run start  # the app streams to it`}
       <ul>
         <li>
           <strong>Call <code>initDevtools()</code> before pools spawn.</strong>{' '}
-          Workers learn whether to forward devtools events at INIT time: a
-          worker spawned before the sink exists stays silent for its
-          lifetime.
+          Workers decide whether to report to devtools when they start: a
+          worker spawned before devtools is on stays silent for its lifetime
+          (the <em>Pool spawned before devtools</em> audit flags it).
         </li>
         <li>
-          <strong>Off means off.</strong> Without the URL param there is no
-          sink, no BroadcastChannel traffic, and workers install no fetch or
-          memory probes: hot paths like shared-memory writes skip building
-          the event object entirely.
+          <strong>Off means off.</strong> Without the URL param nothing is
+          collected or broadcast, and workers install no fetch or memory
+          probes, so there's no overhead on hot paths like shared-memory
+          writes.
         </li>
         <li>
           <strong><code>fetch</code> only.</strong> The network view covers{' '}
