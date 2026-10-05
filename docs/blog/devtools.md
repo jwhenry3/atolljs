@@ -75,8 +75,8 @@ no build step, rendering whichever event stream it hears:
 - **Network**: rolling traffic charts plus a real `fetch()` log from
   main thread *and* workers; click a row for headers, capped body
   previews, sizes, and a Resource-Timing stage breakdown.
-- **Memory**, per-field shared-memory write rates (writes/sec, last
-  writer `poolId#slot`, sparkline) next to per-context JS heap,
+- **Memory**, per-field shared-memory write rates (writes/sec, the
+  worker that wrote last, sparkline) next to per-context JS heap,
   every worker's heap identified by its script URL.
 - **Islands / Workers / Pools**, entity tables: round-trips, op
   batches, replay ms, respawns, errors, live state, cross-linked, since

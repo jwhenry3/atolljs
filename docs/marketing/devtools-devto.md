@@ -85,7 +85,7 @@ The dashboard is a static, dependency-free app, `index.html` + `main.js`, no bui
 - **The app map**: one world-space canvas drawn like the logo it's named for: your app session at the center, pool sockets on the inner rim, workers on the mid orbit, islands on the outer orbit rendered as framework marks (⚛, V, S, A…). Wheel to zoom, clustering tiers collapse islands into a ring, sessions into labeled discs, click to drill into any worker or island's own inspector.
 - **Tasks**: a waterfall with one swimlane per worker slot: queued→dispatched→settled segments colored by outcome, per-task aggregates (failures, wait avg, run p95/max) with click-to-drill.
 - **Network**: rolling traffic charts plus a real `fetch()` log from main thread *and* workers; click a row for headers, capped body previews, sizes, and a Resource-Timing stage breakdown.
-- **Memory**: per-field shared-memory write rates (writes/sec, last writer `poolId#slot`, sparkline) next to per-context JS heap, every worker's heap identified by its script URL.
+- **Memory**: per-field shared-memory write rates (writes/sec, the worker that wrote last, sparkline) next to per-context JS heap, every worker's heap identified by its script URL.
 - **Islands / Workers / Pools**: entity tables: round-trips, op batches, replay ms, respawns, errors, live state, cross-linked, since `island:mount` carries the client's `poolId`.
 - **Log**: the raw event stream when nothing else will do.
 
