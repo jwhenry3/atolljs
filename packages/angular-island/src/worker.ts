@@ -752,6 +752,7 @@ export function angularIslandApp<C>(
   options?: AngularIslandAppOptions<C>,
 ): RenderedIslandApp {
   const app: RenderedIslandApp = {
+    renderer: 'angular',
     mount(ctx: RenderContext): RenderedHandle {
       // `createComponent` resolves the component def — for a JIT (decorator)
       // component that getter hits the compiler facade; surface the fix when

@@ -26,8 +26,14 @@ export type DevtoolsEvent =
       /** Config `name`, when supplied — a display label, not the id. */
       label?: string;
       poolSize: number;
+      /** Per-worker in-flight cap; 0 for a dedicated worker (no queue, uncapped). */
       concurrency: number;
       memoryBytes?: number;
+      /**
+       * True for a single dedicated worker (`connectWorker({ workers: 1 })`,
+       * island clients): no pool, no queue. Same event vocabulary otherwise.
+       */
+      dedicated?: boolean;
     }
   | { type: 'pool:terminate'; poolId: string }
   | { type: 'worker:spawn'; poolId: string; slot: number }
@@ -41,6 +47,8 @@ export type DevtoolsEvent =
       taskId: string;
       slot: number;
       waitMs: number;
+      /** Estimated structured-clone size of the task args (`estimateCloneBytes`). */
+      argBytes?: number;
     }
   | {
       type: 'task:settle';
@@ -51,6 +59,8 @@ export type DevtoolsEvent =
       /** dispatch→reply; absent for calls that never ran. */
       runMs?: number;
       error?: string;
+      /** Estimated structured-clone size of the result (`estimateCloneBytes`). */
+      resultBytes?: number;
     }
   | {
       type: 'memory:bind';
@@ -59,6 +69,16 @@ export type DevtoolsEvent =
       totalBytes: number;
     }
   | { type: 'memory:write'; path: string; version: number }
+  | {
+      /** A dashboard-set watchpoint matched on write (`memory.watch` command). */
+      type: 'memory:watch-hit';
+      path: string;
+      version: number;
+      /** Preview of the written value (`previewValue`). */
+      value: string;
+      /** The watch rule as set, e.g. '> 100', 'change', '== "down"'. */
+      rule: string;
+    }
   | {
       type: 'island:mount';
       instance: string;
@@ -70,7 +90,20 @@ export type DevtoolsEvent =
       framework?: string;
     }
   | { type: 'island:unmount'; instance: string }
-  | { type: 'island:event'; instance: string; name: string }
+  | {
+      type: 'island:event';
+      instance: string;
+      name: string;
+      /** Preview of the emitted payload (`previewValue`). */
+      payload?: string;
+    }
+  | {
+      /** The props an island currently holds: sent on mount and every updateProps. */
+      type: 'island:props';
+      instance: string;
+      /** Preview of the props object (`previewValue`); callbacks show as '[fn]'. */
+      props: string;
+    }
   | {
       type: 'island:task';
       instance: string;
@@ -90,6 +123,8 @@ export type DevtoolsEvent =
       count: number;
       /** Main-thread replay time; worker-side render time rides call timings. */
       replayMs?: number;
+      /** Estimated structured-clone size of the op batch (`estimateCloneBytes`). */
+      bytes?: number;
     }
   | {
       type: 'net:fetch';
@@ -148,6 +183,56 @@ export type DevtoolsEvent =
        * Worker contexts are identified by their script URL.
        */
       contexts?: { bytes: number; scope?: string; url?: string }[];
+    }
+  | {
+      /**
+       * A main-thread frame that blocked rendering: Long Animation Frame
+       * entries where supported, `longtask` entries as the fallback.
+       */
+      type: 'runtime:longframe';
+      /** Frame (or long task) duration. */
+      ms: number;
+      /** Time past the 50ms budget that blocked input/render. */
+      blockingMs: number;
+      /** LoAF script attribution, longest first (capped). */
+      scripts?: { src?: string; fn?: string; ms: number }[];
+      /**
+       * Page was hidden: frame duration is throttling, not work, so only
+       * frames with substantial script time are reported. Excluded from
+       * foreground jank metrics.
+       */
+      hidden?: boolean;
+    }
+  | {
+      /** Main-thread frame rate, sampled once a second via rAF while devtools is on. */
+      type: 'runtime:frames';
+      fps: number;
+      /** Frames over ~2× the display interval in that second. */
+      dropped: number;
+    }
+  | {
+      /** A `src/log.ts` entry, mirrored into the stream (worker logs forward too). */
+      type: 'log';
+      level: 'trace' | 'debug' | 'info' | 'warn' | 'error';
+      scope: string;
+      message: string;
+      /** Preview of the structured data (`previewValue`). */
+      data?: string;
+    }
+  | {
+      /**
+       * Cross-thread reactivity edge/node update for the dependency graph.
+       * `id` names a reactive source or subscriber; `deps` are the ids it reads.
+       */
+      type: 'reactive:node';
+      id: string;
+      kind: 'source' | 'derived' | 'effect' | 'bridge';
+      label?: string;
+      deps?: string[];
+      /** Thread-qualified owner, e.g. a pool id or island instance. */
+      owner?: string;
+      /** Set when the node is disposed. */
+      disposed?: boolean;
     };
 
 export type EmittedDevtoolsEvent = DevtoolsEvent & {
@@ -170,11 +255,54 @@ const THREAD: DevtoolsThread =
     ? 'worker'
     : 'main';
 
+/** The composed sink `emitDevtools` calls: null when nothing listens. */
 let sink: DevtoolsSink | null = null;
+/** The transport slot `setDevtoolsSink` owns. */
+let primary: DevtoolsSink | null = null;
+/** Additive listeners (`addDevtoolsSink`): exporters riding alongside the transport. */
+const extraSinks = new Set<DevtoolsSink>();
 
-/** Install the event sink (devtools transports hook here); null disables. */
+const recompose = (): void => {
+  if (extraSinks.size === 0) {
+    sink = primary;
+    return;
+  }
+  const all = primary ? [primary, ...extraSinks] : [...extraSinks];
+  // Fan-out isolates listeners: one throwing sink can't starve the others.
+  sink =
+    all.length === 1
+      ? all[0]
+      : (event) => {
+          for (const s of all) {
+            try {
+              s(event);
+            } catch {
+              /* a broken listener must not break the app or its siblings */
+            }
+          }
+        };
+};
+
+/**
+ * Install the transport sink (devtools transports hook here); null removes
+ * it. Additive sinks (`addDevtoolsSink`) are unaffected.
+ */
 export const setDevtoolsSink = (custom: DevtoolsSink | null): void => {
-  sink = custom;
+  primary = custom;
+  recompose();
+};
+
+/**
+ * Add a listener alongside the transport sink (exporters like OTLP);
+ * returns its remover. Any installed listener turns `devtoolsEnabled()` on,
+ * so pools spawned afterwards enable worker forwarding the same way.
+ */
+export const addDevtoolsSink = (listener: DevtoolsSink): (() => void) => {
+  extraSinks.add(listener);
+  recompose();
+  return () => {
+    if (extraSinks.delete(listener)) recompose();
+  };
 };
 
 /** Emit a structured event — one branch when no sink is installed. */
@@ -190,8 +318,108 @@ export const forwardDevtools = (event: EmittedDevtoolsEvent): void => {
   if (sink) sink(event);
 };
 
-/** True when a devtools sink is installed on this thread. */
+/** True when a devtools sink (transport or additive listener) is installed on this thread. */
 export const devtoolsEnabled = (): boolean => sink !== null;
+
+/**
+ * Compact, bounded preview of any value for event payloads: JSON-ish,
+ * functions as '[fn]', typed arrays/buffers described by size, cycles cut,
+ * capped at `max` chars. Call only behind `devtoolsEnabled()`.
+ */
+export const previewValue = (value: unknown, max = 2048): string => {
+  const seen = new WeakSet<object>();
+  let out: string;
+  try {
+    out =
+      JSON.stringify(value, (_k, v: unknown) => {
+        if (typeof v === 'function') return '[fn]';
+        if (typeof v === 'bigint') return `${v}n`;
+        if (v instanceof ArrayBuffer) return `[ArrayBuffer ${v.byteLength}B]`;
+        if (ArrayBuffer.isView(v)) return `[${v.constructor.name} ${v.byteLength}B]`;
+        if (v instanceof Map) return { '[Map]': [...v.entries()].slice(0, 50) };
+        if (v instanceof Set) return { '[Set]': [...v].slice(0, 50) };
+        if (v && typeof v === 'object') {
+          if (seen.has(v)) return '[cycle]';
+          seen.add(v);
+        }
+        return v;
+      }) ?? String(value);
+  } catch {
+    out = String(value);
+  }
+  return out.length > max ? `${out.slice(0, max)}…` : out;
+};
+
+/**
+ * Rough structured-clone size in bytes: strings 2B/char, numbers 8B,
+ * typed arrays/buffers by byteLength, plus small per-key overhead. A cost
+ * signal for the dashboard ("is this message big?"), not an exact count.
+ * Walks at most `budget` nodes. Call only behind `devtoolsEnabled()`.
+ */
+export const estimateCloneBytes = (value: unknown, budget = 5000): number => {
+  let nodes = 0;
+  const seen = new WeakSet<object>();
+  const walk = (v: unknown): number => {
+    if (++nodes > budget) return 0;
+    switch (typeof v) {
+      case 'string': return 4 + v.length * 2;
+      case 'number': return 8;
+      case 'boolean': return 4;
+      case 'bigint': return 16;
+      case 'undefined': return 1;
+      case 'object': {
+        if (v === null) return 1;
+        if (v instanceof ArrayBuffer) return v.byteLength;
+        if (ArrayBuffer.isView(v)) return v.byteLength;
+        if (typeof SharedArrayBuffer !== 'undefined' && v instanceof SharedArrayBuffer) return 8;
+        if (seen.has(v)) return 4;
+        seen.add(v);
+        let n = 8;
+        if (v instanceof Map) for (const [k, x] of v) n += walk(k) + walk(x);
+        else if (v instanceof Set) for (const x of v) n += walk(x);
+        else if (Array.isArray(v)) for (const x of v) n += walk(x);
+        else for (const k of Object.keys(v)) n += 4 + k.length * 2 + walk((v as Record<string, unknown>)[k]);
+        return n;
+      }
+      default: return 0;
+    }
+  };
+  return walk(value);
+};
+
+/* ── control: dashboard → app commands ───────────────────────────────────── */
+
+/**
+ * A command the dashboard can invoke on this app (`control` frames on the
+ * devtools transport). Args and result must be structured-cloneable and
+ * JSON-safe (the WebSocket path stringifies them).
+ */
+export type DevtoolsCommandHandler = (args: Record<string, unknown>) => unknown | Promise<unknown>;
+
+const commands = new Map<string, DevtoolsCommandHandler>();
+
+/**
+ * Register a dashboard-invocable command; returns an unregister function.
+ * Names are dotted by area: 'island.tree', 'worker.kill', 'memory.read'.
+ * A later registration under the same name replaces the earlier one.
+ */
+export const registerDevtoolsCommand = (name: string, handler: DevtoolsCommandHandler): (() => void) => {
+  commands.set(name, handler);
+  return () => {
+    if (commands.get(name) === handler) commands.delete(name);
+  };
+};
+
+/** Names of the registered commands — the dashboard enables controls from this. */
+export const listDevtoolsCommands = (): string[] => [...commands.keys()].sort();
+
+/** Run a registered command (transports call this for inbound `control` frames). */
+export const runDevtoolsCommand = async (name: string, args: Record<string, unknown> = {}): Promise<unknown> => {
+  if (name === 'devtools.commands') return listDevtoolsCommands();
+  const handler = commands.get(name);
+  if (!handler) throw new Error(`unknown devtools command '${name}'`);
+  return handler(args);
+};
 
 let workerForwarding = false;
 
@@ -486,5 +714,22 @@ export const installMemoryProbe = (scope: object, intervalMs = 2500): void => {
 };
 
 let seq = 0;
-/** Process-unique ids for pools — 'pool-1', 'pool-2', … */
-export const nextDevtoolsId = (prefix: string): string => `${prefix}-${++seq}`;
+const named = new Map<string, number>();
+/**
+ * Process-unique ids for runners. Unnamed: 'pool-1', 'worker-2', … Named:
+ * the slugged name plus a kind suffix, '-p' for a pool and '-w' for a
+ * dedicated worker ('regions-p', 'ops-inline-w'); a repeated name gets a
+ * counter ('regions-w', 'regions-w2'). Slugs never contain '#', '~' or
+ * '|', which the dashboard uses to qualify forwarded ids.
+ */
+export const nextDevtoolsId = (prefix: string, name?: string): string => {
+  const slug = name
+    ?.toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  if (!slug) return `${prefix}-${++seq}`;
+  const base = `${slug}-${prefix === 'pool' ? 'p' : prefix === 'worker' ? 'w' : prefix}`;
+  const n = (named.get(base) ?? 0) + 1;
+  named.set(base, n);
+  return n === 1 ? base : `${base}${n}`;
+};

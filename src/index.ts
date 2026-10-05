@@ -62,12 +62,15 @@ export {
   TaskTimeoutError,
   WorkerCrashedError,
 } from './pool/errors';
-export { connectWorker, workerClient } from './pool/workerClient';
+export { DedicatedWorker } from './pool/dedicatedWorker';
+export type { DedicatedWorkerConfig } from './pool/dedicatedWorker';
+export { connectWorker, resolveWorkerCount, workerClient } from './pool/workerClient';
 export type {
   ClientMethods,
   ConnectWorkerConfig,
   WorkerClient,
   WorkerMethods,
+  WorkerRunner,
 } from './pool/workerClient';
 export { connectSubWorker } from './pool/subWorkerClient';
 export type { ConnectSubWorkerConfig } from './pool/subWorkerClient';
@@ -117,13 +120,20 @@ export type { AsyncTask, TaskSnapshot } from './task';
 export { getLogLevel, log, scoped, setLogLevel, setLogSink } from './log';
 export type { LogEntry, LogLevel, LogSink } from './log';
 export {
+  addDevtoolsSink,
   devtoolsEnabled,
   emitDevtools,
+  estimateCloneBytes,
   installFetchProbe,
   installMemoryProbe,
+  listDevtoolsCommands,
+  previewValue,
+  registerDevtoolsCommand,
+  runDevtoolsCommand,
   setDevtoolsSink,
 } from './devtools';
 export type {
+  DevtoolsCommandHandler,
   DevtoolsEvent,
   DevtoolsSink,
   DevtoolsThread,

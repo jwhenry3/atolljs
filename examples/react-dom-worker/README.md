@@ -19,8 +19,8 @@ topologies.** The demo mixes them deliberately:
 
 - **Registry worker** (`definePolyWorker({ apps })`) — `render.worker.ts`
   serves the React apps (`controls` / `data-table` / `stats` / `charts`) by
-  name. Islands each get a `connectWorker` client — one pool, **poolSize
-  pinned to 1**, one worker. The React shell goes further: the two
+  name. Islands each get a `connectWorker` client pinned to **`workers: 1`**:
+  one dedicated worker, no pool. The React shell goes further: the two
   `data-table` islands share ONE client, so both instances live in a single
   worker — separate reconcilers, op queues, and pids in one OS thread —
   and `destroy()` unmounts a instance without killing its sibling's worker.
@@ -44,10 +44,10 @@ independent props and content, whether into separate workers (the vanilla
 shell) or the same one (the React shell's shared client). `unmount` on the
 wire tears a instance down without touching its siblings.
 `connectIslandWorker({ worker, ...options })` takes the worker factory (the
-package can't know where your entry lives) while `poolSize`/`sharedMemory`
-stay island-internal — `poolSize: 1` is pinned after the spread, so pooling
-can't be re-enabled even through a cast; everything else (`concurrency`,
-`taskTimeout`, `respawn`, `lazy`…) still passes through.
+package can't know where your entry lives) while `workers`/`poolSize`/`sharedMemory`
+stay island-internal: `workers: 1` is pinned after the spread, so pooling
+can't be re-enabled even through a cast; everything else (`taskTimeout`,
+`respawn`, `lazy`…) still passes through.
 
 **Transclusion — main-thread DOM inside a worker tree.** A worker app can
 render `<Slot name="x"/>` (a leaf `<div data-atoll-slot="x">`): the island
@@ -67,6 +67,10 @@ port into the worker, it gets *transcluded* around it.
 op protocol doesn't care what the shell is made of. `index.html` +
 `src/main.ts` is framework-free: `mountIsland({ el, app, props })` calls
 plus hand-wired `island.updateProps` mediation — its bundle is ~4 kB.
+It is also the all-frameworks page: a framework row mounts the `counter`
+app from the Svelte, Solid and Angular workers beside the React, Vue,
+imperative and Leaflet islands, so the devtools app map (open with
+`?__atoll_devtools`) shows every supported renderer at once.
 `react-shell.html` + `src/shell.tsx` mounts five islands through
 `<Island/>` (`@atolljs/react-island`): each `mountIsland` call
 becomes a component, badges ride `onReady` → state, and
@@ -99,7 +103,29 @@ back up — and the sub-worker's `emit` lands in the outer island's
 `onEvent`, which re-emits to the shell status line. The sub-instance keys
 hierarchically (`nestedhost@1~nested@1`), push and poll transports both
 work, and the devtools app map draws the parent→sub-worker→sub-island
-branch.
+branch. (`SubIsland` is an alias: new worker code imports `Island` from
+`@atolljs/react-island/worker`, the same component the shell uses.)
+
+**The ops console: one PolyWorker, three topologies.** The bottom of
+`react-shell.html` mounts a second definition, `src/worker/console.worker.tsx`
+(apps `pulse`, `export`, `regions`), in every shape the API offers:
+
+| Row | Mount | Topology | Press the heavy button and… |
+|---|---|---|---|
+| A | `pulse` + `export` with `client={opsShared}` | 1 worker, 2 instances | the shared pulse freezes for the whole ~1.2s export |
+| B | `pulse` + `export` with `worker={consoleWorker}` each | 2 workers, same script | the isolated pulse keeps ticking |
+| C | `regions` with `worker={consoleWorker}` | 1 worker that nests `region.worker.tsx` twice | a region recompute stalls all three cards (one shared sub-client); the forecast model stalls nothing (its own sub-worker) |
+
+Inside `regions`, the nested mounts use the shell's own API: `<Island
+client={cards}>` per region card (where `cards = connectIslandWorker({ worker:
+regionEntry })` lives in a `useState` initializer inside the worker) and
+`<Island worker={regionEntry} app="forecast"/>`, both imported from
+`@atolljs/react-island/worker`. Every card and pulse shows its "longest
+stall", measured from how late its own `setInterval` fires, and a
+main-thread heartbeat above the rows shows the page never stalls at all.
+The scenario stands in for a real ops dashboard: live telemetry that must
+keep updating, CPU-heavy report exports, and per-region widgets next to a
+capacity model.
 
 **Worker-side proxy DOM — the "WorkerDOM" pattern.** Transclusion covers
 libraries that must run on the main thread; `src/worker/proxyDom.ts` covers
@@ -194,6 +220,8 @@ vanilla island: emit('colorPicked') ───→ shell status line
 map island: emit('markerClicked' / 'placeSelected' / 'zoomChanged') → shell status line
 charts island: emit('chartClicked') ─────────────────────────────────────────→ shell status line
 nestedhost island: emit('nestedIncremented') ── relayed from the SUB-worker ──→ shell status line
+ops console export islands: emit('exported') ────────────────────────────────→ shell status line
+regions island: emit('regionRecomputed' / 'forecasted') ── relayed from region sub-workers → shell status line
 ```
 
 Each island's header shows its `whoami()` pid — a random per-instance id proving
@@ -212,6 +240,9 @@ keeps:
 - `src/worker/render.worker.ts` — ~20 lines: `definePolyWorker({ apps })` mapping island app names to components/imperative builders
 - `src/worker/react.worker.tsx` — the React shell's registry worker: counter/notes/incidents plus `nestedhost`, a React app whose tree mounts `<SubIsland/>` (an island inside the island)
 - `src/worker/nested.worker.tsx` — the nested island's entry: an ordinary `defineReactPolyWorker` spawned *inside* react.worker (worker → sub-worker)
+- `src/worker/console.worker.tsx` — the ops console's PolyWorker: `pulse` (heartbeat + longest stall), `export` (~1.2s synchronous aggregation), and `regions` (nests region.worker on a shared sub-client and via `worker`)
+- `src/worker/region.worker.tsx` — the nested PolyWorker spawned inside console.worker: `region` cards (live SLA + recompute) and the `forecast` model
+- `src/worker/opsKit.ts` — helpers both console definitions import (`useHeartbeat`, `aggregate`): a shared dependency each spawned worker evaluates on its own
 - `src/worker/apps.tsx` — the four React island apps: `ControlsApp` (emits filter/sort/counter events), `TableApp` (2000-row memoized table, props-driven, emits rowSelected/rowsChanged), `StatsApp` (row count + busy-loop compute), `ChartsApp` (real recharts 3.x `ComposedChart`, fixed dims, emits `chartClicked` on bar click)
 - `src/worker/vanilla.ts` — the imperative island app: a hand-written swatch picker + log on the proxy DOM, AND the vendored MiniWidget running on `installDomShim`'s globals (no React import)
 - `src/worker/map.ts` — the map island app: `installDomShim` + dynamic `import('leaflet')`, then unmodified Leaflet 1.9 (`L.map`, tile layer, divIcon markers, a `L.Control.extend` place picker) on the proxy DOM
@@ -272,8 +303,9 @@ it, so the shell sees `island.updateProps(props)`):
 ## Notes & caveats
 
 - **Pooling is disabled for islands — by construction, not just by
-  convention.** `connectIslandWorker` omits `poolSize` from its options type
-  and pins it to 1 internally. The reason is structural: one reconciled tree
+  convention.** `connectIslandWorker` omits `workers`/`poolSize` from its
+  options type and pins `workers: 1` internally, which builds a
+  `DedicatedWorker` (no pool, no queue). The reason is structural: one reconciled tree
   lives in one worker's memory, and a second worker in the pool would
   receive `dispatch`/`updateProps` calls for a tree it doesn't hold (its
   handler ids and instance ids belong to a different instance). A real pool

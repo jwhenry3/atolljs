@@ -21,6 +21,7 @@ export interface NodeWebSocket {
   close(): void;
   onOpen: (() => void) | null;
   onClose: (() => void) | null;
+  onMessage: ((text: string) => void) | null;
 }
 
 /** Connect a WebSocket to `url` — handshake, then framed text IO. */
@@ -62,6 +63,7 @@ export function connectNodeWebSocket(url: string): NodeWebSocket {
     },
     onOpen: null,
     onClose: null,
+    onMessage: null,
   };
 
   const die = () => {
@@ -108,7 +110,11 @@ export function connectNodeWebSocket(url: string): NodeWebSocket {
       if (opcode === OPCODES.pong) continue;
       if (opcode === OPCODES.text || opcode === OPCODES.continuation) {
         fragments.push(payload);
-        if (fin) fragments = []; // client.ts never reads frames — drain only
+        if (fin) {
+          const text = Buffer.concat(fragments).toString('utf8');
+          fragments = [];
+          conn.onMessage?.(text);
+        }
       }
     }
   });

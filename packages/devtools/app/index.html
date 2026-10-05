@@ -116,6 +116,19 @@
       padding: 3px 10px; cursor: pointer; font: inherit; font-size: 11px;
     }
     .subnav button.on { color: #c9d1d9; border-color: #58a6ff; background: #161b22; }
+    /* panel plumbing (api.js): nav count badges, inspector action rows */
+    .nbadge:not(:empty) {
+      display: inline-block; margin-left: 6px; min-width: 16px; padding: 0 5px; border-radius: 8px;
+      background: #da3633; color: #fff; font-size: 10px; line-height: 16px; text-align: center;
+    }
+    .actions:not(:empty) { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 10px; }
+    .actions button, button.act {
+      background: #21262d; border: 1px solid #30363d; color: #c9d1d9; border-radius: 6px;
+      padding: 3px 10px; cursor: pointer; font: inherit; font-size: 11px;
+    }
+    .actions button:hover, button.act:hover { border-color: #58a6ff; }
+    .actions button.danger, button.act.danger { border-color: #f8514966; color: #ff7b72; }
+    .actions button:disabled, button.act:disabled { opacity: .45; cursor: not-allowed; }
     .fwicon { width: 16px; height: 16px; vertical-align: middle; margin-top: -2px; }
     .subview { display: none; } .subview.on { display: block; }
     pre.body {
@@ -167,13 +180,123 @@
     body.mini #pools th:first-child, body.mini #pools td:first-child { display: none; }
     body.mini .grid2 { grid-template-columns: 1fr; gap: 8px; }
     body.mini nav button { padding: 3px 8px; font-size: 11px; }
+
+    /* ── shell (panels/shell.js): header, responsive nav, palette, help,
+       intros, onboarding. Must hold from ~380px (flyout, DevTools panel)
+       to wide screens, and never assume a top-level window. ── */
+    header { align-items: center; min-width: 0; }
+    header h1, #conn { white-space: nowrap; }
+    #counts { flex: 1 1 0; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    #toolbar {
+      margin-left: auto; display: flex; gap: 6px; align-items: center;
+      flex: 0 1 auto; min-width: 0; overflow-x: auto; scrollbar-width: thin;
+    }
+    #toolbar > * { flex: none; white-space: nowrap; }
+    button.act.icon { padding: 2px 8px; min-width: 26px; }
+    #sideToggle { display: none; }
+    body:not(.local):not(.mini) #sideToggle { display: inline-block; }
+    body.noside main { grid-template-columns: 1fr; }
+    body.noside aside { display: none; }
+    .panels > nav { overflow: hidden; flex-wrap: nowrap; }
+    .panels > nav > button { flex: none; white-space: nowrap; }
+    .panels > nav > button.sh-ovf { display: none; }
+    .panels > nav > .sh-more { margin-left: auto; }
+    .subnav { overflow-x: auto; scrollbar-width: thin; }
+    .subnav button { flex: none; white-space: nowrap; }
+    .sh-tscroll { overflow-x: auto; max-width: 100%; }
+    .sh-menu {
+      position: fixed; z-index: 30; min-width: 170px; max-height: 70vh; overflow-y: auto;
+      background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 4px; box-shadow: 0 8px 24px #0009;
+    }
+    .sh-menu button {
+      display: flex; justify-content: space-between; align-items: center; gap: 10px; width: 100%;
+      background: none; border: 0; color: #c9d1d9; font: inherit; font-size: 12px; text-align: left;
+      padding: 5px 8px; border-radius: 5px; cursor: pointer;
+    }
+    .sh-menu button:hover, .sh-menu button:focus-visible { background: #21262d; outline: none; text-decoration: none; }
+    .sh-menu button.on { color: #58a6ff; }
+    .sh-modal {
+      position: fixed; inset: 0; z-index: 40; background: #01040999;
+      display: flex; justify-content: center; align-items: flex-start; padding: 10vh 12px 12px;
+    }
+    .sh-modal[hidden] { display: none; }
+    body.mini .sh-modal { padding-top: 10px; }
+    .sh-card {
+      width: min(600px, 100%); max-height: 100%; display: flex; flex-direction: column;
+      background: #0d1117; border: 1px solid #30363d; border-radius: 10px; box-shadow: 0 16px 48px #000c; overflow: hidden;
+    }
+    .sh-card.wide { width: min(880px, 100%); }
+    .sh-card > input {
+      width: 100%; background: #010409; border: 0; border-bottom: 1px solid #21262d; color: #c9d1d9;
+      font: inherit; font-size: 14px; padding: 10px 12px; outline: none;
+    }
+    .sh-list { overflow-y: auto; padding: 2px 0 6px; min-height: 0; }
+    .sh-grp { padding: 7px 12px 2px; font-size: 10px; color: #8b949e; text-transform: uppercase; letter-spacing: .06em; }
+    .sh-item { display: flex; align-items: center; gap: 10px; padding: 5px 12px; cursor: pointer; min-width: 0; }
+    .sh-item .t { flex: none; max-width: 65%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .sh-item .h { flex: 1; min-width: 0; color: #8b949e; font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .sh-item mark { background: none; color: #58a6ff; font-weight: 600; }
+    .sh-item.on { background: #1f6feb33; box-shadow: inset 2px 0 #58a6ff; }
+    .sh-item kbd { flex: none; }
+    .sh-none { padding: 14px 12px; color: #8b949e; }
+    .sh-foot {
+      display: flex; gap: 12px; flex-wrap: wrap; padding: 6px 12px; border-top: 1px solid #21262d;
+      color: #8b949e; font-size: 11px;
+    }
+    kbd {
+      display: inline-block; min-width: 18px; padding: 0 5px; border: 1px solid #30363d; border-bottom-width: 2px;
+      border-radius: 4px; background: #161b22; color: #c9d1d9; font: 10px/16px ui-monospace, monospace; text-align: center;
+    }
+    .sh-head { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid #21262d; font-weight: 600; }
+    .sh-head .sh-x { margin-left: auto; }
+    .sh-help {
+      overflow-y: auto; padding: 0 14px 14px; display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 0 22px;
+    }
+    .sh-help h3 { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: #8b949e; margin: 12px 0 6px; font-weight: normal; }
+    .sh-help td { border: 0; padding: 2px 8px 2px 0; vertical-align: top; font-size: 12px; }
+    .sh-help td:first-child { white-space: nowrap; width: 1%; }
+    .sh-help .about { color: #8b949e; font-size: 11px; }
+    .sh-intro, .sh-wait {
+      display: flex; align-items: flex-start; gap: 8px; margin: 0 0 10px; padding: 5px 10px;
+      border: 1px solid #1f6feb44; border-radius: 6px; background: #0d1d33; color: #9fb4cc; font-size: 11px;
+    }
+    .sh-wait { border-color: #d2992255; background: #241c0b; color: #d8c08a; }
+    .sh-intro > span, .sh-wait > span { flex: 1; min-width: 0; }
+    .sh-intro code, .sh-wait code { color: #e6edf3; }
+    body.mini .sh-intro, body.mini .sh-wait { margin-bottom: 6px; padding: 4px 8px; }
+    .sh-x {
+      background: none; border: 0; color: #8b949e; cursor: pointer; font: inherit; font-size: 14px;
+      line-height: 1; padding: 0 3px; border-radius: 4px;
+    }
+    .sh-x:hover, .sh-x:focus-visible { color: #c9d1d9; background: #21262d; text-decoration: none; }
+    .sh-tip {
+      position: fixed; z-index: 35; left: 50%; bottom: 14px; transform: translateX(-50%);
+      width: min(480px, calc(100% - 20px)); display: flex; gap: 8px 10px; align-items: center; flex-wrap: wrap;
+      background: #161b22; border: 1px solid #58a6ff; border-radius: 8px; padding: 8px 12px;
+      box-shadow: 0 8px 28px #000a; font-size: 12px;
+    }
+    .sh-tip > span { flex: 1 1 220px; }
+    @media (max-width: 760px) {
+      main { grid-template-columns: 1fr; }
+      aside { border-right: 0; border-bottom: 1px solid #21262d; max-height: 34vh; overflow-y: auto; }
+      header { gap: 8px; padding: 6px 10px; }
+      .panels { padding: 8px 10px 20px; }
+    }
+    @media (max-width: 480px) {
+      header h1, #counts { display: none; }
+      .panels > nav button { padding: 5px 9px; }
+      .kpis { grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); }
+    }
   </style>
 </head>
 <body>
   <header>
+    <button id="sideToggle" class="act icon" type="button" title="Toggle the sessions sidebar" aria-label="Toggle the sessions sidebar" aria-controls="sessions" aria-expanded="true">☰</button>
     <h1>atoll devtools</h1>
     <span id="conn" class="off">connecting…</span>
     <span class="muted" id="counts"></span>
+    <div id="toolbar"></div>
   </header>
   <main>
     <aside>
@@ -206,7 +329,8 @@
           <div class="grid2" style="margin-top:14px">
             <div>
               <h2>Task throughput <span class="muted">/s, last 60s</span></h2>
-              <canvas id="tput" width="560" height="80" style="width:100%"></canvas>
+              <div class="muted" id="tput-stats" style="font-size:12px;margin:-4px 0 6px"></div>
+              <canvas id="tput" width="560" height="110" style="width:100%"></canvas>
             </div>
             <div>
               <h2>Attention needed</h2>
@@ -234,6 +358,7 @@
         </div>
         <div class="subview" id="tv-worker">
           <h2 id="wkTitle">Worker inspector</h2>
+          <div class="actions" id="wkActions"></div>
           <div class="kpis" id="wkKpis"></div>
           <h2 style="margin-top:14px">Task lane <span class="muted" id="wkrange"></span></h2>
           <canvas id="wklane" style="width:100%;height:120px;display:block;border:1px solid #21262d;border-radius:8px;background:#010409;cursor:crosshair"></canvas>
@@ -258,7 +383,9 @@
         </div>
         <div class="subview" id="tv-island">
           <h2 id="inspTitle">Island inspector</h2>
+          <div class="actions" id="inspActions"></div>
           <div class="kpis" id="inspKpis"></div>
+          <div id="inspExtra"></div>
           <div class="grid2" style="margin-top:14px">
             <div>
               <h2>Op traffic <span class="muted">— batch size over time, colored by call</span></h2>
@@ -378,7 +505,39 @@
       </section>
 
       <section class="view" id="view-log">
-        <h2>Event log</h2>
+        <style>
+          #view-log .logbar { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin: 0 0 6px; }
+          #view-log .logbar input, #view-log .logbar select {
+            background: #0d1117; border: 1px solid #30363d; color: #c9d1d9; border-radius: 6px;
+            padding: 3px 8px; font: inherit; font-size: 11px;
+          }
+          #view-log .logbar input { width: 220px; }
+          #view-log .logbar button.on { border-color: #d29922; color: #d29922; }
+          #logchips { display: flex; gap: 4px; flex-wrap: wrap; margin: 0 0 6px; }
+          #logchips button {
+            background: none; border: 1px solid #21262d; color: #484f58; border-radius: 10px;
+            padding: 1px 8px; cursor: pointer; font: inherit; font-size: 10px;
+          }
+          #logchips button.on { color: #c9d1d9; border-color: #30363d; background: #161b22; }
+          #logchips button i { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 4px; }
+          #logchips button.sep { border-style: dashed; }
+          #log > div { cursor: pointer; }
+          #log > div.open { white-space: normal; }
+          #log > div > pre { margin: 4px 0 6px; cursor: text; }
+          #log .ll-trace { color: #6e7681; } #log .ll-debug { color: #8b949e; }
+          #log .ll-info b { color: #58a6ff; } #log .ll-warn { color: #d29922; } #log .ll-error { color: #f85149; }
+          #log .logx { color: #58a6ff; font-size: 10px; }
+        </style>
+        <div class="logbar">
+          <input id="logq" type="search" placeholder="filter text (type, scope, message, payload)…">
+          <select id="logsess" style="display:none"><option value="">all sessions</option></select>
+          <button class="act" id="logpause" title="stop appending; incoming lines are held until resume">pause</button>
+          <button class="act" id="logclear">clear</button>
+          <span class="muted" id="logstat"></span>
+        </div>
+        <div id="logchips" title="click: toggle · shift/alt-click: solo">
+          <button class="sep" data-all="1">all</button><button class="sep" data-all="0">none</button>
+        </div>
         <div id="log"></div>
       </section>
     </div>

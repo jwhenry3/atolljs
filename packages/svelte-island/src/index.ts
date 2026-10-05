@@ -80,7 +80,7 @@ export interface IslandActionOptions {
    */
   worker?: (() => Worker) | URL;
   client?: IslandClient;
-  /** Extra pool options — concurrency, taskTimeout, respawn… (poolSize stays 1). */
+  /** Extra client options — taskTimeout, respawn, lazy… (always one dedicated worker, no pool). */
   workerOptions?: IslandWorkerOptions & { doorbell?: boolean };
   /** Initial + updated root props — serialized to the worker. */
   props?: Record<string, unknown>;
@@ -169,7 +169,11 @@ export const island: Action<HTMLElement, IslandActionOptions> = (node, options) 
   const client =
     options.client ??
     (worker !== undefined
-      ? connectIslandWorker({ worker, ...options.workerOptions })
+      ? connectIslandWorker({
+          name: typeof options.app === 'string' ? options.app : options.app && islandAppNameOf(options.app),
+          worker,
+          ...options.workerOptions,
+        })
       : undefined);
   if (client === undefined) {
     report(new Error('use:island requires either `worker` or `client`'));

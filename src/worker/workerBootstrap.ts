@@ -1,9 +1,21 @@
 import { TaskRegistry } from './registry';
 import { bindSharedMemories, getDefinedSharedMemoryCount } from '../contract/sharedMemory';
-import { enableWorkerDevtoolsForwarding } from '../devtools';
+import { devtoolsEnabled, enableWorkerDevtoolsForwarding } from '../devtools';
 import { fmtBytes, scoped } from '../log';
+import { measureAtoll } from '../userTiming';
 
 const workerLog = scoped('worker');
+
+/** Worker-side span of one task execution, on this worker thread's 'tasks' track. */
+const measureRun = (taskId: string, messageId: number, t0: number, ok: boolean): void => {
+  const t1 = performance.now();
+  measureAtoll(`atoll run ${taskId}`, t0, t1, {
+    track: 'tasks',
+    color: ok ? 'secondary' : 'error',
+    properties: [['message', messageId], ['outcome', ok ? 'ok' : 'error']],
+    tooltipText: `${taskId}: ${(t1 - t0).toFixed(1)}ms in worker`,
+  });
+};
 
 let memoryInitialized = false;
 let wired = false;
@@ -71,9 +83,11 @@ export function installWorkerListener(): void {
       const t0 = performance.now();
       try {
         const result = await TaskRegistry.execute(taskId, ...(args || []));
+        if (devtoolsEnabled()) measureRun(taskId, messageId, t0, true);
         workerLog.debug(`task ${taskId} → ${(performance.now() - t0).toFixed(1)}ms`);
         self.postMessage({ messageId, success: true, result });
       } catch (err: any) {
+        if (devtoolsEnabled()) measureRun(taskId, messageId, t0, false);
         workerLog.warn(`task ${taskId} failed: ${err.message || String(err)}`);
         self.postMessage({ messageId, success: false, error: err.message || String(err) });
       }

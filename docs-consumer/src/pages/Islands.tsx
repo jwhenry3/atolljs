@@ -46,13 +46,15 @@ export function Islands() {
 
       <h2>Live demo</h2>
       <p>
-        Eight islands on a framework-free shell: plain{' '}
+        Eleven islands on a framework-free shell: plain{' '}
         <code>mountIsland</code> calls, no framework on the main thread at
         all. The React apps ride the registry worker script (
         <code>data-table</code> mounts twice: same app, separate workers),{' '}
-        <code>vue-notes</code> runs a real Vue createRenderer, and the
-        imperative islands get dedicated instance workers running a
-        hand-written proxy-DOM app and unmodified Leaflet 1.9.
+        <code>vue-notes</code> runs a real Vue createRenderer, a row of{' '}
+        <code>counter</code> islands is rendered by Svelte, Solid and Angular
+        workers, and the imperative islands get dedicated instance workers
+        running a hand-written proxy-DOM app and unmodified Leaflet 1.9.
+        Every supported renderer runs on this one page.
       </p>
       <DemoFrame id="react-dom-worker" port={5177} name="vanilla" />
 

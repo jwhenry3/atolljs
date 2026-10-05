@@ -24,7 +24,9 @@ import {
   type EmittedDevtoolsEvent,
 } from '@atolljs/core';
 import { connectBroadcast } from './broadcast';
-import type { ClientMessage, SessionInfo } from './protocol';
+import { answerControl, captureEnv } from './control';
+import { installJankProbe } from './probes';
+import type { AppMessage, ClientMessage, SessionInfo } from './protocol';
 
 export interface ConnectDevtoolsOptions {
   /**
@@ -37,7 +39,7 @@ export interface ConnectDevtoolsOptions {
   /** Server ingest endpoint — implies websocket transport. */
   url?: string;
   /** Session identity shown in the dashboard. */
-  session?: { name?: string; hint?: string };
+  session?: { name?: string; hint?: string; framework?: string };
   /** Batch flush interval ms (default 100). */
   flushMs?: number;
   /** Events buffered while disconnected (default 50_000 — oldest dropped). */
@@ -48,6 +50,12 @@ export interface ConnectDevtoolsOptions {
   network?: boolean;
   /** Sample JS heap usage periodically — Chrome/Blink only (default true). */
   memory?: boolean;
+  /**
+   * Main-thread jank probe (default true): long frames (`runtime:longframe`,
+   * Long Animation Frames or `longtask`) and a rAF fps sampler
+   * (`runtime:frames`). Browser main thread only.
+   */
+  jank?: boolean;
 }
 
 export interface DevtoolsConnection {
@@ -70,8 +78,10 @@ const makeSession = (opts: ConnectDevtoolsOptions): SessionInfo => {
   return {
     id: `s-${Date.now().toString(36)}-${++sessionSeq}`,
     name: opts.session?.name,
+    framework: opts.session?.framework,
     runtime,
     hint,
+    env: captureEnv(),
   };
 };
 
@@ -118,6 +128,16 @@ function connectWebSocket(opts: ConnectDevtoolsOptions, session: SessionInfo): D
     flush();
   };
 
+  const onMessage = (text: string) => {
+    let msg: AppMessage;
+    try {
+      msg = JSON.parse(text);
+    } catch {
+      return;
+    }
+    if (msg.type === 'control') void answerControl(msg, (res) => send(res));
+  };
+
   const isNode = typeof window === 'undefined' || typeof window.document === 'undefined';
   if (typeof WebSocket !== 'undefined') {
     const ws = new WebSocket(url);
@@ -129,6 +149,7 @@ function connectWebSocket(opts: ConnectDevtoolsOptions, session: SessionInfo): D
       close: () => ws.close(),
     };
     ws.onopen = onOpen;
+    ws.onmessage = (m: MessageEvent) => onMessage(String(m.data));
     ws.onclose = () => clearInterval(timer);
     ws.onerror = () => ws.close();
   } else if (isNode) {
@@ -142,6 +163,7 @@ function connectWebSocket(opts: ConnectDevtoolsOptions, session: SessionInfo): D
       const ws = m.connectNodeWebSocket(url);
       sock = ws;
       ws.onOpen = onOpen;
+      ws.onMessage = onMessage;
       ws.onClose = () => clearInterval(timer);
     }).catch(() => {
       /* no net available — sink stays installed but dead */
@@ -154,6 +176,7 @@ function connectWebSocket(opts: ConnectDevtoolsOptions, session: SessionInfo): D
 
   if (opts.network !== false) installFetchProbe(globalThis);
   if (opts.memory !== false) installMemoryProbe(globalThis);
+  const releaseJank = opts.jank !== false ? installJankProbe() : () => {};
 
   setDevtoolsSink((event) => {
     if (closed) return;
@@ -173,6 +196,7 @@ function connectWebSocket(opts: ConnectDevtoolsOptions, session: SessionInfo): D
       flush();
       sock?.close();
       clearInterval(timer);
+      releaseJank();
     },
   };
 }

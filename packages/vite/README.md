@@ -29,8 +29,10 @@ implements exactly that:
 4. Response headers echo `server.headers` — required so COOP/COEP
    (`require-corp`) pages don't block the worker script fetch.
 
-`vite build` is untouched — the plugin is `apply: 'serve'`, and production
-workers bundle through vite's normal pipeline.
+`vite build` workers bundle through vite's normal pipeline. In a build the
+plugin only copies the devtools dashboard into the output at `/__atoll/`,
+and by default only when the app bundles `@atolljs/devtools`, so the
+overlay flyout keeps working in production.
 
 ## Usage
 
@@ -60,6 +62,10 @@ atoll({
   // JSX handling for worker entries (default: automatic runtime)
   jsx: 'automatic',
   jsxImportSource: 'solid-js', // e.g. for solid worker islands
+  // devtools dashboard at <outDir>/__atoll/ on `vite build`:
+  // 'auto' (default) when the app bundles @atolljs/devtools, true always,
+  // false never; `dir` renames the folder
+  devtools: { build: 'auto', dir: '__atoll' },
 });
 ```
 

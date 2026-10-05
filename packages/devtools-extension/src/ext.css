@@ -1,0 +1,10 @@
+/* DevTools panel additions on top of the dashboard's own styles. */
+
+/* Light DevTools theme: the dashboard (and its canvases) are dark-only, so
+   flip the whole document. filter on the root element creates no containing
+   block, so position:fixed menus/modals still anchor to the viewport.
+   Raster icons are flipped back so framework marks keep their colors. */
+html.ext-light { filter: invert(1) hue-rotate(180deg); }
+html.ext-light img { filter: invert(1) hue-rotate(180deg); }
+
+.sh-wait a { color: #58a6ff; }

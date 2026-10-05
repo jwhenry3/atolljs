@@ -1,20 +1,30 @@
 /**
  * Per-island mounter — the main-thread half of one React tree in one worker.
  *
- * `mountIsland` mounts one island scoped so several can coexist on one page:
- * each island gets its own `connectWorker` client (own pool of ONE worker,
- * own doorbell buffer via `makeDoorbell()`), its own nodes/props/listeners
- * maps (op ids are only unique within a worker — sharing maps between
- * islands would corrupt them), and its own `onEvent` sink for `emit` ops.
+ * `mountIsland` mounts one island scoped so several can coexist on one page.
+ * A `worker:` mount builds its own client (one dedicated worker, own
+ * doorbell buffer via `makeDoorbell()`), i.e. spawns a worker; a `client:`
+ * mount adds an instance to that client's existing worker instead. Either
+ * way each island gets its own nodes/props/listeners maps (op ids are only
+ * unique within a worker — sharing maps between islands would corrupt them),
+ * and its own `onEvent` sink for `emit` ops.
  *
  * There is no React on this thread — the driver below just replays ops.
  *
- * poolSize: 1 is REQUIRED per island — the reconciled tree lives in one
- * worker's memory. A real pool can't serve islands today anyway: task routing
- * is least-busy round-robin, so a second worker would receive dispatches for
- * a tree it doesn't hold (sticky routing is future work).
+ * One worker per island client is REQUIRED — the reconciled tree lives in
+ * one worker's memory. A pool can't serve islands: task routing is
+ * least-busy, so a second worker would receive dispatches for a tree it
+ * doesn't hold. Island clients therefore run on `workers: 1`, a dedicated
+ * worker with no pool.
  */
-import { connectWorker, emitDevtools, observe } from '@atolljs/core';
+import {
+  connectWorker,
+  devtoolsEnabled,
+  emitDevtools,
+  estimateCloneBytes,
+  observe,
+  previewValue,
+} from '@atolljs/core';
 import type {
   ConnectWorkerConfig,
   SharedSpec,
@@ -31,6 +41,8 @@ import {
 } from './ops';
 
 import { marshalCallbackProps, CALLBACK_EVENT } from './callbackProps';
+import { trackIslandForDevtools } from './devtoolsCommands';
+import { propsPreview } from './devtoolsPreview';
 import type { ProxyElement } from './worker/dom/element';
 
 export type Mode = 'push' | 'poll';
@@ -38,21 +50,22 @@ export type Mode = 'push' | 'poll';
 /** The worker definition every `definePolyWorker` call produces. */
 export type IslandWorkerDefinition = WorkerDefinition<DoorbellSpec, IslandWorkerMethods>;
 
-/** One island client: one pool, one worker, one doorbell buffer. */
+/** One island client: one dedicated worker, one doorbell buffer. */
 export type IslandClient = WorkerClient<IslandWorkerDefinition, DoorbellSpec>;
 
 /**
- * Islands are microfrontend containers: each owns ONE worker holding ONE
- * reconciled tree, so pooling is disabled by construction — the type omits
- * `poolSize`/`worker`/`sharedMemory` (all island-internal) and the literal
- * below pins `poolSize: 1` after the spread, so a wider pool can't sneak
+ * An island client is ONE worker holding its islands' trees (one per mount
+ * on it), so pooling is disabled by construction — the type omits
+ * `workers`/`poolSize`/`worker`/`sharedMemory` (all island-internal) and the
+ * literal below pins `workers: 1` after the spread, so a pool can't sneak
  * through a cast either. `worker` is supplied per call — the package can't
  * know where the consumer's worker entry lives — everything else
- * (concurrency, taskTimeout, respawn, lazy…) still passes through.
+ * (taskTimeout, respawn, lazy…) still passes through. The pool-only
+ * `concurrency`/`maxQueue` are accepted but have no effect.
  */
 export type IslandWorkerOptions = Omit<
   ConnectWorkerConfig<SharedSpec>,
-  'sharedMemory' | 'worker' | 'poolSize'
+  'sharedMemory' | 'worker' | 'workers' | 'poolSize'
 >;
 
 export interface ConnectIslandWorkerConfig extends IslandWorkerOptions {
@@ -65,13 +78,13 @@ export interface ConnectIslandWorkerConfig extends IslandWorkerOptions {
   /**
    * Default true — the client carries a SharedArrayBuffer doorbell for
    * push-mode flush (requires COOP/COEP cross-origin isolation). Pass
-   * `false` for a message-only pool: `setMode('push')` falls back to
+   * `false` for a message-only client: `setMode('push')` falls back to
    * polling and the page needs no special headers.
    */
   doorbell?: boolean;
 }
 
-/** One island client: one pool, one worker, one doorbell buffer. */
+/** One island client: one dedicated worker, one doorbell buffer. */
 export const connectIslandWorker = <W extends IslandWorkerDefinition = IslandWorkerDefinition>({
   worker,
   doorbell,
@@ -81,7 +94,7 @@ export const connectIslandWorker = <W extends IslandWorkerDefinition = IslandWor
     ...options,
     sharedMemory: doorbell === false ? undefined : makeDoorbell(),
     worker,
-    poolSize: 1,
+    workers: 1,
   });
 
 interface MountIslandBaseOptions {
@@ -109,6 +122,10 @@ interface MountIslandBaseOptions {
    * events, zero wire). Called again with `null` when the worker removes or
    * renames the element, so the shell can tear down. The element itself
    * stays worker-owned — its box/layout props apply normally.
+   *
+   * Nested mounts (a ProxyElement `el`) receive the anchor's ProxyElement
+   * instead, and only claim names present in this object (`name in slots`);
+   * unclaimed slot names bubble up to the outer island's `slots`.
    */
   slots?: Record<string, (el: HTMLElement | null) => void>;
   /** Fired after each applied op batch — the shell uses it for stats. */
@@ -129,9 +146,10 @@ interface MountIslandBaseOptions {
   mode?: Mode;
   /**
    * Optional renderer/framework tag — pure observability metadata forwarded
-   * to devtools on `island:mount` ('react', 'vue', 'svelte', …). Framework
-   * shell bindings can set it automatically; direct mountIsland callers
-   * declare it themselves.
+   * to devtools on `island:mount` ('react', 'vue', 'svelte', …). When
+   * omitted (and devtools is on), the driver asks the worker: package
+   * adapters report their renderer, imperative apps report none and the
+   * map draws them as plain workers. An explicit tag always wins.
    */
   framework?: string;
   /**
@@ -257,6 +275,37 @@ function buildEventPayload(
     targetId,
   };
 }
+
+/**
+ * User Timing entry for one main-thread op replay (devtools only). The
+ * `detail.devtools` track-entry extension puts it on an 'atoll › islands'
+ * track in Chrome's Performance panel; other engines keep a plain measure.
+ * Same shape as core's task measures (`src/userTiming.ts`), including the
+ * immediate clear: per-batch entries would otherwise grow the buffer.
+ */
+const measureReplay = (instance: string, via: string, count: number, start: number, end: number): void => {
+  if (typeof performance?.measure !== 'function') return;
+  const name = `atoll replay ${instance}`;
+  try {
+    performance.measure(name, {
+      start,
+      end,
+      detail: {
+        devtools: {
+          dataType: 'track-entry',
+          trackGroup: 'atoll',
+          track: 'islands',
+          color: 'primary',
+          tooltipText: `${instance} · ${via} · ${count} ops`,
+          properties: [['via', via], ['ops', count]],
+        },
+      },
+    });
+    performance.clearMeasures?.(name);
+  } catch {
+    /* no User Timing L3 — skip */
+  }
+};
 
 /** Per-island instance counter — see the instance key note in mountIsland. */
 let islandSeq = 0;
@@ -405,6 +454,8 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
     return cbSeq;
   };
   const props = marshalCallbackProps(givenProps ?? {}, registerCb) as Record<string, unknown>;
+  /** The props as the caller last gave them — devtools previews/commands read these. */
+  let currentProps: Record<string, unknown> = givenProps ?? {};
   if (givenClient === undefined && worker === undefined) {
     throw new Error(
       'mountIsland: pass `worker` (a `() => new Worker(...)`/URL entry — this call builds the ' +
@@ -414,6 +465,7 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
   const client: IslandClient =
     givenClient ??
     connectIslandWorker({
+      name: givenApp,
       ...workerConfig,
       worker,
       // Poll-mode shorthand islands don't need SharedArrayBuffer at all —
@@ -826,7 +878,9 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
           break;
         }
         // Not a DOM mutation — the island→shell channel.
-        emitDevtools({ type: 'island:event', instance, name: op.name });
+        if (devtoolsEnabled()) {
+          emitDevtools({ type: 'island:event', instance, name: op.name, payload: previewValue(op.payload, 1024) });
+        }
         onEvent?.(op.name, op.payload);
         break;
       }
@@ -838,8 +892,15 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
     onActivity?.();
     const t0 = performance.now();
     for (const op of ops) applyOp(op);
-    const replayMs = performance.now() - t0;
-    emitDevtools({ type: 'island:ops', instance, via, count: ops.length, replayMs });
+    const t1 = performance.now();
+    const replayMs = t1 - t0;
+    if (devtoolsEnabled()) {
+      emitDevtools({
+        type: 'island:ops', instance, via, count: ops.length, replayMs,
+        bytes: estimateCloneBytes(ops),
+      });
+      measureReplay(instance, via, ops.length, t0, t1);
+    }
     onOps?.(ops, replayMs);
   }
 
@@ -928,7 +989,12 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
   try {
     applyOps(await raced(islandCall('mount', client.mount(instance, props))), 'mount');
     pid = await raced(islandCall('whoami', client.whoami(instance)));
-    emitDevtools({ type: 'island:mount', instance, app, pid, poolId: client.pool?.poolId, framework });
+    if (devtoolsEnabled()) {
+      // an explicit tag wins; otherwise ask the worker which renderer the app uses
+      const fw = framework ?? (await client.renderer(instance).catch(() => null)) ?? undefined;
+      emitDevtools({ type: 'island:mount', instance, app, pid, poolId: client.pool?.poolId, framework: fw });
+      emitDevtools({ type: 'island:props', instance, props: propsPreview(currentProps) });
+    }
   } catch (err) {
     // The instance may exist worker-side with ops we never applied — release it.
     // An island-owned client also terminates (stops a crash→respawn loop on
@@ -1005,12 +1071,16 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
       const marshalled = marshalCallbackProps(next, registerCb) as Record<string, unknown>;
       assertCloneableProps(marshalled, `updateProps(${app})`);
       applyOps(await islandCall('updateProps', client.updateProps(instance, marshalled)), 'updateProps');
+      currentProps = next;
+      if (devtoolsEnabled()) emitDevtools({ type: 'island:props', instance, props: propsPreview(next) });
     },
     flush: async () => {
       applyOps(await islandCall('flush', client.flush(instance)), 'flush');
     },
     destroy: () => {
       destroyed = true;
+      untrackDevtools?.();
+      untrackDevtools = null;
       emitDevtools({ type: 'island:unmount', instance });
       unsubscribe?.();
       resizeObserver?.disconnect();
@@ -1042,5 +1112,9 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
       }
     },
   };
+  // Dashboard commands (`island.*`) — registered only while devtools is on.
+  let untrackDevtools: (() => void) | null = devtoolsEnabled()
+    ? trackIslandForDevtools({ handle, el, props: () => currentProps })
+    : null;
   return handle;
 }

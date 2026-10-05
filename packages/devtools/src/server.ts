@@ -11,6 +11,28 @@ import { join, normalize, extname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { ClientMessage, SessionInfo, ViewerMessage, ViewerRequest } from './protocol';
 import { acceptWebSocket, type WsConnection } from './ws';
+import { OtelMapper, type OtelSignals } from './otelMap';
+import {
+  createOtelPipeline,
+  createOtlpSender,
+  sessionResource,
+  type OtelPipeline,
+  type OtlpSenderOptions,
+  type ResourceAttributes,
+} from './otelTransport';
+
+/** Forward every ingested session's events to an OTLP/HTTP endpoint. */
+export interface DevtoolsServerOtlpOptions extends OtlpSenderOptions {
+  /** Fixed `service.name` for every session (default: each session's name). */
+  serviceName?: string;
+  /** Extra resource attributes on every session. */
+  resource?: ResourceAttributes;
+  signals?: OtelSignals;
+  /** Default 5000ms. */
+  flushIntervalMs?: number;
+  /** Default 512. */
+  maxBatch?: number;
+}
 
 export interface DevtoolsServerOptions {
   /** Default 4780. 0 picks an ephemeral port (tests). */
@@ -25,6 +47,11 @@ export interface DevtoolsServerOptions {
   closedTtlMs?: number;
   /** How often the retention sweep runs (default 60s — tests lower it). */
   sweepMs?: number;
+  /**
+   * Also export everything ingested to OpenTelemetry (one OTLP resource per
+   * app session). Off by default.
+   */
+  otlp?: DevtoolsServerOtlpOptions;
   onListen?: (url: string) => void;
 }
 
@@ -77,6 +104,26 @@ export function createDevtoolsServer(opts: DevtoolsServerOptions = {}): Promise<
   const closedTtlMs = opts.closedTtlMs ?? 30 * 60 * 1000;
   /** Batches kept for replay — sessions updates aren't replayed (stale). */
   const tail: ViewerMessage[] = [];
+  /** In-flight control requests: request id → the viewer awaiting the result. */
+  const pendingControl = new Map<string, WsConnection>();
+
+  /** OTLP forwarding: one mapper (resource) per session id. */
+  let otlp: OtelPipeline | null = null;
+  const otlpSessions = new Map<string, SessionInfo>();
+  if (opts.otlp) {
+    const o = opts.otlp;
+    otlp = createOtelPipeline({
+      sender: createOtlpSender(o),
+      signals: o.signals,
+      flushIntervalMs: o.flushIntervalMs,
+      maxBatch: o.maxBatch,
+      newMapper: (id) =>
+        new OtelMapper({
+          resource: sessionResource(otlpSessions.get(id) ?? { id, runtime: 'browser' }, o.serviceName, o.resource),
+          signals: o.signals,
+        }),
+    });
+  }
 
   const sessionList = (): SessionInfo[] => [...sessions.values(), ...closedSessions];
 
@@ -121,7 +168,10 @@ export function createDevtoolsServer(opts: DevtoolsServerOptions = {}): Promise<
 
     if (url.pathname === '/view') {
       viewers.add(conn);
-      conn.onClose = () => viewers.delete(conn);
+      conn.onClose = () => {
+        viewers.delete(conn);
+        for (const [id, v] of pendingControl) if (v === conn) pendingControl.delete(id);
+      };
       conn.onMessage = (text) => {
         let msg: ViewerRequest;
         try {
@@ -139,6 +189,17 @@ export function createDevtoolsServer(opts: DevtoolsServerOptions = {}): Promise<
           if (!s || s.pinned === msg.pinned) return;
           s.pinned = msg.pinned;
           broadcast({ type: 'sessions', sessions: sessionList() });
+        } else if (msg.type === 'control') {
+          const app = [...sessions].find(([, s]) => s.id === msg.sessionId)?.[0];
+          if (!app) {
+            conn.send(JSON.stringify({
+              type: 'control-result', sessionId: msg.sessionId, id: msg.id, ok: false,
+              error: 'session is not live',
+            } satisfies ViewerMessage));
+            return;
+          }
+          pendingControl.set(msg.id, conn);
+          app.send(JSON.stringify(msg));
         }
       };
       conn.send(JSON.stringify({ type: 'sessions', sessions: sessionList() }));
@@ -162,11 +223,27 @@ export function createDevtoolsServer(opts: DevtoolsServerOptions = {}): Promise<
         return;
       }
       if (msg.type === 'batch' && greeted) {
-        broadcast({ type: 'batch', session: sessions.get(conn)!, events: msg.events });
+        const session = sessions.get(conn)!;
+        broadcast({ type: 'batch', session, events: msg.events });
+        if (otlp && Array.isArray(msg.events)) {
+          otlpSessions.set(session.id, session);
+          // Remote clocks are unknown: the mapper rebases on receive time.
+          const recv = Date.now();
+          for (const ev of msg.events) otlp.ingest(ev, recv, session.id);
+        }
+      }
+      if (msg.type === 'control-result') {
+        const viewer = pendingControl.get(msg.id);
+        pendingControl.delete(msg.id);
+        if (viewer && viewers.has(viewer)) viewer.send(JSON.stringify(msg));
       }
     };
     conn.onClose = () => {
       const info = sessions.get(conn);
+      if (info && otlp) {
+        otlp.release(info.id);
+        otlpSessions.delete(info.id);
+      }
       if (sessions.delete(conn) && info) {
         info.closed = true;
         info.closedAt = Date.now();
@@ -210,7 +287,10 @@ export function createDevtoolsServer(opts: DevtoolsServerOptions = {}): Promise<
             clearInterval(sweep);
             for (const v of viewers) v.close();
             for (const c of sessions.keys()) c.close();
-            server.close(() => done());
+            server.close(() => {
+              if (otlp) void otlp.close().then(() => done());
+              else done();
+            });
           }),
       });
     });

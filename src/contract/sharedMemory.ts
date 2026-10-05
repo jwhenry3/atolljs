@@ -2,6 +2,7 @@ import type { Prettify, Schema } from './types';
 import { msgpackrCodec } from './msgpackrCodec';
 import { memberToSpec, zodArrayInfo, zodObjectShape, zodStringBytes } from './listSchema';
 import { devtoolsEnabled, emitDevtools } from '../devtools';
+import { checkWatchOnWrite, ensureMemoryCommands, memoryWatches } from './memoryDevtools';
 import { fmtBytes, scoped } from '../log';
 import { z, fluent } from './zod';
 
@@ -144,6 +145,8 @@ export interface Connector<T> {
   write(value: T): void;
   /** Internal: slot in the shared version counter block, bumped on every write. */
   readonly _version?: { view: Int32Array; index: number };
+  /** Internal: the field's contract path — devtools node labels. */
+  readonly _path?: string;
 }
 
 /* ------------------------------------------------------------------ */
@@ -811,6 +814,7 @@ export class SharedMemory<S extends SharedSpec = SharedSpec> {
       memLog.debug(`bind "${path}" (${descriptor.kind}, ${fmtBytes(descriptor.byteLength)}) via ${this.plugins?.[descriptor.kind] ? 'plugin' : 'built-in'} factory`);
       const ctx: ConnectorContext = { buffer, codec: this.codec, version: { view: versionView, index }, path };
       const raw = factory(descriptor, ctx, this.offsets.get(path)!);
+      const commit = (raw as Partial<ListConnector<unknown>>).commit;
       this.connectors.set(path, {
         ...raw,
         write: (v) => {
@@ -822,12 +826,25 @@ export class SharedMemory<S extends SharedSpec = SharedSpec> {
           Atomics.notify(versionView, index);
           if (devtoolsEnabled()) {
             emitDevtools({ type: 'memory:write', path, version: prev + 1 });
+            if (memoryWatches.size) checkWatchOnWrite(this, path, prev + 1);
           }
         },
+        // List commits bump inside the factory — wrapped for watchpoints only
+        // when devtools is on at bind time, so the plain path stays direct.
+        ...(commit && devtoolsEnabled()
+          ? {
+              commit: () => {
+                commit();
+                if (memoryWatches.size) checkWatchOnWrite(this, path, Atomics.load(versionView, index));
+              },
+            }
+          : {}),
         _version: { view: versionView, index },
+        _path: path,
       });
     });
     if (devtoolsEnabled()) {
+      ensureMemoryCommands(() => definedSharedMemories);
       emitDevtools({
         type: 'memory:bind',
         fields: this.entries.map((e, i) => [i, e.path]),

@@ -625,7 +625,12 @@ export async function runCreate(ctx: Ctx): Promise<number> {
 export async function runDevtools(ctx: Ctx): Promise<number> {
   const { io } = ctx;
   const spec = '@atolljs/devtools/server';
-  const mod: { createDevtoolsServer?: (o: { port: number }) => Promise<{ url: string }> } | null =
+  const mod: {
+    createDevtoolsServer?: (o: {
+      port: number;
+      otlp?: { endpoint: string; headers: Record<string, string>; serviceName?: string; onError?: (e: Error) => void };
+    }) => Promise<{ url: string }>;
+  } | null =
     await import(spec).catch(async () => {
       // In-repo fallback: the workspace package's built dist (extensionless
       // sources can't run under type stripping — `npm run build` there first).
@@ -637,9 +642,30 @@ export async function runDevtools(ctx: Ctx): Promise<number> {
     return 1;
   }
   const port = Number(flag(ctx.args, 'port') ?? 4780);
-  const server = await mod.createDevtoolsServer({ port: Number.isFinite(port) ? port : 4780 });
+  const otlpEndpoint = flag(ctx.args, 'otlp');
+  // `k=v,k2=v2`: the OTEL_EXPORTER_OTLP_HEADERS format.
+  const headers = Object.fromEntries(
+    (flag(ctx.args, 'otlp-headers') ?? '')
+      .split(',')
+      .filter((h) => h.includes('='))
+      .map((h) => [h.slice(0, h.indexOf('=')).trim(), h.slice(h.indexOf('=') + 1).trim()]),
+  );
+  const server = await mod.createDevtoolsServer({
+    port: Number.isFinite(port) ? port : 4780,
+    ...(otlpEndpoint
+      ? {
+          otlp: {
+            endpoint: otlpEndpoint,
+            headers,
+            serviceName: flag(ctx.args, 'otlp-service'),
+            onError: (e: Error) => io.warn(`otlp: ${e.message}`),
+          },
+        }
+      : {}),
+  });
   io.print(`atoll devtools → ${io.fmt.accent(server.url)}`);
   io.print(io.fmt.dim('  ingest endpoint: ' + server.url.replace('http://', 'ws://') + '/events'));
+  if (otlpEndpoint) io.print(io.fmt.dim('  otlp export: ' + otlpEndpoint));
   io.print(io.fmt.dim("  in the app: connectDevtools() from '@atolljs/devtools'"));
   io.warn('serving — Ctrl+C to stop');
   return new Promise<number>(() => {});

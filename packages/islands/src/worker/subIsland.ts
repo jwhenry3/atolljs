@@ -31,7 +31,8 @@
  * already carry the emitting worker's stamp. `appNameOf` still resolves
  * the registry name off the last '@'.
  */
-import { emitDevtools, observe } from '@atolljs/core';
+import { devtoolsEnabled, emitDevtools, estimateCloneBytes, observe, previewValue } from '@atolljs/core';
+import { propsPreview } from '../devtoolsPreview';
 import {
   assertCloneableProps,
   connectIslandWorker,
@@ -53,8 +54,9 @@ import type { ProxyEventHandler, ProxyNode } from './dom/node';
 
 /**
  * The surface is ONE function: `mountIsland`. A proxy `el` makes the mount
- * nested — these are the same options either way (the `slots`/`onActivity`
- * main-side extras tunnel through the parent's own driver).
+ * nested — these are the same options either way. `slots` receive the
+ * anchor's ProxyElement (worker-side content portals into it); slot names
+ * this mount doesn't list bubble up to the outer island's `slots`.
  */
 export type MountSubIslandOptions = MountIslandOptions;
 /** One handle shape for both mount targets — `instance` reads `parent~app@N`. */
@@ -88,7 +90,7 @@ const ENRICHED_KEYS = new Set([
 
 export async function mountSubIsland(opts: MountSubIslandOptions): Promise<SubIslandHandle> {
   const {
-    el, onEvent, onActivity, onOps, client: givenClient, worker, app: givenApp,
+    el, onEvent, onActivity, onOps, slots, client: givenClient, worker, app: givenApp,
     props: givenProps, mode: initialMode, framework, mountTimeout,
     ...workerConfig
   } = opts;
@@ -131,6 +133,7 @@ export async function mountSubIsland(opts: MountSubIslandOptions): Promise<SubIs
   const client: IslandClient =
     givenClient ??
     connectIslandWorker({
+      name: givenApp,
       ...workerConfig,
       worker: worker!,
       doorbell: initialMode !== 'poll',
@@ -145,6 +148,36 @@ export async function mountSubIsland(opts: MountSubIslandOptions): Promise<SubIs
   const prevProps = new Map<number, WireProps>();
   /** sub-id → 'type#handler' → attached proxy listener (kept for removal). */
   const nodeListeners = new Map<number, Map<string, { fn: ProxyEventHandler; capture?: boolean }>>();
+
+  /**
+   * sub-id → slot name for anchors THIS mount's `slots` claimed. A claimed
+   * anchor carries `data-atoll-sub-slot` instead of `data-atoll-slot`, so
+   * the main driver never hands it to the page shell as well; names the
+   * mount doesn't claim (`name in slots` is false) keep the plain attribute
+   * and surface on the outer island's `slots`, as before.
+   */
+  const slotNodes = new Map<number, string>();
+  const claims = (name: string): boolean => slots !== undefined && name in slots;
+  function mountSlot(node: ProxyElement, subId: number, name: string): void {
+    node.setAttribute('data-atoll-sub-slot', name);
+    const prev = slotNodes.get(subId);
+    if (prev !== undefined && prev !== name) slots?.[prev]?.(null);
+    slotNodes.set(subId, name);
+    slots?.[name]?.(node as unknown as HTMLElement);
+  }
+  function unmountSlot(subId: number): void {
+    const name = slotNodes.get(subId);
+    if (name === undefined) return;
+    slotNodes.delete(subId);
+    slots?.[name]?.(null);
+  }
+  /** After a remove/clear: release every claimed anchor no longer under `el`. */
+  function releaseDetachedSlots(): void {
+    for (const subId of [...slotNodes.keys()]) {
+      const node = nodes.get(subId);
+      if (node === undefined || !(el as ProxyNode).contains(node)) unmountSlot(subId);
+    }
+  }
 
   let unsubscribe: (() => void) | null = null;
   let pollTimer: ReturnType<typeof setInterval> | null = null;
@@ -189,6 +222,10 @@ export async function mountSubIsland(opts: MountSubIslandOptions): Promise<SubIs
   }
 
   function setProp(node: ProxyElement, subId: number, name: string, value: unknown): void {
+    if (name === 'data-atoll-slot' && claims(String(value))) {
+      mountSlot(node, subId, String(value));
+      return;
+    }
     if (isEventRef(value)) {
       const eventName = name.slice(2).toLowerCase();
       const key = `${eventName}#${value.__evt}`;
@@ -235,6 +272,11 @@ export async function mountSubIsland(opts: MountSubIslandOptions): Promise<SubIs
   }
 
   function removeProp(node: ProxyElement, subId: number, name: string, oldValue: unknown): void {
+    if (name === 'data-atoll-slot' && slotNodes.has(subId)) {
+      unmountSlot(subId);
+      node.removeAttribute('data-atoll-sub-slot');
+      return;
+    }
     if (isEventRef(oldValue)) {
       const eventName = name.slice(2).toLowerCase();
       const key = `${eventName}#${oldValue.__evt}`;
@@ -302,6 +344,7 @@ export async function mountSubIsland(opts: MountSubIslandOptions): Promise<SubIs
       }
       case 'remove': {
         nodes.get(op.child)?.remove();
+        releaseDetachedSlots();
         break;
       }
       case 'update': {
@@ -320,9 +363,20 @@ export async function mountSubIsland(opts: MountSubIslandOptions): Promise<SubIs
       case 'attr': {
         const node = nodes.get(op.id);
         if (!(node instanceof ProxyElement)) break;
-        // `data-atoll-slot` needs no special case: the attr op the proxy
-        // emits carries the same name, so the MAIN driver's slot machinery
-        // mounts it — nested slots surface on the outer island's `slots`.
+        // A slot this mount claims stays local (see slotNodes); any other
+        // `data-atoll-slot` passes through unchanged, so the MAIN driver's
+        // slot machinery mounts it on the outer island's `slots`.
+        if (op.name === 'data-atoll-slot') {
+          if (op.value === null && slotNodes.has(op.id)) {
+            unmountSlot(op.id);
+            node.removeAttribute('data-atoll-sub-slot');
+            break;
+          }
+          if (op.value !== null && claims(op.value)) {
+            mountSlot(node, op.id, op.value);
+            break;
+          }
+        }
         if (op.value === null) node.removeAttribute(op.name);
         else node.setAttribute(op.name, op.value);
         break;
@@ -366,6 +420,7 @@ export async function mountSubIsland(opts: MountSubIslandOptions): Promise<SubIs
       }
       case 'clear': {
         el.replaceChildren();
+        releaseDetachedSlots();
         break;
       }
       case 'emit': {
@@ -376,7 +431,9 @@ export async function mountSubIsland(opts: MountSubIslandOptions): Promise<SubIs
           }
           break;
         }
-        emitDevtools({ type: 'island:event', instance, name: op.name });
+        if (devtoolsEnabled()) {
+          emitDevtools({ type: 'island:event', instance, name: op.name, payload: previewValue(op.payload, 1024) });
+        }
         // Instance scope for the callback only — a re-emit() inside onEvent
         // resolves the ambient instance and must land on the parent's queue.
         runInInstance(parentInstance, () => onEvent?.(op.name, op.payload));
@@ -396,7 +453,12 @@ export async function mountSubIsland(opts: MountSubIslandOptions): Promise<SubIs
     // would loop: doorbell → flush → empty batch → bump → doorbell → …
     for (const op of ops) applyOp(op);
     const replayMs = performance.now() - t0;
-    emitDevtools({ type: 'island:ops', instance, via, count: ops.length, replayMs });
+    if (devtoolsEnabled()) {
+      emitDevtools({
+        type: 'island:ops', instance, via, count: ops.length, replayMs,
+        bytes: estimateCloneBytes(ops),
+      });
+    }
     onOps?.(ops, replayMs);
   }
 
@@ -476,10 +538,14 @@ export async function mountSubIsland(opts: MountSubIslandOptions): Promise<SubIs
   try {
     applyOps(await raced(islandCall('mount', client.mount(instance, props))), 'mount');
     pid = await raced(islandCall('whoami', client.whoami(instance)));
-    emitDevtools({
-      type: 'island:mount', instance, app, pid,
-      poolId: client.pool?.poolId, framework,
-    });
+    if (devtoolsEnabled()) {
+      const fw = framework ?? (await client.renderer(instance).catch(() => null)) ?? undefined;
+      emitDevtools({
+        type: 'island:mount', instance, app, pid,
+        poolId: client.pool?.poolId, framework: fw,
+      });
+      emitDevtools({ type: 'island:props', instance, props: propsPreview(givenProps ?? {}) });
+    }
   } catch (err) {
     // The instance may exist sub-worker-side with ops never applied — an
     // island-owned client terminates (a broken entry can't respawn-loop);
@@ -525,6 +591,7 @@ export async function mountSubIsland(opts: MountSubIslandOptions): Promise<SubIs
     updateProps: async (next: Record<string, unknown>) => {
       const marshalled = marshalCallbackProps(next, registerCb) as Record<string, unknown>;
       applyOps(await islandCall('updateProps', client.updateProps(instance, marshalled)), 'updateProps');
+      if (devtoolsEnabled()) emitDevtools({ type: 'island:props', instance, props: propsPreview(next) });
     },
     flush: async () => {
       applyOps(await islandCall('flush', client.flush(instance)), 'flush');
@@ -533,6 +600,7 @@ export async function mountSubIsland(opts: MountSubIslandOptions): Promise<SubIs
       if (destroyed) return;
       destroyed = true;
       emitDevtools({ type: 'island:unmount', instance });
+      for (const subId of [...slotNodes.keys()]) unmountSlot(subId);
       unsubscribe?.();
       if (pollTimer !== null) clearInterval(pollTimer);
       const remaining = (clientMounts.get(client) ?? 1) - 1;

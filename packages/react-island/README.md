@@ -111,7 +111,47 @@ it with `<Island worker={mapWorker}/>` or `islandComponent<P>()` with no key.
 
 For multi-island-per-worker, share a client:
 `client={connectIslandWorker({ worker })}` mounts each island's instance into
-the SAME worker (separate reconcilers, op queues, and pids — one OS thread).
+the SAME worker (separate reconcilers, op queues, and pids, one OS thread).
+
+## Islands inside worker islands
+
+A worker-rendered React app mounts islands with the **same components**:
+`@atolljs/react-island/worker` re-exports `Island`, `islandComponent`,
+`lazyIsland` and `connectIslandWorker`. Inside a worker the container div is
+a proxy element, so the mount is routed to a sub-worker whose DOM tunnels
+up through the parent island. Props and semantics are identical:
+
+```tsx
+// a component in the PARENT worker's registry: its module is in the parent
+// worker's bundle, so the `new Worker` literal stays bundler-detectable
+import { useState } from 'react';
+import { connectIslandWorker, emit, Island } from '@atolljs/react-island/worker';
+
+const regionEntry = () =>
+  new Worker(new URL('./region.worker.tsx', import.meta.url), { type: 'module' });
+
+function Regions() {
+  const [cards] = useState(() => connectIslandWorker({ worker: regionEntry }));
+  return (
+    <>
+      <Island client={cards} app="region" props={{ region: 'us-east' }} />
+      <Island client={cards} app="region" props={{ region: 'eu-central' }} />
+      <Island worker={regionEntry} app="forecast" onEvent={(n, p) => emit(n, p)} />
+    </>
+  );
+}
+```
+
+- `worker` spawns a sub-worker for that mount; a shared `client` adds an
+  instance to one sub-worker (the two cards above share a thread, the
+  forecast doesn't).
+- `onEvent` runs in the parent island's scope, so `emit` relays to the page.
+- `slots` portal worker-side content into the sub-island's anchors; slot
+  names you don't list bubble up to the page shell's `slots`.
+- `SubIsland` is kept as an alias of `Island`.
+
+Nested `new Worker` needs an engine that supports it (Chrome, Firefox,
+Node).
 
 ## Documentation
 

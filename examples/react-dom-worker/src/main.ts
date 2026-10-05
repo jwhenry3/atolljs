@@ -1,9 +1,8 @@
 /**
  * The shell — main-thread orchestration for the islands demo.
  *
- * Eight islands render on this page, each inside its OWN Web Worker (one
- * connectWorker client per island, pooling disabled — see island.ts for why
- * pooling can't go wider). Four run reconciled React trees out of the
+ * Eleven islands render on this page, each inside its OWN Web Worker (one
+ * dedicated worker per island, no pool). Four run reconciled React trees out of the
  * registry worker ('charts' is real recharts rendering namespaced SVG);
  * 'vue-notes' runs a REAL Vue createRenderer in the worker via the
  * atoll-vue-island adapter; 'vanilla' and 'map' run on dedicated REALM
@@ -11,7 +10,9 @@
  * IMPERATIVE app on the worker-side proxy DOM, 'map' a REAL unmodified
  * Leaflet 1.9 on proxy DOM + DOM shim — and neither worker's bundle carries
  * the React apps. Two islands run the SAME 'data-table' app — a
- * microfrontend isn't limited to one instance.
+ * microfrontend isn't limited to one instance. A framework row mounts the
+ * 'counter' app from the Svelte, Solid and Angular workers, so every
+ * supported renderer runs on this one page.
  * The shell:
  *
  *   - creates the layout + per-island containers and badges,
@@ -37,7 +38,7 @@ import { initDevtools } from '@atolljs/devtools';
 // builds (panes, tiles, controls) but CSS was always the shell's job.
 import 'leaflet/dist/leaflet.css';
 
-/** One fresh worker per island — poolSize is pinned to 1 inside connectIslandWorker. */
+/** One fresh worker per island — connectIslandWorker always builds one dedicated worker, no pool. */
 const islandWorker = (): Worker =>
   new Worker(new URL('./worker/render.worker.ts', import.meta.url), { type: 'module' });
 // The imperative islands run dedicated instance workers (defineMonoWorker —
@@ -50,6 +51,14 @@ const mapWorker = (): Worker =>
 // carries Vue and no React.
 const vueWorker = (): Worker =>
   new Worker(new URL('./worker/vue.worker.ts', import.meta.url), { type: 'module' });
+// One counter per remaining renderer, so this one page carries every
+// supported framework as a worker (the devtools app map shows them all).
+const svelteWorker = (): Worker =>
+  new Worker(new URL('./worker/svelte.worker.ts', import.meta.url), { type: 'module' });
+const solidWorker = (): Worker =>
+  new Worker(new URL('./worker/solid.worker.ts', import.meta.url), { type: 'module' });
+const angularWorker = (): Worker =>
+  new Worker(new URL('./worker/angular.worker.ts', import.meta.url), { type: 'module' });
 
 // SharedArrayBuffer only exists in cross-origin-isolated contexts — on
 // hosts without COOP/COEP (GitHub Pages where coi-sw.js didn't take, or a
@@ -65,7 +74,7 @@ const initialMode: Mode = isolated ? 'push' : 'poll';
 // unless the URL carries ?__atoll_devtools — then broadcast transport +
 // overlay flyout come up together (/__atoll/ is the full-page view).
 initDevtools({
-  session: { name: 'islands-demo' },
+  session: { name: 'islands-demo', framework: 'vanilla' },
   // Relative dashboard path — mounted hosts (the docs demo tree) ship
   // __atoll/ inside the app's own folder; absolute /__atoll/ would escape
   // a sub-path mount like consumer/<demo>/.
@@ -158,7 +167,7 @@ async function main(): Promise<void> {
   // Mount order: stats first so the table's initial rowsChanged emit has a
   // listener, then table, then controls (its events only travel outward).
   const stats = await mountIsland({
-    client: connectIslandWorker({ worker: islandWorker, doorbell: isolated }),
+    client: connectIslandWorker({ name: 'stats', worker: islandWorker, doorbell: isolated }),
     el: $('island-stats'),
     app: 'stats',
     framework: 'react',
@@ -170,7 +179,7 @@ async function main(): Promise<void> {
   $('badge-stats').textContent = `worker ${stats.pid}`;
 
   const table = await mountIsland({
-    client: connectIslandWorker({ worker: islandWorker, doorbell: isolated }),
+    client: connectIslandWorker({ name: 'data-table', worker: islandWorker, doorbell: isolated }),
     el: $('island-table'),
     app: 'data-table',
     framework: 'react',
@@ -187,7 +196,7 @@ async function main(): Promise<void> {
   $('badge-table').textContent = `worker ${table.pid}`;
 
   const controls = await mountIsland({
-    client: connectIslandWorker({ worker: islandWorker, doorbell: isolated }),
+    client: connectIslandWorker({ name: 'controls', worker: islandWorker, doorbell: isolated }),
     el: $('island-controls'),
     app: 'controls',
     framework: 'react',
@@ -216,7 +225,7 @@ async function main(): Promise<void> {
   // This copy starts filtered to eu-central and isn't wired into stats —
   // its emits still work, they just only reach this island's onEvent sink.
   const table2 = await mountIsland({
-    client: connectIslandWorker({ worker: islandWorker, doorbell: isolated }),
+    client: connectIslandWorker({ name: 'data-table', worker: islandWorker, doorbell: isolated }),
     el: $('island-table-2'),
     app: 'data-table',
     framework: 'react',
@@ -235,7 +244,7 @@ async function main(): Promise<void> {
   // it's build(doc) over the worker-side proxy DOM. Mount, events, and emit
   // all ride the same protocol; the worker just holds no React.
   const vanilla = await mountIsland({
-    client: connectIslandWorker({ worker: vanillaWorker, doorbell: isolated }),
+    client: connectIslandWorker({ name: 'vanilla', worker: vanillaWorker, doorbell: isolated }),
     el: $('island-vanilla'),
     app: 'vanilla',
     framework: 'vanilla',
@@ -272,12 +281,38 @@ async function main(): Promise<void> {
   islands.push(vue);
   $('badge-vue').textContent = `worker ${vue.pid}`;
 
+  // The framework row: the same 'counter' app rendered by Svelte, Solid and
+  // Angular, each in its own worker. The renderer reports itself on mount,
+  // so these pass no `framework` and still get their devtools marks.
+  const counters = [
+    ['svelte', svelteWorker],
+    ['solid', solidWorker],
+    ['angular', angularWorker],
+  ] as const;
+  for (const [fw, worker] of counters) {
+    const island = await mountIsland({
+      worker,
+      mode: initialMode,
+      el: $(`island-${fw}`),
+      app: 'counter',
+      name: `${fw}-counter`,
+      props: { label: `${fw} count` },
+      onEvent: (name, payload) => {
+        const p = payload as { count?: number };
+        if (name === 'incremented') setStatus(`${fw} island emitted incremented → ${p.count}`);
+      },
+      onActivity: renderStats,
+    });
+    islands.push(island);
+    $(`badge-${fw}`).textContent = `worker ${island.pid}`;
+  }
+
   // The map island — REAL Leaflet 1.9, unmodified from npm, mounted on the
   // worker-side proxy DOM after installDomShim(). Tiles, panes, controls,
   // drag-pan and wheel zoom all work through the op stream; the only thing
   // shell-side is the stylesheet (imported above) and tile <img> loading.
   const map = await mountIsland({
-    client: connectIslandWorker({ worker: mapWorker, doorbell: isolated }),
+    client: connectIslandWorker({ name: 'map', worker: mapWorker, doorbell: isolated }),
     el: $('island-map'),
     app: 'map',
     framework: 'leaflet',
@@ -297,7 +332,7 @@ async function main(): Promise<void> {
   // ResponsiveContainer's container measurement has no channel in the
   // worker (the geometry caveat) — the shell just reads its own layout.
   const charts = await mountIsland({
-    client: connectIslandWorker({ worker: islandWorker, doorbell: isolated }),
+    client: connectIslandWorker({ name: 'charts', worker: islandWorker, doorbell: isolated }),
     el: $('island-charts'),
     app: 'charts',
     framework: 'react',
@@ -312,7 +347,9 @@ async function main(): Promise<void> {
   islands.push(charts);
   $('badge-charts').textContent = `worker ${charts.pid}`;
 
-  setStatus('eight islands mounted — two share an app, one is imperative, one is Vue, one runs real Leaflet + recharts');
+  setStatus(
+    'eleven islands mounted — React, Vue, Svelte, Solid and Angular renderers, one imperative, one real Leaflet + recharts',
+  );
 }
 
 void main();

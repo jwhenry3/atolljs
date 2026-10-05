@@ -1,6 +1,7 @@
 import { createEffect, createMemo, createRenderEffect, createRoot, createSignal } from 'solid-js';
 import { Connector } from './contract/sharedMemory';
 import { scoped } from './log';
+import { disposeNodes, graphNode, graphSource } from './reactiveGraph';
 
 const reactiveLog = scoped('reactive');
 
@@ -45,11 +46,39 @@ export interface ReactiveConnector<T> {
  * write — local or remote, both bump it. waitAsync when available, 50ms poll
  * otherwise. No solid-js involved: this is the whole remote-write mechanism.
  */
-const watchVersion = <T>(connector: Connector<T>, onBump: () => void): (() => void) => {
+interface VersionWatch {
+  stop: () => void;
+  /** Devtools graph id of the bridge node (null while devtools is off). */
+  node: string | null;
+}
+
+const watchVersionNode = <T>(connector: Connector<T>, onBump: () => void): VersionWatch => {
   const version = connector._version;
   if (!version) {
     throw new Error('This connector does not support remote observation.');
   }
+  const waits = typeof Atomics.waitAsync === 'function';
+  const node = graphNode('bridge', `${waits ? 'waitAsync' : 'poll'} ${connector._path ?? `@${connector.byteOffset}`}`, [
+    graphSource(connector._path),
+  ]);
+  const stop = watchVersionRaw(connector, version, onBump);
+  return {
+    node,
+    stop: () => {
+      stop();
+      disposeNodes(node);
+    },
+  };
+};
+
+const watchVersion = <T>(connector: Connector<T>, onBump: () => void): (() => void) =>
+  watchVersionNode(connector, onBump).stop;
+
+const watchVersionRaw = <T>(
+  connector: Connector<T>,
+  version: { view: Int32Array; index: number },
+  onBump: () => void,
+): (() => void) => {
   let stopped = false;
   let last = Atomics.load(version.view, version.index);
 
@@ -167,6 +196,39 @@ export function watch<T, S = T>(
 ): () => void {
   const select = onChange ? (selOrCb as (value: T) => S) : ((v: T) => v as unknown as S);
   const cb = (onChange ?? selOrCb) as (slice: S, previous: S | undefined) => void;
+  return watchNodes(connector, select, cb, options, { sliced: onChange !== undefined, label: 'watch' }).stop;
+}
+
+/** Graph labelling for {@link watchNodes} — `observe()` names its effect. */
+export interface WatchMeta {
+  /** A real selector was given (draws a derived node), not the identity. */
+  sliced: boolean;
+  /** Effect node label prefix: 'watch', 'observe'. */
+  label: string;
+}
+
+/**
+ * `watch()` plus its devtools graph wiring: bridge → [derived slice] →
+ * effect. Internal: `observe()` uses it to own the effect node's label.
+ */
+export function watchNodes<T, S>(
+  connector: Connector<T>,
+  select: (value: T) => S,
+  cb: (slice: S, previous: S | undefined) => void,
+  options: SliceOptions<S> | undefined,
+  meta: WatchMeta,
+): { stop: () => void; effect: string | null } {
+  const path = connector._path ?? `@${connector.byteOffset}`;
+  // Nodes are created around the version watch below; ids are null while
+  // devtools is off, and every graph call no-ops on null.
+  let bridge: string | null = null;
+  let derived: string | null = null;
+  let effect: string | null = null;
+  const graph = (): void => {
+    derived = meta.sliced ? graphNode('derived', `select(${path})`, [bridge]) : null;
+    effect = graphNode('effect', `${meta.label}(${path})`, [derived ?? bridge]);
+  };
+  const ungraph = (): void => disposeNodes(effect, derived);
 
   // SSR solid build (node/worker conditions): effects never re-run, so the
   // signal pipeline below would silently never emit. Same semantics, driven
@@ -184,20 +246,29 @@ export function watch<T, S = T>(
       cb(s, old);
     };
     emit();
-    const stop = watchVersion(connector, emit);
+    const remote = watchVersionNode(connector, emit);
+    bridge = remote.node;
+    graph();
     reactiveLog.debug(`watching connector at offset ${connector.byteOffset} (direct)`);
-    return () => {
-      reactiveLog.debug(`watch stopped (offset ${connector.byteOffset})`);
-      stop();
+    return {
+      effect,
+      stop: () => {
+        reactiveLog.debug(`watch stopped (offset ${connector.byteOffset})`);
+        remote.stop();
+        ungraph();
+      },
     };
   }
 
-  const sig = reactive(connector);
-  const stopRemote = sig.observeRemote();
+  // reactive(connector) + observeRemote(), inlined to keep the bridge id.
+  const [value, setValue] = createSignal<T>(connector.read(), { equals: false });
+  const remote = watchVersionNode(connector, () => setValue(() => connector.read()));
+  bridge = remote.node;
+  graph();
   const dispose = createRoot((d) => {
     const slice = createMemo(
       () => {
-        const v = sig.get() as T | null | undefined;
+        const v = value() as T | null | undefined;
         return v == null ? undefined : select(v);
       },
       undefined,
@@ -218,9 +289,13 @@ export function watch<T, S = T>(
     return d;
   });
   reactiveLog.debug(`watching connector at offset ${connector.byteOffset}`);
-  return () => {
-    reactiveLog.debug(`watch stopped (offset ${connector.byteOffset})`);
-    stopRemote();
-    dispose();
+  return {
+    effect,
+    stop: () => {
+      reactiveLog.debug(`watch stopped (offset ${connector.byteOffset})`);
+      remote.stop();
+      dispose();
+      ungraph();
+    },
   };
 }

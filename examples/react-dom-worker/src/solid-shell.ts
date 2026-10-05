@@ -43,7 +43,7 @@ const initialMode: Mode = isolated ? 'push' : 'poll';
 // Sink before any island mounts — workers only forward events when the
 // flag reaches them at INIT. No-op without ?__atoll_devtools.
 initDevtools({
-  session: { name: 'islands-solid-shell' },
+  session: { name: 'islands-solid-shell', framework: 'solid' },
   overlay: { src: '__atoll/?mini=1' },
 });
 
@@ -52,11 +52,11 @@ initDevtools({
  * share one client (one worker, two 'counter@N' instances); notes and the
  * incidents benchmark each get their own.
  */
-const counterClient = connectIslandWorker({ worker: solidWorker, doorbell: isolated });
-const notesClient = connectIslandWorker({ worker: solidWorker, doorbell: isolated });
+const counterClient = connectIslandWorker({ name: 'counters', worker: solidWorker, doorbell: isolated });
+const notesClient = connectIslandWorker({ name: 'notes', worker: solidWorker, doorbell: isolated });
 // The 1M-incidents benchmark gets its own worker — the whole point is the
 // heavy component never contends with (or blocks) anything else.
-const incidentsClient = connectIslandWorker({ worker: solidWorker, doorbell: isolated });
+const incidentsClient = connectIslandWorker({ name: 'incidents', worker: solidWorker, doorbell: isolated });
 
 /* ── Shell ──────────────────────────────────────────────────────────────── */
 

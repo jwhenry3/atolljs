@@ -15,6 +15,8 @@ import {
   setDevtoolsSink,
   type EmittedDevtoolsEvent,
 } from '@atolljs/core';
+import { answerControl } from './control';
+import { installJankProbe } from './probes';
 import { DEVTOOLS_CHANNEL, type BroadcastMessage, type SessionInfo } from './protocol';
 import type { ConnectDevtoolsOptions, DevtoolsConnection } from './client';
 
@@ -54,6 +56,8 @@ export function connectBroadcast(
     if (m.data?.type === 'view') {
       hello();
       for (const events of tail) post({ type: 'batch', session, events });
+    } else if (m.data?.type === 'control' && m.data.sessionId === session.id) {
+      void answerControl(m.data, (res) => post(res));
     }
   };
 
@@ -69,6 +73,7 @@ export function connectBroadcast(
 
   if (opts.network !== false) installFetchProbe(globalThis);
   if (opts.memory !== false) installMemoryProbe(globalThis);
+  const releaseJank = opts.jank !== false ? installJankProbe() : () => {};
 
   setDevtoolsSink((event) => {
     if (closed) return;
@@ -90,6 +95,7 @@ export function connectBroadcast(
       bye();
       setDevtoolsSink(null);
       clearInterval(timer);
+      releaseJank();
       if (typeof removeEventListener === 'function') removeEventListener('pagehide', onHide);
       bc.close();
     },

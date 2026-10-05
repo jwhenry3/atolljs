@@ -89,6 +89,81 @@ island.destroy();`}
         calls (see the Islands page under each framework).
       </p>
 
+      <h2>One definition, many workers</h2>
+      <p>
+        <code>definePolyWorker</code> doesn't create a worker: it defines what
+        a worker spawned from that script <em>can</em> render. The mount site
+        decides how many workers exist. A <code>worker:</code> mount builds its
+        own client, so it spawns a new worker from the definition and renders
+        the chosen app in it. A <code>client:</code> mount reuses that client's
+        one worker and adds another island instance to it, no spawn.
+      </p>
+      <CodeBlock
+        file="main.ts: same PolyWorker, two topologies"
+        code={`const renderEntry = () =>
+  new Worker(new URL('./render.worker.ts', import.meta.url), { type: 'module' });
+
+// worker: → each mount spawns its own worker (2 workers, 1 island each)
+await mountIsland({ el: a, worker: renderEntry, app: 'counter' });
+await mountIsland({ el: b, worker: renderEntry, app: 'notes' });
+
+// client: → no spawn, instances co-locate (1 worker, 3 islands)
+const shared = connectIslandWorker({ worker: renderEntry });
+await mountIsland({ el: c, client: shared, app: 'counter' });
+await mountIsland({ el: d, client: shared, app: 'counter' });
+await mountIsland({ el: e, client: shared, app: 'notes' });`}
+      />
+      <table>
+        <thead>
+          <tr><th>Shape</th><th>Shares the bundle</th><th>Shares the runtime</th><th>Failure domain</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>defineMonoWorker</code></td><td>no, per app</td><td>no</td><td>per island</td></tr>
+          <tr><td>PolyWorker, <code>worker:</code> per mount</td><td>yes, one script</td><td>no: each worker evaluates its own framework copy</td><td>per island</td></tr>
+          <tr><td>PolyWorker, shared <code>client:</code></td><td>yes</td><td>yes: one framework copy, one thread</td><td>the whole client</td></tr>
+        </tbody>
+      </table>
+      <p>
+        Share a client when islands are small and you'd rather keep one runtime
+        warm; mount with <code>worker:</code> when they should stall and fail
+        independently but still ship one bundle; reach for a MonoWorker when an
+        island's dependencies are heavy or private.
+      </p>
+
+      <h2>Nesting uses the same API</h2>
+      <p>
+        An island app can mount islands of its own, and the call is the one
+        you already know. Inside a worker, <code>mountIsland</code> (from{' '}
+        <code>@atolljs/islands/worker</code>) takes a proxy element as{' '}
+        <code>el</code> and routes to a nested mounter that spawns or reuses
+        a <em>sub</em>-worker; React apps use the same <code>Island</code>,{' '}
+        <code>islandComponent</code> and <code>lazyIsland</code>, imported
+        from <code>@atolljs/react-island/worker</code>. The two mount shapes
+        keep their meaning one level down:
+      </p>
+      <CodeBlock
+        file="inside a worker island: same PolyWorker, two topologies"
+        code={`const regionEntry = () =>
+  new Worker(new URL('./region.worker.ts', import.meta.url), { type: 'module' });
+
+// worker: → spawns a sub-worker for this mount
+await mountIsland({ el: forecastHost, worker: regionEntry, app: 'forecast' });
+
+// client: → one sub-worker, one instance per mount
+const cards = connectIslandWorker({ worker: regionEntry });
+await mountIsland({ el: cardA, client: cards, app: 'region', props: { region: 'us-east' } });
+await mountIsland({ el: cardB, client: cards, app: 'region', props: { region: 'eu-central' } });`}
+      />
+      <p>
+        The sub-island's DOM tunnels up through the parent island's op
+        stream, its <code>onEvent</code> runs in the parent's scope (so{' '}
+        <code>emit</code> relays to the page), and its instance key nests as{' '}
+        <code>parent~app@N</code>. Slots work too: a nested mount's{' '}
+        <code>slots</code> receive the anchor's proxy element, and slot names
+        it doesn't list bubble up to the page shell. The React demo's ops
+        console runs this exact shape.
+      </p>
+
       <h2>Three app kinds</h2>
       <table className="doc-table">
         <thead>

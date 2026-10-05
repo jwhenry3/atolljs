@@ -38,6 +38,25 @@ all the island rules apply unchanged.
 | `islandApp` | `islandApp('name', app)` | Stamps an app (component or `{imperative}` def) with its registry name: a data property, so references survive minification. Bare components fall back to `displayName`/`fn.name`: dev convenience; bundlers mangle `fn.name`, which is what the stamp exists for. |
 | `definePolyWorker` / `defineMonoWorker` | from `atoll-islands/worker` | Registry worker (many named apps, shareable clients) vs the 1:1 instance worker (mounted namelessly, minimal bundle). |
 | `Slot` / `emit` | `<Slot name>` / `emit(name, payload)` | Transclusion leaf + island→shell channel: see [../islands-worker.md](../islands-worker.md). |
+| `Island` / `islandComponent` / `lazyIsland` / `connectIslandWorker` | from `@atolljs/react-island/worker` | The SAME mount components (and shared-client factory) for use inside a worker island: a nested mount spawns or reuses a sub-worker. |
+
+### Nested islands: the same components inside a worker
+
+`@atolljs/react-island/worker` re-exports `Island`, `islandComponent` and
+`lazyIsland` unchanged. Rendered by a worker island, their container div is a
+ProxyElement, so `mountIsland` routes the mount to the nested path; nothing
+else differs. `worker={factory}` spawns a sub-worker for that mount;
+`client={connectIslandWorker({ worker })}` built inside the parent worker
+(a `useState` initializer keeps it per instance) hosts several sub-island
+instances in one sub-worker. `onEvent` runs in the parent instance's scope,
+so `emit` relays to the page; `slots` portal worker-side content into the
+sub-island's anchors, and unlisted slot names bubble to the page shell.
+`SubIsland` is kept as an alias. Details:
+[../islands-worker.md](../islands-worker.md#one-mount-api-on-both-threads).
+
+Reference: `examples/react-dom-worker/src/worker/console.worker.tsx`
+(`regions`), mounted in the shell's ops console next to the same
+definition's apps on a shared client and on per-mount workers.
 
 ### Mounting: the proxies make islands look local
 
@@ -49,11 +68,12 @@ mounts: a static import pulls them into the shell chunk eagerly).
 worker-mount window: mounting can't suspend because a suspended tree never
 commits and the container must be in the DOM first.
 
-Reference shell: `examples/react-dom-worker/src/shell.tsx`: mounts four
-framework-native islands (`counter` ×2 on a shared client, `notes` via
-`islandComponent`, the 1M-incident benchmark via `lazyIsland`) with the
-mediation pattern (`onEvent → setState → <Island props>`) replacing
-hand-wired `updateProps`.
+Reference shell: `examples/react-dom-worker/src/shell.tsx`: mounts the
+framework-native islands (`counter` ×2 + `nestedhost` on a shared client,
+`notes` via `islandComponent`, the 1M-incident benchmark via `lazyIsland`)
+with the mediation pattern (`onEvent → setState → <Island props>`) replacing
+hand-wired `updateProps`, then the ops console: one PolyWorker mounted on a
+shared client, with `worker` per mount, and nested.
 
 `lazyIsland` also accepts a contract module carrying its own worker:
 `lazyIsland(() => import('./incidents.island'))` resolves `{ app, worker }`

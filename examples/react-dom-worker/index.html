@@ -87,6 +87,10 @@
       .mini-widget .mw-label { font: 12px monospace; color: #7fb6ff; }
       .mini-widget .mw-btn { padding: 3px 10px; background: #22354f; font-size: 12px; }
       .mini-widget .mw-btn:hover { background: #2d4365; }
+      /* framework row: one counter per worker renderer, side by side */
+      .fw-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+      .fw-row .mw-btn { padding: 3px 10px; background: #22354f; font-size: 12px; }
+      .fw-row .mw-btn:hover { background: #2d4365; }
       .mini-widget .mw-log { margin: 6px 0 0; padding: 0 0 0 16px; font: 11px/1.6 monospace; color: #9aa4b2; }
       .mini-widget .mw-entry { list-style: '» '; }
       /* the map island — Leaflet CSS (imported in main.ts) does the heavy
@@ -113,7 +117,7 @@
   </head>
   <body>
     <div id="root">
-      <h1>Worker islands — React, Vue, imperative, real libraries</h1>
+      <h1>Worker islands — React, Vue, Svelte, Solid, Angular, imperative, real libraries</h1>
       <div id="transport-bar">
         <span>transport:</span>
         <label id="transport-toggle" title="push via SharedArrayBuffer doorbell — off falls back to 50ms polling">
@@ -156,6 +160,21 @@
         <div class="island-head"><span>app: vue-notes (real Vue 3 createRenderer)</span><span class="badge" id="badge-vue">worker …</span></div>
         <div class="island-root" id="island-vue"></div>
       </section>
+
+      <div class="fw-row">
+        <section class="island">
+          <div class="island-head"><span>app: counter (Svelte 5 in the worker)</span><span class="badge" id="badge-svelte">worker …</span></div>
+          <div class="island-root" id="island-svelte"></div>
+        </section>
+        <section class="island">
+          <div class="island-head"><span>app: counter (Solid in the worker)</span><span class="badge" id="badge-solid">worker …</span></div>
+          <div class="island-root" id="island-solid"></div>
+        </section>
+        <section class="island">
+          <div class="island-head"><span>app: counter (Angular in the worker)</span><span class="badge" id="badge-angular">worker …</span></div>
+          <div class="island-root" id="island-angular"></div>
+        </section>
+      </div>
 
       <section class="island">
         <div class="island-head"><span>app: charts (real recharts — unmodified — namespaced SVG ops)</span><span class="badge" id="badge-charts">worker …</span></div>

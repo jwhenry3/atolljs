@@ -24,7 +24,8 @@ reload its module graph: any source change needs a respawn anyway.
 
 ## What the plugin does
 
-`apply: 'serve'` only: production builds keep vite's normal worker bundling.
+Dev-server work only: production builds keep vite's normal worker bundling.
+In `vite build` the plugin only copies the devtools dashboard (step 6).
 
 1. **Intercepts `?worker_file`/`?sharedworker_file` requests** in
    `configureServer` before vite's transform middleware, so worker entries
@@ -49,6 +50,15 @@ reload its module graph: any source change needs a respawn anyway.
    so workspace aliases find `@atolljs/devtools` even when it isn't in the
    app's `node_modules`, with the same header echo (COOP decides whether the
    flyout's iframe can even see its document). See [devtools.md](devtools.md).
+6. **Emits the dashboard into builds that use it.** In `writeBundle`, a
+   client `vite build` copies the dashboard into `<outDir>/__atoll/`
+   (`devtools.dir` renames the folder), flagged for BroadcastChannel by an
+   external `atoll-transport.js` (no inline script, so strict CSPs pass).
+   `devtools.build` defaults to `'auto'`: emit when some chunk renders code
+   from the `@atolljs/devtools` package, so a shipped overlay always has
+   its iframe target. `true` always emits, `false` never. SSR builds are
+   skipped. Headers and sub-path mounts are the host's job: see
+   [devtools-deploy.md](devtools-deploy.md) topology A.
 
 Worker graphs containing framework SFCs (`.vue`/`.svelte`/`.astro`/`.md`/
 `.mdx`) can't be bundled by esbuild: the middleware detects the marker and

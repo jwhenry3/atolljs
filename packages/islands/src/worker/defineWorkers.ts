@@ -153,6 +153,13 @@ export interface RenderedHandle {
  */
 export interface RenderedIslandApp {
   mount(ctx: RenderContext): RenderedHandle | void;
+  /**
+   * Renderer tag ('react', 'vue', 'svelte', 'solid', 'angular'): set by the
+   * package adapters, reported by the `renderer` task so devtools can mark
+   * an island whose mount declared no `framework`. Hand-written adapters
+   * may set it; imperative apps have none.
+   */
+  renderer?: string;
 }
 /** The apps an island can mount — keyed by the name the shell passes to mount(). */
 export type IslandApp = ImperativeIslandApp | RenderedIslandApp;
@@ -619,6 +626,12 @@ function createIslandRuntime(
       /** The mounted instance's random id — the island's "worker pid" badge. */
       whoami(instance: string): string {
         return mounts.get(instance)?.pid ?? 'unmounted';
+      },
+
+      /** The instance's renderer tag (an adapter's `renderer`); null for imperative or unknown. */
+      renderer(instance: string): string | null {
+        const mounted = mounts.get(instance);
+        return (mounted && isRenderedInstance(mounted) && mounted.rendered.app.renderer) || null;
       },
     },
   });

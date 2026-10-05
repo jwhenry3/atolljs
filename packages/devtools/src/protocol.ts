@@ -13,6 +13,11 @@ export interface SessionInfo {
   id: string;
   /** Human label — config `name`, app title, process argv, etc. */
   name?: string;
+  /**
+   * The shell's own framework ('react', 'vue', 'svelte', 'solid', 'angular',
+   * 'vanilla', …): drawn as the main-thread hub's mark on the app map.
+   */
+  framework?: string;
   runtime: 'browser' | 'node';
   /** Browser location.href / process title — whatever helps identify it. */
   hint?: string;
@@ -26,6 +31,18 @@ export interface SessionInfo {
   closedAt?: number;
   /** Viewer-pinned closed sessions are exempt from the retention sweep. */
   pinned?: boolean;
+  /** Runtime facts captured at connect, for the dashboard's audits. */
+  env?: SessionEnv;
+}
+
+export interface SessionEnv {
+  /** `crossOriginIsolated` — false means no SharedArrayBuffer doorbell (islands poll). */
+  crossOriginIsolated?: boolean;
+  sharedArrayBuffer?: boolean;
+  hardwareConcurrency?: number;
+  userAgent?: string;
+  /** Node `process.version` on the Node path. */
+  node?: string;
 }
 
 export interface HelloMessage {
@@ -38,20 +55,48 @@ export interface BatchMessage {
   events: EmittedDevtoolsEvent[];
 }
 
+/**
+ * Dashboard → app command (`runDevtoolsCommand` on the app side). `id` is
+ * viewer-generated and echoed on the result.
+ */
+export interface ControlRequest {
+  type: 'control';
+  sessionId: string;
+  id: string;
+  cmd: string;
+  args?: Record<string, unknown>;
+}
+
+/** App → dashboard reply to a ControlRequest. */
+export interface ControlResult {
+  type: 'control-result';
+  sessionId: string;
+  id: string;
+  ok: boolean;
+  result?: unknown;
+  error?: string;
+}
+
 /** What an instrumented app sends on /events. */
-export type ClientMessage = HelloMessage | BatchMessage;
+export type ClientMessage = HelloMessage | BatchMessage | ControlResult;
+
+/** What the server sends an instrumented app on /events. */
+export type AppMessage = ControlRequest;
 
 /** What a dashboard viewer receives on /view. */
 export type ViewerMessage =
   | { type: 'sessions'; sessions: SessionInfo[] }
-  | { type: 'batch'; session: SessionInfo; events: EmittedDevtoolsEvent[] };
+  | { type: 'batch'; session: SessionInfo; events: EmittedDevtoolsEvent[] }
+  | ControlResult;
 
 /** What a dashboard viewer sends on /view. */
 export type ViewerRequest =
   /** Drop a closed session and its replayed history. Live sessions are ignored. */
   | { type: 'dismiss'; sessionId: string }
   /** Exempt a closed session from the retention sweep (or release it). */
-  | { type: 'pin'; sessionId: string; pinned: boolean };
+  | { type: 'pin'; sessionId: string; pinned: boolean }
+  /** Relay a command to the live app with this session id. */
+  | ControlRequest;
 
 /**
  * Pure-client transport: frames on a same-origin BroadcastChannel named
@@ -66,4 +111,7 @@ export type BroadcastMessage =
   /** Posted on close/pagehide so dashboards can mark the session ended. */
   | { type: 'bye'; sessionId: string }
   /** Dashboard announcing itself — apps re-hello and replay their tail. */
-  | { type: 'view' };
+  | { type: 'view' }
+  /** Dashboard → app command; only the app whose session id matches answers. */
+  | ControlRequest
+  | ControlResult;

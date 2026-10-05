@@ -38,6 +38,7 @@
     "stats": "node scripts/bundle-stats.mjs",
     "stats:islands": "node scripts/island-perf.mjs",
     "build:pages": "node scripts/build-pages.mjs",
+    "build:extension": "node packages/devtools-extension/scripts/build.mjs",
     "assemble:pages": "node scripts/assemble-pages.mjs",
     "serve:pages": "node scripts/serve-pages.mjs",
     "serve:static": "node scripts/serve-static.mjs"

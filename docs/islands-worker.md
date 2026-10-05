@@ -196,7 +196,9 @@ flushes the queued ops.
 ## Islands inside islands: nested `mountIsland`
 
 A worker-rendered island can mount a *real* sub-worker inside itself —
-an island inside an island. The surface is the SAME function:
+an island inside an island. The surface is the SAME function (and, for
+React, the same components: see
+[One mount API on both threads](#one-mount-api-on-both-threads)):
 `mountIsland` discriminates on its mount target, so a **proxy** `el`
 (anything `ctx.doc` or a React ref produced inside the parent instance)
 takes the nested path while a real element takes the main-thread driver.
@@ -238,14 +240,90 @@ shared-client semantics are identical to a top-level mount.
   it — Chrome/Firefox/Node. Safari workers can't spawn workers, so design
   the nesting depth by capability, not aesthetics.
 
-For React islands, `@atolljs/react-island` exports `<SubIsland worker app
-props onEvent mode/>`: it renders a `<div data-atoll-sub-island>` in the
-parent tree, mounts through the same `mountIsland` on first ref, forwards
-prop changes through `updateProps`, and destroys the sub-island on
-unmount. `worker`/`app` are mount-identity — swap them with a React
-`key`. Reference:
-`examples/react-dom-worker/src/worker/react.worker.tsx` (`nestedhost` →
-`nested` via `nested.worker.tsx`).
+### One mount API on both threads
+
+Nothing about a nested mount needs a separate API. The page and a worker
+use the same functions and components with the same options; the mount
+target picks the path.
+
+| Surface | On the page | Inside a worker island | Routed by |
+|---|---|---|---|
+| Core | `mountIsland` from `@atolljs/islands` | `mountIsland` from `@atolljs/islands/worker` | `el`: real element → DOM driver, ProxyElement → nested mounter |
+| Shared client | `connectIslandWorker` from `@atolljs/islands` | `connectIslandWorker` from `@atolljs/islands/worker` (or `@atolljs/react-island/worker`) | thread-agnostic: spawns from whichever thread calls it |
+| React | `Island`, `islandComponent`, `lazyIsland` from `@atolljs/react-island` | the same three from `@atolljs/react-island/worker` | the component's container div is a ProxyElement inside a worker |
+
+`worker` vs `client` means the same thing on either thread:
+
+- **`worker`** (a `() => new Worker(new URL(...))` factory): this mount
+  builds its own client, so it **spawns** a worker (a sub-worker when the
+  caller is itself a worker) and destroys it on unmount.
+- **`client`** (a `connectIslandWorker` result): this mount adds an
+  **instance** to that existing worker. Build the client where it should
+  live: on the page for top-level islands, inside the parent worker (for
+  example in a component's `useState` initializer) for sub-islands.
+
+```tsx
+// inside a worker-rendered React app (its module is in the parent worker's
+// bundle, so the `new Worker` literal stays bundler-detectable)
+import { useState } from 'react';
+import { connectIslandWorker, Island } from '@atolljs/react-island/worker';
+
+const regionEntry = () =>
+  new Worker(new URL('./region.worker.tsx', import.meta.url), { type: 'module' });
+
+function Regions({ regions }: { regions: string[] }) {
+  // one sub-worker, one instance per card
+  const [cards] = useState(() => connectIslandWorker({ worker: regionEntry }));
+  return (
+    <>
+      {regions.map((r) => (
+        <Island key={r} client={cards} app="region" props={{ region: r }} />
+      ))}
+      {/* spawns its own sub-worker from the same script */}
+      <Island worker={regionEntry} app="forecast" />
+    </>
+  );
+}
+```
+
+Options carry over unchanged: `props`, `onEvent`, `onReady`, `onError`,
+`onActivity`, `mode`, `workerOptions` (including `doorbell`), `framework`,
+`slots`, and container attributes (`className`, `style`, `data-*`). The
+`worker` shorthand builds its client doorbell-free under `mode: 'poll'` on
+both threads. Inside a worker, `onEvent` runs in the parent instance's
+scope, so a re-`emit` relays the event to the page.
+
+**Slots in nested mounts.** A nested mount's `slots[name]` receives the
+anchor's ProxyElement (not a real element), so worker-side content renders
+into it: the React `Island` portals `slots` content there, exactly as on the
+page. A nested mount claims only the names it lists (`name in slots`); a
+claimed anchor is re-marked `data-atoll-sub-slot` so the page never claims it
+as well. Unclaimed `data-atoll-slot` anchors keep bubbling to the outer
+island's `slots` on the page, where the shell can fill them with real DOM.
+
+**Other renderers.** Any framework that hands you a ref to a
+worker-rendered element can nest: pass that ref (a ProxyElement) as `el` to
+`mountIsland` and destroy the handle on unmount. `SubIsland` from
+`@atolljs/react-island/worker` remains as an alias of `Island` that tags
+`framework: 'react'` and stamps `data-atoll-sub-island` on its host div.
+
+**Devtools framework marks.** `framework` is optional on every mount, page
+or nested: when omitted, the driver asks the worker which renderer the
+mounted app uses (the `renderer(instance)` task, called only while
+devtools is enabled). Package adapters (`reactIslandApp`, `vueIslandApp`,
+`svelteIslandApp`, `solidIslandApp`, `angularIslandApp`) set
+`RenderedIslandApp.renderer`; imperative apps report `null` and draw as a
+plain worker. The tag is per instance: a host doesn't inherit its
+sub-islands' renderer, and a sub-island spawned from an imperative host
+still reports its own. A plain `defineWorker` worker has no proxy DOM, so
+it can't host islands at all; its `connectSubWorker` children show as
+sub-workers, not islands.
+
+`worker`/`client`/`app` are mount identity: swap them with a React `key`.
+References: `examples/react-dom-worker/src/worker/console.worker.tsx`
+(`regions`: three cards on one shared sub-client plus a `worker`-form
+forecast, both from `region.worker.tsx`) and `…/react.worker.tsx`
+(`nestedhost` → `nested` via `nested.worker.tsx`).
 
 ## Channels: emit, callbackProp, slots
 

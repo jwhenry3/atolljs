@@ -33,6 +33,10 @@ export function callbackProp<Args extends unknown[]>(
   return marker as unknown as (...args: Args) => void;
 }
 
+/** True for a `callbackProp(fn)` marker — devtools previews show it as '[fn]'. */
+export const isCallbackMarker = (v: unknown): boolean =>
+  typeof v === 'object' && v !== null && markers.has(v);
+
 const isPlainObj = (v: unknown): v is Record<string, unknown> => {
   if (typeof v !== 'object' || v === null) return false;
   const p = Object.getPrototypeOf(v);

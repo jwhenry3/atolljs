@@ -52,6 +52,11 @@ import { createReactInstance } from './reactInstance';
 // island→shell channel — `import { emit } from '@atolljs/react-island/worker'`.
 export { emit, runInInstance } from '@atolljs/islands/worker';
 export { Slot } from './slot';
+// The page's mount components, unchanged: inside a worker the container is
+// a proxy element and mountIsland takes the nested (sub-worker) path.
+export { Island, islandComponent, lazyIsland } from './index';
+export type { IslandProps, IslandShellProps, IslandAppRef } from './index';
+export { connectIslandWorker } from '@atolljs/islands/worker';
 export { SubIsland } from './subIsland';
 export type { SubIslandProps } from './subIsland';
 
@@ -74,6 +79,7 @@ export function reactIslandApp(
   contract?: IslandContract,
 ): RenderedIslandApp {
   const app: RenderedIslandApp = {
+    renderer: 'react',
     mount({ instance, props }: RenderContext): RenderedHandle {
       const react = createReactInstance(instance);
       const render = (next: Record<string, unknown>): void =>

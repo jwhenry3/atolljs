@@ -44,8 +44,8 @@ const initialMode: Mode = isolated ? 'push' : 'poll';
  * and the incidents benchmark carries a third worker through its contract
  * module below.
  */
-const counterClient = connectIslandWorker({ worker: vueWorker, doorbell: isolated });
-const notesClient = connectIslandWorker({ worker: vueWorker, doorbell: isolated });
+const counterClient = connectIslandWorker({ name: 'counters', worker: vueWorker, doorbell: isolated });
+const notesClient = connectIslandWorker({ name: 'notes', worker: vueWorker, doorbell: isolated });
 
 /**
  * The facades — mount worker apps this shell never imports. Notes goes

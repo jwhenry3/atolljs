@@ -48,9 +48,10 @@ const HELP = (fmt: Fmt) => `${fmt.strong('atoll')} — bootstrap multithreading 
       Check the setup — deps, lockfile, .npmrc policy, bundler-detectable
       worker entries, COOP/COEP headers. --fix writes a hardened .npmrc.
 
-  ${fmt.accent('atoll devtools')} [--port 4780]
+  ${fmt.accent('atoll devtools')} [--port 4780] [--otlp <url>] [--otlp-headers k=v,…] [--otlp-service <name>]
       Serve the local devtools dashboard — pools, task timings, shared-memory
       writes, island traffic. Apps connect via connectDevtools().
+      --otlp also forwards every session to an OpenTelemetry OTLP/HTTP endpoint.
 
   ${fmt.dim(`flags: --yes/-y accepts defaults, --force overwrites existing files,
          --no-install skips dependency installation`)}

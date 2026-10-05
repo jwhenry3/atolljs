@@ -23,7 +23,7 @@ export interface ConnectSubWorkerConfig<S extends SharedSpec> extends ConnectWor
  *     sharedMemory: memory,                    // fresh buffer per sub-pool
  *     // — or attach sub-workers to THIS worker's bound buffer:
  *     // sharedBuffer: memory.buffer,
- *     poolSize: 2,
+ *     workers: 2,
  *   });
  *
  *   methods: { fanOut: (chunks) => Promise.all(chunks.map((c) => sub.crunch(c))) }

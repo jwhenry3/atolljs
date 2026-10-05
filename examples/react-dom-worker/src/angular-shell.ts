@@ -59,7 +59,7 @@ const initialMode: Mode = isolated ? 'push' : 'poll';
 // Sink before any island mounts — workers only forward events when the
 // flag reaches them at INIT. No-op without ?__atoll_devtools.
 initDevtools({
-  session: { name: 'islands-angular-shell' },
+  session: { name: 'islands-angular-shell', framework: 'angular' },
   overlay: { src: '__atoll/?mini=1' },
 });
 
@@ -70,7 +70,7 @@ initDevtools({
  * (its output()/model() fields). `app`/`client`/`worker` bake in as
  * defaults — the template call sites below carry only per-instance data.
  */
-const counterClient = connectIslandWorker({ worker: angularWorker, doorbell: isolated });
+const counterClient = connectIslandWorker({ name: 'counters', worker: angularWorker, doorbell: isolated });
 
 const CounterIsland = islandComponent<CounterComponent>({
   app: 'counter',

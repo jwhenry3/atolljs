@@ -176,7 +176,7 @@ export function useIsland(options: UseIslandOptions): UseIslandReturn {
     const client =
       options.client ??
       (worker !== undefined
-        ? connectIslandWorker({ worker, ...options.workerOptions })
+        ? connectIslandWorker({ name: app, worker, ...options.workerOptions })
         : undefined);
     if (client === undefined) {
       report(new Error('useIsland requires either `client` or `worker`'));

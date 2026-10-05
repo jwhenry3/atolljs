@@ -44,11 +44,14 @@ export const CONSUMER_PROJECTS = [
  * the same script tag the vite plugin adds when it serves /__atoll/ in dev
  * (topology A in docs/devtools-deploy.md). Demos iframe it via the relative
  * overlay src '__atoll/?mini=1', which resolves inside their own mount no
- * matter how deep the docs tree sits under the site root.
+ * matter how deep the docs tree sits under the site root. Vite demos that
+ * bundle @atolljs/devtools already carry one (the plugin's `devtools.build`
+ * default), so an existing copy is kept.
  */
 export function mountDevtoolsApp(root, demoDest) {
   const appSrc = join(root, 'packages/devtools/app');
   const dest = join(demoDest, '__atoll');
+  if (existsSync(join(dest, 'index.html'))) return;
   cpSync(appSrc, dest, { recursive: true });
   const index = join(dest, 'index.html');
   const html = readFileSync(index, 'utf8');

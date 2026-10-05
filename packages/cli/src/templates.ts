@@ -158,7 +158,7 @@ ${memImport}import type { ${P}Worker } from './${name}.worker';
 export const ${c} = connectWorker<${P}Worker>({
   worker: () =>
     new Worker(new URL('./${name}.worker.ts', import.meta.url), { type: 'module' }),
-${memLine}  poolSize: 'auto',
+${memLine}  workers: 'auto',
 });
 export type ${P}Client = typeof ${c};
 

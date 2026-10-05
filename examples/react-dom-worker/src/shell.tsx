@@ -15,10 +15,15 @@
  *   - Mediation is plain React state: worker emits land in onEvent →
  *     setState → the status line.
  *
+ * The ops console at the bottom mounts a SECOND PolyWorker definition
+ * (worker/console.worker.tsx) three ways: compute inline on a shared
+ * client, compute offloaded to a `workers: 1` compute worker, and nested
+ * (render sub-worker for the cards, a `workers: 3` compute pool for them).
+ *
  * The seven-island demo lives in index.html — this page is the small
  * framework-island edition matching vue/solid/svelte/angular-shell.html.
  */
-import { useRef, useState, Suspense } from 'react';
+import { useEffect, useRef, useState, Suspense } from 'react';
 import type { ReactElement, ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Island, islandComponent, lazyIsland } from '@atolljs/react-island';
@@ -42,7 +47,7 @@ const initialMode: Mode = isolated ? 'push' : 'poll';
 // Sink before any island mounts — workers only forward events when the
 // flag reaches them at INIT. No-op without ?__atoll_devtools.
 initDevtools({
-  session: { name: 'islands-react-shell' },
+  session: { name: 'islands-react-shell', framework: 'react' },
   overlay: { src: '__atoll/?mini=1' },
 });
 
@@ -52,8 +57,8 @@ initDevtools({
  * and the incidents benchmark carries a third worker through its contract
  * module below.
  */
-const counterClient = connectIslandWorker({ worker: reactWorker, doorbell: isolated });
-const notesClient = connectIslandWorker({ worker: reactWorker, doorbell: isolated });
+const counterClient = connectIslandWorker({ name: 'counters', worker: reactWorker, doorbell: isolated });
+const notesClient = connectIslandWorker({ name: 'notes', worker: reactWorker, doorbell: isolated });
 
 /**
  * The facades — mount worker apps this shell never imports. Notes goes
@@ -64,6 +69,42 @@ const notesClient = connectIslandWorker({ worker: reactWorker, doorbell: isolate
  */
 const NotesIsland = islandComponent<{ title?: string }>('notes');
 const IncidentsIsland = lazyIsland(() => import('./incidents.island'));
+
+/**
+ * The ops console: a SECOND PolyWorker definition, spawned three ways
+ * below. `opsInline` and `opsOffload` are each one render worker hosting
+ * two instances: the first computes inline (and stalls), the second sends
+ * the export to a compute worker. 'regions' passes `worker={consoleWorker}`
+ * and nests a render sub-worker plus compute workers inside its worker.
+ */
+const consoleWorker = (): Worker =>
+  new Worker(new URL('./worker/console.worker.tsx', import.meta.url), { type: 'module' });
+const opsInline = connectIslandWorker({ name: 'ops-inline', worker: consoleWorker, doorbell: isolated });
+const opsOffload = connectIslandWorker({ name: 'ops-offload', worker: consoleWorker, doorbell: isolated });
+
+/** Main-thread heartbeat: proves the page never stalls, whatever the workers do. */
+function MainHeartbeat(): ReactElement {
+  const [beats, setBeats] = useState(0);
+  const [worst, setWorst] = useState(0);
+  const last = useRef(0);
+  useEffect(() => {
+    last.current = performance.now();
+    const id = setInterval(() => {
+      const now = performance.now();
+      const late = Math.max(0, now - last.current - 250);
+      last.current = now;
+      setBeats((b) => b + 1);
+      if (late > 50) setWorst((w) => Math.max(w, Math.round(late)));
+    }, 250);
+    return () => clearInterval(id);
+  }, []);
+  return (
+    <div id="main-heartbeat" className="ops-main">
+      <span className={`ops-dot ${beats % 2 ? 'on' : ''}`} /> main thread · ticks {beats} ·{' '}
+      <span className={`ops-stall ${worst ? 'hit' : ''}`}>longest stall {worst}ms</span>
+    </div>
+  );
+}
 
 /* ── Shell ──────────────────────────────────────────────────────────────── */
 
@@ -126,6 +167,7 @@ export function Shell(): ReactElement {
     mode: initialMode,
     onReady: ready(key),
     onActivity: bump,
+    framework: 'react',
     onEvent: (name: string, payload: unknown) => {
       const p = payload as { count?: number; label?: string };
       if (name === 'incremented')
@@ -181,6 +223,7 @@ export function Shell(): ReactElement {
         <Island
           client={counterClient}
           app="nestedhost"
+          framework="react"
           props={{ label: 'inner counter' }}
           mode={initialMode}
           onReady={ready('nestedhost')}
@@ -202,6 +245,7 @@ export function Shell(): ReactElement {
       >
         <NotesIsland
           client={notesClient}
+          framework="react"
           title="react island"
           onReady={ready('notes')}
           onActivity={bump}
@@ -223,6 +267,7 @@ export function Shell(): ReactElement {
             // The contract supplies the worker; workerOptions carries the
             // doorbell choice through to the shorthand client it builds.
             workerOptions={{ doorbell: isolated }}
+            framework="react"
             mode={initialMode}
             onReady={ready('incidents')}
             onActivity={bump}
@@ -236,6 +281,117 @@ export function Shell(): ReactElement {
             containerProps={{ className: 'island-root' }}
           />
         </Suspense>
+      </IslandPanel>
+
+      <h2 id="ops-console">Ops console: render workers render, compute workers compute</h2>
+      <p className="ops-intro">
+        Every panel below mounts an app from the SAME definition,{' '}
+        <code>worker/console.worker.tsx</code>. Island clients are always one worker (a rendered
+        tree can't be split), so heavy work goes to a separate compute worker, and{' '}
+        <code>workers</code> says how many: <code>1</code> to get it off the render thread,{' '}
+        <code>N</code> when independent jobs should overlap. Press an export and watch which pulse
+        freezes.
+      </p>
+      <MainHeartbeat />
+
+      <h3 className="ops-row-title">A. anti-pattern: export computed INLINE on the render worker it shares with the pulse</h3>
+      <div className="ops-row">
+        <IslandPanel title="app: pulse (opsInline)" badge={pids.pulseInline}>
+          <Island
+            client={opsInline}
+            framework="react"
+            app="pulse"
+            props={{ label: 'inline' }}
+            mode={initialMode}
+            onReady={ready('pulseInline')}
+            onActivity={bump}
+            className="island-root"
+          />
+        </IslandPanel>
+        <IslandPanel title="app: export (opsInline)" badge={pids.exportInline}>
+          <Island
+            client={opsInline}
+            framework="react"
+            app="export"
+            props={{ label: 'inline' }}
+            mode={initialMode}
+            onReady={ready('exportInline')}
+            onActivity={bump}
+            onEvent={(name, payload) => {
+              const p = payload as { ms?: number; rows?: number };
+              if (name === 'exported')
+                setStatus(
+                  `inline export: ${p.rows?.toLocaleString()} rows in ${p.ms}ms; the pulse on the same render worker was frozen the whole time`,
+                );
+            }}
+            className="island-root"
+          />
+        </IslandPanel>
+      </div>
+
+      <h3 className="ops-row-title">B. fix: same two instances in ONE render worker, export offloaded (workers: 1)</h3>
+      <div className="ops-row">
+        <IslandPanel title="app: pulse (opsOffload)" badge={pids.pulseOffload}>
+          <Island
+            client={opsOffload}
+            framework="react"
+            app="pulse"
+            props={{ label: 'offload' }}
+            mode={initialMode}
+            onReady={ready('pulseOffload')}
+            onActivity={bump}
+            className="island-root"
+          />
+        </IslandPanel>
+        <IslandPanel title="app: export (opsOffload → compute.worker ×1)" badge={pids.exportOffload}>
+          <Island
+            client={opsOffload}
+            framework="react"
+            app="export"
+            props={{ label: 'offload', offload: true }}
+            mode={initialMode}
+            onReady={ready('exportOffload')}
+            onActivity={bump}
+            onEvent={(name, payload) => {
+              const p = payload as { ms?: number; rows?: number };
+              if (name === 'exported')
+                setStatus(
+                  `offloaded export: ${p.rows?.toLocaleString()} rows in ${p.ms}ms on a dedicated compute worker; the pulse kept ticking`,
+                );
+            }}
+            className="island-root"
+          />
+        </IslandPanel>
+      </div>
+
+      <h3 className="ops-row-title">C. nested: one render sub-worker for the cards, a compute pool for their work</h3>
+      <IslandPanel
+        title="app: regions (own worker → region.worker ×1, compute.worker pool ×3 + ×1)"
+        badge={pids.regions}
+      >
+        <Island
+          worker={consoleWorker}
+          framework="react"
+          workerOptions={{ doorbell: isolated }}
+          app="regions"
+          mode={initialMode}
+          onReady={ready('regions')}
+          onActivity={bump}
+          onEvent={(name, payload) => {
+            const p = payload as { regions?: string[]; wallMs?: number; workMs?: number; ms?: number; rows?: number };
+            if (name === 'regionRecomputed')
+              setStatus(
+                p.regions?.length === 1
+                  ? `${p.regions[0]} recomputed in ${p.wallMs}ms on the compute pool; every card kept ticking`
+                  : `${p.regions?.length} regions recomputed in ${p.wallMs}ms wall (${p.workMs}ms of work) on a 3-worker pool`,
+              );
+            if (name === 'forecasted')
+              setStatus(
+                `forecast scored ${p.rows?.toLocaleString()} rows in ${p.ms}ms on a dedicated compute worker; cards kept ticking`,
+              );
+          }}
+          className="island-root"
+        />
       </IslandPanel>
     </>
   );

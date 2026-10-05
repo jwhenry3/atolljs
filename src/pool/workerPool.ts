@@ -1,9 +1,12 @@
-import { MemoryManager } from './memory';
+import type { MemoryManager } from './memory';
 import { PoolQueueFullError, TaskAbortedError, TaskTimeoutError, WorkerCrashedError } from './errors';
 import { SharedAccess, SharedMemory, SharedSpec } from '../contract/sharedMemory';
 import { MemoryPersistence, PoolTasks, TaskContract, TaskMap, TaskResult, WorkerPoolConfig } from '../contract/types';
-import { devtoolsEnabled, emitDevtools, forwardDevtools, nextDevtoolsId, type EmittedDevtoolsEvent } from '../devtools';
+import { devtoolsEnabled, emitDevtools, estimateCloneBytes, nextDevtoolsId, type EmittedDevtoolsEvent } from '../devtools';
+import { measureTaskCall } from '../userTiming';
+import { forwardWorkerDevtools, sendInit, setupChannelMemory, type ChannelMemory } from './workerChannel';
 import { fmtBytes, scoped } from '../log';
+import { applyChaos, CHAOS_FAILURE, KILL_MESSAGE, registerDevtoolsRunner, type ChaosConfig } from './devtoolsCommands';
 
 const poolLog = scoped('pool');
 const taskLog = scoped('task');
@@ -86,6 +89,7 @@ class WorkerPoolImpl<S extends SharedSpec = SharedSpec> {
   private pending = new Map<number, TaskEntry>();
   private nextMessageId = 0;
   private queue: TaskEntry[] = [];
+  private readonly mem: ChannelMemory<S>;
   private memoryManager?: MemoryManager;
   /** A caller-supplied buffer shipped via INIT_MEMORY (sub-worker / second-pool sharing). */
   private injectedBuffer?: SharedArrayBuffer;
@@ -96,6 +100,9 @@ class WorkerPoolImpl<S extends SharedSpec = SharedSpec> {
   private readonly respawn: boolean;
   private readonly taskTimeout?: number;
   private closed = false;
+  /** Dashboard fault injection (`pool.chaos`); null unless devtools set it. */
+  private chaos: ChaosConfig | null = null;
+  private devtoolsOff?: () => void;
   private drainWaiters: Array<() => void> = [];
   private statsAgg = {
     completed: 0,
@@ -105,8 +112,11 @@ class WorkerPoolImpl<S extends SharedSpec = SharedSpec> {
     waitMs: agg(),
     runMs: agg(),
   };
-  /** Devtools correlation id ('pool-N') — stamped on every event this pool emits. */
-  readonly poolId = nextDevtoolsId('pool');
+  /**
+   * Devtools correlation id, stamped on every event this pool emits:
+   * '<name>-p' when the config has a `name`, else 'pool-N'.
+   */
+  readonly poolId: string;
   private readonly label?: string;
   private nextCallId = 0;
   public readonly sharedMemory: (SharedMemory<S> & SharedAccess<S>) | undefined;
@@ -114,13 +124,7 @@ class WorkerPoolImpl<S extends SharedSpec = SharedSpec> {
   public readonly persistence: MemoryPersistence | undefined;
 
   constructor(config: WorkerPoolConfig<S, TaskMap>) {
-    if (config.sharedMemory || config.sharedBuffer !== undefined) {
-      if (typeof SharedArrayBuffer === 'undefined' || (typeof crossOriginIsolated !== 'undefined' && !crossOriginIsolated)) {
-        throw new Error(
-          'WorkerPool requires SharedArrayBuffer in a cross-origin isolated context — serve the page with COOP/COEP headers.'
-        );
-      }
-    }
+    const mem = setupChannelMemory(config, 'WorkerPool');
     if (!config.workerUrl && !config.createWorker) {
       throw new Error('WorkerPool requires either `workerUrl` or `createWorker` in its config.');
     }
@@ -131,30 +135,12 @@ class WorkerPoolImpl<S extends SharedSpec = SharedSpec> {
     this.respawn = config.respawn ?? true;
     this.taskTimeout = config.taskTimeout;
     this.label = config.name;
-
-    // A caller-supplied buffer is resolved once here — the contract's local
-    // binding and every spawned worker must share the same bytes.
-    if (config.sharedBuffer !== undefined) {
-      this.injectedBuffer =
-        typeof config.sharedBuffer === 'function' ? config.sharedBuffer() : config.sharedBuffer;
-      if (!this.injectedBuffer) {
-        throw new Error(
-          'WorkerPool: `sharedBuffer` resolved to an empty buffer — the producing pool or contract has no bound memory yet.'
-        );
-      }
-    }
-
-    if (config.sharedMemory) {
-      this.sharedMemory = config.sharedMemory;
-      if (this.injectedBuffer) {
-        this.sharedMemory.bind(this.injectedBuffer);
-      } else {
-        this.memoryManager = new MemoryManager(config.memory);
-        this.memoryManager.ensureCapacity(this.sharedMemory.totalBytes);
-        this.sharedMemory.bind(this.memoryManager.getBuffer());
-      }
-      this.persistence = config.persistence?.(config.sharedMemory);
-    }
+    this.poolId = nextDevtoolsId('pool', config.name);
+    this.mem = mem;
+    this.sharedMemory = mem.sharedMemory;
+    this.memoryManager = mem.memoryManager;
+    this.injectedBuffer = mem.injectedBuffer;
+    this.persistence = mem.persistence;
 
     const requestedSize = config.poolSize ?? 'auto';
     const poolSize =
@@ -184,6 +170,22 @@ class WorkerPoolImpl<S extends SharedSpec = SharedSpec> {
     for (let i = 0; i < poolSize; i++) {
       this.addWorker(this.spawn());
     }
+    if (devtoolsEnabled()) {
+      this.devtoolsOff = registerDevtoolsRunner({
+        poolId: this.poolId,
+        label: this.label,
+        dedicated: false,
+        size: () => this.slots.length,
+        stats: () => this.stats(),
+        kill: (slot) => {
+          const s = this.slots[slot];
+          if (!s) throw new Error(`${this.poolId} has no worker slot ${slot}`);
+          this.handleWorkerError(s, { message: KILL_MESSAGE });
+        },
+        getChaos: () => this.chaos,
+        setChaos: (chaos) => { this.chaos = chaos; },
+      });
+    }
 
     // Install first-class task methods: pool.queryIncidents(q) →
     // runTask(QueryIncidents, q). Typed through PoolTasks<T> at the
@@ -212,29 +214,7 @@ class WorkerPoolImpl<S extends SharedSpec = SharedSpec> {
       // slot produced it so worker-side fetches/heap/memory writes
       // attribute to a specific worker.
       if (data.type === 'ATOLL_DEVTOOLS' && data.event) {
-        const ev = data.event as EmittedDevtoolsEvent & { poolId?: string };
-        const slotIndex = this.slots.indexOf(slot);
-        // A pool constructed inside a worker mints ids ('pool-1', 'task-1')
-        // on that context's own counters — they collide textually with
-        // same-named ids minted on the parent thread. Every poolId arriving
-        // from a worker refers to the worker's local id space (worker-side
-        // island clients, sub-pools, sub-workers), never to this pool: the
-        // emitting context can't even see the parent's ids. Qualify
-        // unconditionally so the id encodes the spawn path
-        // ('pool-1#0~pool-1' = pool-1 minted inside worker pool-1#0) —
-        // dashboards then key nested pools/workers unambiguously and draw
-        // parent→child edges. `worker` stamps that already exist (multi-hop
-        // forwarding) are qualified the same way so attribution stays pinned
-        // to the deepest emitting worker.
-        const qualify = (id: string): string => `${this.poolId}#${slotIndex}~${id}`;
-        forwardDevtools({
-          ...ev,
-          ...(ev.poolId !== undefined ? { poolId: qualify(ev.poolId) } : {}),
-          worker:
-            ev.worker === undefined
-              ? { poolId: this.poolId, slot: slotIndex }
-              : { poolId: qualify(ev.worker.poolId), slot: ev.worker.slot },
-        });
+        forwardWorkerDevtools(this.poolId, this.slots.indexOf(slot), data.event);
         return;
       }
       this.handleReply(slot, data);
@@ -242,17 +222,9 @@ class WorkerPoolImpl<S extends SharedSpec = SharedSpec> {
     worker.addEventListener('error', (event: unknown) => {
       this.handleWorkerError(slot, event);
     });
-    // `devtools` tells the worker to forward its instrumentation events back
-    // on this channel (ATOLL_DEVTOOLS) — only when a sink is live at spawn.
-    if (this.memoryManager) {
-      worker.postMessage({ type: 'INIT_MEMORY', memory: this.memoryManager.memory, devtools: devtoolsEnabled() });
-    } else if (this.injectedBuffer) {
-      worker.postMessage({ type: 'INIT_MEMORY', buffer: this.injectedBuffer, devtools: devtoolsEnabled() });
-    } else {
-      worker.postMessage({ type: 'INIT', devtools: devtoolsEnabled() });
-    }
+    const init = sendInit(worker, this.mem);
     this.slots.push(slot);
-    poolLog.debug(`worker spawned, ${this.memoryManager || this.injectedBuffer ? 'INIT_MEMORY' : 'INIT'} sent`);
+    poolLog.debug(`worker spawned, ${init} sent`);
     emitDevtools({ type: 'worker:spawn', poolId: this.poolId, slot: this.slots.indexOf(slot) });
     return slot;
   }
@@ -267,17 +239,24 @@ class WorkerPoolImpl<S extends SharedSpec = SharedSpec> {
     // stats and settlement — the caller was already rejected.
     if (!entry.done) {
       entry.done = true;
-      const runMs = performance.now() - (entry.sentAt ?? entry.enqueuedAt);
+      const start = entry.sentAt ?? entry.enqueuedAt;
+      const runMs = performance.now() - start;
       this.statsAgg.runMs.add(runMs);
       if (data.success) {
         this.statsAgg.completed++;
         taskLog.debug(`← ${entry.contract.taskId} ok`);
-        emitDevtools({ type: 'task:settle', poolId: this.poolId, callId: entry.callId, taskId: entry.contract.taskId, outcome: 'ok', runMs });
+        if (devtoolsEnabled()) {
+          emitDevtools({ type: 'task:settle', poolId: this.poolId, callId: entry.callId, taskId: entry.contract.taskId, outcome: 'ok', runMs, resultBytes: estimateCloneBytes(data.result) });
+          measureTaskCall(this.poolId, entry.contract.taskId, entry.callId, this.slots.indexOf(slot), start, start + runMs, true);
+        }
         entry.resolve(data.result);
       } else {
         this.statsAgg.failed++;
         taskLog.warn(`← ${entry.contract.taskId} failed: ${data.error}`);
-        emitDevtools({ type: 'task:settle', poolId: this.poolId, callId: entry.callId, taskId: entry.contract.taskId, outcome: 'error', runMs, error: data.error });
+        if (devtoolsEnabled()) {
+          emitDevtools({ type: 'task:settle', poolId: this.poolId, callId: entry.callId, taskId: entry.contract.taskId, outcome: 'error', runMs, error: data.error });
+          measureTaskCall(this.poolId, entry.contract.taskId, entry.callId, this.slots.indexOf(slot), start, start + runMs, false);
+        }
         entry.reject(new Error(data.error));
       }
     }
@@ -358,13 +337,20 @@ class WorkerPoolImpl<S extends SharedSpec = SharedSpec> {
     this.pending.set(messageId, entry);
     const slotIndex = this.slots.indexOf(slot);
     taskLog.debug(`→ ${entry.contract.taskId}`, { worker: slotIndex, args: entry.args });
-    emitDevtools({ type: 'task:dispatch', poolId: this.poolId, callId: entry.callId, taskId: entry.contract.taskId, slot: slotIndex, waitMs });
-    slot.worker.postMessage({
-      type: 'EXECUTE_TASK',
-      messageId,
-      taskId: entry.contract.taskId,
-      args: entry.args,
-    });
+    if (devtoolsEnabled()) {
+      emitDevtools({ type: 'task:dispatch', poolId: this.poolId, callId: entry.callId, taskId: entry.contract.taskId, slot: slotIndex, waitMs, argBytes: estimateCloneBytes(entry.args) });
+    }
+    const msg = { type: 'EXECUTE_TASK', messageId, taskId: entry.contract.taskId, args: entry.args };
+    if (this.chaos) {
+      applyChaos(this.chaos, {
+        live: () => this.pending.get(messageId) === entry,
+        fail: () => this.handleReply(slot, { messageId, taskId: msg.taskId, success: false, error: CHAOS_FAILURE }),
+        timeout: () => this.cancel(entry, new TaskTimeoutError()),
+        post: () => slot.worker.postMessage(msg),
+      });
+    } else {
+      slot.worker.postMessage(msg);
+    }
   }
 
   /** Detaches signal/timeout listeners from a finalized entry. */
@@ -509,6 +495,7 @@ class WorkerPoolImpl<S extends SharedSpec = SharedSpec> {
 
   public terminate(): void {
     this.closed = true;
+    this.devtoolsOff?.();
     // Final flush + release — fire-and-forget; terminate() stays synchronous.
     void this.persistence?.stop()?.catch?.((e: unknown) =>
       poolLog.warn('memory persistence stop failed', e),

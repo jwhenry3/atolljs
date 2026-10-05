@@ -1,5 +1,130 @@
 # Changelog
 
+## Unreleased
+
+### `connectWorker({ workers })`: state the count, the client picks the runner
+
+- **New `workers` option** on `connectWorker` / `connectSubWorker`: a number
+  or `'auto'`. `workers: 1` builds a new `DedicatedWorker` (one worker, no
+  pool: no queue, no scheduler), keeping per-call timeout and abort, crash
+  respawn, `stats()`, and devtools events (`pool:init` gains
+  `dedicated: true`). More than one builds a `WorkerPool` as before.
+- **Behavior change: the default is now `1`**, not `'auto'`. Clients that
+  relied on the implicit `navigator.hardwareConcurrency` pool should pass
+  `workers: 'auto'`. `poolSize` stays as a deprecated alias; `workers` wins
+  when both are set. `new WorkerPool({ poolSize })`, `createNodePool`, and
+  the framework pool modules are unchanged.
+- `client.pool` is now typed `WorkerRunner<S>` (`WorkerPool<S> |
+  DedicatedWorker<S>`); both share `stats()`, `workers`, `sharedBuffer`,
+  `close()`, and `terminate()`. `resolveWorkerCount` is exported.
+- Island clients (`connectIslandWorker`) run on `DedicatedWorker`.
+- Island workers report their renderer: package adapters set
+  `RenderedIslandApp.renderer`, a new `renderer(instance)` task returns it,
+  and `island:mount` falls back to it when the mount declared no
+  `framework` (queried only while devtools is enabled; an explicit tag
+  wins). Imperative apps report `null`.
+- Devtools app map: a dedicated runner draws no P mark; the hub spoke runs
+  straight to its worker, labeled with its id. Nested sub-worker fans
+  tighten with many siblings so they stay pointed outward.
+
+### Devtools: labeled runner ids, shell framework, throughput axis
+
+- **Runner ids derive from `name`**: a named pool is `<slug>-p`, a named
+  dedicated worker `<slug>-w`, with a counter on repeats (`sla-p`,
+  `sla-p2`). Unnamed runners keep `pool-N` / `worker-N`. Island `worker`
+  shorthands (`mountIsland`, `<Island>`, `useIsland`, `createIsland`, the
+  Svelte action, `atollIsland`) default `name` to the app name.
+- **`initDevtools({ session: { framework } })`**: the shell reports its own
+  framework (`SessionInfo.framework`), drawn as the mark on the map's
+  main-thread hub. Every browser example now sets it.
+- The task-throughput chart sums sessions per second, windows the last 60s,
+  and gains a y-axis scale, time ticks, and a latest/peak/avg/total line.
+- The vanilla islands demo (`index.html`) adds a framework row: Svelte,
+  Solid and Angular `counter` islands next to the React, Vue, imperative and
+  Leaflet ones, so one page runs every supported renderer.
+
+### Devtools: `/__atoll/` in production builds
+
+- **`@atolljs/vite`**: a client `vite build` copies the dashboard into
+  `<outDir>/__atoll/` whenever the bundle contains `@atolljs/devtools` code,
+  so a shipped overlay flyout always has its page. Flagged for
+  BroadcastChannel by an external `atoll-transport.js` (CSP-friendly, no
+  inline script). `devtools: { build: 'auto' | true | false, dir? }`
+  overrides; SSR builds are skipped. The Pages assembly keeps a demo's
+  plugin-emitted `__atoll/` instead of overwriting it. Hosts still serve
+  the app's COOP/COEP on `/__atoll/` (`preview.headers` for `vite preview`).
+  See `docs/devtools-deploy.md` topology A.
+
+### Devtools: Chrome DevTools extension
+
+- **`packages/devtools-extension`** (MV3, private). An **atoll** panel in
+  Chrome DevTools runs the same dashboard against the inspected tab.
+  Frames are pushed, not polled: a content script (all URLs, top frame,
+  passive until a panel attaches) joins the page's `atoll-devtools`
+  BroadcastChannel and relays through a module service worker that pairs
+  it with the panel by tab id, including control commands, with reset and
+  re-attach across reloads. No `permissions` keys, but the all-sites
+  content script brings Chrome's "Read and change all your data on all
+  websites" install warning; Chrome 114+. Build with
+  `npm run build:extension` and load `dist/` unpacked.
+- **Dashboard**: a third transport (`__ATOLL_TRANSPORT === 'extension'`) and
+  a `body.ext` panel context (real history, Ctrl/Cmd+Shift+K palette).
+
+### Devtools: OpenTelemetry export
+
+- **`@atolljs/devtools/otel`.** `exportOtel({ endpoint, serviceName, ... })`
+  sends traces (task calls, island round trips, fetches), cumulative metrics
+  and logs to any OpenTelemetry backend over OTLP/HTTP JSON, with no new
+  dependencies. Install it before pools spawn.
+- **Server forwarding.** `createDevtoolsServer({ otlp })` and
+  `atoll-devtools --otlp <url> [--otlp-headers k=v] [--otlp-service name]`
+  (also on `atoll devtools`) export every connected session as its own
+  resource.
+- **`addDevtoolsSink(fn)`** in core: extra event listeners next to the
+  transport sink; any listener enables worker forwarding.
+
+### Devtools: live controls, performance, reactivity, audits, recordings
+
+- **Control channel.** Dashboards send `control` frames back to a live app
+  and get `control-result` replies (BroadcastChannel, or relayed by the
+  aggregate server). Core exports `registerDevtoolsCommand`,
+  `listDevtoolsCommands` and `runDevtoolsCommand`; commands register lazily
+  and only while devtools is enabled: `pool.list`, `pool.stats`,
+  `worker.kill` (the real crash path, `'killed from devtools'`),
+  `pool.chaos` (`delayMs`, `failRate`, `timeoutRate`), `island.list`,
+  `island.tree`, `island.highlight`, `island.props`, `island.updateProps`
+  (restores `'[fn]'` callback placeholders), `island.setMode`,
+  `memory.read`, `memory.watch` / `unwatch` / `watches`, `reactive.nodes`,
+  and the built-in `devtools.commands`. Main-thread runners and islands
+  only.
+- **New events**: `task:dispatch.argBytes`, `task:settle.resultBytes` (`ok`
+  only) and `island:ops.bytes` (estimated clone size,
+  `estimateCloneBytes`), `island:event.payload` and `island:props`
+  (`previewValue`), `memory:watch-hit`, `runtime:longframe` and
+  `runtime:frames` (new `jank` option on `connectDevtools`, default on),
+  `log` (SDK log entries mirrored at the current `setLogLevel`), and
+  `reactive:node`. `SessionInfo.env` reports `crossOriginIsolated`,
+  `hardwareConcurrency` and friends.
+- **User Timing**: `atoll task <taskId>`, `atoll run <taskId>` and
+  `atoll replay <instance>` measures on an `atoll` track group in Chrome's
+  Performance panel, cleared from the buffer right after recording.
+- **Dashboard views**: Performance (long frames, fps, message cost),
+  island inspector tabs (Elements with in-page highlight, Props history
+  with diffs, Events), Memory › Values (live values, snapshot diff,
+  watchpoints), Reactivity (cross-thread dependency graph), Audits (20
+  rules with thresholds, fixes and per-rule mute), and inspector controls
+  (kill, chaos, edit props, push/poll).
+- **Recordings**: ● Rec / Export / Import with a replay banner (play,
+  speed, scrub); format `atoll-devtools-recording` v1. Replayed sessions
+  are closed and take no commands.
+- **Shell**: Ctrl/⌘+K palette, `g`+letter view shortcuts, `[` `]`
+  sub-tabs, `/` filter focus, `?` help, hash routes
+  (`#/<view>[/<sub>][?session=&island=&worker=]`), view intros. Time series
+  bucket on the dashboard clock, since worker-forwarded `at` is per-thread.
+- **Overlay**: `persist` (position, size, open state) and `hotkey`
+  (default `Alt+Shift+D`) options; "full page ↗" opens the flyout's
+  current view.
+
 ## 0.1.7
 
 New `@atolljs/devtools` package: live observability for pools, workers,

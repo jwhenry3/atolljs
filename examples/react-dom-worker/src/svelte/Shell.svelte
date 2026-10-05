@@ -42,12 +42,12 @@
    * schedules render work through ambient `document` resolution, so two
    * mounts sharing one worker can route ops to the wrong instance.
    */
-  const counterClient = connectIslandWorker({ worker: svelteWorker, doorbell: isolated });
-  const counter2Client = connectIslandWorker({ worker: svelteWorker, doorbell: isolated });
-  const notesClient = connectIslandWorker({ worker: svelteWorker, doorbell: isolated });
+  const counterClient = connectIslandWorker({ name: 'counter', worker: svelteWorker, doorbell: isolated });
+  const counter2Client = connectIslandWorker({ name: 'counter-2', worker: svelteWorker, doorbell: isolated });
+  const notesClient = connectIslandWorker({ name: 'notes', worker: svelteWorker, doorbell: isolated });
   // The 1M-incidents benchmark gets its own worker — the whole point is
   // the heavy component never contends with (or blocks) anything else.
-  const incidentsClient = connectIslandWorker({ worker: svelteWorker, doorbell: isolated });
+  const incidentsClient = connectIslandWorker({ name: 'incidents', worker: svelteWorker, doorbell: isolated });
 
   /* ── Mediation state — worker emits → $state → status line ── */
 

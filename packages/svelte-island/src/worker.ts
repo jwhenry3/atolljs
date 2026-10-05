@@ -299,6 +299,7 @@ export function svelteIslandApp<P extends Record<string, unknown>>(
   contract?: IslandContract<P>,
 ): RenderedIslandApp {
   const app: RenderedIslandApp = {
+    renderer: 'svelte',
     mount({ doc, props }: RenderContext): RenderedHandle {
       installSvelteCompat();
       decorateDocument(doc);

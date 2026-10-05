@@ -15,6 +15,7 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { mountIsland, connectIslandWorker } from '@atolljs/islands';
 import { InProcessWorker } from '@atolljs/core/testing/inProcessWorker';
+import { setDevtoolsSink, type DevtoolsEvent } from '@atolljs/core';
 import { suspendControl } from './fixtures/react.worker';
 import { taggedApp } from './fixtures/react-mono.worker';
 
@@ -343,5 +344,36 @@ describe('worker entry variants', () => {
     await expect(client.updateProps('ghost@1', {})).rejects.toThrow(/not mounted/);
     expect(await client.dispatch(999_999, { type: 'click' })).toEqual([]);
     client.terminate();
+  });
+});
+
+describe('renderer reporting', () => {
+  it('React apps report "react"; imperative entries and unknown instances report null', async () => {
+    const client = connectIslandWorker({ worker: reactWorker });
+    await client.mount('counter@r1', { label: 'x' });
+    await client.mount('boom@r2', {});
+    expect(await client.renderer('counter@r1')).toBe('react');
+    expect(await client.renderer('boom@r2')).toBeNull();
+    expect(await client.renderer('ghost@1')).toBeNull();
+    client.terminate();
+  });
+
+  it('island:mount carries the reported renderer unless the mount declared one', async () => {
+    const events: DevtoolsEvent[] = [];
+    setDevtoolsSink((e) => events.push(e));
+    try {
+      const a = await mountIsland({ worker: reactWorker, el: host(), app: 'counter', props: { label: 'a' } });
+      const b = await mountIsland({
+        worker: reactWorker, el: host(), app: 'counter', props: { label: 'b' }, framework: 'custom',
+      });
+      const c = await mountIsland({ worker: reactWorker, el: host(), app: 'boom', props: {} });
+      const mounts = events.filter((e) => e.type === 'island:mount') as Array<{ framework?: string }>;
+      expect(mounts.map((m) => m.framework)).toEqual(['react', 'custom', undefined]);
+      a.destroy();
+      b.destroy();
+      c.destroy();
+    } finally {
+      setDevtoolsSink(null);
+    }
   });
 });

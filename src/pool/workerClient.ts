@@ -2,6 +2,7 @@ import type { ServiceMethod, TaskRunner } from '../service';
 import type { SharedAccess, SharedMemory, SharedSpec } from '../contract/sharedMemory';
 import type { MemoryConfig, Prettify } from '../contract/types';
 import { WorkerPool, type RunOptions } from './workerPool';
+import { DedicatedWorker } from './dedicatedWorker';
 import type {
   WorkerDefinition,
   WorkerMethodMap,
@@ -104,13 +105,21 @@ export interface ConnectWorkerConfig<S extends SharedSpec> {
    * or a URL.
    */
   worker: (() => Worker) | URL;
+  /**
+   * How many workers this client needs. `1` (the default) is a single
+   * dedicated worker with no pool: calls post straight to it, no queue or
+   * scheduler. `N > 1` builds a pool that spreads separate calls across N
+   * workers; `'auto'` sizes it to `navigator.hardwareConcurrency ?? 4`.
+   */
+  workers?: number | 'auto';
+  /** @deprecated Use `workers`. Read only when `workers` is absent. */
   poolSize?: number | 'auto';
   /** Display label for devtools/dashboards — falls back to a generated id. */
   name?: string;
   memory?: MemoryConfig;
-  /** Max in-flight tasks per worker (default 1); excess calls queue FIFO. */
+  /** Pool only: max in-flight tasks per worker (default 1); excess calls queue FIFO. */
   concurrency?: number;
-  /** Max queued calls (default Infinity); a full queue rejects with PoolQueueFullError. */
+  /** Pool only: max queued calls (default Infinity); a full queue rejects with PoolQueueFullError. */
   maxQueue?: number;
   /** Default true — a crashed worker is replaced and its in-flight calls reject. */
   respawn?: boolean;
@@ -120,13 +129,29 @@ export interface ConnectWorkerConfig<S extends SharedSpec> {
   lazy?: boolean;
 }
 
-/** A typed worker client plus pool lifecycle controls. */
+/** What a client runs on: a pool (`workers > 1`) or one dedicated worker. */
+export type WorkerRunner<S extends SharedSpec = SharedSpec> = WorkerPool<S> | DedicatedWorker<S>;
+
+/** Resolve a `workers` count: `'auto'` is one per core (4 when unknown). */
+export const resolveWorkerCount = (n: number | 'auto' | undefined): number =>
+  n === 'auto'
+    ? typeof navigator !== 'undefined'
+      ? (navigator.hardwareConcurrency ?? 4)
+      : 4
+    : Math.max(1, Math.floor(n ?? 1));
+
+/** A typed worker client plus lifecycle controls. */
 export type WorkerClient<W extends WorkerDefinition, S extends SharedSpec> = WorkerMethods<W> & {
-  /** Spawn the pool now (idempotent). */
+  /** Spawn the worker(s) now (idempotent). */
   start(): void;
-  /** Terminate the pool; the next method call re-spawns it. */
+  /** Terminate the worker(s); the next method call re-spawns. */
   terminate(): void;
-  readonly pool: WorkerPool<S> | null;
+  /**
+   * The runner once spawned: a `DedicatedWorker` for `workers: 1`, a
+   * `WorkerPool` otherwise. Both expose `stats()`, `close()`, `terminate()`,
+   * `workers`, `sharedBuffer` and `poolId`.
+   */
+  readonly pool: WorkerRunner<S> | null;
   readonly sharedMemory: ConnectWorkerConfig<S>['sharedMemory'] | undefined;
 };
 
@@ -139,11 +164,14 @@ export type WorkerClient<W extends WorkerDefinition, S extends SharedSpec> = Wor
  *   export const incidents = connectWorker<IncidentsWorker>({
  *     sharedMemory: incidentsMemory,
  *     worker: () => new Worker(new URL('./worker/incidents.worker.ts', import.meta.url), { type: 'module' }),
- *     poolSize: 1,
+ *     workers: 3,                         // omit for one dedicated worker
  *   });
  *
- *   await incidents.queryIncidents(q);   // typed dispatch to the pool
+ *   await incidents.queryIncidents(q);   // typed dispatch
  *   incidents.terminate();               // next call lazily re-spawns
+ *
+ * `workers` states what the work needs and the client picks the runner:
+ * 1 (default) → a `DedicatedWorker`, no pool; more → a `WorkerPool`.
  *
  * Lazy by default: no Worker is touched until the first method call (or
  * `start()`), so importing the client is SSR-safe.
@@ -152,23 +180,33 @@ export function connectWorker<
   W extends WorkerDefinition,
   S extends SharedSpec = W extends WorkerDefinition<infer X> ? X : SharedSpec,
 >(config: ConnectWorkerConfig<S>): WorkerClient<W, S> {
-  let pool: WorkerPool<S> | null = null;
-  const spawn = (): WorkerPool<S> =>
-    (pool ??= new WorkerPool<S>({
+  let pool: WorkerRunner<S> | null = null;
+  const spawn = (): WorkerRunner<S> => {
+    if (pool) return pool;
+    const count = resolveWorkerCount(config.workers ?? config.poolSize);
+    const base = {
       sharedMemory: config.sharedMemory,
       sharedBuffer: config.sharedBuffer,
       createWorker:
         typeof config.worker === 'function'
           ? config.worker
           : () => new Worker(config.worker as URL, { type: 'module' }),
-      poolSize: config.poolSize,
       name: config.name,
       memory: config.memory,
-      concurrency: config.concurrency,
-      maxQueue: config.maxQueue,
       respawn: config.respawn,
       taskTimeout: config.taskTimeout,
-    }));
+    };
+    pool =
+      count === 1
+        ? new DedicatedWorker<S>(base)
+        : new WorkerPool<S>({
+            ...base,
+            poolSize: count,
+            concurrency: config.concurrency,
+            maxQueue: config.maxQueue,
+          });
+    return pool;
+  };
 
   if (config.lazy === false) spawn();
 

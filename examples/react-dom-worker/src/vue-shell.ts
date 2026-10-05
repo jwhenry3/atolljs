@@ -9,7 +9,7 @@ import Shell from './vue/Shell.vue';
 // Sink before the shell mounts any island — workers only forward events
 // when the flag reaches them at INIT. No-op without ?__atoll_devtools.
 initDevtools({
-  session: { name: 'islands-vue-shell' },
+  session: { name: 'islands-vue-shell', framework: 'vue' },
   overlay: { src: '__atoll/?mini=1' },
 });
 

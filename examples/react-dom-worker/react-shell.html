@@ -129,6 +129,27 @@
       .inc-sev.sev-p3 { background: #1f4d2e; color: #a9e5c3; }
       .inc-sev.sev-p4 { background: #22354f; color: #bcd4f0; }
       .inc-dur { margin-left: auto; color: #7d8a9c; }
+      /* the ops console — one PolyWorker mounted shared, isolated, and nested */
+      #ops-console { margin-top: 32px; font-size: 18px; }
+      .ops-intro { font: 12px/1.6 monospace; color: #9aa4b2; }
+      .ops-main { font: 12px monospace; color: #c9d4e0; margin: 8px 0 4px; }
+      .ops-row-title { font: 600 12px monospace; color: #7fb6ff; margin: 18px 0 6px; }
+      .ops-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+      .ops-row .island { margin-bottom: 0; }
+      .ops-card { display: grid; gap: 4px; font: 12px monospace; color: #c9d4e0; }
+      .ops-card .mw-btn { justify-self: start; }
+      .ops-card-title { font-weight: 700; color: #e6edf3; }
+      .ops-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #303845; }
+      .ops-dot.on { background: #3fb950; }
+      .ops-stall { color: #7d8a9c; }
+      .ops-stall.hit { color: #f0883e; font-weight: 700; }
+      .ops-result { color: #9aa4b2; }
+      .ops-sub-head { font: 11px monospace; color: #8b7fd6; margin: 8px 0 4px; }
+      .ops-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px; }
+      .ops-sub { border: 1px dashed #4b4380; border-radius: 6px; padding: 8px; }
+      .ops-sub-head code { color: #c9bfff; }
+      .ops-all { margin: 4px 0 6px; }
+      .ops-card .mw-btn:disabled { opacity: 0.5; cursor: progress; }
     </style>
   </head>
   <body>

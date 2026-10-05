@@ -18,8 +18,9 @@ go*, and *where does a human open the dashboard*.
 - **BroadcastChannel** (browser `auto` default): events never leave the
   origin. The dashboard must be served on that same origin, and it must
   be told so via `window.__ATOLL_TRANSPORT = 'broadcast'` (the vite
-  plugin injects that script tag when it serves `/__atoll/`; a static
-  copy needs it added by hand).
+  plugin injects it when it serves `/__atoll/` in dev and when it emits
+  the dashboard into a `vite build`; a hand-made static copy needs it
+  added by hand).
 - **WebSocket** (`transport: 'websocket'` or `url`, and every Node app):
   events go to `/events` on a `createDevtoolsServer` instance; the
   dashboard served by that same server reads them back on `/view`. No
@@ -28,14 +29,29 @@ go*, and *where does a human open the dashboard*.
 
 ## Topology A: same-origin static dashboard (zero backend)
 
-Copy `packages/devtools/app/` into your deploy at `/__atoll/` and add
-the broadcast flag to its `index.html` before `</head>`:
+With vite, the plugin does it for you: whenever the built bundle contains
+`@atolljs/devtools` code (the app calls `initDevtools()`), `vite build`
+copies the dashboard into `<outDir>/__atoll/`, so the overlay flyout never
+points at a missing page. The broadcast flag is set by an external
+`atoll-transport.js` script, so a CSP without `'unsafe-inline'` still
+allows it. An import tree-shaken away (say, behind `import.meta.env.DEV`)
+doesn't count. Override with `devtools.build`:
+
+```ts
+// vite.config.ts
+atoll({ devtools: { build: false } }) // never ship /__atoll/
+atoll({ devtools: { build: true, dir: 'debug/devtools' } }) // always, elsewhere
+```
+
+Without vite, copy `packages/devtools/app/` into your deploy at
+`/__atoll/` and add the broadcast flag to its `index.html` before
+`</head>`:
 
 ```html
 <script>window.__ATOLL_TRANSPORT="broadcast"</script>
 ```
 
-`?__atoll_devtools` and the overlay flyout then work exactly like dev:
+Either way, `?__atoll_devtools` and the overlay flyout then work exactly like dev:
 `initDevtools()` activates on the param, the sink broadcasts, the flyout
 iframes `/__atoll/?mini=1`. Same-origin isolation carries into
 production for free: the dashboard can only ever hear apps on its own
@@ -43,17 +59,20 @@ origin. Two production-only details:
 
 - **Serve the app's COOP/COEP headers on `/__atoll/` too.** In dev the
   vite middleware echoes `server.config.server.headers`; on a static
-  host that's your job. Without COOP `same-origin` the flyout iframe
-  lands in a separate browsing-context group and the overlay goes blank.
-  If your app ships `SharedArrayBuffer` the headers exist anyway.
+  host that's your job (and for `vite preview`, set `preview.headers`).
+  Without COOP `same-origin` the flyout iframe lands in a separate
+  browsing-context group and the overlay goes blank. If your app ships
+  `SharedArrayBuffer` the headers exist anyway.
 - **Apps mounted under a sub-path can't use the absolute default.** If
   the dashboard copy sits inside the app's own mount (`/<base>/<app>/__atoll/`),
   pass a relative overlay src: `overlay: { src: '__atoll/?mini=1' }` resolves
   it next to the app's page, where an absolute `/__atoll/` would escape the
-  mount. The `full page ↗` link derives from the same `src`, so it stays
+  mount. With a vite `base`, `import.meta.env.BASE_URL + '__atoll/?mini=1'`
+  points at the same place the plugin emits to. The `full page ↗` link derives from the same `src`, so it stays
   correct either way. This repo's docs demos do exactly this:
+  the plugin emits `__atoll/` into each demo's build, and
   `mountDevtoolsApp` in `scripts/pages-lib.mjs` plants a flag-injected
-  `__atoll/` copy inside every demo mount.
+  copy in any demo mount that lacks one.
 - **This mode is browser-only and single-origin.** Node sessions and
   other origins can't join a BroadcastChannel: use topology B for those.
 

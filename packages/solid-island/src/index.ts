@@ -95,7 +95,7 @@ export interface CreateIslandOptions<A = string> {
    */
   worker?: (() => Worker) | URL;
   client?: IslandClient;
-  /** Extra pool options — concurrency, taskTimeout, respawn… (poolSize stays 1). */
+  /** Extra client options — taskTimeout, respawn, lazy… (always one dedicated worker, no pool). */
   workerOptions?: IslandWorkerOptions & { doorbell?: boolean };
   /**
    * Initial + updated root props — serialized to the worker. Pass an
@@ -228,7 +228,7 @@ export function createIsland<A = string>(
     const client =
       options.client ??
       (worker !== undefined
-        ? connectIslandWorker({ worker, ...options.workerOptions })
+        ? connectIslandWorker({ name: appName, worker, ...options.workerOptions })
         : undefined);
     if (client === undefined) {
       fail(new Error('createIsland requires either `worker` or `client`'));

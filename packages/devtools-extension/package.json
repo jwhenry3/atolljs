@@ -1,0 +1,16 @@
+{
+  "name": "@atolljs/devtools-extension",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Chrome DevTools extension: the atoll devtools dashboard as a DevTools panel for the inspected tab",
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.mjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jwhenry3/atolljs",
+    "directory": "packages/devtools-extension"
+  },
+  "license": "MIT"
+}

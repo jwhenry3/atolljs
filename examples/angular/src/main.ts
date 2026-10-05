@@ -18,12 +18,12 @@ import { AppComponent } from './app.component';
 initDevtools(
   location.port === '4201'
     ? {
-        session: { name: 'incidents-angular' },
+        session: { name: 'incidents-angular', framework: 'angular' },
         overlay: false,
         url: 'ws://127.0.0.1:4780/events',
       }
     : {
-        session: { name: 'incidents-angular' },
+        session: { name: 'incidents-angular', framework: 'angular' },
         // Relative dashboard path — mounted hosts ship __atoll/ inside the
         // app's own folder; absolute /__atoll/ would escape a sub-path mount.
         overlay: { src: '__atoll/?mini=1' },

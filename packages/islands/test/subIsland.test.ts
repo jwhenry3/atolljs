@@ -161,6 +161,39 @@ describe('mountIsland into a proxy element (nested island)', () => {
     sub.destroy();
   });
 
+  it('slots: a nested mount claims the names it lists; the rest bubble to the outer island', async () => {
+    const el = host();
+    const outerSlots: Array<HTMLElement | null> = [];
+    const island = await mountIsland({
+      worker: outerWorker,
+      el,
+      app: 'subouter',
+      slots: { free: (e) => outerSlots.push(e) },
+    });
+    const nestedSlots: Array<HTMLElement | null> = [];
+    const sub = await mountIsland({
+      el: hostRef.el!,
+      worker: innerWorker,
+      app: 'inner',
+      slots: { badge: (e) => nestedSlots.push(e) },
+    });
+    // The nested mount gets the anchor's proxy element, renamed so the
+    // page-side driver never claims it a second time.
+    expect(nestedSlots).toHaveLength(1);
+    expect(nestedSlots[0]!.getAttribute('data-atoll-sub-slot')).toBe('badge');
+
+    await island.flush();
+    expect(el.querySelector('[data-atoll-sub-slot="badge"]')).not.toBeNull();
+    expect(el.querySelector('[data-atoll-slot="badge"]')).toBeNull();
+    // 'free' was not listed, so it reached the outer island's slots as real DOM.
+    expect(outerSlots).toHaveLength(1);
+    expect(outerSlots[0]).toBe(el.querySelector('[data-atoll-slot="free"]'));
+
+    sub.destroy();
+    expect(nestedSlots.at(-1)).toBeNull();
+    island.destroy();
+  });
+
   it('destroy releases the sub-worker it owns and stops forwarding', async () => {
     const el = host();
     const island = await outerIsland(el);

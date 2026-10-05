@@ -212,4 +212,10 @@ export type IslandWorkerMethods = {
   unmount(instance: string): Op[];
   /** The mounted instance's random id — the island's "worker pid" badge. */
   whoami(instance: string): string;
+  /**
+   * The instance's renderer tag ('react', 'vue', …) from its adapter; null
+   * for imperative apps. Read by the driver only for devtools, and only
+   * when the mount declared no `framework`.
+   */
+  renderer(instance: string): string | null;
 };

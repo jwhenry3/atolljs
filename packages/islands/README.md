@@ -100,8 +100,9 @@ rejection naming the unanswered entry — not a silent hang.
 
 ## Island rules
 
-- **Pool size is pinned to 1.** One tree lives in one worker's memory — scale
-  out with more islands, not wider pools.
+- **One dedicated worker per client, no pool.** `connectIslandWorker` pins
+  `workers: 1`. One tree lives in one worker's memory, so scale out with
+  more islands, not wider pools.
 - **Instance keys** are `app` or `app@N`; `mountIsland` mints them and the
   same app can mount in many islands at once.
 - **Clients can be shared.** Several `mountIsland`s into one

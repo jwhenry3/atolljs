@@ -35,7 +35,7 @@ export const counter = connectWorker<CounterWorker>({
   // Inline new Worker(new URL(..., import.meta.url)): every bundler's
   // worker transform can see the entry point this way.
   worker: () => new Worker(new URL('./counter.worker.ts', import.meta.url), { type: 'module' }),
-  poolSize: 'auto',   // navigator.hardwareConcurrency, or pass a number
+  workers: 'auto',    // navigator.hardwareConcurrency; default 1 (one worker, no pool)
 });
 // counter.increment(1) → Promise<number>. The pool spawns on first call
 // (SSR-safe to import); counter.terminate() tears it down.`;

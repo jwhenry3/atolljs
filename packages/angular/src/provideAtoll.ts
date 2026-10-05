@@ -14,6 +14,7 @@ import {
   type SharedSpec,
   type TaskMap,
   type WorkerPoolConfig,
+  type WorkerRunner,
 } from '@atolljs/core';
 
 /**
@@ -25,7 +26,7 @@ import {
 type AnyWorkerClient = {
   start(): void;
   terminate(): void;
-  readonly pool: WorkerPool<any, any> | null;
+  readonly pool: WorkerRunner<any> | null;
   readonly sharedMemory: unknown;
 };
 

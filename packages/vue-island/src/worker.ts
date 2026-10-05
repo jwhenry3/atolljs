@@ -324,6 +324,7 @@ export function vueIslandApp(
   contract?: IslandContract,
 ): RenderedIslandApp {
   const renderedApp: RenderedIslandApp = {
+    renderer: 'vue',
     mount({ instance, doc, props }: RenderContext): RenderedHandle {
 
       const container = doc.body;

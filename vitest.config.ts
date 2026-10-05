@@ -109,6 +109,10 @@ export default mergeConfig(
           '**/testing/**',
           'packages/cli/**',
           'packages/devtools/src/bin.ts',
+          // chrome.devtools.* glue: only runs inside a DevTools window
+          'packages/devtools-extension/src/bridge.js',
+          'packages/devtools-extension/src/devtools.js',
+          'packages/devtools-extension/src/background.js',
         ],
         // Floor slightly below the current baseline — regresses fail CI.
         thresholds: { statements: 92, branches: 85, functions: 93, lines: 96 },

@@ -1,7 +1,9 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
-import { connectWorker, workerClient } from './workerClient';
+import { connectWorker, resolveWorkerCount, workerClient } from './workerClient';
+import { DedicatedWorker } from './dedicatedWorker';
+import { WorkerPool } from './workerPool';
 import { defineWorker } from '../worker/defineWorker';
 import { defineSharedMemory, field } from '../contract/sharedMemory';
 import { serviceMethod } from '../service';
@@ -126,5 +128,56 @@ describe('connectWorker', () => {
     await client.greet('b').catch(() => {});
     expect(client.pool).not.toBeNull();
     client.terminate();
+  });
+});
+
+describe('connectWorker — worker count', () => {
+  const base = {
+    sharedMemory: mem,
+    worker: () => new Worker(new URL('./x.worker.ts', import.meta.url)),
+    lazy: false,
+  } as const;
+
+  it('defaults to one dedicated worker (no pool)', () => {
+    const client = connectWorker<W>({ ...base });
+    expect(client.pool).toBeInstanceOf(DedicatedWorker);
+    client.terminate();
+  });
+
+  it('builds a pool when workers > 1', () => {
+    const client = connectWorker<W>({ ...base, workers: 2 });
+    expect(client.pool).toBeInstanceOf(WorkerPool);
+    expect(client.pool!.workers).toHaveLength(2);
+    client.terminate();
+  });
+
+  it('honors the deprecated poolSize alias', () => {
+    const one = connectWorker<W>({ ...base, poolSize: 1 });
+    const three = connectWorker<W>({ ...base, poolSize: 3 });
+    expect(one.pool).toBeInstanceOf(DedicatedWorker);
+    expect(three.pool!.workers).toHaveLength(3);
+    one.terminate();
+    three.terminate();
+  });
+
+  it('workers wins over poolSize', () => {
+    const client = connectWorker<W>({ ...base, workers: 1, poolSize: 4 });
+    expect(client.pool).toBeInstanceOf(DedicatedWorker);
+    client.terminate();
+  });
+});
+
+describe('resolveWorkerCount', () => {
+  it('defaults to 1, floors, and clamps to at least 1', () => {
+    expect(resolveWorkerCount(undefined)).toBe(1);
+    expect(resolveWorkerCount(2.9)).toBe(2);
+    expect(resolveWorkerCount(0)).toBe(1);
+  });
+
+  it("resolves 'auto' from navigator.hardwareConcurrency", () => {
+    vi.stubGlobal('navigator', { hardwareConcurrency: 6 });
+    expect(resolveWorkerCount('auto')).toBe(6);
+    vi.unstubAllGlobals();
+    vi.stubGlobal('Worker', InProcessWorker);
   });
 });

@@ -36,6 +36,14 @@
  *   is SHARED (several `<Island client={c}/>` mount mounts into one worker —
  *   the instance unmounts and the worker dies with the last island to leave).
  *
+ * Both threads, one API: `@atolljs/react-island/worker` re-exports these
+ * same `Island`/`islandComponent`/`lazyIsland` for worker-rendered trees.
+ * Inside a worker the container div is a proxy element, so `mountIsland`
+ * routes the mount to the nested path (a sub-worker spawned from this
+ * worker, ops tunneled through the parent island). `worker` vs `client`
+ * means the same thing on either thread: spawn a worker for this mount, or
+ * add an instance to an existing one.
+ *
  * The `app` prop accepts the registry name OR the app itself — a React
  * component, an `islandApp`-stamped value, or an `{ imperative }` def. Pass
  * the component to get `props` inference; `islandApp('name', Comp)` is the
@@ -87,8 +95,8 @@ export interface IslandProps<A = string>
   worker?: (() => Worker) | URL;
   client?: IslandClient;
   /**
-   * Extra pool options — concurrency, taskTimeout, respawn… (poolSize stays
-   * 1). `doorbell: false` builds the shorthand client message-only — no
+   * Extra client options — taskTimeout, respawn, lazy… (always one
+   * dedicated worker, no pool). `doorbell: false` builds the shorthand client message-only — no
    * SharedArrayBuffer, no COOP/COEP requirement (same as `mode: 'poll'` on
    * a direct `mountIsland` shorthand mount).
    */
@@ -101,6 +109,8 @@ export interface IslandProps<A = string>
    * Mount-time only; switch later via the handle's `setMode`.
    */
   mode?: Mode;
+  /** Renderer tag reported to devtools on mount ('react', 'vue', …). */
+  framework?: string;
   /** Initial + updated root props — serialized to the worker. */
   props?: IslandAppProps<A>;
   /** Island → shell channel: every `emit` op lands here. */
@@ -127,6 +137,7 @@ export function Island<A = string>({
   client: clientProp,
   workerOptions,
   mode,
+  framework,
   props,
   onEvent,
   onActivity,
@@ -193,7 +204,12 @@ export function Island<A = string>({
     const client =
       clientProp ??
       (resolvedWorker !== undefined
-        ? connectIslandWorker({ worker: resolvedWorker, ...workerOptions })
+        ? connectIslandWorker({
+            name: appName,
+            worker: resolvedWorker,
+            doorbell: mode !== 'poll',
+            ...workerOptions,
+          })
         : undefined);
     if (client === undefined) {
       report(new Error('<Island> requires either `worker` or `client`'));
@@ -203,10 +219,13 @@ export function Island<A = string>({
     // React portal anchors: the worker marks `data-atoll-slot="name"`, the
     // driver hands us the real element, and we render the matching slot
     // content into it with createPortal.
+    // `has` answers for the slots actually passed: a nested mount only
+    // claims names it lists and lets the rest bubble to the outer island.
     const slotProxy = new Proxy({} as Record<string, (el: HTMLElement | null) => void>, {
       get: (_t, name: string) => (e: HTMLElement | null) => {
         setSlotTargets((prev) => (prev[name] === e ? prev : { ...prev, [name]: e }));
       },
+      has: (_t, name: string) => slotsRef.current?.[name] != null,
     });
 
     void (async () => {
@@ -216,6 +235,7 @@ export function Island<A = string>({
           el,
           app: appName,
           mode,
+          framework,
           // Serialized across the wire either way — cast preserves inference
           // for props types without an index signature.
           props: (propsRef.current ?? {}) as Record<string, unknown>,
@@ -290,6 +310,8 @@ export interface IslandShellProps {
   workerOptions?: IslandWorkerOptions & { doorbell?: boolean };
   /** Initial flush mode — see IslandProps.mode. */
   mode?: Mode;
+  /** Devtools renderer tag — see IslandProps.framework. */
+  framework?: string;
   /** Island → shell channel: every `emit` op lands here. */
   onEvent?: (name: string, payload: unknown) => void;
   /** Fired after each applied op batch. */
@@ -314,6 +336,7 @@ const SHELL_PROP_KEYS: ReadonlySet<string> = new Set([
   'client',
   'workerOptions',
   'mode',
+  'framework',
   'onEvent',
   'onActivity',
   'onReady',
@@ -412,6 +435,7 @@ function ProxyIsland({
         client={shell.client}
         workerOptions={shell.workerOptions}
         mode={shell.mode}
+        framework={shell.framework}
         props={islandProps as Record<string, unknown>}
         onEvent={shell.onEvent}
         onActivity={shell.onActivity}

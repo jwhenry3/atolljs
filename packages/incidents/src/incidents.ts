@@ -16,7 +16,7 @@ export const incidents = connectWorker<IncidentsWorker>({
   sharedMemory: incidentsMemory,
   worker: () =>
     new Worker(new URL('./worker/incidents.worker.ts', import.meta.url), { type: 'module' }),
-  poolSize: 3,
+  workers: 3,
 });
 export type IncidentsClient = typeof incidents;
 

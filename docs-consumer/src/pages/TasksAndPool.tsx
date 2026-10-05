@@ -56,7 +56,7 @@ import type { IncidentsWorker } from './incidents.worker';   // zero worker code
 export const incidents = connectWorker<IncidentsWorker>({
   sharedMemory: incidentsMemory,
   worker: () => new Worker(new URL('./incidents.worker.ts', import.meta.url), { type: 'module' }),
-  poolSize: 'auto',            // 'auto' = navigator.hardwareConcurrency ?? 4
+  workers: 'auto',             // 'auto' = navigator.hardwareConcurrency ?? 4; default 1
 });
 
 // A Proxy typed by the worker's signatures: pool spawns on first call:
@@ -76,15 +76,41 @@ const api = workerClient<IncidentsWorker>(pool);`}
         <tbody>
           <tr><td><code>worker</code></td><td>Factory <code>() =&gt; new Worker(new URL(...))</code>: required for esbuild/webpack/turbopack to detect the entry. A <code>URL</code> also works where the bundler emits one (Vite).</td></tr>
           <tr><td><code>sharedMemory</code></td><td><em>Optional.</em> A contract to bind on the main thread and ship to workers: type-checked against the worker's declaration. Omit for a message-only pool: no <code>SharedArrayBuffer</code>, no COOP/COEP headers required.</td></tr>
-          <tr><td><code>poolSize</code></td><td>A number, or <code>'auto'</code> (default) for <code>navigator.hardwareConcurrency ?? 4</code>.</td></tr>
-          <tr><td><code>concurrency</code></td><td>Max in-flight calls per worker (default 1). Dispatch is least-busy; when every worker is at the cap, calls queue FIFO.</td></tr>
-          <tr><td><code>maxQueue</code></td><td>Queue bound (default unbounded). A full queue rejects immediately with <code>PoolQueueFullError</code>: backpressure instead of unbounded growth.</td></tr>
+          <tr><td><code>workers</code></td><td>How many workers you need: a number (default <code>1</code>), or <code>'auto'</code> for <code>navigator.hardwareConcurrency ?? 4</code>. <code>1</code> is one dedicated worker with no pool; more builds a <code>WorkerPool</code>.</td></tr>
+          <tr><td><code>poolSize</code></td><td><em>Deprecated</em> alias for <code>workers</code>.</td></tr>
+          <tr><td><code>concurrency</code></td><td><em>Pool only.</em> Max in-flight calls per worker (default 1). Dispatch is least-busy; when every worker is at the cap, calls queue FIFO.</td></tr>
+          <tr><td><code>maxQueue</code></td><td><em>Pool only.</em> Queue bound (default unbounded). A full queue rejects immediately with <code>PoolQueueFullError</code>: backpressure instead of unbounded growth.</td></tr>
           <tr><td><code>taskTimeout</code></td><td>Default per-call timeout in ms, measured from enqueue (queue wait + run). Rejects with <code>TaskTimeoutError</code>.</td></tr>
           <tr><td><code>respawn</code></td><td>Default <code>true</code>: a crashed worker is replaced and its in-flight calls reject with <code>WorkerCrashedError</code>. <code>false</code> shrinks the pool instead.</td></tr>
           <tr><td><code>memory</code></td><td>Buffer growth: <code>maximumPages</code> (default 16384 = 1 GB), <code>growthFactor</code>.</td></tr>
           <tr><td><code>lazy</code></td><td>Default <code>true</code>: spawn on first call (SSR-safe import). <code>false</code> spawns at construction.</td></tr>
         </tbody>
       </table>
+
+      <h2>How many workers</h2>
+      <p>
+        <code>workers</code> states intent; the client picks the machinery.{' '}
+        <code>workers: 1</code> (the default) is a <code>DedicatedWorker</code>:
+        calls post straight to the worker, with no queue and no scheduler, and
+        it keeps per-call timeout and abort, crash respawn,{' '}
+        <code>stats()</code> and the devtools events. <code>workers: N</code>{' '}
+        or <code>'auto'</code> builds a <code>WorkerPool</code> that spreads
+        separate calls across N workers; one call still runs on one worker.
+      </p>
+      <ul>
+        <li>
+          <strong>Use more than one</strong> when independent heavy calls
+          should overlap (N jobs on N workers finish in about the time of
+          one), or for throughput under load, where the pool is the
+          backpressure point.
+        </li>
+        <li>
+          <strong>Use one</strong> when state lives in the worker (a cache, a
+          loaded model, a rendered island tree) so every call must land on the
+          same worker, or when you only need the work <em>off the main
+          thread</em>. Island clients are always one worker.
+        </li>
+      </ul>
 
       <h2>Cancellation, timeouts, backpressure</h2>
       <CodeBlock
@@ -115,7 +141,8 @@ await incidents.pool?.close();   // drain the queue, then terminate`}
         Client members <code>start()</code>, <code>terminate()</code>,{' '}
         <code>with()</code>, <code>pool</code>, <code>sharedMemory</code> are
         reserved: a worker method by those names is a compile error. Under the
-        hood <code>connectWorker</code> builds a <code>WorkerPool</code>; the
+        hood <code>connectWorker</code> builds a <code>DedicatedWorker</code>{' '}
+        (one worker) or a <code>WorkerPool</code> (more than one); the
         explicit-contract API (<code>TaskContract</code> +{' '}
         <code>TaskRegistry.register</code> + <code>WorkerPool</code>'s{' '}
         <code>tasks</code>) remains available when both threads need the contract

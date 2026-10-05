@@ -41,6 +41,9 @@ vi.stubGlobal('Worker', InProcessWorker);
 InProcessWorker.handlerModules = [
   () => import('../src/worker/react.worker'),
   () => import('../src/worker/nested.worker'),
+  () => import('../src/worker/console.worker'),
+  () => import('../src/worker/region.worker'),
+  () => import('../src/worker/compute.worker'),
 ];
 
 const waitFor = async (fn: () => unknown, timeoutMs = 15_000): Promise<void> => {
@@ -76,9 +79,9 @@ describe('React shell', () => {
     createRoot(host).render(<Shell />);
   });
 
-  it('mounts all five islands through the component APIs', async () => {
-    await waitFor(() => realDoc.querySelectorAll('.island-root').length === 5);
-    await waitFor(() => realDoc.querySelectorAll('.island-head .badge').length === 5);
+  it('mounts all ten islands through the component APIs', async () => {
+    await waitFor(() => realDoc.querySelectorAll('.island-root').length === 10);
+    await waitFor(() => realDoc.querySelectorAll('.island-head .badge').length === 10);
     await waitFor(() =>
       [...realDoc.querySelectorAll('.island-head .badge')].every((b) =>
         /^worker w-/.test(b.textContent ?? ''),
@@ -159,6 +162,43 @@ describe('React shell', () => {
     // The outer island's own readout shows the relayed event too.
     const host = realDoc.querySelector('[data-atoll-sub-island]')!.parentElement!;
     await waitFor(() => /inner island → 1/.test(host.textContent ?? ''), 30_000);
+  }, 120_000);
+
+  it('the ops console exports inline and offloaded to a compute worker', async () => {
+    await waitFor(() => realDoc.querySelectorAll('.ops-pulse').length === 2, 60_000);
+    await waitFor(() => realDoc.querySelectorAll('.ops-export').length === 2, 60_000);
+    expect(realDoc.getElementById('main-heartbeat')).not.toBeNull();
+    const [inline, offload] = [...realDoc.querySelectorAll('.ops-export')];
+    click(inline!.querySelector('.mw-btn')!);
+    await waitFor(() => /inline export: [\d,]+ rows in \d+ms/.test(status()), 30_000);
+    click(offload!.querySelector('.mw-btn')!);
+    await waitFor(() => /offloaded export: [\d,]+ rows in \d+ms on a dedicated compute worker/.test(status()), 30_000);
+    await waitFor(() => /[\d,]+ rows · [\d,]+ P1/.test(offload!.textContent ?? ''), 30_000);
+  }, 120_000);
+
+  it('the regions island renders cards on one sub-worker and computes on compute workers', async () => {
+    // Three cards + the forecast panel on ONE shared sub-client, replayed
+    // through the regions island's op stream; work runs on compute.worker.
+    await waitFor(() => realDoc.querySelectorAll('.ops-sub .ops-region').length === 3, 60_000);
+    await waitFor(() => realDoc.querySelector('.ops-sub .ops-forecast'), 60_000);
+    const cards = [...realDoc.querySelectorAll('.ops-region')];
+    expect(cards.map((c) => c.querySelector('.ops-card-title')!.textContent)).toEqual([
+      'us-east',
+      'eu-central',
+      'ap-south',
+    ]);
+
+    click(cards[1]!.querySelector('.mw-btn')!);
+    await waitFor(() => /eu-central recomputed in \d+ms on the compute pool/.test(status()), 30_000);
+    await waitFor(() => /P1 [\d,]+ · mean/.test(cards[1]!.textContent ?? ''), 30_000);
+
+    click(findButton(/recompute all/)!);
+    await waitFor(() => /3 regions recomputed in \d+ms wall \(\d+ms of work\)/.test(status()), 30_000);
+    await waitFor(() => cards.every((c) => /P1 [\d,]+ · mean/.test(c.textContent ?? '')), 30_000);
+
+    click(realDoc.querySelector('.ops-forecast .mw-btn')!);
+    await waitFor(() => /forecast scored [\d,]+ rows .* dedicated compute worker/.test(status()), 30_000);
+    await waitFor(() => /scored [\d,]+ rows in \d+ms/.test(realDoc.querySelector('.ops-forecast')!.textContent ?? ''), 30_000);
   }, 120_000);
 
   it('transport stats aggregate in React-rendered DOM', async () => {

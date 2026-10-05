@@ -3,6 +3,7 @@
 import workerEntry from '../../../examples/react-dom-worker/src/worker/react.worker.tsx?raw';
 import contractModule from '../../../examples/react-dom-worker/src/incidents.island.ts?raw';
 import shellSource from '../../../examples/react-dom-worker/src/shell.tsx?raw';
+import consoleWorkerSource from '../../../examples/react-dom-worker/src/worker/console.worker.tsx?raw';
 import { CodeBlock } from '../components/CodeBlock';
 import { DemoFrame } from '../components/DemoFrame';
 import { PkgLink } from '../components/PkgLink';
@@ -123,6 +124,14 @@ export function ReactWorkerIslands() {
               event channel.
             </td>
           </tr>
+          <tr>
+            <td><code>Island / islandComponent / lazyIsland</code></td>
+            <td>from <code>react-island/worker</code></td>
+            <td>
+              The same mount components, for use inside a worker island: the
+              mount spawns or reuses a sub-worker. Same props, same meaning.
+            </td>
+          </tr>
         </tbody>
       </table>
 
@@ -172,6 +181,51 @@ export function ReactWorkerIslands() {
       <CodeBlock
         file="examples/react-dom-worker/src/incidents.island.ts"
         code={contractModule}
+      />
+
+      <h2>Islands inside islands: the same API, one level down</h2>
+      <p>
+        A worker-rendered app mounts islands with the components the shell
+        uses. <code>@atolljs/react-island/worker</code> re-exports{' '}
+        <code>Island</code>, <code>islandComponent</code>,{' '}
+        <code>lazyIsland</code> and <code>connectIslandWorker</code>; inside a
+        worker the container is a proxy element, so the mount is routed to a
+        sub-worker whose DOM tunnels up through the parent island's own op
+        stream. You don't pick a different API for nesting, only a mount shape:
+      </p>
+      <ul>
+        <li>
+          <code>worker={'{'}factory{'}'}</code> spawns a sub-worker for that
+          mount (from the parent worker, so the <code>new Worker</code>{' '}
+          literal lives in the parent worker's bundle).
+        </li>
+        <li>
+          <code>client={'{'}connectIslandWorker({'{'} worker {'}'}){'}'}</code>,
+          built inside the parent worker, adds one instance per mount to a
+          single sub-worker: shared runtime, shared thread.
+        </li>
+        <li>
+          <code>onEvent</code> runs in the parent island's scope, so{' '}
+          <code>emit</code> relays to the shell; <code>slots</code> portal
+          worker-side content into the sub-island, and names you don't list
+          bubble up to the shell's <code>slots</code>.
+        </li>
+      </ul>
+      <p>
+        The demo's ops console shows why the shape matters. One PolyWorker
+        (below) is mounted three ways: <code>pulse</code> +{' '}
+        <code>export</code> on a shared client, where an export freezes the
+        pulse; the same two apps with <code>worker</code> each, where it
+        doesn't; and <code>regions</code>, whose worker nests{' '}
+        <code>region.worker.tsx</code> both ways: three region cards on one
+        shared sub-client and a forecast model on its own sub-worker. See{' '}
+        <a href={docHref('island-apps')}>Quickstart</a> for the
+        definition/worker/instance model.
+      </p>
+      <CodeBlock
+        file="examples/react-dom-worker/src/worker/console.worker.tsx"
+        language="tsx"
+        code={consoleWorkerSource}
       />
 
       <h2>Notes</h2>

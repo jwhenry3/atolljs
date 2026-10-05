@@ -9,7 +9,7 @@ import Shell from './svelte/Shell.svelte';
 // Sink before the shell mounts any island — workers only forward events
 // when the flag reaches them at INIT. No-op without ?__atoll_devtools.
 initDevtools({
-  session: { name: 'islands-svelte-shell' },
+  session: { name: 'islands-svelte-shell', framework: 'svelte' },
   overlay: { src: '__atoll/?mini=1' },
 });
 

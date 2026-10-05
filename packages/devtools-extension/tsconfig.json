@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ESNext", "DOM", "WebWorker"],
+    "types": ["node"],
+    "strict": true,
+    "noEmit": true,
+    "isolatedModules": true,
+    "skipLibCheck": true,
+    "allowJs": true,
+    "checkJs": false,
+    "paths": {
+      "@atolljs/core": ["../../src/index.ts"],
+      "@atolljs/core/*": ["../../src/*"],
+      "@atolljs/devtools": ["../devtools/src/index.ts"],
+      "@atolljs/devtools/*": ["../devtools/src/*"]
+    }
+  },
+  "include": ["test"]
+}

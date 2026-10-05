@@ -13,8 +13,9 @@
  *   in its input graph changes — the watcher then sends a `full-reload` and
  *   the page respawns a fresh worker (the only meaningful worker HMR).
  *
- * Production builds are untouched: `apply: 'serve'` means `vite build` keeps
- * bundling workers through its normal pipeline.
+ * Production builds keep bundling workers through vite's normal pipeline; the
+ * plugin only joins a build when `devtools.build` asks it to copy the
+ * dashboard into the output (`/__atoll/`).
  *
  * Worker graphs containing framework SFCs (.vue/.svelte) bail back to vite's
  * own per-module pipeline — those plugins need their own transforms and,
@@ -30,10 +31,10 @@
  *    aliases, tsconfig paths, and plugin resolvers apply inside the worker
  *    bundle the same way they do on the main thread.
  */
-import { existsSync, readFileSync } from 'node:fs';
+import { cpSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, extname, join, resolve } from 'node:path';
-import type { Plugin, ViteDevServer } from 'vite';
+import type { Plugin, ResolvedConfig, Rollup, ViteDevServer } from 'vite';
 import type { Plugin as EsbuildPlugin } from 'esbuild';
 
 export interface AtollViteOptions {
@@ -49,6 +50,14 @@ export interface AtollViteOptions {
   jsx?: 'transform' | 'preserve' | 'automatic';
   /** JSX import source for `jsx: 'automatic'` — e.g. `'solid-js'`. */
   jsxImportSource?: string;
+  /**
+   * Devtools dashboard in production builds: `vite build` copies it into
+   * `<outDir>/__atoll/` (or `dir`) with the broadcast-transport flag, so the
+   * built app answers `/__atoll/` like dev. `'auto'` (default) emits it when
+   * the bundle contains `@atolljs/devtools` code, so the flyout always has a
+   * page to load; `true` always emits, `false` never does.
+   */
+  devtools?: { build?: boolean | 'auto'; dir?: string };
 }
 
 interface WorkerBundle {
@@ -137,6 +146,55 @@ async function devtoolsAppDir(server: ViteDevServer): Promise<string | null> {
   } catch {
     return null; // devtools not installed — /__atoll 404s
   }
+}
+
+/** Build-time twin of devtoolsAppDir (no dev server to resolve through). */
+async function devtoolsAppDirForBuild(
+  resolveId: (id: string) => Promise<{ id: string } | null>,
+  root: string,
+): Promise<string | null> {
+  try {
+    const r = await resolveId('@atolljs/devtools');
+    if (r) {
+      const dir = resolve(dirname(toFsPath(r.id.split('?')[0], root)), '../app');
+      if (existsSync(join(dir, 'index.html'))) return dir;
+    }
+  } catch { /* fall through to node resolution */ }
+  try {
+    const req = createRequire(resolve(root, 'package.json'));
+    const dir = resolve(dirname(req.resolve('@atolljs/devtools')), '../app');
+    return existsSync(join(dir, 'index.html')) ? dir : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Whether any emitted chunk renders code from the package rooted at `pkgRoot`
+ *  (a tree-shaken-away import, e.g. behind `import.meta.env.DEV`, doesn't count). */
+function bundlesPackage(bundle: Rollup.OutputBundle, pkgRoot: string): boolean {
+  const prefix = toPosix(pkgRoot).replace(/\/$/, '') + '/';
+  for (const out of Object.values(bundle)) {
+    if (out.type !== 'chunk') continue;
+    for (const [id, info] of Object.entries(out.modules)) {
+      if (info.renderedLength > 0 && toPosix(id.split('?')[0]).startsWith(prefix)) return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Copy the dashboard into `dest` and flag it for BroadcastChannel transport.
+ * The flag is an external script, not inline, so apps with a strict
+ * `script-src 'self'` CSP can serve it; it must load before main.js.
+ */
+export function emitDevtoolsApp(appDir: string, dest: string): void {
+  cpSync(appDir, dest, { recursive: true, filter: (src) => !src.endsWith('.d.ts') });
+  writeFileSync(join(dest, 'atoll-transport.js'), 'window.__ATOLL_TRANSPORT = "broadcast";\n');
+  const index = join(dest, 'index.html');
+  writeFileSync(
+    index,
+    readFileSync(index, 'utf8').replace('</head>', '<script src="./atoll-transport.js"></script></head>'),
+  );
 }
 
 /** vite dev ids are posix paths, sometimes `/@fs/` or root-relative — unwrap to fs. */
@@ -308,16 +366,38 @@ async function buildWorkerBundle(
 }
 
 /**
- * Dev-only vite plugin: serves worker entries (`new Worker(new URL(...))`) as
- * esbuild bundles instead of vite's per-module dev graph, and full-reloads the
- * page when any worker dependency changes.
+ * Vite plugin: in dev, serves worker entries (`new Worker(new URL(...))`) as
+ * esbuild bundles instead of vite's per-module dev graph, full-reloads the
+ * page when any worker dependency changes, and serves the devtools dashboard
+ * at `/__atoll/`. In `vite build`, that dashboard is emitted into the output
+ * whenever the app bundles `@atolljs/devtools` (see `devtools.build`).
  */
 export function atoll(options: AtollViteOptions = {}): Plugin {
   const cache = new Map<string, Promise<WorkerBundle>>();
+  let resolved: ResolvedConfig | undefined;
 
   return {
     name: 'atoll:vite',
-    apply: 'serve',
+    // Serve-only behavior lives in configureServer; the build only gets the
+    // dashboard copy below.
+    apply: (_config, env) => env.command === 'serve' || options.devtools?.build !== false,
+
+    configResolved(config) {
+      resolved = config;
+    },
+
+    async writeBundle(output, bundle) {
+      if (!resolved || resolved.command !== 'build' || resolved.build.ssr) return;
+      const mode = options.devtools?.build ?? 'auto';
+      const appDir = await devtoolsAppDirForBuild((id) => this.resolve(id), resolved.root);
+      if (!appDir) {
+        if (mode === true) this.warn('devtools.build: @atolljs/devtools not found, /__atoll/ not emitted');
+        return;
+      }
+      if (mode === 'auto' && !bundlesPackage(bundle, dirname(appDir))) return;
+      const outDir = output.dir ?? resolve(resolved.root, resolved.build.outDir);
+      emitDevtoolsApp(appDir, resolve(outDir, options.devtools?.dir ?? '__atoll'));
+    },
 
     configureServer(server) {
       // /__atoll/ — the devtools dashboard on the app's own origin. The

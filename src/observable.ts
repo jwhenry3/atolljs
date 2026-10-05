@@ -1,5 +1,6 @@
 import type { Connector, PathConnector, SharedMemory, SharedSpec, SpecPath } from './contract/sharedMemory';
-import { watch, type SliceOptions } from './reactive';
+import { watchNodes, type SliceOptions } from './reactive';
+import { relabelNode } from './reactiveGraph';
 import { scoped } from './log';
 
 const obsLog = scoped('observe');
@@ -57,7 +58,10 @@ export function observe<S extends SharedSpec, K extends SpecPath<S>, Sel>(
   let pendingBind: (() => void) | null = null;
   let rebindUn: (() => void) | null = null;
   let watched: Connector<T> | null = null;
+  /** Devtools graph id of the watch's effect node — relabelled with the subscriber count. */
+  let effectNode: string | null = null;
   const subscribers = new Set<(value: Out | undefined) => void>();
+  const relabel = () => relabelNode(effectNode, `observe(${String(key)}) · ${subscribers.size} sub${subscribers.size === 1 ? '' : 's'}`);
 
   const activate = () => {
     if (unwatch || pendingBind) return;
@@ -74,7 +78,7 @@ export function observe<S extends SharedSpec, K extends SpecPath<S>, Sel>(
       });
       return;
     }
-    unwatch = watch(
+    const w = watchNodes(
       connector,
       selectFn as (value: T) => Sel,
       (value) => {
@@ -85,8 +89,12 @@ export function observe<S extends SharedSpec, K extends SpecPath<S>, Sel>(
           for (const cb of subscribers) cb(value);
         }
       },
-      options
+      options,
+      { sliced: select !== undefined, label: 'observe' }
     );
+    unwatch = w.stop;
+    effectNode = w.effect;
+    relabel();
     watched = connector;
     // bind() can REBIND this contract to a different buffer — in-process
     // harnesses run every worker's bindSharedMemories in one module graph,
@@ -113,6 +121,7 @@ export function observe<S extends SharedSpec, K extends SpecPath<S>, Sel>(
   const deactivate = () => {
     unwatch?.();
     unwatch = null;
+    effectNode = null;
     watched = null;
     pendingBind?.();
     pendingBind = null;
@@ -144,9 +153,11 @@ export function observe<S extends SharedSpec, K extends SpecPath<S>, Sel>(
     subscribe(onChange) {
       subscribers.add(onChange);
       activate();
+      relabel();
       return () => {
         subscribers.delete(onChange);
         if (subscribers.size === 0) deactivate();
+        else relabel();
       };
     },
   };

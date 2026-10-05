@@ -21,7 +21,13 @@ export const innerApp = islandApp('inner', {
       label.textContent = `${String(props.label ?? 'inner')}:${n}`;
       emit('inner-tick', { n });
     });
-    root.append(label, btn);
+    // Two slot anchors: a nested mount claims 'badge' through its own
+    // `slots`; 'free' is unclaimed and bubbles to the outer island.
+    const badge = doc.createElement('div');
+    badge.setAttribute('data-atoll-slot', 'badge');
+    const free = doc.createElement('div');
+    free.setAttribute('data-atoll-slot', 'free');
+    root.append(label, btn, badge, free);
     doc.body.append(root);
   },
 });

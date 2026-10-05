@@ -119,7 +119,7 @@ return (
     advanced: [
       {
         title: 'Tuning the pool',
-        desc: 'connectWorker folds the WorkerPool config into the client declaration, size, queueing, timeouts, crash respawn.',
+        desc: 'connectWorker folds the runner config into the client declaration: worker count, queueing, timeouts, crash respawn. workers: 1 (the default) is one dedicated worker with no pool; more builds a WorkerPool.',
         file: 'incidents.ts',
         language: 'ts',
         code: `export const incidents = connectWorker<IncidentsWorker>({
@@ -128,9 +128,9 @@ return (
     new URL('./incidents.worker.ts', import.meta.url),
     { type: 'module' },
   ),
-  poolSize: 'auto',    // navigator.hardwareConcurrency
-  concurrency: 1,      // in-flight tasks per worker; excess queue FIFO
-  maxQueue: 1_000,     // a full queue rejects with PoolQueueFullError
+  workers: 'auto',     // navigator.hardwareConcurrency (default 1: no pool)
+  concurrency: 1,      // pool only: in-flight tasks per worker; excess queue FIFO
+  maxQueue: 1_000,     // pool only: a full queue rejects with PoolQueueFullError
   respawn: true,       // replace crashed workers (default)
   taskTimeout: 5_000,  // default per-call budget, with({timeout}) overrides
   // lazy: false,      // spawn immediately instead of on first call

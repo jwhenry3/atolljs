@@ -5,6 +5,10 @@
 // Time basis: each event's `at` is performance.now() on its emitting
 // thread, so intra-session timelines (the waterfall) use `at` directly.
 // Cross-session ordering is only meaningful within one session.
+//
+// Feature panels live in ./panels/*.js and plug in through ./api.js (see
+// PANELS at the bottom): this file owns the reducer, core views, transport.
+import { api } from './api.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
@@ -56,8 +60,10 @@ const MAX_ALERTS = 60;
 
 /* ── event reducer ───────────────────────────────────────────────────────── */
 
-const bump = (sid, metric, at, n = 1) => {
-  const k = `${sid}|${metric}|${Math.floor(at / 1000)}`;
+/** Per-second buckets on the dashboard clock: event `at` epochs differ per thread. */
+const dashSec = () => Math.floor(performance.now() / 1000);
+const bump = (sid, metric, _at, n = 1) => {
+  const k = `${sid}|${metric}|${dashSec()}`;
   state.series.set(k, (state.series.get(k) ?? 0) + n);
 };
 
@@ -69,7 +75,7 @@ function applyEvent(sess, e) {
       state.pools.set(key(sid, e.poolId), {
         poolId: e.poolId, label: e.label ?? e.poolId, size: e.poolSize,
         memoryBytes: e.memoryBytes, workers: new Set(), tasks: 0, failed: 0,
-        dead: sess.closed === true,
+        dedicated: e.dedicated === true, dead: sess.closed === true,
       });
       break;
     case 'pool:terminate': {
@@ -141,7 +147,9 @@ function applyEvent(sess, e) {
           }
         }
       }
-      const sec = Math.floor(e.at / 1000);
+      // Dashboard clock, like heapSeries: emit threads (and sessions) have
+      // unrelated performance.now() epochs, so `e.at` can't share an axis.
+      const sec = Math.floor(performance.now() / 1000);
       const bk = key(sid, sec);
       const b = state.tput.get(bk) ?? { n: 0, err: 0 };
       b.n++; if (e.outcome !== 'ok') b.err++;
@@ -160,7 +168,7 @@ function applyEvent(sess, e) {
       m.writes++; m.version = e.version; m.thread = e.thread; m.lastAt = e.at;
       // worker:* forwarded events carry slot attribution — pin the writer.
       if (e.worker) m.writer = `${e.worker.poolId}#${e.worker.slot}`;
-      const sec = Math.floor(e.at / 1000);
+      const sec = dashSec();
       m.buckets.set(sec, (m.buckets.get(sec) ?? 0) + 1);
       if (m.buckets.size > 120) m.buckets.delete([...m.buckets.keys()][0]);
       state.mem.set(k, m);
@@ -235,7 +243,7 @@ function applyEvent(sess, e) {
         // filter, or worker-side performance.memory) stamped to the slot.
         const w = getWorker(sid, e.worker.poolId, e.worker.slot, e.at);
         w.heap = e.heapBytes; w.heapLimit = e.heapLimitBytes; w.lastAt = e.at;
-        const sec = Math.floor(e.at / 1000);
+        const sec = dashSec();
         (w.heapSeries ??= new Map()).set(sec, e.heapBytes / 1048576); // MB for the chart
         if (w.heapSeries.size > 120) w.heapSeries.delete([...w.heapSeries.keys()][0]);
       }
@@ -306,6 +314,7 @@ function reconcileSessions(live) {
   if (state.sel && !ids.has(state.sel)) state.sel = null;
   if (state.inspect && !state.islands.has(state.inspect)) state.inspect = null;
   if (state.inspectWorker && !state.workers.has(state.inspectWorker)) state.inspectWorker = null;
+  for (const h of api.hooks.reconcile) h(ids);
 }
 
 /**
@@ -651,28 +660,76 @@ function drawThroughput() {
   const canvas = $('tput');
   const ctx = canvas.getContext('2d');
   const w = (canvas.width = canvas.clientWidth || 560);
-  const h = (canvas.height = 80);
+  const h = (canvas.height = 110);
   ctx.clearRect(0, 0, w, h);
-  if (state.t0 === null) return;
-  const buckets = [...state.tput.entries()].filter(([k]) => inSel(k));
-  const secs = buckets.map(([k]) => Number(k.split('|')[1]));
-  if (!secs.length) return;
-  const lo = Math.min(...secs), hi = Math.max(...secs);
-  const span = Math.max(hi - lo + 1, 1);
-  const bw = w / Math.max(span, 60);
-  const max = Math.max(...buckets.map(([, b]) => b.n), 1);
-  for (const [k, b] of buckets) {
+  const statsEl = $('tput-stats');
+  if (state.t0 === null) { statsEl.textContent = ''; return; }
+  // Buckets are on the dashboard clock: sum sessions per second, window the
+  // last 60s ending now (an idle stretch shows as empty seconds).
+  const bySec = new Map();
+  for (const [k, b] of state.tput) {
+    if (!inSel(k)) continue;
     const sec = Number(k.split('|')[1]);
-    const x = (sec - lo) * (w / Math.max(span, 60));
-    const bh = (b.n / max) * (h - 4);
+    const s = bySec.get(sec) ?? { n: 0, err: 0 };
+    s.n += b.n; s.err += b.err;
+    bySec.set(sec, s);
+  }
+  if (!bySec.size) { statsEl.textContent = 'no settled tasks yet'; return; }
+  const hi = Math.floor(performance.now() / 1000);
+  const lo = hi - 59;
+  const win = [...bySec].filter(([s]) => s >= lo);
+  const peak = Math.max(...win.map(([, b]) => b.n), 0);
+  const total = win.reduce((a, [, b]) => a + b.n, 0);
+  const errs = win.reduce((a, [, b]) => a + b.err, 0);
+  const first = win.length ? Math.min(...win.map(([s]) => s)) : hi;
+  const latest = bySec.get(hi - 1)?.n ?? 0;
+  statsEl.textContent =
+    `latest ${fmtN(latest)}/s · peak ${fmtN(peak)}/s · avg ${fmtN(total / (hi - first + 1))}/s · ` +
+    `${fmtN(total)} settled in 60s` + (errs ? ` · ${fmtN(errs)} failed` : '');
+
+  const scale = niceCeil(Math.max(peak, 1));
+  const L = 40, B = 16, T = 6;
+  const pw = w - L - 4, ph = h - B - T;
+  const bw = pw / 60;
+  ctx.font = '10px ui-monospace, monospace';
+  ctx.textBaseline = 'middle';
+  ctx.textAlign = 'right';
+  for (const f of [0, 0.5, 1]) {
+    const y = T + ph - f * ph;
+    ctx.strokeStyle = f === 0 ? '#30363d' : '#21262d';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(L, Math.round(y) + 0.5); ctx.lineTo(w - 4, Math.round(y) + 0.5); ctx.stroke();
+    ctx.fillStyle = '#8b949e';
+    ctx.fillText(fmtN(scale * f), L - 6, y);
+  }
+  ctx.textBaseline = 'top';
+  for (const [ago, align] of [[60, 'left'], [30, 'center'], [0, 'right']]) {
+    ctx.textAlign = align;
+    ctx.fillText(ago ? `-${ago}s` : 'now', L + pw * (1 - ago / 60), T + ph + 4);
+  }
+  for (const [sec, b] of win) {
+    const x = L + (sec - lo) * bw;
+    const bh = (b.n / scale) * ph;
     ctx.fillStyle = '#58a6ff';
-    ctx.fillRect(x, h - bh, Math.max(1, bw - 1), bh);
+    ctx.fillRect(x, T + ph - bh, Math.max(1, bw - 1), bh);
     if (b.err) {
-      const eh = (b.err / max) * (h - 4);
       ctx.fillStyle = '#f85149';
-      ctx.fillRect(x, h - bh, Math.max(1, bw - 1), eh);
+      ctx.fillRect(x, T + ph - bh, Math.max(1, bw - 1), (b.err / scale) * ph);
     }
   }
+}
+
+/** Round up to 1, 2 or 5 × 10^k, so axis ticks land on readable numbers. */
+function niceCeil(v) {
+  const p = 10 ** Math.floor(Math.log10(v));
+  return [1, 2, 5, 10].find((m) => m * p >= v) * p;
+}
+
+/** Compact count: 950, 1.2k, 3.4M. */
+function fmtN(v) {
+  if (v >= 1e6) return `${+(v / 1e6).toFixed(1)}M`;
+  if (v >= 1e3) return `${+(v / 1e3).toFixed(1)}k`;
+  return v >= 10 || Number.isInteger(v) ? String(Math.round(v)) : v.toFixed(1);
 }
 
 /* ── tasks: waterfall + aggregates + table ───────────────────────────────── */
@@ -987,6 +1044,8 @@ function renderInspector() {
       <td class="${t.error ? 'error' : 'ok'}">${t.error ? 'error' : 'ok'}</td>
       <td class="muted">${esc(t.error ?? '')}</td></tr>`)
     .join('') || '<tr><td colspan="6" class="muted">no calls yet</td></tr>';
+
+  for (const h of api.hooks.inspectIsland) h(state.inspect, i, { extra: $('inspExtra'), actions: $('inspActions') });
 }
 
 function drawOpTraffic(i) {
@@ -1013,19 +1072,224 @@ function drawOpTraffic(i) {
 
 const logEl = () => $('log');
 const pad = (n, w = 2) => String(n).padStart(w, '0');
-function logLine(sess, e) {
+
+/*
+ * Event log: one DOM line per event, appended incrementally (never a full
+ * re-render). Filters flip `hidden` on existing lines. Lines are grouped
+ * for the chips by event-type prefix ('task', 'island', …), and `log`
+ * events by level ('log.warn'). reset() empties #log; the reset hook
+ * below drops the matching records.
+ */
+const LOG_CAP = 2000;
+const LOG_LEVELS = ['trace', 'debug', 'info', 'warn', 'error'];
+const LOG_LEVEL_COLOR = { trace: '#484f58', debug: '#8b949e', info: '#58a6ff', warn: '#d29922', error: '#f85149' };
+const logView = {
+  recs: [],          // [{ sid, group, hay, el, vis, sess, e }] oldest first, all in #log
+  held: [],          // records ingested while paused, appended on resume
+  groups: new Map(), // group → on (bool)
+  sessions: new Set(),
+  q: '',
+  sess: '',
+  paused: false,
+  hidden: 0,
+};
+const logGroupOf = (e) => (e.type === 'log' ? `log.${e.level}` : e.type.split(':')[0]);
+const logMatch = (r) =>
+  logView.groups.get(r.group) !== false &&
+  (!logView.sess || r.sid === logView.sess) &&
+  (!logView.q || r.hay.includes(logView.q));
+
+function logStatus() {
+  const s = $('logstat');
+  if (!s) return;
+  const parts = [`${logView.recs.length} lines`];
+  if (logView.hidden) parts.push(`${logView.hidden} hidden by filters`);
+  if (logView.paused) parts.push(`${logView.held.length} held while paused`);
+  s.textContent = parts.join(' · ');
+}
+
+function logRefilter() {
+  logView.hidden = 0;
+  for (const r of logView.recs) {
+    r.vis = logMatch(r);
+    r.el.hidden = !r.vis;
+    if (!r.vis) logView.hidden++;
+  }
+  logStatus();
+  const el = logEl();
+  el.scrollTop = el.scrollHeight;
+}
+
+function logChip(group) {
+  if (logView.groups.has(group)) return;
+  logView.groups.set(group, true);
+  const bar = $('logchips');
+  if (!bar) return;
+  const b = document.createElement('button');
+  b.className = 'on';
+  b.dataset.g = group;
+  const lvl = group.startsWith('log.') ? group.slice(4) : null;
+  b.innerHTML = lvl ? `<i style="background:${LOG_LEVEL_COLOR[lvl]}"></i>${esc(lvl)}` : esc(group);
+  b.title = lvl ? `log entries at ${lvl}` : `${group}:* events`;
+  // levels first (in severity order), then event groups alphabetically
+  const rank = (g) => (g.startsWith('log.') ? LOG_LEVELS.indexOf(g.slice(4)) : 10);
+  const after = [...bar.querySelectorAll('button[data-g]')].find(
+    (x) => rank(x.dataset.g) > rank(group) || (rank(x.dataset.g) === rank(group) && x.dataset.g > group),
+  );
+  bar.insertBefore(b, after ?? null);
+}
+
+function logSessOption(sess) {
+  if (logView.sessions.has(sess.id)) return;
+  logView.sessions.add(sess.id);
+  const sel = $('logsess');
+  if (!sel) return;
+  const o = document.createElement('option');
+  o.value = sess.id;
+  o.textContent = sess.name ?? sess.id;
+  sel.appendChild(o);
+  sel.style.display = logView.sessions.size > 1 ? '' : 'none';
+}
+
+function logRender(sess, e) {
   const div = document.createElement('div');
   const { type, at, thread, ...rest } = e;
   // Wall-clock is dashboard receive time — emit-side `at` is a per-thread
   // performance.now() epoch, so it's shown as elapsed instead.
   const now = new Date();
   const ts = `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}.${pad(now.getMilliseconds(), 3)}`;
-  div.innerHTML = `<span class="logts">${ts}</span> <span class="muted">${esc(sess.name ?? sess.id)}${thread === 'worker' ? ' ⧉' : ''}</span> ${esc(type)} <span class="muted">${esc(JSON.stringify(rest))}</span> <span class="logts">+${fmt(at / 1000, 1)}s</span>`;
-  const el = logEl();
-  el.appendChild(div);
-  while (el.children.length > 500) el.firstChild.remove();
-  el.scrollTop = el.scrollHeight;
+  const origin = e.worker ? ` ${e.worker.poolId}#${e.worker.slot}` : thread === 'worker' ? ' ⧉' : '';
+  const head = `<span class="logts">${ts}</span> <span class="muted">${esc(sess.name ?? sess.id)}${esc(origin)}</span> `;
+  let body, hay;
+  if (type === 'log') {
+    div.className = `ll-${e.level}`;
+    body = `<b>[${esc(e.level)}]</b> ${esc(e.scope)}: ${esc(e.message)}${e.data !== undefined ? ' <span class="logx">▸ data</span>' : ''}`;
+    hay = `log ${e.level} ${e.scope} ${e.message} ${e.data ?? ''}`;
+  } else {
+    const json = JSON.stringify(rest);
+    const bad = type === 'worker:error' || (type === 'task:settle' && e.outcome !== 'ok');
+    if (bad) div.className = 'll-error';
+    body = `${esc(type)} <span class="muted">${esc(json.length > 400 ? `${json.slice(0, 400)}…` : json)}</span>`;
+    hay = `${type} ${json}`;
+  }
+  div.innerHTML = `${head}${body} <span class="logts">+${fmt(at / 1000, 1)}s</span>`;
+  return { sid: sess.id, group: logGroupOf(e), hay: `${sess.name ?? sess.id} ${hay}`.toLowerCase(), el: div, vis: true, sess, e };
 }
+
+function logAppend(batch) {
+  const el = logEl();
+  const stick = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+  const frag = document.createDocumentFragment();
+  for (const r of batch) {
+    r.vis = logMatch(r);
+    r.el.hidden = !r.vis;
+    if (!r.vis) logView.hidden++;
+    frag.appendChild(r.el);
+    logView.recs.push(r);
+  }
+  el.appendChild(frag);
+  const over = logView.recs.length - LOG_CAP;
+  if (over > 0) {
+    for (const r of logView.recs.splice(0, over)) {
+      if (!r.vis) logView.hidden--;
+      r.el.remove();
+    }
+  }
+  if (stick) el.scrollTop = el.scrollHeight;
+  logStatus();
+}
+
+function logLine(sess, e) {
+  logSessOption(sess);
+  logChip(logGroupOf(e));
+  const r = logRender(sess, e);
+  if (logView.paused) {
+    logView.held.push(r);
+    if (logView.held.length > LOG_CAP) logView.held.shift();
+    logStatus();
+    return;
+  }
+  logAppend([r]);
+}
+
+function logClear() {
+  logView.recs.length = 0;
+  logView.held.length = 0;
+  logView.hidden = 0;
+  logEl().innerHTML = '';
+  logStatus();
+}
+
+api.onReset(() => {
+  logClear();
+  logView.sessions.clear();
+  const sel = $('logsess');
+  if (sel) { sel.length = 1; sel.value = ''; sel.style.display = 'none'; }
+  logView.sess = '';
+});
+
+(function logControls() {
+  const chips = $('logchips');
+  if (!chips) return;
+  chips.addEventListener('click', (ev) => {
+    const b = ev.target.closest('button');
+    if (!b) return;
+    if (b.dataset.all !== undefined) {
+      const on = b.dataset.all === '1';
+      for (const g of logView.groups.keys()) logView.groups.set(g, on);
+      for (const x of chips.querySelectorAll('button[data-g]')) x.classList.toggle('on', on);
+    } else if (b.dataset.g) {
+      const g = b.dataset.g;
+      // alt/shift-click: solo this group
+      if (ev.altKey || ev.shiftKey) {
+        for (const k of logView.groups.keys()) logView.groups.set(k, k === g);
+        for (const x of chips.querySelectorAll('button[data-g]')) x.classList.toggle('on', x.dataset.g === g);
+      } else {
+        const on = !(logView.groups.get(g) ?? true);
+        logView.groups.set(g, on);
+        b.classList.toggle('on', on);
+      }
+    } else return;
+    logRefilter();
+  });
+  let qTimer = 0;
+  $('logq').addEventListener('input', (ev) => {
+    clearTimeout(qTimer);
+    qTimer = setTimeout(() => { logView.q = ev.target.value.trim().toLowerCase(); logRefilter(); }, 150);
+  });
+  $('logsess').addEventListener('change', (ev) => { logView.sess = ev.target.value; logRefilter(); });
+  $('logpause').addEventListener('click', (ev) => {
+    logView.paused = !logView.paused;
+    ev.target.textContent = logView.paused ? 'resume' : 'pause';
+    ev.target.classList.toggle('on', logView.paused);
+    if (!logView.paused && logView.held.length) logAppend(logView.held.splice(0));
+    logStatus();
+  });
+  $('logclear').addEventListener('click', logClear);
+  // Click a line to expand its full payload (log data, or the event JSON).
+  logEl().addEventListener('click', (ev) => {
+    const line = ev.target.closest('#log > div');
+    if (!line) return;
+    const open = line.querySelector(':scope > pre');
+    if (open) { open.remove(); line.classList.remove('open'); return; }
+    const r = logView.recs.find((x) => x.el === line);
+    if (!r) return;
+    const { e } = r;
+    let text;
+    if (e.type === 'log') {
+      try { text = e.data !== undefined ? JSON.stringify(JSON.parse(e.data), null, 2) : '(no data)'; }
+      catch { text = e.data; }
+    } else {
+      const { type, ...rest } = e;
+      text = `${type}\n${JSON.stringify(rest, null, 2)}`;
+    }
+    const pre = document.createElement('pre');
+    pre.className = 'body';
+    pre.textContent = text;
+    line.appendChild(pre);
+    line.classList.add('open');
+  });
+})();
 
 /* ── app map — one world-space canvas; zoom/pan + zoom-tier clustering ───── */
 
@@ -1089,7 +1353,10 @@ function layoutWorld(sids) {
       const pk = w[0].slice(0, w[0].lastIndexOf('|'));
       let g = byPool.get(pk);
       if (!g) {
-        g = { pk, poolId: pk.split('|')[1], workers: [], nested: pk.split('|')[1].includes('~') };
+        g = {
+          pk, poolId: pk.split('|')[1], workers: [], nested: pk.split('|')[1].includes('~'),
+          dedicated: state.pools.get(pk)?.dedicated === true,
+        };
         byPool.set(pk, g);
         pools.push(g);
       }
@@ -1105,9 +1372,9 @@ function layoutWorld(sids) {
     }
     const rimN = Math.max(pools.length + orphans.length, 1);
     const rimR = Math.max(110, rimN * 15);
-    // nested worker clusters hang ~170 world units outside the island ring
-    // per nesting level (orbit link + sub-orbit + island orbit)
-    maxR = Math.max(maxR, rimR + (nested.size ? 170 : 0));
+    // nested worker clusters hang ~120 world units outside the rim
+    // (worker ring + sub-worker orbit + labels)
+    maxR = Math.max(maxR, rimR + (nested.size ? 120 : 0));
     clusters.push({ sid, workers, pools, islands, hosted, orphans, nested, rimN, rimR });
   }
   const cell = maxR * 2 + 280;
@@ -1138,8 +1405,30 @@ const FW_BADGES = {
   leaflet: ['#19993b', 'L'],
 };
 
+/** Structural (non-island) nodes — a lettered disc, so pools and plain
+ *  workers never read as a framework island. */
+const ROLE_MARKS = {
+  pool: { letter: 'P', fill: '#21262d', ring: '#8b949e88', text: '#8b949e' },
+  worker: { letter: 'W', fill: '#30363d', ring: '#8b949e', text: '#c9d1d9' },
+  subworker: { letter: 'W', fill: '#a371f733', ring: '#a371f7', text: '#d2a8ff' },
+};
+
+function drawRoleMark(ctx, m, x, y, s, dead) {
+  ctx.save();
+  if (dead) ctx.globalAlpha = 0.35;
+  ctx.beginPath(); ctx.arc(x, y, s, 0, 7);
+  ctx.fillStyle = m.fill; ctx.fill();
+  ctx.strokeStyle = m.ring; ctx.lineWidth = s * 0.14; ctx.stroke();
+  ctx.font = `bold ${s * 1.05}px ui-monospace, monospace`;
+  ctx.fillStyle = m.text; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(m.letter, x, y + s * 0.06);
+  ctx.restore();
+  ctx.textBaseline = 'top';
+}
+
 /** Real framework marks, drawn at icon size (s ≈ node radius). */
 function drawFwMark(ctx, fw, x, y, s, dead) {
+  if (ROLE_MARKS[fw]) return drawRoleMark(ctx, ROLE_MARKS[fw], x, y, s, dead);
   ctx.save();
   if (dead) ctx.globalAlpha = 0.35;
   switch (fw) {
@@ -1232,18 +1521,27 @@ function drawFwMark(ctx, fw, x, y, s, dead) {
   ctx.textBaseline = 'top';
 }
 
-/** The island node — the framework mark IS the dot. Untagged islands
- *  keep the plain green dot; ended islands dim. Returns the hit radius. */
-function drawIslandDot(ctx, i, x, y, inv) {
-  const fw = i.fw?.toLowerCase();
-  if (fw) {
-    drawFwMark(ctx, fw, x, y, 12 * inv, i.ended);
-    return 12 * inv;
+/** The island node — the framework mark IS the dot. An untagged island
+ *  isn't a framework island, so it reads as its worker: a W (`role`
+ *  picks the nested variant). Ended islands dim. Returns the hit radius. */
+function drawIslandDot(ctx, i, x, y, inv, role = 'worker') {
+  drawFwMark(ctx, i.fw?.toLowerCase() || role, x, y, 12 * inv, i.ended);
+  return 12 * inv;
+}
+
+/** The session hub (main thread): the shell's framework mark in a violet
+ *  ring when the session reports one (`initDevtools({ session: { framework } })`),
+ *  else the plain violet disc. */
+function drawHub(ctx, sess, x, y, r, inv) {
+  if (sess?.framework) {
+    ctx.beginPath(); ctx.arc(x, y, r, 0, 7);
+    ctx.fillStyle = '#0d1117'; ctx.fill();
+    ctx.strokeStyle = '#a371f7'; ctx.lineWidth = 2 * inv; ctx.stroke();
+    drawFwMark(ctx, sess.framework.toLowerCase(), x, y, r * 0.72, sess.closed === true);
+  } else {
+    ctx.beginPath(); ctx.arc(x, y, r, 0, 7);
+    ctx.fillStyle = '#a371f7'; ctx.fill();
   }
-  ctx.beginPath(); ctx.arc(x, y, 5.5 * inv, 0, 7);
-  ctx.fillStyle = i.ended ? '#484f58' : '#3fb950';
-  ctx.fill();
-  return 5.5 * inv;
 }
 
 function drawAppMap(canvas, sids) {
@@ -1281,8 +1579,7 @@ function drawAppMap(canvas, sids) {
         const a = (j / Math.max(cl.islands.length, 1)) * 2 * Math.PI - Math.PI / 2;
         drawIslandDot(ctx, i, cx + r * Math.cos(a), cy + r * Math.sin(a), mi);
       });
-      ctx.beginPath(); ctx.arc(cx, cy, 8 * inv, 0, 7);
-      ctx.fillStyle = '#a371f7'; ctx.fill();
+      drawHub(ctx, sess, cx, cy, 8 * inv, inv);
       ctx.font = `${11 * inv}px ui-monospace, monospace`;
       ctx.fillStyle = '#c9d1d9';
       ctx.fillText(sess?.name ?? cl.sid, cx, cy + 14 * inv);
@@ -1292,11 +1589,11 @@ function drawAppMap(canvas, sids) {
       continue;
     }
 
-    const workerR = cl.rimR + 38;   // mid ring — workers
-    const islandR = cl.rimR + 76;   // outer ring — islands
-    // orbit lines — one per level, so pool/worker/island nodes sit ON them
+    // outer ring — workers; an island-hosting worker IS its island(s)
+    const workerR = cl.rimR + 38;
+    // orbit lines — one per level, so pool/worker nodes sit ON them
     ctx.strokeStyle = '#21262d'; ctx.lineWidth = 1 * inv;
-    for (const r of [cl.rimR, workerR, islandR]) {
+    for (const r of [cl.rimR, workerR]) {
       ctx.beginPath(); ctx.arc(cx, cy, r, 0, 7); ctx.stroke();
     }
 
@@ -1307,145 +1604,248 @@ function drawAppMap(canvas, sids) {
     ctx.strokeStyle = '#21262d';
     ctx.lineWidth = 1 * inv;
     for (const p of ppos) {
+      if (p.dedicated) continue;   // its spoke runs to the worker, drawn with it
       ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(p.x, p.y); ctx.stroke();
     }
 
     const font = (px) => `${px * inv}px ui-monospace, monospace`;
 
+    const islandName = (ik) => ik.split('|').slice(1).join('|');
+
+    const anchors = new Map();   // island key → its node { x, y, r }: spawn links start here
+    const badges = new Map();    // worker key → the W badge on a shared worker's ring
+
+    /** Untagged instance inside a shared worker — hollow disc + the app's initial. */
+    const instanceMark = (ik) => ({
+      letter: islandName(ik).split('~').pop()[0] ?? '?',
+      fill: '#3fb9501f', ring: '#3fb950', text: '#3fb950',
+    });
+
+    /** A label pushed outward from (x, y) along angle th, aligned to its side. */
+    const labelOut = (text, x, y, th, dist, color) => {
+      const c = Math.cos(th), s = Math.sin(th);
+      ctx.save();
+      ctx.font = font(10); ctx.fillStyle = color;
+      ctx.textAlign = c > 0.35 ? 'left' : c < -0.35 ? 'right' : 'center';
+      ctx.textBaseline = s > 0.35 ? 'top' : s < -0.35 ? 'bottom' : 'middle';
+      ctx.fillText(text, x + dist * c, y + dist * s);
+      ctx.restore();
+    };
+
     /**
-     * Nested workers: a pool minted inside a worker draws as a violet
-     * mini-orbit centered ON the host worker's dot — the same
-     * ring-around-parent grammar as session → pools → workers → islands.
-     * Sub-workers fan to the sides of that orbit (perpendicular to the
-     * host's radial ray) so they sit between the worker and island rings
-     * instead of colliding with ring islands; each sub-worker's islands
-     * get their own mini-orbit, and deeper pools recurse the same way.
+     * A worker hosting ONE island is that island: its mark (or a W when
+     * untagged) sits on the worker's spot. A worker hosting several
+     * (one shared client) is a container: a ring with a W badge for the
+     * worker itself, one node per instance inside (framework mark, or a
+     * hollow initial when untagged), each labeled outward. Every instance
+     * registers in `anchors` so a sub-island's spawn link starts at the
+     * instance that spawned it. `ring` colors the sub-worker variant.
+     * Returns the drawn radius.
      */
-    const drawBranch = (pwKey, px, py, a) => {
+    const drawIslandWorker = (k, isl, x, y, ring, wid) => {
+      const w = state.workers.get(k);
+      const n = isl.length;
+      const m = 12 * inv;
+      const lc = ring ? '#a371f7' : '#8b949e';
+      if (n === 1) {
+        const { ik, i } = isl[0];
+        drawIslandDot(ctx, i, x, y, inv, ring ? 'subworker' : 'worker');
+        nodes.push({ x, y, r: m + 4 * inv, kind: 'island', key: ik, wk: k });
+        anchors.set(ik, { x, y, r: m });
+        let R = m;
+        if (ring) {
+          R += 3 * inv;
+          ctx.beginPath(); ctx.arc(x, y, R, 0, 7);
+          ctx.strokeStyle = ring; ctx.lineWidth = 1.2 * inv; ctx.stroke();
+        }
+        if (full) labelWorker(isl, wid, x, y, R, lc);
+        return R;
+      }
+      const cr = (m + 4 * inv) / Math.sin(Math.PI / n);
+      const R = cr + m + 5 * inv;
+      ctx.beginPath(); ctx.arc(x, y, R, 0, 7);
+      ctx.fillStyle = '#0d111799'; ctx.fill();
+      ctx.strokeStyle = ring ?? '#8b949e88'; ctx.lineWidth = 1.2 * inv; ctx.stroke();
+      isl.forEach(({ ik, i }, j) => {
+        const th = (j / n) * 2 * Math.PI - Math.PI / 2;
+        const ix = x + cr * Math.cos(th), iy = y + cr * Math.sin(th);
+        if (i.fw) drawIslandDot(ctx, i, ix, iy, inv);
+        else drawRoleMark(ctx, instanceMark(ik), ix, iy, m, i.ended);
+        nodes.push({ x: ix, y: iy, r: m + inv, kind: 'island', key: ik, wk: k });
+        anchors.set(ik, { x: ix, y: iy, r: m, cx: x, cy: y });
+        if (full) labelOut(islandName(ik), x, y, th, R + 5 * inv, '#c9d1d9');
+      });
+      // the worker itself — a W badge on the ring, in the first gap between instances
+      const tb = -Math.PI / 2 + Math.PI / n;
+      const bx = x + R * Math.cos(tb), by = y + R * Math.sin(tb), br = 7 * inv;
+      drawFwMark(ctx, ring ? 'subworker' : 'worker', bx, by, br, w?.dead);
+      nodes.push({ x: bx, y: by, r: br + 3 * inv, kind: 'worker', key: k });
+      badges.set(k, { x: bx, y: by, r: br });
+      if (full) labelOut(wid, bx, by, tb, br + 4 * inv, lc);
+      return R;
+    };
+
+    /** Under-node label for a 1:1 or plain worker: the island name (if any), then the worker id. */
+    const labelWorker = (isl, wid, x, y, r, color = '#8b949e') => {
+      let ly = y + r + 2 * inv;
+      ctx.font = font(10);
+      if (isl.length) {
+        ctx.fillStyle = '#c9d1d9';
+        // the spawn link already names a sub-island's parent: label its own segment
+        ctx.fillText(islandName(isl[0].ik).split('~').pop(), x, ly);
+        ly += 12 * inv;
+      }
+      ctx.fillStyle = color;
+      ctx.fillText(wid, x, ly);
+    };
+
+    /**
+     * Nested workers: a pool minted inside a worker hangs off whatever
+     * spawned it. A sub-island's key (`parent~app@N`) names the spawning
+     * INSTANCE, so its sub-worker links from that instance's node; a
+     * worker-level spawn (`connectSubWorker`, no island) links from the
+     * host's W badge, or the host node itself. Sub-workers fan outward
+     * from the anchor, nudged off the anchor's own outward label. Each is
+     * a violet W, or its island(s) in a violet ring. Deeper pools recurse.
+     */
+    const drawBranch = (pwKey, px, py, a, pr) => {
       const ws = (cl.nested.get(pwKey) ?? [])
         .flatMap((g) => g.workers.map(([k, w]) => ({ k, w, g })));
       if (!ws.length) return;
-      const br = 34;   // sub-worker orbit radius, centered on the parent
-      ctx.beginPath(); ctx.arc(px, py, br, 0, 7);
-      ctx.strokeStyle = '#a371f72e'; ctx.lineWidth = inv; ctx.stroke();
-      ws.forEach(({ k, w, g }, j) => {
-        // lateral slots: ±90° off the ray first, then further around
-        const side = j % 2 === 0 ? 1 : -1;
-        const step = Math.floor(j / 2) + 1;
-        const th = a + side * (Math.PI / 2) * step * 0.8;
-        const nx = px + br * Math.cos(th), ny = py + br * Math.sin(th);
-        // spawn link — violet, distinct from pool→worker gray
-        ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(nx, ny);
-        ctx.strokeStyle = '#a371f766'; ctx.lineWidth = 1.4 * inv; ctx.stroke();
-        const r = 6 * inv;
-        ctx.beginPath(); ctx.arc(nx, ny, r, 0, 7);
-        ctx.fillStyle = w.dead ? '#484f58' : '#a371f7'; ctx.fill();
-        ctx.strokeStyle = '#a371f7aa'; ctx.lineWidth = inv; ctx.stroke();
-        if (full) {
-          ctx.font = font(10); ctx.fillStyle = '#a371f7';
-          ctx.fillText(`${g.poolId.split('~').pop()}#${k.split('|').pop()}`, nx, ny + r + 2 * inv);
+      const groups = new Map();   // anchor key → sub-workers it spawned
+      for (const s of ws) {
+        let anc = null;
+        for (const { ik } of cl.hosted.get(s.k) ?? []) {
+          const t = ik.lastIndexOf('~');
+          if (t > 0) { anc = ik.slice(0, t); break; }
         }
-        nodes.push({ x: nx, y: ny, r: r + 4 * inv, kind: 'worker', key: k });
-        // this sub-worker's islands orbit it — a child ring, not the main one
-        const isl = cl.hosted.get(k) ?? [];
-        if (isl.length) {
-          ctx.beginPath(); ctx.arc(nx, ny, 28, 0, 7);
-          ctx.strokeStyle = '#3fb9502a'; ctx.lineWidth = inv; ctx.stroke();
-        }
-        isl.forEach(({ ik, i }, jj) => {
-          // fan along the spoke from the host's center to this sub-worker
-          const th2 = th + (jj - (isl.length - 1) / 2) * 0.7;
-          const ix = nx + 28 * Math.cos(th2), iy = ny + 28 * Math.sin(th2);
-          ctx.beginPath(); ctx.moveTo(nx, ny); ctx.lineTo(ix, iy);
-          ctx.strokeStyle = `${i.ended ? '#484f58' : '#3fb950'}55`;
-          ctx.lineWidth = 1.4 * inv; ctx.stroke();
-          const r = drawIslandDot(ctx, i, ix, iy, inv);
-          if (full) {
-            ctx.fillStyle = '#8b949e';
-            ctx.fillText(ik.split('|').slice(1).join('|'), ix, iy + r + 2 * inv);
-          }
-          nodes.push({ x: ix, y: iy, r: r + 4 * inv, kind: 'island', key: ik });
+        // an anchor sitting on the host itself (a 1:1 island worker) joins
+        // the host's own fan, so siblings spread together instead of overlapping
+        const at = anc ? anchors.get(anc) : undefined;
+        const gk = at && Math.hypot(at.x - px, at.y - py) > 1 ? anc : '';
+        const l = groups.get(gk) ?? [];
+        if (!l.length) groups.set(gk, l);
+        l.push(s);
+      }
+      for (const [gk, raw] of groups) {
+        // widest sibling (an island container) in the middle of the fan,
+        // smaller ones alternating outward, so the bulk points straight out
+        const size = (s) => (cl.hosted.get(s.k) ?? []).length;
+        const bySize = [...raw].sort((x, y) => size(y) - size(x));
+        const list = new Array(bySize.length);
+        const mid = (bySize.length - 1) >> 1;
+        bySize.forEach((s, i) => { list[mid + (i % 2 ? (i + 1) >> 1 : -(i >> 1))] = s; });
+        const an = gk ? anchors.get(gk) : (badges.get(pwKey) ?? { x: px, y: py, r: pr });
+        const off = Math.hypot(an.x - px, an.y - py) > 1;
+        const dir = off ? Math.atan2(an.y - py, an.x - px) : a;
+        // Each sibling takes the angle its own footprint needs at its
+        // distance (a container is wide and sits further out; a W plus its
+        // label is narrow), packed around one centre line. One or two
+        // siblings rotate off the anchor's outward label toward the upper
+        // side (labels hang below); a bigger fan points straight out.
+        const geo = list.map(({ k }) => {
+          const isl = cl.hosted.get(k) ?? [];
+          // a container is wider than one mark: push its centre out by its radius
+          const ext = isl.length > 1 ? (16 * inv) / Math.sin(Math.PI / isl.length) + 5 * inv : 0;
+          const dist = an.r + 56 + ext;
+          const foot = (isl.length > 1 ? ext + 12 * inv : 7 * inv) + 14 * inv;
+          return { isl, dist, hw: Math.asin(Math.min(0.95, foot / dist)) };
         });
-        // deeper pools orbit this sub-worker the same way
-        drawBranch(k, nx, ny, th);
-      });
+        const total = geo.reduce((s, x) => s + 2 * x.hw, 0);
+        const turn = list.length > 2 ? 0 : Math.max(0, Math.min(off ? 1 : 1.25, 1.4 - total / 2));
+        const nudge = Math.sin(dir + turn) < Math.sin(dir - turn) ? turn : -turn;
+        let cursor = dir + nudge - total / 2;
+        list.forEach(({ k, w, g }, j) => {
+          const { isl, dist, hw } = geo[j];
+          const th = cursor + hw;
+          cursor += 2 * hw;
+          const nx = an.x + dist * Math.cos(th), ny = an.y + dist * Math.sin(th);
+          const local = g.poolId.split('~').pop();
+          const wid = g.dedicated ? local : `${local}#${k.split('|').pop()}`;
+          let r;
+          if (isl.length) r = drawIslandWorker(k, isl, nx, ny, '#a371f7aa', wid);
+          else {
+            r = 7 * inv;
+            drawFwMark(ctx, 'subworker', nx, ny, r, w.dead);
+            nodes.push({ x: nx, y: ny, r: r + 4 * inv, kind: 'worker', key: k });
+            if (full) labelWorker([], wid, nx, ny, r, '#a371f7');
+          }
+          // spawn link — violet, anchor edge → sub-worker edge
+          ctx.beginPath();
+          ctx.moveTo(an.x + an.r * Math.cos(th), an.y + an.r * Math.sin(th));
+          ctx.lineTo(nx - r * Math.cos(th), ny - r * Math.sin(th));
+          ctx.strokeStyle = '#a371f799'; ctx.lineWidth = 1.4 * inv; ctx.stroke();
+          drawBranch(k, nx, ny, th, r);
+        });
+      }
     };
 
     for (const p of ppos) {
       const mark = Math.max(inv, 1);
-      // pool — a gray socket on the rim, the container for its workers
-      const poolR = 10 * mark;
-      ctx.beginPath(); ctx.arc(p.x, p.y, poolR, 0, 7);
-      ctx.fillStyle = '#21262d'; ctx.fill();
-      ctx.strokeStyle = '#8b949e55'; ctx.lineWidth = 1.2 * inv; ctx.stroke();
-      if (full) {
-        ctx.font = font(10); ctx.fillStyle = '#8b949e';
-        ctx.fillText(p.poolId, p.x, p.y + poolR + 2 * inv);
+      // pool — a P socket on the rim, the container for its workers. A
+      // dedicated runner (workers: 1, no pool) has no socket: its worker
+      // keeps the worker-orbit spot and the hub spoke runs straight to it.
+      const poolR = p.dedicated ? 0 : 10 * mark;
+      if (!p.dedicated) {
+        drawFwMark(ctx, 'pool', p.x, p.y, poolR);
+        if (full) {
+          ctx.font = font(10); ctx.fillStyle = '#8b949e';
+          ctx.fillText(p.poolId, p.x, p.y + poolR + 2 * inv);
+        }
       }
       const n = p.workers.length;
       p.workers.forEach(([k, w], j) => {
         // workers spread around the pool's angle on the mid ring
         const a2 = p.a + (j - (n - 1) / 2) * 0.22;
-        const wx = cx + workerR * Math.cos(a2), wy = cy + workerR * Math.sin(a2);
-        const r = (7 + (w.heap !== undefined ? Math.min(6, (w.heap / (80 << 20)) * 6) : 0)) * mark;
-        // pool → worker link
-        ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(wx, wy);
-        ctx.strokeStyle = '#8b949e44'; ctx.lineWidth = 1.2 * inv; ctx.stroke();
         const isl = cl.hosted.get(k) ?? [];
-        if (isl.length === 0) {
-          // a worker hosting no islands is itself a vanilla island —
-          // same mark the islands column shows
-          drawFwMark(ctx, 'vanilla', wx, wy, Math.max(r, 9 * mark), w.dead);
-        } else {
-          ctx.beginPath(); ctx.arc(wx, wy, r, 0, 7);
-          ctx.fillStyle = w.dead ? '#484f58' : '#8b949e';
-          ctx.fill();
+        // a shared-worker container is wider than one mark — push it clear of its pool
+        const span = isl.length > 1 ? (16 * inv) / Math.sin(Math.PI / isl.length) + 17 * inv : 0;
+        const wd = cl.rimR + Math.max(38, span + (p.dedicated ? 10 * mark : poolR) + 8 * inv);
+        const wx = cx + wd * Math.cos(a2), wy = cy + wd * Math.sin(a2);
+        const wid = p.dedicated ? p.poolId : `${p.poolId}#${k.split('|').pop()}`;
+        let r;
+        if (isl.length) r = drawIslandWorker(k, isl, wx, wy, undefined, wid);
+        else {
+          // plain worker — W, sized by heap when the probe reports it
+          r = Math.max(8, 7 + (w.heap !== undefined ? Math.min(6, (w.heap / (80 << 20)) * 6) : 0)) * mark;
+          drawFwMark(ctx, 'worker', wx, wy, r, w.dead);
+          nodes.push({ x: wx, y: wy, r: r + 4 * inv, kind: 'worker', key: k });
         }
-        if (full) {
-          ctx.font = font(10); ctx.fillStyle = '#8b949e';
-          ctx.fillText(`${p.poolId}#${k.split('|').pop()}`, wx, wy + r + 2 * inv);
+        // pool → worker link, edge to edge so it never crosses a cluster
+        const d = Math.hypot(wx - p.x, wy - p.y) || 1;
+        const ux = (wx - p.x) / d, uy = (wy - p.y) / d;
+        if (p.dedicated) {
+          ctx.beginPath();
+          ctx.moveTo(cx, cy); ctx.lineTo(wx - Math.cos(a2) * r, wy - Math.sin(a2) * r);
+          ctx.strokeStyle = '#21262d'; ctx.lineWidth = 1 * inv; ctx.stroke();
+        } else if (d > poolR + r) {
+          ctx.beginPath();
+          ctx.moveTo(p.x + ux * poolR, p.y + uy * poolR); ctx.lineTo(wx - ux * r, wy - uy * r);
+          ctx.strokeStyle = '#8b949e44'; ctx.lineWidth = 1.2 * inv; ctx.stroke();
         }
-        nodes.push({ x: wx, y: wy, r: r + 4 * inv, kind: 'worker', key: k });
-        // this worker's islands spread around its angle on the outer ring —
-        // marks stay visible when zoomed out (the atoll look)
-        isl.forEach(({ ik, i }, jj) => {
-          const a3 = a2 + (jj - (isl.length - 1) / 2) * 0.18;
-          const ix = cx + islandR * Math.cos(a3), iy = cy + islandR * Math.sin(a3);
-          if (full) {
-            // host link — worker → its island
-            ctx.beginPath(); ctx.moveTo(wx, wy); ctx.lineTo(ix, iy);
-            ctx.strokeStyle = `${i.ended ? '#484f58' : '#3fb950'}55`;
-            ctx.lineWidth = 1.4 * inv; ctx.stroke();
-          }
-          const r = drawIslandDot(ctx, i, ix, iy, inv);
-          if (full) {
-            ctx.fillStyle = '#8b949e';
-            ctx.fillText(ik.split('|').slice(1).join('|'), ix, iy + r + 2 * inv);
-          }
-          nodes.push({ x: ix, y: iy, r: r + 4 * inv, kind: 'island', key: ik });
-        });
-        // nested pools branch off this worker — sub-workers + their islands
-        drawBranch(k, wx, wy, a2);
+        if (full && !isl.length) labelWorker([], wid, wx, wy, r);
+        // nested pools branch off this worker — sub-workers / sub-islands
+        drawBranch(k, wx, wy, a2, r);
       });
     }
+    // islands whose worker never reported take a worker slot of their own
     cl.orphans.forEach(({ ik, i }, j) => {
       const a = ((cl.pools.length + j) / cl.rimN) * 2 * Math.PI - Math.PI / 2;
-      const ix = cx + islandR * Math.cos(a), iy = cy + islandR * Math.sin(a);
+      const ix = cx + workerR * Math.cos(a), iy = cy + workerR * Math.sin(a);
       const r = drawIslandDot(ctx, i, ix, iy, inv);
       if (full) {
-        ctx.fillStyle = '#8b949e';
-        ctx.fillText(ik.split('|').slice(1).join('|'), ix, iy + r + 2 * inv);
+        ctx.font = font(10); ctx.fillStyle = '#c9d1d9';
+        ctx.fillText(islandName(ik), ix, iy + r + 2 * inv);
       }
       nodes.push({ x: ix, y: iy, r: r + 4 * inv, kind: 'island', key: ik });
     });
 
-    ctx.beginPath(); ctx.arc(cx, cy, 16 * inv, 0, 7);
-    ctx.fillStyle = '#a371f7'; ctx.fill();
+    drawHub(ctx, sess, cx, cy, 16 * inv, inv);
     ctx.font = font(11);
     ctx.fillStyle = '#c9d1d9';
     ctx.fillText(sess?.name ?? cl.sid, cx, cy + 19 * inv);
     ctx.fillStyle = '#8b949e';
-    ctx.fillText('main thread', cx, cy + 32 * inv);
+    ctx.fillText(sess?.framework ? `main thread · ${sess.framework}` : 'main thread', cx, cy + 32 * inv);
     if (!cl.pools.length && !cl.orphans.length) ctx.fillText('no workers or islands yet', cx, cy + 46 * inv);
     // the session hub is clickable too — same drill-in as the far-zoom disc
     nodes.push({ x: cx, y: cy, r: 16 * inv, kind: 'session', key: cl.sid });
@@ -1454,7 +1854,7 @@ function drawAppMap(canvas, sids) {
   // selection highlight — ring whatever is under inspection / selected
   for (const n of nodes) {
     const sel = (n.kind === 'worker' && n.key === state.inspectWorker)
-      || (n.kind === 'island' && n.key === state.inspect)
+      || (n.kind === 'island' && (n.key === state.inspect || (n.wk && n.wk === state.inspectWorker)))
       || (n.kind === 'session' && n.key === state.sel);
     if (!sel) continue;
     const rr = n.r + 2.5 * inv;
@@ -1499,7 +1899,7 @@ function renderWorkers() {
         <td class="${w.heap !== undefined ? '' : 'muted'}">${w.heap !== undefined ? fmtBytes(w.heap) : '—'}</td>
         <td>${hosted.length
           ? `<span class="ok">${hosted.map((h) => `${fwIconImg(h.fw)} ${esc(h.name)}`).join(', ')}</span>`
-          : `<span class="muted" title="no hosted islands — plain worker">${fwIconImg('vanilla')}</span>`}</td>
+          : `<span class="muted" title="no hosted islands — plain worker">${fwIconImg('worker')}</span>`}</td>
         <td class="muted">${esc(w.lastTaskId || '—')}</td>
         <td class="${w.dead ? 'error' : 'ok'}">${w.dead ? 'down' : 'live'}</td></tr>`;
     }) || '<tr><td colspan="10" class="muted">no workers yet</td></tr>';
@@ -1582,6 +1982,8 @@ function renderWorkerInsp() {
   $('wkErrors').innerHTML = w.errors.length
     ? w.errors.slice().reverse().map((x) => `<div style="padding:2px 0;border-bottom:1px dashed #21262d"><span class="error">error</span> ${esc(x.message)}</div>`).join('')
     : '<div class="muted">none</div>';
+
+  for (const h of api.hooks.inspectWorker) h(k, w, { actions: $('wkActions') });
 }
 
 /* ── render dispatch ─────────────────────────────────────────────────────── */
@@ -1631,6 +2033,19 @@ function render() {
       render();
     };
   }
+  for (const h of api.hooks.render) h();
+  updateBadges();
+}
+
+/** Nav badges for registered views (`addView({ badge })`): counts, alerts. */
+function updateBadges() {
+  for (const v of registeredViews) {
+    if (!v.badge) continue;
+    const el = document.querySelector(`.panels > nav button[data-view="${v.id}"] .nbadge`);
+    if (!el) continue;
+    const b = v.badge();
+    el.textContent = b === null || b === undefined || b === 0 ? '' : String(b);
+  }
 }
 
 let raf = 0;
@@ -1647,16 +2062,89 @@ setInterval(() => {
   if ($('view-memory').classList.contains('on')) renderMemory();
   if ($('view-dashboard').classList.contains('on')) renderTopology();
   if (BC) sweepClosed();
+  for (const h of api.hooks.tick) h();
 }, 1000);
 
 /* ── tabs + waterfall interaction ────────────────────────────────────────── */
 
-for (const b of document.querySelectorAll('.panels > nav button')) {
-  b.onclick = () => {
-    document.querySelectorAll('.panels > nav button').forEach((x) => x.classList.toggle('on', x === b));
-    document.querySelectorAll('.view').forEach((v) => v.classList.toggle('on', v.id === `view-${b.dataset.view}`));
-    render();
-  };
+/** Switch the main view; panels and the palette route through this. */
+function openView(id) {
+  const btn = document.querySelector(`.panels > nav button[data-view="${id}"]`);
+  if (!btn) return;
+  document.querySelectorAll('.panels > nav button').forEach((x) => x.classList.toggle('on', x === btn));
+  document.querySelectorAll('.view').forEach((v) => v.classList.toggle('on', v.id === `view-${id}`));
+  render();
+  navigated();
+}
+
+/** Fire api.onNavigate hooks (routing, nav layout) after a view/subview switch. */
+function navigated() {
+  for (const h of api.hooks.navigate ?? []) h();
+}
+
+// Delegated, so views/subviews panels add later get the same handlers.
+document.querySelector('.panels > nav').addEventListener('click', (e) => {
+  const b = e.target.closest('button[data-view]');
+  if (b) openView(b.dataset.view);
+});
+
+/** Registered panel views, in nav order. */
+const registeredViews = [];
+const CORE_VIEW_ORDER = { dashboard: 10, tasks: 20, network: 30, memory: 40, log: 90 };
+const viewOrder = (b) => Number(b.dataset.order ?? CORE_VIEW_ORDER[b.dataset.view] ?? 50);
+
+/**
+ * Add a top-level view: a nav button (ordered by `order`; core views are
+ * 10 dashboard, 20 tasks, 30 network, 40 memory, 90 log) and a section.
+ * `badge()` feeds a small count on the nav button each render.
+ */
+function addView({ id, label, order = 50, html = '', badge, title }) {
+  const nav = document.querySelector('.panels > nav');
+  const btn = document.createElement('button');
+  btn.dataset.view = id;
+  btn.dataset.order = String(order);
+  btn.innerHTML = `${esc(label)}<span class="nbadge"></span>`;
+  if (title) btn.title = title;
+  const after = [...nav.querySelectorAll('button[data-view]')].find((b) => viewOrder(b) > order);
+  nav.insertBefore(btn, after ?? null);
+  const section = document.createElement('section');
+  section.className = 'view';
+  section.id = `view-${id}`;
+  section.innerHTML = html;
+  document.querySelector('.panels').appendChild(section);
+  registeredViews.push({ id, label, order, badge });
+  return section;
+}
+
+/**
+ * Add a subview (sub-tab) under a view. A view without a subnav gets one,
+ * and its existing content becomes the first subview (`<view>-main`).
+ */
+function addSubview(viewId, { id, label, html = '', order = 50 }) {
+  const view = $(`view-${viewId}`);
+  let subnav = view.querySelector(':scope > .subnav');
+  if (!subnav) {
+    const main = document.createElement('div');
+    main.className = 'subview on';
+    main.id = `${viewId}-main`;
+    main.append(...view.childNodes);
+    subnav = document.createElement('nav');
+    subnav.className = 'subnav';
+    subnav.innerHTML = `<button class="on" data-sub="${viewId}-main" data-order="0">${esc(registeredViews.find((v) => v.id === viewId)?.label ?? 'Main')}</button>`;
+    view.append(subnav, main);
+  }
+  const btn = document.createElement('button');
+  btn.dataset.sub = id;
+  btn.dataset.order = String(order);
+  btn.textContent = label;
+  const after = [...subnav.querySelectorAll('button[data-sub]')].find((b) => Number(b.dataset.order ?? 50) > order);
+  subnav.insertBefore(btn, after ?? null);
+  const div = document.createElement('div');
+  div.className = 'subview';
+  div.id = id;
+  div.innerHTML = html;
+  view.appendChild(div);
+  return div;
 }
 
 /* ── app map interaction — wheel zoom, drag pan, click/double-click ─────── */
@@ -1739,18 +2227,20 @@ if (new URLSearchParams(location.search).has('mini')) {
   document.getElementById('tv-dash').classList.remove('on');
 }
 
-for (const b of document.querySelectorAll('.subnav button')) {
-  b.onclick = () => {
-    const nav = b.closest('.subnav');
-    nav.querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b));
-    nav.parentElement.querySelectorAll(':scope > .subview')
-      .forEach((v) => v.classList.toggle('on', v.id === b.dataset.sub));
-    render();
-  };
-}
+document.addEventListener('click', (e) => {
+  const b = e.target.closest?.('.subnav button[data-sub]');
+  if (!b) return;
+  const nav = b.closest('.subnav');
+  nav.querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b));
+  nav.parentElement.querySelectorAll(':scope > .subview')
+    .forEach((v) => v.classList.toggle('on', v.id === b.dataset.sub));
+  render();
+  navigated();
+});
 
 /** Open a subtab under a main view — switches main tabs first if needed. */
 const openSub = (view, sub) => {
+  if (!document.getElementById(`view-${view}`)) return;
   if (!document.getElementById(`view-${view}`).classList.contains('on')) {
     document.querySelector(`.panels > nav button[data-view="${view}"]`).click();
   }
@@ -1804,10 +2294,17 @@ let viewer = null;
  * BroadcastChannel the app publishes on. There is no server-side session
  * registry — this page builds it from hello/batch/bye frames and owns
  * retention (pins + TTL) itself.
+ *
+ * Extension mode (`__ATOLL_TRANSPORT === 'extension'`): the Chrome DevTools
+ * panel (packages/devtools-extension) can't join the inspected page's
+ * channel, so its bootstrap installs `__ATOLL_BRIDGE`, a BroadcastChannel-
+ * shaped relay (postMessage / onmessage, plus onreset when the inspected
+ * page navigates). Everything below treats it exactly like the channel.
  */
-const BC = window.__ATOLL_TRANSPORT === 'broadcast' && typeof BroadcastChannel !== 'undefined'
+const BRIDGE = window.__ATOLL_TRANSPORT === 'extension' ? window.__ATOLL_BRIDGE ?? null : null;
+const BC = BRIDGE ?? (window.__ATOLL_TRANSPORT === 'broadcast' && typeof BroadcastChannel !== 'undefined'
   ? new BroadcastChannel('atoll-devtools')
-  : null;
+  : null);
 // ?mini=1 — the overlay flyout: compact single-instance layout (CSS does
 // the hiding; the session sidebar is meaningless for one origin's app).
 if (new URLSearchParams(location.search).has('mini')) document.body.classList.add('mini');
@@ -1855,12 +2352,105 @@ const pinSession = (id, pinned) => {
   }
 };
 
+/**
+ * The one ingest path — live transport frames and replayed recordings both
+ * come through here, so panels see a single stream via api.hooks.
+ */
+function ingest(session, events) {
+  state.sessions.set(session.id, session);
+  for (const e of events) {
+    applyEvent(session, e);
+    logLine(session, e);
+    for (const h of api.hooks.event) h(session, e);
+    // New runners / islands / contracts register new app-side commands.
+    if (e.type === 'pool:init' || e.type === 'island:mount' || e.type === 'memory:bind') {
+      refreshCommands(session.id);
+    }
+  }
+  for (const h of api.hooks.batch) h(session, events);
+  scheduleRender();
+}
+
+/* ── control channel: dashboard → app commands ───────────────────────────── */
+
+const pendingCtl = new Map(); // request id → { resolve, reject, timer }
+
+/** Invoke a registered app-side command (`registerDevtoolsCommand`) on a live session. */
+function control(sessionId, cmd, args = {}, timeoutMs = 5000) {
+  const id = `c${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+  return new Promise((resolve, reject) => {
+    const msg = { type: 'control', sessionId, id, cmd, args };
+    if (BC) BC.postMessage(msg);
+    else if (viewer?.readyState === WebSocket.OPEN) viewer.send(JSON.stringify(msg));
+    else return reject(new Error('dashboard is not connected'));
+    const timer = setTimeout(() => {
+      pendingCtl.delete(id);
+      reject(new Error(`${cmd}: no reply in ${timeoutMs}ms (app may predate the control channel)`));
+    }, timeoutMs);
+    pendingCtl.set(id, { resolve, reject, timer });
+  });
+}
+
+function settleControl(data) {
+  const p = pendingCtl.get(data.id);
+  if (!p) return; // another dashboard's request
+  pendingCtl.delete(data.id);
+  clearTimeout(p.timer);
+  if (data.ok) p.resolve(data.result); else p.reject(new Error(data.error ?? 'command failed'));
+}
+
+/** sid → Set of command names, from 'devtools.commands' (refreshed as runners appear). */
+const cmdCache = new Map();
+const cmdDirty = new Set();
+let cmdTimer = 0;
+function refreshCommands(sid) {
+  if (state.sessions.get(sid)?.closed || api.livePaused) return;
+  cmdDirty.add(sid);
+  clearTimeout(cmdTimer);
+  cmdTimer = setTimeout(() => {
+    for (const s of cmdDirty) {
+      control(s, 'devtools.commands', {}, 3000)
+        .then((list) => { cmdCache.set(s, new Set(list)); scheduleRender(); })
+        .catch(() => { /* app without the control channel: commands stay off */ });
+    }
+    cmdDirty.clear();
+  }, 400);
+}
+const hasCommand = (sid, cmd) => cmdCache.get(sid)?.has(cmd) === true;
+
+const STATE_INIT = { sel: null, drillTask: null, inspect: null, inspectWorker: null, inspectFetch: null, seq: 0, t0: null };
+
+/** Clear every dashboard aggregate (the recorder's import/replay starts here). */
+function reset() {
+  for (const v of Object.values(state)) {
+    if (v instanceof Map) v.clear();
+    else if (Array.isArray(v)) v.length = 0;
+  }
+  Object.assign(state, STATE_INIT);
+  bcSessions.clear();
+  cmdCache.clear();
+  logEl().innerHTML = '';
+  for (const h of api.hooks.reset) h();
+  topo.fit = true;
+  render();
+}
+
+/** Ask live apps to re-identify and replay their tail (after a reset/unpause). */
+function reannounce() {
+  if (BC) BC.postMessage({ type: 'view' });
+  else viewer?.close(); // reconnect → the server replays its tail
+}
+
 function connect() {
   if (BC) {
-    $('conn').textContent = 'local';
-    $('conn').className = 'on';
+    if (!BRIDGE) { // the extension bridge owns #conn (page reachable, atoll seen, …)
+      $('conn').textContent = 'local';
+      $('conn').className = 'on';
+    }
     BC.onmessage = (msg) => {
       const data = msg.data;
+      if (data.type === 'control-result') return settleControl(data);
+      if (api.livePaused) return;
       if (data.type === 'hello') {
         // a fresh hello means a new app instance — same id can't revive
         const prev = bcSessions.get(data.session.id);
@@ -1868,6 +2458,7 @@ function connect() {
           ...data.session, closed: false, closedAt: undefined, pinned: prev?.pinned,
         });
         bcSync();
+        refreshCommands(data.session.id);
       } else if (data.type === 'bye') {
         const s = bcSessions.get(data.sessionId);
         if (s && !s.closed) { s.closed = true; s.closedAt = Date.now(); bcSync(); }
@@ -1876,14 +2467,12 @@ function connect() {
           bcSessions.set(data.session.id, data.session);
           bcSync();
         }
-        state.sessions.set(data.session.id, data.session);
-        for (const e of data.events) {
-          applyEvent(data.session, e);
-          logLine(data.session, e);
-        }
+        ingest(data.session, data.events);
       }
       scheduleRender();
     };
+    // inspected page navigated: its sessions are gone, start over and re-announce
+    if (BRIDGE) BRIDGE.onreset = () => { reset(); reannounce(); };
     // announce — apps re-hello and replay their batch tail
     BC.postMessage({ type: 'view' });
     return;
@@ -1898,16 +2487,87 @@ function connect() {
   };
   ws.onmessage = (msg) => {
     const data = JSON.parse(msg.data);
+    if (data.type === 'control-result') return settleControl(data);
+    if (api.livePaused) return;
     if (data.type === 'sessions') {
       reconcileSessions(data.sessions);
+      for (const s of data.sessions) if (!s.closed && !cmdCache.has(s.id)) refreshCommands(s.id);
     } else if (data.type === 'batch') {
-      state.sessions.set(data.session.id, data.session);
-      for (const e of data.events) {
-        applyEvent(data.session, e);
-        logLine(data.session, e);
-      }
+      ingest(data.session, data.events);
     }
     scheduleRender();
   };
 }
+
+/* ── panels ──────────────────────────────────────────────────────────────── */
+
+const kpi = (v, l, cls = '') => `<div class="kpi ${cls}"><div class="v">${v}</div><div class="l">${l}</div></div>`;
+
+Object.assign(api, {
+  state, $, esc, fmt, fmtBytes, fmtInt, key, sessOf, inSel, withGroups, kpi,
+  sparkline, drawLine, drawMultiLine, fwIconImg,
+  render, scheduleRender, addView, addSubview, openView, openSub,
+  control, hasCommand, ingest, reset, reannounce,
+  liveSessions: () => [...state.sessions.values()].filter((s) => !s.closed),
+  /** The selected session, else the only live one, else null (ambiguous). */
+  selectedOrOnlyLive: () => {
+    if (state.sel) return state.sel;
+    const live = [...state.sessions.values()].filter((s) => !s.closed);
+    return live.length === 1 ? live[0].id : null;
+  },
+  isMini: new URLSearchParams(location.search).has('mini'),
+  transport: BRIDGE ? 'extension' : BC ? 'broadcast' : 'ws',
+  livePaused: false,
+  /** () after every view/subview switch (openView, subnav clicks, openSub). */
+  onNavigate(fn) { (api.hooks.navigate ??= []).push(fn); },
+  /** viewId → intro html; the shell panel renders these under each view heading. */
+  viewIntros: new Map(),
+  /** One-line, dismissible "what this view shows" intro (callable before the shell loads). */
+  setViewIntro(viewId, html) {
+    api.viewIntros.set(viewId, html);
+    for (const h of api.hooks.intro ?? []) h(viewId, html);
+  },
+  /** Transient message: kind 'ok' | 'error' | 'info' (panels/toast.js). */
+  toast: (msg, kind, ms) => import('./panels/toast.js').then((m) => m.toast(msg, kind, ms)),
+});
+
+/**
+ * Header toolbar button (global actions: record, export, palette). Returns
+ * the button; `order` sorts left→right.
+ */
+api.addToolbarButton = ({ id, label, title, order = 50, onClick }) => {
+  const bar = $('toolbar');
+  const b = document.createElement('button');
+  b.className = 'act';
+  b.id = id;
+  b.dataset.order = String(order);
+  b.innerHTML = label;
+  if (title) b.title = title;
+  b.onclick = onClick;
+  const after = [...bar.children].find((c) => Number(c.dataset.order ?? 50) > order);
+  bar.insertBefore(b, after ?? null);
+  return b;
+};
+
+/** Feature panels: each module exports setup(api). Order = setup order. */
+const PANELS = [
+  './panels/performance.js',   // jank, frames, User Timing, message cost
+  './panels/inspect-island.js',// island Elements / Props & events tabs
+  './panels/memory-values.js', // shared-memory values, diff, watchpoints
+  './panels/reactivity.js',    // cross-thread reactivity graph
+  './panels/actions.js',       // live controls: kill, chaos, props, mode
+  './panels/recorder.js',      // record / export / import / replay
+  './panels/audits.js',        // recommendations
+  './panels/shell.js',         // palette, routing, shortcuts, help (load last)
+];
+
+for (const p of PANELS) {
+  try {
+    const mod = await import(p);
+    mod.setup(api);
+  } catch (err) {
+    console.error(`[atoll devtools] panel ${p} failed to load`, err);
+  }
+}
+
 connect();

@@ -388,6 +388,7 @@ export function solidIslandApp<P extends Record<string, unknown>>(
   contract?: IslandContract<P>,
 ): RenderedIslandApp {
   const app: RenderedIslandApp = {
+    renderer: 'solid',
     mount({ doc, props }: RenderContext): RenderedHandle {
       assertClientBuild();
       const renderer = rendererFor(doc);

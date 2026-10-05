@@ -7,6 +7,8 @@
  *   setLogLevel('debug'); // or 'trace', 'warn', 'off'
  */
 
+import { devtoolsEnabled, emitDevtools, previewValue } from './devtools';
+
 export type LogLevel = 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'off';
 
 const LEVELS: Record<LogLevel, number> = { trace: 0, debug: 1, info: 2, warn: 3, error: 4, off: 5 };
@@ -46,9 +48,29 @@ export const getLogLevel = (): LogLevel => minLevel;
 /** Replace the console sink (e.g. collect entries for a UI panel); null restores it. */
 export const setLogSink = (custom: LogSink | null): void => { sink = custom ?? consoleSink; };
 
+/** Set while a log entry is being mirrored, so a transport that logs can't recurse. */
+let teeing = false;
+
 export function log(level: Exclude<LogLevel, 'off'>, scope: string, message: string, data?: unknown): void {
   if (LEVELS[level] < LEVELS[minLevel]) return;
   sink({ level, scope, message, data, thread: THREAD, at: performance.now() });
+  // Mirror into the devtools stream alongside (never instead of) the log
+  // sink. Worker-side entries ride the same ATOLL_DEVTOOLS forwarding as
+  // every other worker event once the INIT handshake enables it.
+  if (!teeing && devtoolsEnabled()) {
+    teeing = true;
+    try {
+      emitDevtools({
+        type: 'log',
+        level,
+        scope,
+        message,
+        ...(data !== undefined ? { data: previewValue(data, 1024) } : {}),
+      });
+    } finally {
+      teeing = false;
+    }
+  }
 }
 
 /** A logger bound to a subsystem scope: `poolLog.info('spawned')`. */

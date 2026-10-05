@@ -256,6 +256,13 @@ describe('devtools events', () => {
     expect(Number(b.slice(5))).toBe(Number(a.slice(5)) + 1);
   });
 
+  it('nextDevtoolsId labels named runners with a kind suffix', () => {
+    expect(nextDevtoolsId('pool', 'Label Test')).toBe('label-test-p');
+    expect(nextDevtoolsId('pool', 'Label Test')).toBe('label-test-p2');
+    expect(nextDevtoolsId('worker', 'a#b~c|d')).toBe('a-b-c-d-w');
+    expect(nextDevtoolsId('worker', '###')).toMatch(/^worker-\d+$/);
+  });
+
   it('devtoolsEnabled reflects sink installation', () => {
     setDevtoolsSink(null);
     expect(devtoolsEnabled()).toBe(false);

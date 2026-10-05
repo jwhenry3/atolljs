@@ -7,7 +7,7 @@ import './styles.css';
 // when workers spawn for their events to forward over the task channel.
 // No-op unless the URL carries ?__atoll_devtools.
 initDevtools({
-  session: { name: 'incidents-solid' },
+  session: { name: 'incidents-solid', framework: 'solid' },
   // Relative dashboard path — mounted hosts (the docs demo tree) ship
   // __atoll/ inside the app's own folder; absolute /__atoll/ would escape
   // a sub-path mount like consumer/<demo>/.
