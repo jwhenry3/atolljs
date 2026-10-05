@@ -135,6 +135,34 @@ describe('atoll vite plugin', () => {
     expect(res.headers.get('location')).toBe('/__atoll/');
   });
 
+  it('serves dashboard assets with their MIME type and the page headers echoed', async () => {
+    const res = await fetch(`${base}/__atoll/main.js`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toBe('text/javascript; charset=utf-8');
+    expect(res.headers.get('cross-origin-opener-policy')).toBe('same-origin');
+    // Only index.html carries the injected flag.
+    expect(await res.text()).not.toContain('window.__ATOLL_TRANSPORT="broadcast"');
+  });
+
+  it('404s dashboard paths that do not exist', async () => {
+    const res = await fetch(`${base}/__atoll/nope.js`);
+    expect(res.status).toBe(404);
+    expect(await res.text()).toBe('not found');
+  });
+
+  it('leaves non-GET /__atoll requests to the rest of the stack', async () => {
+    const res = await fetch(`${base}/__atoll/`, { method: 'POST' });
+    expect(await res.text()).not.toContain('atoll devtools');
+  });
+
+  it('bundles classic workers as an iife', async () => {
+    const res = await fetch(`${base}/src/app.worker.ts?worker_file&type=classic`);
+    expect(res.status).toBe(200);
+    const code = await res.text();
+    expect(code).toContain('DEP_V');
+    expect(code).not.toMatch(/^\s*export\s/m);
+  });
+
   it('falls back to vite per-module serving for SFC worker graphs', async () => {
     const res = await fetch(`${base}/src/sfc.worker.ts?worker_file&type=module`);
     expect(res.status).toBe(200);

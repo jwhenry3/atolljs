@@ -104,6 +104,9 @@ export default mergeConfig(
         // devtools bin is the same shape (argv → createDevtoolsServer).
         include: ['src/**', 'packages/*/src/**'],
         exclude: [
+          // `src/**` also matches examples/*/src: demo apps aren't surface
+          'examples/**',
+          '**/*.{json,html,css}',
           '**/*.test.*',
           '**/test/**',
           '**/testing/**',
@@ -115,7 +118,11 @@ export default mergeConfig(
           'packages/devtools-extension/src/background.js',
         ],
         // Floor slightly below the current baseline — regresses fail CI.
-        thresholds: { statements: 92, branches: 85, functions: 93, lines: 96 },
+        // A `--shard` run only sees its slice, so CI checks the floor once,
+        // on `vitest --merge-reports --coverage` over the shard blobs.
+        thresholds: process.argv.some((a) => a.startsWith('--shard'))
+          ? undefined
+          : { statements: 92, branches: 85, functions: 93, lines: 96 },
       },
     },
   })

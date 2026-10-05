@@ -17,7 +17,11 @@ initDevtools({ session: { name: 'build-test' } });
 document.body.textContent = 'app';`;
 const PLAIN = `document.body.textContent = 'app';`;
 
-async function buildFixture(main: string, devtools?: AtollViteOptions['devtools']) {
+async function buildFixture(
+  main: string,
+  devtools?: AtollViteOptions['devtools'],
+  { alias = true, ssr = false, onWarn }: { alias?: boolean; ssr?: boolean; onWarn?: (msg: string) => void } = {},
+) {
   const root = mkdtempSync(join(tmpdir(), 'atoll-vite-build-'));
   dirs.push(root);
   writeFileSync(join(root, 'index.html'), '<!doctype html><html><head></head><body><script type="module" src="./main.js"></script></body></html>');
@@ -27,8 +31,12 @@ async function buildFixture(main: string, devtools?: AtollViteOptions['devtools'
     configFile: false,
     logLevel: 'silent',
     plugins: [atoll({ devtools })],
-    resolve: { alias: [{ find: /^@atolljs\/devtools$/, replacement: devtoolsSrc }] },
-    build: { outDir: join(root, 'dist') },
+    resolve: { alias: alias ? [{ find: /^@atolljs\/devtools$/, replacement: devtoolsSrc }] : [] },
+    build: {
+      outDir: join(root, 'dist'),
+      ...(ssr ? { ssr: join(root, 'main.js') } : {}),
+      rollupOptions: { onwarn: (w) => onWarn?.(w.message) },
+    },
   });
   return join(root, 'dist');
 }
@@ -59,6 +67,25 @@ describe('devtools.build', () => {
     const out = await buildFixture(PLAIN, { build: true, dir: 'debug/devtools' });
     expect(existsSync(join(out, 'debug/devtools/index.html'))).toBe(true);
     expect(existsSync(join(out, '__atoll'))).toBe(false);
+  });
+
+  it('skips SSR builds', async () => {
+    const out = await buildFixture(PLAIN, { build: true }, { ssr: true });
+    expect(existsSync(join(out, '__atoll'))).toBe(false);
+  });
+
+  it('true: warns when @atolljs/devtools cannot be resolved', async () => {
+    const warnings: string[] = [];
+    const out = await buildFixture(PLAIN, { build: true }, { alias: false, onWarn: (m) => warnings.push(m) });
+    expect(existsSync(join(out, '__atoll'))).toBe(false);
+    expect(warnings.some((w) => w.includes('@atolljs/devtools not found'))).toBe(true);
+  });
+
+  it('auto: stays silent when @atolljs/devtools is not installed', async () => {
+    const warnings: string[] = [];
+    const out = await buildFixture(PLAIN, undefined, { alias: false, onWarn: (m) => warnings.push(m) });
+    expect(existsSync(join(out, '__atoll'))).toBe(false);
+    expect(warnings.some((w) => w.includes('@atolljs/devtools'))).toBe(false);
   });
 
   it('false: opts out even when devtools is bundled', async () => {

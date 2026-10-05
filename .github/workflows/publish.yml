@@ -19,7 +19,49 @@ on:
     types: [published]
 
 jobs:
+  # Don't publish a red tree: the same suites as ci.yml, sharded across
+  # parallel jobs (no coverage here; ci.yml owns the thresholds).
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    name: test (shard ${{ matrix.shard }}/4)
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: 26
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            examples/nestjs/package-lock.json
+            examples/nextjs/package-lock.json
+            examples/react-dom-worker/package-lock.json
+            examples/express/package-lock.json
+            examples/fastify/package-lock.json
+            examples/hono/package-lock.json
+            examples/koa/package-lock.json
+            examples/http-offload/package-lock.json
+
+      - name: Install dependencies
+        run: node scripts/ci-install.mjs
+
+      # packages/node's sharedBuffer.functional.test spawns REAL
+      # worker_threads that import '@atolljs/core' via a loader hook that
+      # maps to dist/index.js — the built lib bundle must exist BEFORE tests.
+      - name: Build core bundle (dist/index.js — needed by worker_threads tests)
+        run: npx vite build
+
+      - name: Test — shard ${{ matrix.shard }}/4
+        run: npx vitest run --shard=${{ matrix.shard }}/4
+
   publish:
+    needs: test
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -51,14 +93,8 @@ jobs:
       - name: Install dependencies
         run: node scripts/ci-install.mjs
 
-      # packages/node's sharedBuffer.functional.test spawns REAL
-      # worker_threads that import '@atolljs/core' via a loader hook that
-      # maps to dist/index.js — the built lib bundle must exist BEFORE tests.
-      - name: Build core bundle (dist/index.js — needed by worker_threads tests)
+      - name: Build core bundle (dist/index.js)
         run: npx vite build
-
-      - name: Test — all suites (don't publish a red tree)
-        run: npx vitest run
 
       # Unit tests drive the CLI through scriptIo — exercise the real entry
       # (shebang + Node type stripping of the .ts sources) before staging;

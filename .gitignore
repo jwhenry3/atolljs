@@ -9,6 +9,7 @@ nul
 *.tsbuildinfo
 coverage/
 coverage-driver/
+.vitest-reports/
 *.log
 
 .playwright-mcp/

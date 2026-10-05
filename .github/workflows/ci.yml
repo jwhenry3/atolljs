@@ -4,6 +4,12 @@
 # packages/*/test (bindings, incidents domain, node/nestjs adapters).
 # Typechecks run per-tsconfig so each publishable package is verified against
 # only its own declared peer dependency graph.
+#
+# Tests run as parallel shard jobs (`vitest --shard=i/4`), each writing a
+# blob report that carries its coverage; the `coverage` job merges them and
+# checks the thresholds once (a shard alone only sees its slice, so
+# vitest.config.ts skips thresholds on --shard runs). Changing the shard
+# count means editing the matrix, the job name, and the --shard flag.
 name: CI
 
 on:
@@ -16,7 +22,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  test:
+  checks:
     runs-on: ubuntu-latest
     steps:
       # Actions are pinned to commit SHAs — a hijacked major tag can't move
@@ -61,14 +67,79 @@ jobs:
       - name: Smoke — atoll bin runs on the CI toolchain
         run: node packages/cli/src/cli.ts --help
 
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      # Let every shard finish so one failure doesn't hide another.
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    name: test (shard ${{ matrix.shard }}/4)
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: 26
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            examples/nestjs/package-lock.json
+            examples/nextjs/package-lock.json
+            examples/react-dom-worker/package-lock.json
+            examples/express/package-lock.json
+            examples/fastify/package-lock.json
+            examples/hono/package-lock.json
+            examples/koa/package-lock.json
+            examples/http-offload/package-lock.json
+
+      # Every shard can draw any suite, so each needs the full toolchain.
+      - name: Install dependencies
+        run: node scripts/ci-install.mjs
+
       # packages/node's sharedBuffer.functional.test spawns REAL
       # worker_threads that import '@atolljs/core' via a loader hook that
       # maps to dist/index.js — the built lib bundle must exist.
       - name: Build — core SDK lib (needed by real worker_threads tests)
         run: npx vite build
 
-      - name: Test — all suites (vitest, with coverage)
-        run: npx vitest run --coverage
+      - name: Test — shard ${{ matrix.shard }}/4 (vitest, with coverage)
+        run: npx vitest run --coverage --shard=${{ matrix.shard }}/4 --reporter=blob --reporter=default
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: vitest-blob-${{ matrix.shard }}
+          path: .vitest-reports/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 1
+
+  # Merge the shard blobs: one test summary, one coverage report, and the
+  # threshold check over the whole suite.
+  coverage:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: 26
+          cache: npm
+
+      # Merging reruns nothing: root deps (vitest + the config's plugins)
+      # are all it loads.
+      - name: Install root dependencies
+        run: npm ci
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: vitest-blob-*
+          path: .vitest-reports/
+          merge-multiple: true
+
+      - name: Merge shard reports + coverage thresholds
+        run: npx vitest run --merge-reports --coverage
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@0fb7174895f61a3b6b78fc075e0cd60383518dac # v5.5.5

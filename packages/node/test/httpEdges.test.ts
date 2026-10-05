@@ -35,6 +35,10 @@ const httpFixture = fileURLToPath(
   new URL('../../../test/fixtures/httpServer.worker.mjs', import.meta.url),
 );
 
+// Real worker_threads spawn + port announce: well past waitFor's 1s default
+// when the full suite saturates the CPU (and on 4-core CI runners).
+const SPAWN_WAIT = { timeout: 15_000 };
+
 const listen = (server: { listen: Function; once: Function }) =>
   new Promise<number>((resolve) => {
     server.once('listening', () =>
@@ -412,7 +416,7 @@ describe('routeHttpGateway edge branches', () => {
     });
     const port = await whenListening(gateway.server);
     try {
-      await vi.waitFor(() => expect(gateway.ports.size).toBe(1));
+      await vi.waitFor(() => expect(gateway.ports.size).toBe(1), SPAWN_WAIT);
       const res = await fetch(`http://127.0.0.1:${port}/c/zap`);
       expect((await res.json()).url).toBe('/zap');
     } finally {
@@ -430,7 +434,7 @@ describe('routeHttpGateway edge branches', () => {
     });
     const port = await whenListening(gateway.server);
     try {
-      await vi.waitFor(() => expect(gateway.ports.size).toBe(1));
+      await vi.waitFor(() => expect(gateway.ports.size).toBe(1), SPAWN_WAIT);
       // Read the 101 head so we can assert the rewritten path.
       const head = await new Promise<string>((resolve, reject) => {
         const socket = netConnect({ host: '127.0.0.1', port }, () =>
@@ -466,7 +470,7 @@ describe('routeHttpGateway edge branches', () => {
     await whenListening(gateway.server);
     const { client, socket, close: closeHub } = await socketPair();
     try {
-      await vi.waitFor(() => expect(gateway.ports.size).toBe(1));
+      await vi.waitFor(() => expect(gateway.ports.size).toBe(1), SPAWN_WAIT);
 
       // 'request' path — fabricated IncomingMessage without url.
       const res = fakeRes();
@@ -579,7 +583,7 @@ describe('routeHttpGateway edge branches', () => {
     try {
       // BYO server → onListen fires synchronously instead of after listen().
       expect(onListen).toHaveBeenCalledWith(server);
-      await vi.waitFor(() => expect(gateway.ports.size).toBe(1));
+      await vi.waitFor(() => expect(gateway.ports.size).toBe(1), SPAWN_WAIT);
       const res = await fetch(`http://127.0.0.1:${port}/a/who`);
       expect((await res.json()).url).toBe('/who');
       const fallback = await fetch(`http://127.0.0.1:${port}/main`);

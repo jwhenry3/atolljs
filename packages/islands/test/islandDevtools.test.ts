@@ -191,6 +191,72 @@ describe('island.* commands', () => {
     island.destroy();
   });
 
+  it('covers shadow roots, long text, text highlights, bad ids, and the overlay lifecycle', async () => {
+    on();
+    const el = host();
+    const island = await mountIsland({ worker: perfWorker, el, app: 'tree', props: { rows: 2, label: 'r' } });
+    const instance = island.instance;
+    // Page-side DOM the dashboard still walks: a shadow root and an over-cap text node.
+    const row = el.querySelector('.row')!;
+    const shadow = row.attachShadow({ mode: 'open' });
+    shadow.appendChild(realDoc.createElement('b'));
+    el.appendChild(realDoc.createTextNode('x'.repeat(250)));
+
+    const tree = (await runDevtoolsCommand('island.tree', { instance, maxNodes: 'lots' })) as { root: IslandTreeNode };
+    const sr = find(tree.root, (n) => n.tag === '#shadow-root')!;
+    expect(sr.id.endsWith('.s')).toBe(true);
+    expect(sr.attrs).toEqual([]);
+    expect(sr.children[0].tag).toBe('b');
+    const long = find(tree.root, (n) => n.tag === '#text' && (n.text ?? '').startsWith('xxx'))!;
+    expect(long.text).toHaveLength(201);
+    expect(long.text!.endsWith('…')).toBe(true);
+
+    expect((await runDevtoolsCommand('island.highlight', { instance, id: sr.id })) as { ok: boolean }).toMatchObject({ ok: true });
+    const overlay = realDoc.querySelector<HTMLElement>('[data-atoll-devtools="highlight"]')!;
+    expect(overlay.textContent).toMatch(/^#shadow-root /);
+    expect(await runDevtoolsCommand('island.highlight', { instance, id: long.id })).toMatchObject({ ok: true });
+    expect(overlay.textContent).toMatch(/^#text /);
+    expect(await runDevtoolsCommand('island.highlight', { instance, id: '1.0' })).toEqual({ ok: false });
+
+    // A removed overlay is rebuilt on the next highlight.
+    overlay.remove();
+    await runDevtoolsCommand('island.highlight', { instance, id: '0.0' });
+    const rebuilt = realDoc.querySelector<HTMLElement>('[data-atoll-devtools="highlight"]')!;
+    expect(rebuilt).not.toBe(overlay);
+    expect(rebuilt.style.display).toBe('block');
+
+    await expect(runDevtoolsCommand('island.updateProps', { instance, props: [1] })).rejects.toThrow(/must be an object/);
+    await expect(runDevtoolsCommand('island.updateProps', { instance, props: null })).rejects.toThrow(/must be an object/);
+    await expect(runDevtoolsCommand('island.tree', {})).rejects.toThrow(/not mounted/);
+
+    // Untracking the highlighted island hides the overlay.
+    island.destroy();
+    expect(rebuilt.style.display).toBe('none');
+  });
+
+  it('updateProps restores [fn] inside arrays and nested objects, and keeps literal "[fn]" strings', async () => {
+    on();
+    const el = host();
+    const fn = callbackProp(() => {});
+    const island = await mountIsland({
+      worker: perfWorker, el, app: 'tree',
+      props: { rows: 1, label: 'r', list: [fn, 2], nested: { cb: fn }, flat: 7 },
+    });
+    const update = vi.spyOn(island, 'updateProps');
+    await runDevtoolsCommand('island.updateProps', {
+      instance: island.instance,
+      props: { rows: 1, label: 'r', list: ['[fn]', 3], nested: { cb: '[fn]' }, flat: { cb: '[fn]' }, extra: '[fn]' },
+    });
+    const sent = update.mock.calls[0][0] as Record<string, unknown>;
+    expect((sent.list as unknown[])[0]).toBe(fn);
+    expect((sent.list as unknown[])[1]).toBe(3);
+    expect((sent.nested as Record<string, unknown>).cb).toBe(fn);
+    // No live callback at that path: the placeholder stays a string.
+    expect((sent.flat as Record<string, unknown>).cb).toBe('[fn]');
+    expect(sent.extra).toBe('[fn]');
+    island.destroy();
+  });
+
   it("includes a nested island's replayed DOM in the outer tree; the nested instance itself isn't commandable", async () => {
     on();
     const el = host();
