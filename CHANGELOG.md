@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+### `@atolljs/devtools`: overlay resize and clamping
+
+- **The flyout resizes from every edge and corner**, not just the
+  bottom-right grip, so a panel anchored at the bottom-right can grow up
+  and to the left.
+- **Dragging keeps the whole panel on screen**, close button included.
+  Before, only a 60px strip had to stay visible, so the header's ✕ could end
+  up offscreen. Clamping uses the visible viewport (page scrollbar excluded).
+- **The panel refits** when the window resizes, when a page scrollbar
+  appears, and when a drag starts. A size saved on a larger screen shrinks
+  to fit instead of overflowing.
+
 ## 0.1.8
 
 `connectWorker` / `connectSubWorker` take a `workers` count and build a

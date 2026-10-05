@@ -387,6 +387,15 @@ link carries the current view. The overlay listens for Alt+Shift+D on the
 host page and for an `atoll-devtools:toggle` message the iframe posts for
 the same chord.
 
+The overlay moves by its header and resizes from any edge or corner. Every
+move and resize is clamped so the whole panel, header close button included,
+stays inside `document.documentElement.clientWidth`/`clientHeight` (the
+viewport minus page scrollbars), and resizing stops at a 340×220 minimum.
+The first drag pins a corner- or center-anchored panel to explicit
+`left`/`top`. It refits on window `resize`, on a `ResizeObserver` callback
+for `<html>` (a scrollbar appearing fires no `resize` event), and at the
+start of each drag, so a persisted size from a larger screen can't overflow.
+
 ## Time basis
 
 Every event's `at` is `performance.now()` on the thread that emitted it,

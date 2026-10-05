@@ -153,6 +153,60 @@ describe('mountDevtoolsOverlay', () => {
     o.unmount();
   });
 
+  const edge = (p: HTMLElement, e: string) => p.querySelector(`[data-edge="${e}"]`) as HTMLElement;
+  const dragBy = (el: HTMLElement, dx: number, dy: number) => {
+    el.dispatchEvent(ptr('pointerdown', 0, 0));
+    dispatchEvent(ptr('pointermove', dx, dy));
+    dispatchEvent(ptr('pointerup'));
+  };
+  const box = (p: HTMLElement) => ['left', 'top', 'width', 'height'].map((k) => parseFloat((p.style as unknown as Record<string, string>)[k]));
+
+  it('keeps the whole panel, close button included, inside the viewport while dragging', () => {
+    const o = mountDevtoolsOverlay({ startOpen: true });
+    const p = panel();
+    dragBy(p.firstElementChild as HTMLElement, 5000, 5000);
+    const [left, top, w, h] = box(p);
+    expect(left + w).toBe(innerWidth);
+    expect(top + h).toBe(innerHeight);
+    dragBy(p.firstElementChild as HTMLElement, -9000, -9000);
+    expect(box(p).slice(0, 2)).toEqual([0, 0]);
+    o.unmount();
+  });
+
+  it('resizes from the left and top edges, moving the panel and keeping the floor', () => {
+    const o = mountDevtoolsOverlay({ startOpen: true, width: 500, height: 400 });
+    const p = panel();
+    dragBy(p.firstElementChild as HTMLElement, 200, 100);
+    expect(box(p)).toEqual([200, 100, 500, 400]);
+    dragBy(edge(p, 'w'), -50, 0);
+    expect(box(p)).toEqual([150, 100, 550, 400]);
+    dragBy(edge(p, 'n'), 0, 1000);
+    expect(box(p)).toEqual([150, 100 + 400 - 220, 550, 220]);
+    dragBy(edge(p, 'nw'), -9000, -9000);
+    const [left, top] = box(p);
+    expect([left, top]).toEqual([0, 0]);
+    o.unmount();
+  });
+
+  it('stops edge resizes at the viewport and refits when the window shrinks', () => {
+    const o = mountDevtoolsOverlay({ startOpen: true });
+    const p = panel();
+    dragBy(edge(p, 'e'), 5000, 0);
+    expect(box(p)[2]).toBe(innerWidth);
+    const was = Object.getOwnPropertyDescriptor(window, 'innerWidth');
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 500 });
+    try {
+      dispatchEvent(new Event('resize'));
+      const [left, , w] = box(p);
+      expect(w).toBe(500);
+      expect(left).toBe(0);
+    } finally {
+      if (was) Object.defineProperty(window, 'innerWidth', was);
+      else delete (window as { innerWidth?: number }).innerWidth;
+    }
+    o.unmount();
+  });
+
   it('unmount removes both the panel and the toggle', () => {
     const o = mountDevtoolsOverlay();
     o.unmount();

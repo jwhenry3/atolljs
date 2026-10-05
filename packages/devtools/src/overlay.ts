@@ -66,7 +66,21 @@ const BTN_STYLE =
 const PANEL_STYLE =
   'position:fixed;z-index:2147483646;display:flex;flex-direction:column;' +
   'background:#0d1117;border:1px solid #30363d;border-radius:8px;' +
-  'box-shadow:0 12px 40px #000c;overflow:hidden;min-width:340px;min-height:220px';
+  'box-shadow:0 12px 40px #000c;overflow:hidden;min-width:340px;min-height:220px;' +
+  'max-width:100vw;max-height:100vh;box-sizing:border-box';
+
+type Edge = 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw';
+const EDGE_CSS: Record<Edge, string> = {
+  n: 'top:0;left:10px;right:10px;height:4px;cursor:ns-resize',
+  s: 'bottom:0;left:10px;right:16px;height:5px;cursor:ns-resize',
+  e: 'right:0;top:10px;bottom:16px;width:5px;cursor:ew-resize',
+  w: 'left:0;top:10px;bottom:10px;width:5px;cursor:ew-resize',
+  ne: 'right:0;top:0;width:10px;height:10px;cursor:nesw-resize',
+  nw: 'left:0;top:0;width:10px;height:10px;cursor:nwse-resize',
+  sw: 'left:0;bottom:0;width:10px;height:10px;cursor:nesw-resize',
+  se: 'right:0;bottom:0;width:16px;height:16px;cursor:nwse-resize;' +
+    'background:linear-gradient(135deg,transparent 50%,#30363d 50%);border-radius:0 0 7px',
+};
 
 const ANCHOR: Record<DevtoolsOverlayPosition, (m: number) => string> = {
   topleft: (m) => `left:${m}px;top:${m}px`,
@@ -173,24 +187,51 @@ export function mountDevtoolsOverlay(opts: DevtoolsOverlayOptions = {}): Devtool
   frame.title = 'atoll devtools dashboard';
   frame.style.cssText = 'flex:1;border:0;background:#0d1117;min-height:0';
 
-  // manual resize grip — CSS `resize` doesn't work over an iframe
-  const grip = document.createElement('div');
-  grip.setAttribute('aria-hidden', 'true');
-  grip.style.cssText =
-    'position:absolute;right:0;bottom:0;width:16px;height:16px;cursor:nwse-resize;' +
-    'background:linear-gradient(135deg,transparent 50%,#30363d 50%);border-radius:0 0 7px';
-  panel.append(head, frame, grip);
+  // Manual resize handles on every edge and corner (CSS `resize` doesn't work
+  // over an iframe). The visible se grip stays the panel's last child.
+  const handles = (['n', 's', 'e', 'w', 'ne', 'nw', 'sw', 'se'] as const).map((edge) => {
+    const h = document.createElement('div');
+    h.setAttribute('aria-hidden', 'true');
+    h.dataset.edge = edge;
+    h.style.cssText = `position:absolute;z-index:1;${EDGE_CSS[edge]}`;
+    return h;
+  });
+  panel.append(head, frame, ...handles);
   document.body.append(panel, btn);
 
+  const px = (v: string) => parseFloat(v) || 0;
+  const vw = () => document.documentElement.clientWidth || innerWidth;
+  const vh = () => document.documentElement.clientHeight || innerHeight;
+  const fitW = (w: number) => Math.max(MIN_W, Math.min(w, vw()));
+  const fitH = (h: number) => Math.max(MIN_H, Math.min(h, vh()));
+
+  /** Explicit left/top, clamped so the whole panel (close button included) stays in the viewport. */
   const placeAt = (left: number, top: number) => {
-    // keep at least 40px of the title bar on screen
-    panel.style.left = `${Math.min(Math.max(0, left), Math.max(0, innerWidth - 60))}px`;
-    panel.style.top = `${Math.min(Math.max(0, top), Math.max(0, innerHeight - 40))}px`;
+    const w = px(panel.style.width), h = px(panel.style.height);
+    panel.style.left = `${Math.min(Math.max(0, left), Math.max(0, vw() - w))}px`;
+    panel.style.top = `${Math.min(Math.max(0, top), Math.max(0, vh() - h))}px`;
     panel.style.right = 'auto';
     panel.style.bottom = 'auto';
     panel.style.transform = 'none'; // drop the center anchor's translateX
   };
-  if (typeof saved.left === 'number' && typeof saved.top === 'number') placeAt(saved.left, saved.top);
+  const pinned = () => panel.style.right === 'auto';
+  /** Swap a corner/center anchor for explicit left/top at the panel's current spot. */
+  const pin = () => {
+    if (pinned()) return;
+    const r = panel.getBoundingClientRect();
+    placeAt(r.left, r.top);
+  };
+  /** Shrink to the viewport and pull back on screen (window resized, or reopened smaller). */
+  const refit = () => {
+    panel.style.width = `${fitW(px(panel.style.width))}px`;
+    panel.style.height = `${fitH(px(panel.style.height))}px`;
+    if (pinned()) placeAt(px(panel.style.left), px(panel.style.top));
+  };
+  if (typeof saved.left === 'number' && typeof saved.top === 'number') {
+    panel.style.width = `${fitW(W)}px`;
+    panel.style.height = `${fitH(H)}px`;
+    placeAt(saved.left, saved.top);
+  }
 
   // Only what the user changed is remembered: an untouched size/position
   // keeps following the options.
@@ -202,23 +243,21 @@ export function mountDevtoolsOverlay(opts: DevtoolsOverlayOptions = {}): Devtool
       mem.width = parseFloat(panel.style.width);
       mem.height = parseFloat(panel.style.height);
     }
-    if (what === 'move') {
+    // resizing pins the panel and a w/n edge moves it, so size saves position too
+    if (what === 'move' || what === 'size') {
       mem.left = parseFloat(panel.style.left);
       mem.top = parseFloat(panel.style.top);
     }
     try { localStorage.setItem(storeKey, JSON.stringify(mem)); } catch { /* storage off */ }
   };
 
-  /** Pointer-drag helper: run `move` on pointermove until pointerup. */
+  /** Pointer-drag helper: run `move` with the total offset from the press until pointerup. */
   const drag = (e: PointerEvent, what: 'move' | 'size', move: (dx: number, dy: number) => void) => {
     e.preventDefault();
-    let lx = e.clientX, ly = e.clientY;
+    const sx = e.clientX, sy = e.clientY;
     // the iframe would swallow pointermove while the cursor is over it
     frame.style.pointerEvents = 'none';
-    const mm = (ev: PointerEvent) => {
-      move(ev.clientX - lx, ev.clientY - ly);
-      lx = ev.clientX; ly = ev.clientY;
-    };
+    const mm = (ev: PointerEvent) => move(ev.clientX - sx, ev.clientY - sy);
     const up = () => {
       removeEventListener('pointermove', mm);
       removeEventListener('pointerup', up);
@@ -231,25 +270,45 @@ export function mountDevtoolsOverlay(opts: DevtoolsOverlayOptions = {}): Devtool
 
   head.onpointerdown = (e) => {
     if ((e.target as HTMLElement).closest('a,button')) return;
-    drag(e, 'move', (dx, dy) => {
-      const r = panel.getBoundingClientRect();
-      placeAt(r.left + dx, r.top + dy);
-    });
+    pin();
+    refit();
+    const l0 = px(panel.style.left), t0 = px(panel.style.top);
+    drag(e, 'move', (dx, dy) => placeAt(l0 + dx, t0 + dy));
   };
 
-  grip.onpointerdown = (e) => {
-    e.stopPropagation();
-    drag(e, 'size', (dx, dy) => {
-      const r = panel.getBoundingClientRect();
-      panel.style.width = `${Math.max(MIN_W, r.width + dx)}px`;
-      panel.style.height = `${Math.max(MIN_H, r.height + dy)}px`;
-    });
-  };
+  for (const h of handles) {
+    const edge = h.dataset.edge as Edge;
+    h.onpointerdown = (e) => {
+      e.stopPropagation();
+      pin();
+      refit();
+      const l0 = px(panel.style.left), t0 = px(panel.style.top);
+      const w0 = px(panel.style.width), h0 = px(panel.style.height);
+      drag(e, 'size', (dx, dy) => {
+        let left = l0, top = t0, w = w0, hh = h0;
+        if (edge.includes('e')) w = Math.max(MIN_W, Math.min(w0 + dx, vw() - l0));
+        if (edge.includes('s')) hh = Math.max(MIN_H, Math.min(h0 + dy, vh() - t0));
+        if (edge.includes('w')) {
+          left = Math.max(0, Math.min(l0 + dx, l0 + w0 - MIN_W));
+          w = l0 + w0 - left;
+        }
+        if (edge.includes('n')) {
+          top = Math.max(0, Math.min(t0 + dy, t0 + h0 - MIN_H));
+          hh = t0 + h0 - top;
+        }
+        panel.style.width = `${w}px`;
+        panel.style.height = `${hh}px`;
+        panel.style.left = `${left}px`;
+        panel.style.top = `${top}px`;
+      });
+    };
+  }
 
   const set = (v: boolean, focus = false, persist = true) => {
     const hadFocus = panel.contains(document.activeElement);
     open = v;
     panel.style.display = v ? 'flex' : 'none';
+    if (v) refit();
     btn.style.display = v ? 'none' : 'block';
     btn.setAttribute('aria-expanded', String(v));
     if (v && focus) frame.focus();
@@ -272,8 +331,13 @@ export function mountDevtoolsOverlay(opts: DevtoolsOverlayOptions = {}): Devtool
       route = d.hash;
     }
   };
+  const onResize = () => { if (open) refit(); };
   if (isHotkey) addEventListener('keydown', onKey);
   addEventListener('message', onMessage);
+  addEventListener('resize', onResize);
+  // a page scrollbar appearing shrinks the visible width without a window resize event
+  const ro = typeof ResizeObserver === 'function' ? new ResizeObserver(onResize) : undefined;
+  ro?.observe(document.documentElement);
 
   set(opts.startOpen ?? saved.open === true, false, false);
 
@@ -284,6 +348,8 @@ export function mountDevtoolsOverlay(opts: DevtoolsOverlayOptions = {}): Devtool
     unmount: () => {
       removeEventListener('keydown', onKey);
       removeEventListener('message', onMessage);
+      removeEventListener('resize', onResize);
+      ro?.disconnect();
       panel.remove();
       btn.remove();
     },
