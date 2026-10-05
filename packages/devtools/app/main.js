@@ -9,6 +9,7 @@
 // Feature panels live in ./panels/*.js and plug in through ./api.js (see
 // PANELS at the bottom): this file owns the reducer, core views, transport.
 import { api } from './api.js';
+import { FW_LOGOS } from './fw-logos.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
@@ -1394,17 +1395,6 @@ function fitTopo(canvas, world) {
   topo.oy = (H - world.height * topo.scale) / 2;
 }
 
-/** framework → [chip color, short tag] — HTML chips + fallback marks. */
-const FW_BADGES = {
-  react: ['#61dafb', '⚛'],
-  vue: ['#42b883', 'V'],
-  svelte: ['#ff3e00', 'S'],
-  angular: ['#dd0031', 'A'],
-  solid: ['#4f88c6', 'So'],
-  vanilla: ['#f0db4f', 'JS'],
-  leaflet: ['#19993b', 'L'],
-};
-
 /** Structural (non-island) nodes — a lettered disc, so pools and plain
  *  workers never read as a framework island. */
 const ROLE_MARKS = {
@@ -1426,96 +1416,31 @@ function drawRoleMark(ctx, m, x, y, s, dead) {
   ctx.textBaseline = 'top';
 }
 
-/** Real framework marks, drawn at icon size (s ≈ node radius). */
+/** Framework logos (FW_LOGOS paths in their brand colours) on a disc, drawn
+ *  at icon size (s ≈ node radius). Logos too dark for the dashboard sit on
+ *  a light disc. Unknown tags fall back to a lettered disc. */
+const fwPaths = {};
 function drawFwMark(ctx, fw, x, y, s, dead) {
   if (ROLE_MARKS[fw]) return drawRoleMark(ctx, ROLE_MARKS[fw], x, y, s, dead);
+  const logo = FW_LOGOS[fw];
   ctx.save();
   if (dead) ctx.globalAlpha = 0.35;
-  switch (fw) {
-    case 'react': {
-      // the atom — nucleus + three orbital ellipses
-      ctx.beginPath(); ctx.arc(x, y, s, 0, 7);
-      ctx.fillStyle = '#22272e'; ctx.fill();
-      ctx.strokeStyle = '#61dafb'; ctx.lineWidth = s * 0.13;
-      for (const deg of [0, 60, 120]) {
-        ctx.beginPath();
-        ctx.ellipse(x, y, s * 0.95, s * 0.38, (deg * Math.PI) / 180, 0, 7);
-        ctx.stroke();
-      }
-      ctx.beginPath(); ctx.arc(x, y, s * 0.15, 0, 7);
-      ctx.fillStyle = '#61dafb'; ctx.fill();
-      break;
-    }
-    case 'vue': {
-      // nested V — green outer chevron, dark inner chevron
-      const h = s * 0.92;
-      ctx.beginPath();
-      ctx.moveTo(x - s, y - h); ctx.lineTo(x + s, y - h); ctx.lineTo(x, y + h);
-      ctx.closePath(); ctx.fillStyle = '#42b883'; ctx.fill();
-      ctx.beginPath();
-      ctx.moveTo(x - s * 0.58, y - h); ctx.lineTo(x + s * 0.58, y - h); ctx.lineTo(x, y + h * 0.14);
-      ctx.closePath(); ctx.fillStyle = '#35495e'; ctx.fill();
-      break;
-    }
-    case 'svelte': {
-      ctx.beginPath(); ctx.arc(x, y, s, 0, 7);
-      ctx.fillStyle = '#ff3e00'; ctx.fill();
-      ctx.font = `bold ${s * 1.3}px ui-monospace, monospace`;
-      ctx.fillStyle = '#fff'; ctx.textBaseline = 'middle';
-      ctx.fillText('S', x, y + s * 0.06);
-      break;
-    }
-    case 'angular': {
-      // shield + A
-      ctx.beginPath();
-      ctx.moveTo(x, y - s); ctx.lineTo(x + s * 0.95, y - s * 0.62);
-      ctx.lineTo(x + s * 0.78, y + s * 0.72); ctx.lineTo(x, y + s);
-      ctx.lineTo(x - s * 0.78, y + s * 0.72); ctx.lineTo(x - s * 0.95, y - s * 0.62);
-      ctx.closePath(); ctx.fillStyle = '#dd0031'; ctx.fill();
-      ctx.font = `bold ${s * 1.15}px ui-monospace, monospace`;
-      ctx.fillStyle = '#fff'; ctx.textBaseline = 'middle';
-      ctx.fillText('A', x, y + s * 0.1);
-      break;
-    }
-    case 'solid': {
-      ctx.beginPath(); ctx.arc(x, y, s, 0, 7);
-      ctx.fillStyle = '#4f88c6'; ctx.fill();
-      ctx.font = `bold ${s * 1.15}px ui-monospace, monospace`;
-      ctx.fillStyle = '#fff'; ctx.textBaseline = 'middle';
-      ctx.fillText('S', x, y + s * 0.06);
-      break;
-    }
-    case 'vanilla': {
-      // the JS badge — yellow square, black JS
-      ctx.beginPath();
-      ctx.roundRect(x - s, y - s, s * 2, s * 2, s * 0.14);
-      ctx.fillStyle = '#f0db4f'; ctx.fill();
-      ctx.font = `bold ${s * 0.85}px ui-monospace, monospace`;
-      ctx.fillStyle = '#0d1117'; ctx.textBaseline = 'middle';
-      ctx.fillText('JS', x, y + s * 0.18);
-      break;
-    }
-    case 'leaflet': {
-      // green rounded square + white leaf
-      ctx.beginPath();
-      ctx.roundRect(x - s, y - s, s * 2, s * 2, s * 0.25);
-      ctx.fillStyle = '#19993b'; ctx.fill();
-      ctx.beginPath();
-      ctx.ellipse(x, y - s * 0.08, s * 0.3, s * 0.58, Math.PI / 4, 0, 7);
-      ctx.fillStyle = '#fff'; ctx.fill();
-      ctx.beginPath();
-      ctx.moveTo(x - s * 0.45, y + s * 0.42); ctx.lineTo(x + s * 0.45, y - s * 0.48);
-      ctx.strokeStyle = '#19993b'; ctx.lineWidth = s * 0.07; ctx.stroke();
-      break;
-    }
-    default: {
-      // tagged but unknown framework — green disc + first letter
-      ctx.beginPath(); ctx.arc(x, y, s * 0.85, 0, 7);
-      ctx.fillStyle = dead ? '#484f58' : '#3fb950'; ctx.fill();
-      ctx.font = `bold ${s * 0.9}px ui-monospace, monospace`;
-      ctx.fillStyle = '#0d1117'; ctx.textBaseline = 'middle';
-      ctx.fillText(fw[0].toUpperCase(), x, y);
-    }
+  if (logo && typeof Path2D === 'function') {
+    const n = parseInt(logo.hex.slice(1), 16);
+    const lum = (0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255;
+    ctx.beginPath(); ctx.arc(x, y, s, 0, 7);
+    ctx.fillStyle = lum < 0.35 ? '#f0f3f6' : '#22272e'; ctx.fill();
+    const k = (s * 1.3) / 24;
+    ctx.translate(x - 12 * k, y - 12 * k);
+    ctx.scale(k, k);
+    ctx.fillStyle = logo.hex;
+    ctx.fill(fwPaths[fw] ??= new Path2D(logo.d));
+  } else {
+    ctx.beginPath(); ctx.arc(x, y, s * 0.85, 0, 7);
+    ctx.fillStyle = dead ? '#484f58' : '#3fb950'; ctx.fill();
+    ctx.font = `bold ${s * 0.9}px ui-monospace, monospace`;
+    ctx.fillStyle = '#0d1117'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(fw[0].toUpperCase(), x, y);
   }
   ctx.restore();
   ctx.textBaseline = 'top';

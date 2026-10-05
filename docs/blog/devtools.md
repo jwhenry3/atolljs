@@ -66,7 +66,7 @@ no build step, rendering whichever event stream it hears:
 - **The app map**: one world-space canvas drawn like the logo it's
   named for: your app session at the center, pool sockets on the inner
   rim, workers on the mid orbit, islands on the outer orbit rendered as
-  framework marks (⚛, V, S, A…). Wheel to zoom, clustering tiers
+  their framework's logo (React, Vue, Svelte, Angular…). Wheel to zoom, clustering tiers
   collapse islands into a ring, sessions into labeled discs, click to
   drill into any worker or island's own inspector.
 - **Tasks**: a waterfall with one swimlane per worker slot:

@@ -162,10 +162,16 @@ Static `index.html` + `main.js`, no build step, no dependencies.
   sub-worker is a violet W, or its island(s) in a violet ring, labeled
   with its own key segment (the link already shows the parent):
   recursively for deeper nesting.
-- Framework icons are drawn once via `drawFwMark` into offscreen
-  canvases → cached data URLs → `<img class="fwicon">` everywhere tables
-  need an icon. One icon implementation feeds map + tables: don't fork
-  it.
+- Framework icons are the real logos: `app/fw-logos.js` holds Simple Icons
+  (CC0) 24×24 path data and official brand hex per `framework` tag
+  (`react`, `vue`, `svelte`, `solid`, `angular`, `vanilla` as the
+  JavaScript badge, `leaflet`, `nextjs`). Copy new entries from a pinned
+  Simple Icons release rather than drawing them by hand. `drawFwMark` fills
+  the path on a disc (light when the brand colour is too dark for the
+  dashboard, e.g. Angular, Solid, Next.js); unknown tags get a lettered
+  disc. It is drawn once into offscreen canvases → cached data URLs →
+  `<img class="fwicon">` everywhere tables need an icon. One icon
+  implementation feeds map + tables: don't fork it.
 
 ## Node apps
 

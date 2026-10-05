@@ -14,6 +14,15 @@
   appears, and when a drag starts. A size saved on a larger screen shrinks
   to fit instead of overflowing.
 
+### `@atolljs/devtools`: real framework logos
+
+- **The app map and every table show the real logos** for React, Vue,
+  Svelte, Solid, Angular, JavaScript (`vanilla`), Leaflet and Next.js,
+  using Simple Icons path data in each brand's official colour. They
+  replace the hand-drawn approximations and letter glyphs ("S", "A").
+  Marks whose brand colour is too dark for the dashboard (Angular, Solid,
+  Next.js) sit on a light disc.
+
 ## 0.1.8
 
 `connectWorker` / `connectSubWorker` take a `workers` count and build a
