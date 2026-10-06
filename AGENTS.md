@@ -125,6 +125,10 @@ examples/<fw>/        demo apps; examples/react-dom-worker/ is the islands demo;
 examples/express|fastify|hono|koa   plain-Node REST APIs on @atolljs/node
                       (esbuild-bundled worker entries — tsx paths don't reach
                       worker_threads)
+pages-landing/        the site-root landing page — a Vite app that mounts the
+                      examples/mfe worker islands (all five frameworks) as a
+                      live showcase; static assets live in public/, dist/ is
+                      the Pages root
 docs/                 this project's documentation (markdown)
 docs-consumer/        consumer docs site (Vite app — `npm run build` also runs
                       prerender.mjs, emitting one static HTML page per route)

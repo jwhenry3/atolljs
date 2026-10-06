@@ -43,6 +43,7 @@ jobs:
           cache: npm
           cache-dependency-path: |
             package-lock.json
+            pages-landing/package-lock.json
             docs-consumer/package-lock.json
             examples/react/package-lock.json
             examples/vue/package-lock.json
@@ -65,7 +66,7 @@ jobs:
           # root source tree, whose imports (react, zod, msgpackr, solid-js,
           # node:* types) resolve upward to the root node_modules.
           npm ci
-          for d in docs-consumer examples/react examples/vue examples/solid examples/svelte examples/angular examples/react-dom-worker examples/react-host examples/vue-host examples/solid-host examples/svelte-host examples/angular-host examples/mfe-publish examples/mfe-consumer; do
+          for d in pages-landing docs-consumer examples/react examples/vue examples/solid examples/svelte examples/angular examples/react-dom-worker examples/react-host examples/vue-host examples/solid-host examples/svelte-host examples/angular-host examples/mfe-publish examples/mfe-consumer; do
             echo "=== npm ci: $d ==="
             (cd "$d" && npm ci)
           done

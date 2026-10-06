@@ -3,6 +3,9 @@
 export const apps = [
   ['devtools', 'packages/devtools', 4780],
   ['consumer-docs', 'docs-consumer', 4181],
+  // The site-root landing page is a Vite app too — it mounts the five
+  // examples/mfe worker islands directly on the homepage.
+  ['landing', 'pages-landing', 4175],
   ['react', 'examples/react', 5173],
   ['vue', 'examples/vue', 5174],
   ['solid', 'examples/solid', 5175],

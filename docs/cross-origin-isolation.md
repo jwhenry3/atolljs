@@ -88,7 +88,7 @@ cross-origin*.
 When the server can't send headers at all, a **service worker** can inject
 them: it intercepts every response in its scope and rewrites the headers
 before the document parses. This repo ships `coi-sw.js` (source in
-`pages-landing/`, copied beside each entry point by `assemble-pages.mjs`),
+`pages-landing/public/`, copied beside each entry point by `assemble-pages.mjs`),
 modeled on `coi-serviceworker`:
 
 - Each entry HTML registers `./coi-sw.js` via an inline snippet. The script
@@ -119,7 +119,7 @@ so their `index.html` shows a notice instead.
 | angular dev server | `serve.options.headers` in `angular.json` |
 | next.js (`dev` + `start`) | `headers()` in `next.config.ts` |
 | iframe delegation | `allow="cross-origin-isolated"` in `docs-consumer/src/components/DemoFrame.tsx` |
-| GitHub Pages deploy | `coi-sw.js` service worker (source `pages-landing/coi-sw.js`, fanned out by `scripts/assemble-pages.mjs`; inline register+reload snippet in every entry `index.html`) |
+| GitHub Pages deploy | `coi-sw.js` service worker (source `pages-landing/public/coi-sw.js`, fanned out by `scripts/assemble-pages.mjs`; inline register+reload snippet in every entry `index.html`) |
 
 Re-run the empirical check anytime: `node scripts/diag-sab.mjs` spins up fresh
 servers and probes the matrix in real Chromium;

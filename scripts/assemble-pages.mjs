@@ -1,7 +1,7 @@
 // Assembles the GitHub Pages artifact into dist-pages/:
 //
 //   dist-pages/
-//     index.html                  landing page (pages-landing/)
+//     index.html                  landing page (pages-landing/dist/)
 //     consumer/                   docs-consumer site
 //       react/ vue/ … react-dom-worker/       demos embedded by consumer iframes
 //       v0.1.3/ v0.1.4/ …         release snapshots (docs-versions/*.tar.gz)
@@ -31,11 +31,11 @@ import { mountConsumerTree } from './pages-lib.mjs';
 const root = fileURLToPath(new URL('..', import.meta.url));
 const out = join(root, 'dist-pages');
 
-const landingSrc = join(root, 'pages-landing');
+const landingSrc = join(root, 'pages-landing', 'dist');
 const versionsDir = join(root, 'docs-versions');
 
 if (!existsSync(join(landingSrc, 'index.html'))) {
-  console.error('assemble-pages: pages-landing/index.html missing');
+  console.error('assemble-pages: pages-landing/dist/index.html missing — build it first');
   process.exit(1);
 }
 
@@ -58,7 +58,7 @@ function pickSnapshots() {
 
 rmSync(out, { recursive: true, force: true });
 cpSync(landingSrc, out, { recursive: true });
-console.log('mounted pages-landing/ -> dist-pages/');
+console.log('mounted pages-landing/dist -> dist-pages/');
 
 mountConsumerTree(root, join(out, 'consumer'));
 console.log('mounted docs-consumer/dist -> dist-pages/consumer/ (+ demos, coi-sw.js)');

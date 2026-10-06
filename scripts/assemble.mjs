@@ -1,10 +1,10 @@
 // Copies each built app into dist/<name>/ under the root dist, so one static
 // server can reach every app's index.html by path:
-//   /            pages-landing index (copied in below)
+//   /            pages-landing/dist (copied in below)
 //   /consumer/   docs-consumer site
 //   /react/ /vue/ /solid/ /svelte/ /angular/   framework examples
 // (Next.js is server-rendered — it isn't copied; `next start` serves it.)
-import { cpSync, copyFileSync, existsSync, mkdirSync, rmSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, rmSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 import { mountDevtoolsApp } from './pages-lib.mjs';
@@ -34,12 +34,16 @@ const mounts = [
   ['mfe-consumer', 'examples/mfe-consumer/dist'],
 ];
 
-// The root page is the static landing — the dashboard app was removed when
-// src/ became the package source root (lib build emits to dist/ alongside).
-mkdirSync(join(root, 'dist'), { recursive: true });
-for (const f of ['index.html', 'coi-sw.js']) {
-  copyFileSync(join(root, 'pages-landing', f), join(root, 'dist', f));
+// The root page is the landing app — a Vite build (index.html + the worker
+// bundles its live island showcase mounts). It shares dist/ with the lib
+// build, which emits alongside.
+const landingDist = join(root, 'pages-landing', 'dist');
+if (!existsSync(join(landingDist, 'index.html'))) {
+  console.error('assemble: pages-landing/dist missing — build the landing app first');
+  process.exit(1);
 }
+mkdirSync(join(root, 'dist'), { recursive: true });
+cpSync(landingDist, join(root, 'dist'), { recursive: true });
 
 for (const [name, dir] of mounts) {
   const src = join(root, dir);

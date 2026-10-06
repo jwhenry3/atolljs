@@ -8,6 +8,9 @@ const root = fileURLToPath(new URL('..', import.meta.url));
 const assemble = fileURLToPath(new URL('assemble-pages.mjs', import.meta.url));
 
 const projects = [
+  // The landing page is a Vite app: dist/ holds index.html + the worker
+  // bundles the homepage's live island showcase mounts.
+  ['landing', 'pages-landing'],
   ['docs-consumer', 'docs-consumer'],
   ['react', 'examples/react'],
   ['vue', 'examples/vue'],

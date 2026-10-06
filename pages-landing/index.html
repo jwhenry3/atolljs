@@ -51,31 +51,181 @@
       --text: #e4f2fb;
       --muted: #8fb6cd;
       --accent: #58c0f0;
+      --mono: 'Cascadia Code', 'JetBrains Mono', Consolas, monospace;
       font-family: 'Segoe UI', system-ui, sans-serif;
     }
     * { box-sizing: border-box; }
     body {
       margin: 0; color: var(--text);
-      min-height: 100vh; display: flex; align-items: center; justify-content: center;
       background:
         radial-gradient(1200px 700px at 50% -10%, #16405e 0%, transparent 60%),
         radial-gradient(900px 600px at 85% 110%, #0d2a3e 0%, transparent 55%),
         var(--bg);
     }
-    main { max-width: 780px; padding: 56px 24px; width: 100%; position: relative; z-index: 1; }
-    .brand-bg {
-      position: fixed; inset: 0; display: grid; place-items: center;
-      pointer-events: none; z-index: 0;
+    a { color: var(--accent); }
+
+    /* ── top nav ─────────────────────────────────────────────── */
+    .topnav {
+      position: sticky; top: 0; z-index: 10;
+      display: flex; align-items: center; gap: 28px;
+      padding: 14px 32px;
+      background: rgba(8, 20, 32, 0.8);
+      -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
     }
-    .brand-lockup { width: min(96vmin, 1100px); height: auto; opacity: 0.2; }
-    h1 { font-size: 2.1rem; margin: 0 0 10px; }
-    h1 .accent { color: var(--accent); }
-    .lead { color: var(--muted); font-size: 1.05rem; line-height: 1.6; margin: 0 0 40px; }
-    .cards { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-    @media (max-width: 640px) { .cards { grid-template-columns: 1fr; } }
+    .topnav .brand { display: flex; align-items: center; gap: 10px; text-decoration: none; color: var(--text); font-weight: 600; }
+    .topnav .brand img { width: 22px; height: 22px; }
+    .topnav nav { display: flex; gap: 22px; margin-left: auto; }
+    .topnav nav a { color: var(--muted); text-decoration: none; font-size: 0.9rem; }
+    .topnav nav a:hover { color: var(--text); }
+
+    .wrap { max-width: 1080px; margin: 0 auto; padding: 0 24px; }
+
+    /* ── hero ────────────────────────────────────────────────── */
+    .hero { padding: 88px 0 56px; text-align: center; position: relative; }
+    .brand-bg {
+      position: absolute; inset: -40px 0 auto; display: grid; place-items: center;
+      pointer-events: none; z-index: -1; overflow: hidden; height: 100%;
+    }
+    .brand-lockup { width: min(80vmin, 820px); height: auto; opacity: 0.16; }
+    .pill {
+      display: inline-block; padding: 4px 14px; border: 1px solid var(--border);
+      border-radius: 999px; font: 0.75rem var(--mono); color: var(--accent);
+      background: rgba(88, 192, 240, 0.07); margin-bottom: 22px;
+    }
+    .hero h1 { font-size: clamp(2.2rem, 5vw, 3.4rem); margin: 0 0 16px; letter-spacing: -0.02em; }
+    .hero h1 .accent { color: var(--accent); }
+    .hero .lead {
+      color: var(--muted); font-size: 1.1rem; line-height: 1.65;
+      max-width: 660px; margin: 0 auto 32px;
+    }
+    .cta-row { display: flex; gap: 14px; justify-content: center; align-items: center; flex-wrap: wrap; }
+    .btn {
+      display: inline-block; padding: 10px 26px; border-radius: 999px;
+      font-weight: 600; font-size: 0.95rem; text-decoration: none;
+      transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+    }
+    .btn-primary { background: var(--accent); color: #06202f; }
+    .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 8px 28px rgba(24, 122, 178, 0.35); }
+    .btn-ghost { border: 1px solid var(--border); color: var(--text); }
+    .btn-ghost:hover { border-color: var(--accent); }
+    .install {
+      margin-top: 26px; display: inline-flex; align-items: center; gap: 10px;
+      padding: 10px 20px; border: 1px solid var(--border); border-radius: 10px;
+      font: 0.85rem var(--mono); color: var(--muted); background: rgba(16, 35, 47, 0.65);
+    }
+    .install code { color: var(--text); }
+    .install .dollar { color: var(--accent); user-select: none; }
+
+    /* ── section scaffolding ─────────────────────────────────── */
+    section { padding: 56px 0; }
+    .sec-head { text-align: center; margin-bottom: 36px; }
+    .sec-head .over { font: 0.78rem var(--mono); color: var(--accent); letter-spacing: 0.08em; text-transform: uppercase; }
+    .sec-head h2 { font-size: 1.8rem; margin: 8px 0 10px; letter-spacing: -0.01em; }
+    .sec-head p { color: var(--muted); max-width: 620px; margin: 0 auto; line-height: 1.6; }
+
+    /* ── feature strip ───────────────────────────────────────── */
+    .features { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+    @media (max-width: 860px) { .features { grid-template-columns: repeat(2, 1fr); } }
+    @media (max-width: 520px) { .features { grid-template-columns: 1fr; } }
+    .feature {
+      border: 1px solid var(--border); border-radius: 12px; padding: 18px;
+      background: rgba(16, 35, 47, 0.45);
+    }
+    .feature h3 { margin: 0 0 6px; font-size: 0.95rem; }
+    .feature p { margin: 0; color: var(--muted); font-size: 0.82rem; line-height: 1.55; }
+
+    /* ── showcase panel ──────────────────────────────────────── */
+    .showcase {
+      border: 1px solid var(--border); border-radius: 16px; overflow: hidden;
+      background: rgba(16, 35, 47, 0.5);
+      -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+    }
+    .showcase-bar {
+      display: flex; justify-content: space-between; align-items: center; gap: 16px;
+      padding: 10px 18px; border-bottom: 1px solid var(--border);
+      font: 0.75rem var(--mono); color: var(--muted); flex-wrap: wrap;
+      background: rgba(8, 20, 32, 0.5);
+    }
+    .showcase-bar .live-dot::before {
+      content: ''; display: inline-block; width: 7px; height: 7px; border-radius: 50%;
+      background: #4ade80; margin-right: 7px;
+      animation: pulse 2s ease-in-out infinite;
+    }
+    @keyframes pulse { 50% { opacity: 0.35; } }
+    .isle-grid {
+      display: grid; grid-template-columns: repeat(6, 1fr); gap: 14px; padding: 18px;
+    }
+    @media (max-width: 860px) { .isle-grid { grid-template-columns: repeat(2, 1fr); } .isle.tall { grid-row: auto; } }
+    @media (max-width: 520px) { .isle-grid { grid-template-columns: 1fr; } }
+    .isle {
+      grid-column: span 3;
+      border: 1px solid var(--border); border-radius: 10px; overflow: hidden;
+      background: rgba(8, 20, 32, 0.55);
+      display: flex; flex-direction: column; min-width: 0;
+    }
+    .isle.tall { grid-row: span 2; }
+    .isle-head {
+      display: flex; align-items: center; gap: 8px;
+      padding: 7px 12px; border-bottom: 1px solid var(--border);
+      font: 0.72rem var(--mono); color: var(--muted);
+    }
+    .isle-head .fw { color: var(--text); font-weight: 700; }
+    .isle-head .pid {
+      margin-left: auto; padding: 1px 8px; border-radius: 8px;
+      background: #223042; color: #9aa4b2; font-size: 0.68rem;
+    }
+    .isle-head .pid.live { background: #1f4d2e; color: #a9e5c3; }
+    .isle-head .pid.dead { background: #4d1f1f; color: #e5a9a9; }
+    .isle-body { padding: 14px; flex: 1; }
+    .isle-error { color: #e5a9a9; font: 0.78rem var(--mono); }
+    .isle-foot {
+      padding: 6px 12px; border-top: 1px dashed var(--border);
+      font: 0.68rem var(--mono); color: #5f7387;
+    }
+    .showcase-foot {
+      display: flex; justify-content: space-between; gap: 14px; flex-wrap: wrap;
+      padding: 10px 18px; border-top: 1px solid var(--border);
+      font: 0.75rem var(--mono); color: var(--muted);
+      background: rgba(8, 20, 32, 0.5);
+    }
+    #isle-event { color: var(--accent); }
+
+    /* island content (rendered in workers, styled here — real DOM) */
+    .mfe-card { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .mfe-heading { font-size: 13px; color: var(--muted); }
+    .mfe-btn {
+      padding: 4px 12px; background: #22354f; color: var(--text);
+      font-size: 12px; border: 0; border-radius: 6px; cursor: pointer; font-family: inherit;
+    }
+    .mfe-btn:hover { background: #2d4365; }
+    .mfe-row { display: flex; gap: 6px; }
+    .mfe-list { margin: 10px 0 0; padding-left: 16px; font: 11px/1.8 var(--mono); color: #7d8a9c; }
+    .mfe-list-line { border-left: 2px solid var(--border); padding-left: 8px; list-style: none; }
+    .mfe-readout { font: 11px var(--mono); color: #7d8a9c; margin-top: 6px; }
+    .mfe-range { accent-color: var(--accent); }
+    .isle-body input:not([type='range']) {
+      padding: 6px 10px; background: #1c2330; color: var(--text);
+      border: 1px solid #303845; border-radius: 6px; font-family: inherit;
+    }
+
+    /* ── pillars ─────────────────────────────────────────────── */
+    .pillars { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }
+    @media (max-width: 700px) { .pillars { grid-template-columns: 1fr; } }
+    .pillar {
+      border: 1px solid var(--border); border-radius: 12px; padding: 22px;
+      background: rgba(16, 35, 47, 0.45);
+      transition: border-color 0.15s ease;
+    }
+    .pillar:hover { border-color: var(--accent); }
+    .pillar h3 { margin: 0 0 8px; font-size: 1rem; }
+    .pillar p { margin: 0; color: var(--muted); font-size: 0.86rem; line-height: 1.6; }
+
+    /* ── learn-more cards ────────────────────────────────────── */
+    .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+    @media (max-width: 860px) { .cards { grid-template-columns: 1fr; } }
     .card {
       display: block; background: rgba(16, 35, 47, 0.65); border: 1px solid var(--border);
-      -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
       border-radius: 12px; padding: 24px; color: var(--text); text-decoration: none;
       transition: border-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
     }
@@ -84,18 +234,19 @@
       transform: translateY(-2px);
       box-shadow: 0 8px 28px rgba(24, 122, 178, 0.18);
     }
-    .card h2 { margin: 0 0 8px; font-size: 1.15rem; }
-    .card h2 .path { color: var(--accent); font-weight: 400; font-size: 0.85rem; margin-left: 8px; }
-    .card p { margin: 0; color: var(--muted); font-size: 0.9rem; line-height: 1.5; }
-    .note {
-      margin: 0 0 24px; padding: 14px 16px; border: 1px solid var(--border);
-      border-left: 3px solid var(--accent);
-      border-radius: 8px; color: var(--muted); font-size: 0.85rem; line-height: 1.6;
-      background: rgba(88, 192, 240, 0.05);
+    .card h3 { margin: 0 0 8px; font-size: 1.05rem; }
+    .card h3 .path { color: var(--accent); font-weight: 400; font-size: 0.78rem; margin-left: 8px; font-family: var(--mono); }
+    .card p { margin: 0; color: var(--muted); font-size: 0.88rem; line-height: 1.55; }
+
+    .mission {
+      border: 1px solid var(--border); border-left: 3px solid var(--accent);
+      border-radius: 10px; padding: 18px 20px; color: var(--muted);
+      font-size: 0.88rem; line-height: 1.65; background: rgba(88, 192, 240, 0.05);
     }
-    .note code { font-family: 'Cascadia Code', 'JetBrains Mono', Consolas, monospace; font-size: 0.9em; }
+    .mission code { font-family: var(--mono); font-size: 0.9em; }
+
     .site-footer {
-      margin-top: 44px; padding-top: 18px;
+      margin-top: 20px; padding: 22px 0 40px;
       border-top: 1px solid var(--border);
       display: flex; justify-content: space-between; align-items: baseline;
       flex-wrap: wrap; gap: 8px 20px;
@@ -107,69 +258,208 @@
   </style>
 </head>
 <body>
+  <header class="topnav">
+    <a class="brand" href="./">
+      <img src="atoll-icon-dark.svg" alt="" />
+      atoll
+    </a>
+    <nav>
+      <a href="./consumer/">Docs</a>
+      <a href="./consumer/blog/">Blog</a>
+      <a href="https://github.com/jwhenry3/atolljs">GitHub</a>
+      <a href="https://www.npmjs.com/org/atolljs">npm</a>
+    </nav>
+  </header>
+
   <main>
-    <picture class="brand-bg" aria-hidden="true">
-      <source media="(prefers-color-scheme: light)" srcset="atoll-light-t.svg" />
-      <img class="brand-lockup" src="atoll-dark-t.svg" alt="" />
-    </picture>
-    <h1>Islands Based Multithreading</h1>
-    <p class="lead">
-      Worker pools and shared workers joined to your app through one
-      shared-memory fabric. Contracts share fixed-layout
-      <code>SharedArrayBuffer</code> state across threads; work is offloaded via
-      task commands and state reactivity.
-    </p>
+    <section class="hero">
+      <picture class="brand-bg" aria-hidden="true">
+        <source media="(prefers-color-scheme: light)" srcset="atoll-light-t.svg" />
+        <img class="brand-lockup" src="atoll-dark-t.svg" alt="" />
+      </picture>
+      <span class="pill">typed worker pools · shared memory · worker islands</span>
+      <h1>Islands based <span class="accent">multithreading</span></h1>
+      <p class="lead">
+        Worker pools and shared workers joined to your app through one
+        shared-memory fabric. Contracts share fixed-layout
+        <code>SharedArrayBuffer</code> state across threads; work is offloaded
+        via task commands and state reactivity.
+      </p>
+      <div class="cta-row">
+        <a class="btn btn-primary" href="./consumer/quickstart/">Get started</a>
+        <a class="btn btn-ghost" href="#showcase">See it live</a>
+      </div>
+      <div><span class="install"><span class="dollar">$</span><code>npm install @atolljs/core</code></span></div>
+    </section>
 
-    <div class="note">
-      <b>Mission — Make multithreaded JavaScript feel like single-threaded
-      JavaScript.</b> Atoll turns the worker boundary into a typed contract:
-      pools, task dispatch, reactivity, and worker-rendered UI islands all
-      speak one fixed-layout shared-memory fabric. Heavy work leaves the main
-      thread without leaving your framework's idioms — no bespoke
-      <code>postMessage</code> plumbing, no serialization guesswork. Declare
-      the contract once, and both threads speak it.
-    </div>
+    <section>
+      <div class="wrap">
+        <div class="sec-head">
+          <span class="over">The fabric</span>
+          <h2>One contract, every thread</h2>
+        </div>
+        <div class="features">
+          <div class="feature">
+            <h3>Worker pools</h3>
+            <p>Typed task dispatch over lazily-spawned workers. Call a method, get a promise.</p>
+          </div>
+          <div class="feature">
+            <h3>Shared-memory contracts</h3>
+            <p>Fixed-layout SharedArrayBuffer state, declared once and identical on both threads.</p>
+          </div>
+          <div class="feature">
+            <h3>Cross-thread reactivity</h3>
+            <p>observe, watch, and task state subscribe on either side of the boundary.</p>
+          </div>
+          <div class="feature">
+            <h3>Worker-rendered islands</h3>
+            <p>Whole framework trees committed off the main thread, replayed as DOM ops.</p>
+          </div>
+        </div>
+      </div>
+    </section>
 
-    <div class="cards">
-      <a class="card" href="./consumer/">
-        <h2>Package Docs <span class="path">./consumer/</span></h2>
-        <p>
-          Consumer guide for <code>@atolljs/core</code> — install, quickstart,
-          public API, framework bindings (React, Vue, SolidJS, Svelte, Angular,
-          Next.js), worker islands, and hosting headers.
-        </p>
-      </a>
-      <a class="card" href="https://github.com/jwhenry3/atolljs/tree/master/docs">
-        <h2>Internals Docs <span class="path">repo → docs/</span></h2>
-        <p>
-          Architecture and internals as in-repo markdown — contract schema,
-          fixed-layout memory, worker pool and task dispatch, reactivity,
-          shared workers, the islands engine, and cross-origin isolation.
-        </p>
-      </a>
-      <a class="card" href="./consumer/blog/">
-        <h2>Blog <span class="path">./consumer/blog/</span></h2>
-        <p>
-          <em>Facades Over Threads</em> — why Atoll exists, the problems it
-          solves, and how its facades make worker interop look like ordinary
-          components and services across React, Vue, SolidJS, Svelte,
-          Angular, and NestJS.
-        </p>
-      </a>
-    </div>
+    <section id="showcase">
+      <div class="wrap">
+        <div class="sec-head">
+          <span class="over">Live</span>
+          <h2>Five frameworks, five workers, one page</h2>
+          <p>
+            Every card below is a running micro-frontend: a real React, Vue,
+            Solid, Svelte, or Angular component rendering inside its own
+            dedicated worker. Clicks, timers, and state all live off the main
+            thread; only DOM mutation ops cross back.
+          </p>
+        </div>
+        <div class="showcase">
+          <div class="showcase-bar">
+            <span class="live-dot">worker islands · mounted via mountIsland()</span>
+            <span id="isle-stats">mounting islands…</span>
+          </div>
+          <div class="isle-grid">
+            <div class="isle" id="isle-counter">
+              <div class="isle-head"><span class="fw">React</span><span>counter</span><span class="pid">spawning…</span></div>
+              <div class="isle-body" data-mount></div>
+              <div class="isle-foot">react-reconciler · dedicated worker</div>
+            </div>
+            <div class="isle tall" id="isle-notes">
+              <div class="isle-head"><span class="fw">Vue</span><span>notes</span><span class="pid">spawning…</span></div>
+              <div class="isle-body" data-mount></div>
+              <div class="isle-foot">createRenderer on the proxy DOM</div>
+            </div>
+            <div class="isle" id="isle-ticker">
+              <div class="isle-head"><span class="fw">Solid</span><span>ticker</span><span class="pid">spawning…</span></div>
+              <div class="isle-body" data-mount></div>
+              <div class="isle-foot">solid-js/universal · timer emits</div>
+            </div>
+            <div class="isle" id="isle-dial">
+              <div class="isle-head"><span class="fw">Svelte</span><span>dial</span><span class="pid">spawning…</span></div>
+              <div class="isle-body" data-mount></div>
+              <div class="isle-foot">mount() on the proxy DOM</div>
+            </div>
+            <div class="isle" id="isle-checkout">
+              <div class="isle-head"><span class="fw">Angular</span><span>checkout</span><span class="pid">spawning…</span></div>
+              <div class="isle-body" data-mount></div>
+              <div class="isle-foot">Renderer2 · JIT + zoneless</div>
+            </div>
+          </div>
+          <div class="showcase-foot">
+            <span id="isle-event">waiting for island events…</span>
+            <span id="main-thread-hb">main thread idle</span>
+          </div>
+        </div>
+      </div>
+    </section>
 
-    <footer class="site-footer">
-      <span>
-        MIT licensed · © 2026 Justin Henry ·
-        <a href="https://github.com/jwhenry3/atolljs/blob/main/LICENSE">LICENSE</a>
-      </span>
-      <nav>
-        <a href="https://github.com/jwhenry3/atolljs">GitHub</a>
-        <a href="https://www.npmjs.com/org/atolljs">npm</a>
-        <a href="https://github.com/jwhenry3/atolljs/issues">Issues</a>
-        <a href="https://github.com/jwhenry3/atolljs/blob/main/CHANGELOG.md">Changelog</a>
-      </nav>
-    </footer>
+    <section>
+      <div class="wrap">
+        <div class="sec-head">
+          <span class="over">Why atoll</span>
+          <h2>Micro-frontends without the plumbing</h2>
+        </div>
+        <div class="pillars">
+          <div class="pillar">
+            <h3>Typed contracts</h3>
+            <p>defineSharedMemory and defineIslandContract declare the wire once. Both threads type-check against it, and payloads validate at the boundary.</p>
+          </div>
+          <div class="pillar">
+            <h3>Any framework, or none</h3>
+            <p>One op protocol carries React, Vue, Solid, Svelte, and Angular trees side by side, plus imperative proxy-DOM apps. The shell never imports another framework.</p>
+          </div>
+          <div class="pillar">
+            <h3>Topology per mount</h3>
+            <p>Dedicated worker, shared client, or nested sub-worker: the mount call decides, the app doesn't change. The demos put all three on one page.</p>
+          </div>
+          <div class="pillar">
+            <h3>Remote MFEs</h3>
+            <p>Worker bundles can live on another origin, versioned and cached like any asset. The contract module is the only import the host needs.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap">
+        <div class="mission">
+          <b>Mission: make multithreaded JavaScript feel like single-threaded
+          JavaScript.</b> Atoll turns the worker boundary into a typed contract:
+          pools, task dispatch, reactivity, and worker-rendered UI islands all
+          speak one fixed-layout shared-memory fabric. Heavy work leaves the
+          main thread without leaving your framework's idioms: no bespoke
+          <code>postMessage</code> plumbing, no serialization guesswork.
+          Declare the contract once, and both threads speak it.
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap">
+        <div class="sec-head">
+          <span class="over">Learn more</span>
+          <h2>Want to dig in?</h2>
+        </div>
+        <div class="cards">
+          <a class="card" href="./consumer/">
+            <h3>Package docs <span class="path">./consumer/</span></h3>
+            <p>
+              Consumer guide for @atolljs/core: install, quickstart, public
+              API, framework bindings (React, Vue, SolidJS, Svelte, Angular,
+              Next.js), worker islands, and hosting headers.
+            </p>
+          </a>
+          <a class="card" href="./consumer/blog/">
+            <h3>Blog <span class="path">./consumer/blog/</span></h3>
+            <p>
+              Facades Over Threads: why Atoll exists, the problems it solves,
+              and how its facades make worker interop look like ordinary
+              components and services.
+            </p>
+          </a>
+          <a class="card" href="https://github.com/jwhenry3/atolljs/tree/master/docs">
+            <h3>Internals docs <span class="path">repo → docs/</span></h3>
+            <p>
+              Architecture and internals as in-repo markdown: contract schema,
+              fixed-layout memory, worker pool and task dispatch, reactivity,
+              shared workers, the islands engine, cross-origin isolation.
+            </p>
+          </a>
+        </div>
+
+        <footer class="site-footer">
+          <span>
+            MIT licensed · © 2026 Justin Henry ·
+            <a href="https://github.com/jwhenry3/atolljs/blob/main/LICENSE">LICENSE</a>
+          </span>
+          <nav>
+            <a href="https://github.com/jwhenry3/atolljs">GitHub</a>
+            <a href="https://www.npmjs.com/org/atolljs">npm</a>
+            <a href="https://github.com/jwhenry3/atolljs/issues">Issues</a>
+            <a href="https://github.com/jwhenry3/atolljs/blob/main/CHANGELOG.md">Changelog</a>
+          </nav>
+        </footer>
+      </div>
+    </section>
   </main>
+  <script type="module" src="/src/main.ts"></script>
 </body>
 </html>

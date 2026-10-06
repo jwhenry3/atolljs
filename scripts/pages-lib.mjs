@@ -82,7 +82,7 @@ export function mountConsumerTree(root, dest) {
   // Every directory holding a page that registers the service worker needs
   // its own copy — the page registers './coi-sw.js' (depth-adjusted) so the
   // SW's scope is its own subtree.
-  const coiSw = join(root, 'pages-landing/coi-sw.js');
+  const coiSw = join(root, 'pages-landing/public/coi-sw.js');
   copyFileSync(coiSw, join(dest, 'coi-sw.js'));
   for (const [name] of DEMOS) {
     copyFileSync(coiSw, join(dest, name, 'coi-sw.js'));

@@ -1,0 +1,23 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ESNext", "DOM", "WebWorker"],
+    "types": ["vite/client", "node"],
+    "strict": true,
+    "noEmit": true,
+    // vite.config.ts imports packages/vite sources with explicit .ts
+    // specifiers (same convention as the type-stripped CLI sources).
+    "allowImportingTsExtensions": true,
+    "isolatedModules": true,
+    "skipLibCheck": true,
+    "paths": {
+      "@atolljs/core": ["../src/index.ts"],
+      "@atolljs/core/*": ["../src/*"],
+      "@atolljs/islands": ["../packages/islands/src/index.ts"],
+      "@atolljs/islands/worker": ["../packages/islands/src/worker/index.ts"]
+    }
+  },
+  "include": ["src", "vite.config.ts"]
+}
