@@ -46,18 +46,11 @@ workflow:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
     - if: $CI_PIPELINE_SOURCE == "web"
 
+# cache:key:files accepts at most 2 files — a static key works better here
+# anyway: .npm is a content-addressed tarball store, so a stale entry just
+# means npm ci fetches the new version on top; nothing goes stale-correct.
 .cache-lockfiles: &cache-lockfiles
-  key:
-    files:
-      - package-lock.json
-      - examples/nestjs/package-lock.json
-      - examples/nextjs/package-lock.json
-      - examples/react-dom-worker/package-lock.json
-      - examples/express/package-lock.json
-      - examples/fastify/package-lock.json
-      - examples/hono/package-lock.json
-      - examples/koa/package-lock.json
-      - examples/http-offload/package-lock.json
+  key: atoll-npm
   paths:
     - .npm/
 
@@ -190,13 +183,7 @@ docs-snapshot:
   needs:
     - job: publish
       artifacts: false
-  cache:
-    key:
-      files:
-        - package-lock.json
-        - docs-consumer/package-lock.json
-    paths:
-      - .npm/
+  cache: *cache-lockfiles
   script:
     - npm ci
     - |
@@ -236,14 +223,7 @@ pages:
   environment:
     name: gitlab-pages
     url: $CI_PAGES_URL
-  cache:
-    key:
-      files:
-        - package-lock.json
-        - pages-landing/package-lock.json
-        - docs-consumer/package-lock.json
-    paths:
-      - .npm/
+  cache: *cache-lockfiles
   script:
     - npm ci
     - |
