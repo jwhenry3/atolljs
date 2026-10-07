@@ -12,7 +12,7 @@ import { ScanTelemetry } from '../shared/scan-telemetry.service';
   imports: [
     AtollModule.registerPool({
       name: 'digest',
-      worker: () => new Worker(new URL('./digest.worker.ts', import.meta.url)),
+      worker: () => new Worker(new URL('./digest.worker.js', import.meta.url)),
       sharedMemory: digestMemory,
       poolSize: 2,
     }),

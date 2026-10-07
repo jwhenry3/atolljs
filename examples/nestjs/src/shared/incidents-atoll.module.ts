@@ -16,14 +16,14 @@ import { ScanTelemetry } from './scan-telemetry.service';
  *   with real DI, the decorated bodies execute, and the pool provider
  *   resolves to null (pools only spawn on the main thread).
  *
- * webpack detects `new Worker(new URL(...))` and emits the worker chunk; the
- * config references the TS source, never a dist filename.
+ * vite.config.ts emits every src/**\/*.worker.ts as dist/<name>.worker.js;
+ * the URL literal resolves against dist/main.js at runtime.
  */
 @Module({
   imports: [
     AtollModule.registerPool({
       name: 'incidents',
-      worker: () => new Worker(new URL('./incidents.worker.ts', import.meta.url)),
+      worker: () => new Worker(new URL('./incidents.worker.js', import.meta.url)),
       sharedMemory: incidentsMemory,
       poolSize: 'auto',
     }),

@@ -45,6 +45,7 @@ describe('atoll init', () => {
     expect(code).toBe(0);
     const npmrc = readFileSync(join(dir, '.npmrc'), 'utf8');
     expect(npmrc).toContain('min-release-age=7');
+    expect(npmrc).toContain('min-release-age-exclude[]=@atolljs/*');
     expect(npmrc).toContain('ignore-scripts=true');
     const worker = readFileSync(join(dir, 'src/atoll/app.worker.ts'), 'utf8');
     expect(worker).toContain('defineWorker');
@@ -65,6 +66,21 @@ describe('atoll init', () => {
     const client = readFileSync(join(dir, 'src/atoll/app.ts'), 'utf8');
     expect(client).toContain('createNodePool');
     expect(client).toContain('node:worker_threads');
+  });
+
+  it('emits the nestjs DI spine for nest projects', async () => {
+    const dir = tmp();
+    mkdirSync(join(dir, 'src'));
+    writePkg(dir, { name: 'api', dependencies: { '@nestjs/core': '12' } });
+    const code = await run(['init'], dir, [false]);
+    expect(code).toBe(0);
+    const mod = readFileSync(join(dir, 'src/atoll/app.module.ts'), 'utf8');
+    expect(mod).toContain('AtollModule.registerPool');
+    expect(mod).toContain(`new URL('./app.worker.js', import.meta.url)`);
+    const svc = readFileSync(join(dir, 'src/atoll/app.service.ts'), 'utf8');
+    expect(svc).toContain(`@AtollService({ pool: 'app' })`);
+    const worker = readFileSync(join(dir, 'src/atoll/app.worker.ts'), 'utf8');
+    expect(worker).toContain('runAtollWorker(AppModule)');
   });
 
   it('fails outside a project', async () => {
@@ -99,7 +115,7 @@ describe('atoll add', () => {
     const alt = join(dir, 'atoll/metrics.memory.ts');
     const content = readFileSync(existsSync(file) ? file : alt, 'utf8');
     expect(content).toContain('defineSharedMemory');
-    expect(content).toContain('mz.object');
+    expect(content).toContain('reef.object');
   });
 
   it('add island emits a react worker entry and prints shell usage', async () => {
@@ -481,6 +497,67 @@ describe('nestjs add kinds', () => {
     writePkg(dir, { name: 'demo', dependencies: { react: '^19' } });
     const code = await run(['add', 'service', 'x'], dir);
     expect(code).toBe(1);
+  });
+});
+
+describe('atoll convert vite', () => {
+  const nestProject = (dir: string) => {
+    writePkg(dir, {
+      name: 'api',
+      dependencies: { '@nestjs/core': '12', '@nestjs/common': '12' },
+      scripts: { build: 'nest build', start: 'node dist/main' },
+    });
+    mkdirSync(join(dir, 'src/atoll'), { recursive: true });
+    writeFileSync(
+      join(dir, 'src/main.ts'),
+      `import { NestFactory } from '@nestjs/core';\n`,
+    );
+    writeFileSync(
+      join(dir, 'src/atoll/app.module.ts'),
+      `worker: () => new Worker(new URL('./app.worker.ts', import.meta.url)),\n`,
+    );
+    writeFileSync(
+      join(dir, 'tsconfig.json'),
+      `{\n  // nest scaffold\n  "compilerOptions": { "module": "nodenext", "moduleResolution": "nodenext", },\n  "include": ["src"],\n}\n`,
+    );
+    writeFileSync(join(dir, 'nest-cli.json'), '{}');
+  };
+
+  it('writes vite config + dev loop, rewrites worker URLs, patches manifests', async () => {
+    const dir = tmp();
+    nestProject(dir);
+    const code = await run(['convert', 'vite'], dir, [false]); // decline install
+    expect(code).toBe(0);
+
+    const vite = readFileSync(join(dir, 'vite.config.ts'), 'utf8');
+    expect(vite).toContain('ssr: true');
+    expect(vite).toContain(".worker.ts'");
+    expect(existsSync(join(dir, 'dev.mjs'))).toBe(true);
+
+    const mod = readFileSync(join(dir, 'src/atoll/app.module.ts'), 'utf8');
+    expect(mod).toContain(`new URL('./app.worker.js', import.meta.url)`);
+
+    const pkg = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'));
+    expect(pkg.type).toBe('module');
+    expect(pkg.scripts.build).toBe('tsc --noEmit && vite build');
+    expect(pkg.devDependencies.vite).toBeTruthy();
+
+    const tsconfig = JSON.parse(readFileSync(join(dir, 'tsconfig.json'), 'utf8'));
+    expect(tsconfig.compilerOptions.moduleResolution).toBe('bundler');
+    expect(tsconfig.include).toContain('vite.config.ts');
+
+    const main = readFileSync(join(dir, 'src/main.ts'), 'utf8');
+    expect(main.startsWith(`import 'reflect-metadata';`)).toBe(true);
+  });
+
+  it('rejects non-nestjs projects and unknown targets', async () => {
+    const dir = tmp();
+    writePkg(dir, { name: 'demo', dependencies: { react: '19' } });
+    expect(await run(['convert', 'vite'], dir)).toBe(1);
+    nestProject(tmp());
+    const dir2 = tmp();
+    nestProject(dir2);
+    expect(await run(['convert', 'esbuild'], dir2)).toBe(1);
   });
 });
 

@@ -31,9 +31,11 @@ import { digestMemory, DigestService } from './digest.service';
   imports: [
     AtollModule.registerPool({
       name: 'digest',
-      // webpack detects new Worker(new URL(...)) and emits the entry as its
-      // own chunk — the factory references the TS source, not a dist file.
-      worker: () => new Worker(new URL('../digest.worker.ts', import.meta.url)),
+      // The URL must resolve to the emitted worker bundle. With a Vite SSR
+      // build, worker entries are explicit inputs emitted flat into dist/ —
+      // reference the emitted name. (Webpack instead detects a
+      // './x.worker.ts' literal and rewrites the URL.)
+      worker: () => new Worker(new URL('../digest.worker.js', import.meta.url)),
       sharedMemory: digestMemory,
       poolSize: 2,
     }),
@@ -135,9 +137,13 @@ Peer dependencies: `@nestjs/common`, `@nestjs/core`, `reflect-metadata`,
 ## Notes
 
 - Server-only binding — `SharedArrayBuffer` in Node needs no COOP/COEP headers.
-- Plain `nest build` works: webpack mode detects each
-  `new Worker(new URL('./x.worker.ts', import.meta.url))` in the pool config
-  and compiles it as its own chunk.
+- Bundling: build for Node with worker entries as explicit inputs, emitted
+  flat beside `main.js` — `examples/nestjs` uses `vite build` (`build.ssr`)
+  and the pool factories reference the emitted `./x.worker.js` names.
+  `nest build` (webpack) also works — it detects each
+  `new Worker(new URL('./x.worker.ts', import.meta.url))` literal — but keep
+  webpack <5.108: that release miscompiles the
+  `import { Worker } from 'node:worker_threads'` callee.
 - Each pool's workers share one buffer — only define the pool's own contracts
   in a worker entry's module graph.
 - Args/results cross `postMessage` (structured clone); the shared buffer

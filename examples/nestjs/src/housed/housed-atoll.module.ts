@@ -16,7 +16,7 @@ import { withSharedBuffer } from '@atolljs/node';
     AtollModule.registerPool({
       name: 'housed',
       worker: withSharedBuffer(
-        () => new Worker(new URL('./housed.worker.ts', import.meta.url)),
+        () => new Worker(new URL('./housed.worker.js', import.meta.url)),
         // Resolved lazily — IncidentsAtollModule is imported first.
         () => getAtollPool('incidents')?.sharedBuffer,
       ),

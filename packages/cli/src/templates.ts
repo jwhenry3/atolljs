@@ -9,6 +9,9 @@ export const NPMRC = `# Supply-chain hardening — read by every npm command run
 # lockfile (requires npm >= 11.10 — shipped with Node 26; older npm
 # silently ignores this key).
 min-release-age=7
+# First-party packages must install even inside the age window (npm 11.10+;
+# older npm silently ignores the key).
+min-release-age-exclude[]=@atolljs/*
 # Install lifecycle scripts are the dominant malware vector — none run
 # during install/ci. If a native dep ever legitimately needs one:
 #   npm rebuild <pkg> --ignore-scripts=false
@@ -26,7 +29,7 @@ dist/
 
 export function memoryContract(name: string): string {
   const c = camel(name);
-  return `import { defineSharedMemory, field, mz } from '@atolljs/core';
+  return `import { defineSharedMemory, field, reef } from '@atolljs/core';
 
 /**
  * ${c} shared memory — the single source of truth for state both threads
@@ -42,10 +45,10 @@ export const ${c}Memory = defineSharedMemory({
   // Structured snapshots — one inline record, rewritten wholesale.
   state: {
     summary: field.object({
-      schema: mz.object({
-        total: mz.f64(),
-        errors: mz.f64(),
-        updatedAt: mz.u32(),
+      schema: reef.object({
+        total: reef.f64(),
+        errors: reef.f64(),
+        updatedAt: reef.u32(),
       }),
     }),
   },
@@ -1705,8 +1708,10 @@ ${serviceImport}${memImport}
   imports: [
     AtollModule.registerPool({
       name: '${name}',
-      // webpack emits the worker entry as its own chunk — keep the URL inline
-      worker: () => new Worker(new URL('./${name}.worker.ts', import.meta.url)),
+      // the emitted worker bundle — keep the URL inline. Under a Vite SSR
+      // build declare ${name}.worker.ts as a build input; on webpack point
+      // this at the './${name}.worker.ts' source instead.
+      worker: () => new Worker(new URL('./${name}.worker.js', import.meta.url)),
 ${memLine}      poolSize: 'auto',
     }),
   ],
@@ -1817,7 +1822,7 @@ export function nestjsHousedFiles(name: string, dir: string): OutFile[] {
 // runs in. Message-only by default; to share another pool's buffer, wrap
 // the factory:
 //   worker: withSharedBuffer(
-//     () => new Worker(new URL('./${name}.worker.ts', import.meta.url)),
+//     () => new Worker(new URL('./${name}.worker.js', import.meta.url)),
 //     () => getAtollPool('<other-pool>')?.sharedBuffer,
 //   )
 import { Module } from '@nestjs/common';
@@ -1828,7 +1833,10 @@ import { AtollModule } from '@atolljs/nestjs';
   imports: [
     AtollModule.registerPool({
       name: '${name}',
-      worker: () => new Worker(new URL('./${name}.worker.ts', import.meta.url)),
+      // the emitted worker bundle — keep the URL inline. Under a Vite SSR
+      // build declare ${name}.worker.ts as a build input; on webpack point
+      // this at the './${name}.worker.ts' source instead.
+      worker: () => new Worker(new URL('./${name}.worker.js', import.meta.url)),
       poolSize: 2,
     }),
   ],
@@ -2224,5 +2232,79 @@ initDevtools({
  * /__atoll/ itself is served by the @atolljs/vite plugin (plugins: [atoll()]).
  */
 initDevtools({ session: { name: '${name}' } });
+`;
+}
+
+/* ── `atoll convert vite` (nestjs → Vite SSR build) ─────────────────────── */
+
+/**
+ * Consumer-facing vite.config.ts for a converted NestJS project — no repo
+ * aliases (published @atolljs/* packages resolve from node_modules). Every
+ * src/**\/*.worker.ts is an explicit rollup input; output is flat so a
+ * './x.worker.js' literal resolves from dist/main.js or a shared chunk.
+ * Uses readdirSync recursive (Node 20.1+) rather than globSync (Node 22+).
+ */
+export function nestjsViteConfig(): string {
+  return `import { readdirSync } from 'node:fs';
+import { basename } from 'node:path';
+import { defineConfig } from 'vite';
+
+// Every *.worker.ts under src/ is its own entry — pool configs reference the
+// emitted './x.worker.js' via new URL(..., import.meta.url). Keys are
+// basenames, so output is flat and the literal resolves from dist/main.js.
+const workerInputs = Object.fromEntries(
+  readdirSync('src', { recursive: true, withFileTypes: true })
+    .filter((e) => e.isFile() && e.name.endsWith('.worker.ts'))
+    .map((e) => {
+      const dir = (e.parentPath ?? e.path).replaceAll('\\\\', '/');
+      return [basename(e.name, '.ts'), \`\${dir}/\${e.name}\`];
+    }),
+);
+
+export default defineConfig({
+  build: {
+    // Node SSR build: node builtins + node_modules stay external.
+    ssr: true,
+    outDir: 'dist',
+    rollupOptions: {
+      input: { main: 'src/main.ts', ...workerInputs },
+      // Flat layout: a './x.worker.js' literal resolves to dist/<name>.worker.js
+      // whether it lands in main.js or a shared chunk (the default assets/
+      // subdir would put chunks one level too deep).
+      output: { entryFileNames: '[name].js', chunkFileNames: '[name]-[hash].js' },
+    },
+  },
+});
+`;
+}
+
+/**
+ * `node --watch` + vite watcher dev loop for the converted project — a
+ * worker reload is a respawn anyway, so watching dist/ is enough. Uses
+ * vite's programmatic build API: no npx/.cmd spawn (Node 20.12+ blocks .cmd
+ * spawn without shell:true on Windows → EINVAL).
+ */
+export function devServerScript(): string {
+  return `// Dev loop: vite's Rollup watcher rebuilds main + worker bundles on change
+// while \`node --watch\` restarts the app whenever dist/ updates — a worker
+// reload is a respawn anyway. Programmatic API: no npx/.cmd spawn (Node
+// 20.12+ blocks .cmd spawn without shell:true on Windows → EINVAL).
+import { spawn } from 'node:child_process';
+import { build } from 'vite';
+
+await build(); // initial build — throws and exits on failure
+await build({ build: { watch: {} } }); // keeps the process alive
+
+const child = spawn(process.execPath, ['--watch', 'dist/main.js'], {
+  stdio: 'inherit',
+});
+
+const shutdown = () => {
+  child.kill();
+  process.exit(0);
+};
+process.on('SIGINT', shutdown);
+process.on('SIGTERM', shutdown);
+process.on('exit', () => child.kill());
 `;
 }

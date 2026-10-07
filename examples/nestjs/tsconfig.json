@@ -26,5 +26,5 @@
       "@nestjs/core": ["./node_modules/@nestjs/core"]
     }
   },
-  "include": ["src", "test"]
+  "include": ["src", "test", "vite.config.ts"]
 }

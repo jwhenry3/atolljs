@@ -139,15 +139,15 @@ the atoll. Four things, none touching the incidents code:
 // digest.module.ts — the module owns its pool; AppModule just imports it
 AtollModule.registerPool({
   name: 'digest',
-  worker: () => new Worker(new URL('./digest.worker.ts', import.meta.url)),
+  worker: () => new Worker(new URL('./digest.worker.js', import.meta.url)),
   sharedMemory: digestMemory,   // its own tiny contract — separate buffer
   poolSize: 2,
 }),
 ```
 
-The `worker:` factory references the **TS source** — webpack detects
-`new Worker(new URL(...))`, compiles the entry as its own chunk, and rewrites
-the URL to the emitted file. No dist filename coupling.
+The `worker:` factory references the **emitted** `./x.worker.js` — Vite's
+SSR build declares every `src/**/*.worker.ts` as an explicit rollup input,
+emitted flat into `dist/`, so the literal URL resolves to the bundle.
 
 - `digest.service.ts` — a small `defineSharedMemory({ jobsDone })` contract
   plus a `@AtollTask({ pool: 'digest' })` service (injected deps work too)
@@ -156,7 +156,7 @@ the URL to the emitted file. No dist filename coupling.
 - `digest.controller.ts` — routes (`/api/digest/*`)
 - `digest/digest.worker.ts` — 4-line entry: `node/shim` + `workerBootstrap` imports +
   `runAtollWorker(DigestAtollModule)`. Referenced by the pool's `createWorker`
-  factory; webpack emits it as its own chunk automatically.
+  factory; the Vite build emits it as `dist/digest.worker.js`.
 
 Each pool gets its own shared buffer and its own worker bundle — the digest
 workers' 100KB contract carries just `jobsDone`, while `/api/digest/status`
@@ -205,16 +205,15 @@ the worker only ever sees plain method arguments.
 - `src/facade/` — service-level facade: `@AtollService` class (`report.service.ts`),
   a plain service consumer (`dashboard.service.ts`), controller, module, and
   a worker entry that binds the incidents buffer (`facade.worker.ts`)
-- `nest-cli.json` — `"webpack": true`, plain `nest build`. Worker chunks are
-  detected from `new Worker(new URL('./x.worker.ts', import.meta.url))` in
-  the pool configs — no webpack configuration needed. (`webpack.config.js`
-  here only adds `TsconfigPathsPlugin` to resolve this repo's `@atolljs/*`
-  source aliases; it isn't part of the pattern.) Each worker entry's first import is
-  `@atolljs/node/shim`, which binds `globalThis.self = parentPort`
-  before `workerBootstrap` wires the MessagePort — no bundler banner needed.
-  `@Inject…` tokens are used throughout — ts-loader honors
-  `emitDecoratorMetadata`, so they're belt-and-suspenders rather than
-  required.
+- `vite.config.ts` — SSR build targeting Node: `main.ts` plus every
+  `src/**/*.worker.ts` are rollup inputs, emitted flat into `dist/` so each
+  pool's `new URL('./x.worker.js', import.meta.url)` literal resolves to the
+  emitted worker file. `resolve.alias` maps this repo's `@atolljs/*` sources;
+  a consumer installing the published packages needs only the inputs and the
+  flat output. Each worker entry's first import is `@atolljs/node/shim`,
+  which binds `globalThis.self = parentPort` before `workerBootstrap` wires
+  the MessagePort — no bundler banner needed. `@Inject…` tokens are used
+  throughout so decorator metadata isn't load-bearing under esbuild.
 - No COOP/COEP needed — Node always allows `SharedArrayBuffer`.
 - The buffer is in-process: every restart gets a fresh, zeroed
   `SharedArrayBuffer`. `SeedOnBootstrap` (app.module.ts) runs `seedIncidents`
@@ -225,8 +224,8 @@ the worker only ever sees plain method arguments.
 
 ```sh
 npm install
-npm run dev     # nest start --watch → http://localhost:3100
-npm run build   # tsc --noEmit + nest build (webpack) → dist/
+npm run dev     # vite build --watch + node --watch dist/main.js → http://localhost:3100
+npm run build   # tsc --noEmit + vite build → dist/
 npm start       # node dist/main.js
 ```
 

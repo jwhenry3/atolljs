@@ -6,6 +6,7 @@
 // main thread, so this module is also safe to pull in via the package barrel.
 import '@atolljs/node/shim';
 import '@atolljs/core/worker/workerBootstrap';
+import { installWorkerListener } from '@atolljs/core/worker/workerBootstrap';
 import { DiscoveryModule, DiscoveryService, NestFactory } from '@nestjs/core';
 import { Module, type INestApplicationContext, type Type } from '@nestjs/common';
 import { scoped } from '@atolljs/core';
@@ -13,6 +14,12 @@ import { getAtollTaskMeta } from './decorators';
 import { registerAtollHandlers } from './handlers';
 
 const log = scoped('atoll-worker');
+
+// Bundlers that flatten this module's deps into a shared chunk may evaluate
+// workerBootstrap before the shim above binds `self` — its import-time wire
+// then no-ops. An explicit call here runs after both: inside a worker `self`
+// is bound and this wires immediately; on main it's a safe no-op.
+if (typeof self !== 'undefined') installWorkerListener();
 
 /**
  * Bootstraps a Nest application context inside the worker and registers every

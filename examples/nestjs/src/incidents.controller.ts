@@ -23,7 +23,7 @@ export class IncidentsController {
   // (field initializers run before the ctor's parameter-property assignment).
   private readonly incidents = workerClient<IncidentsWorker>(() => this.pool);
 
-  // Explicit @Inject tokens — webpack/ts-loader does emit design:paramtypes,
+  // Explicit @Inject tokens — vite/esbuild emits design:paramtypes too,
   // so these are belt-and-suspenders rather than required.
   constructor(
     @InjectAtollPool('incidents') private readonly pool: WorkerPool,

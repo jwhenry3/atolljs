@@ -61,7 +61,14 @@ async function offerInstall(
     cwd: project.root ?? ctx.cwd,
     stdio: 'inherit',
   });
-  if (r.status !== 0) throw new Error(`install failed — run \`${cmd}\` manually`);
+  if (r.status !== 0) {
+    if (project.framework === 'nestjs') {
+      ctx.io.warn(
+        'if npm reported ERESOLVE: the installed @nestjs/* major may be outside the range @atolljs/nestjs supports (@nestjs/common and @nestjs/core 11.x or 12.x). Align all @nestjs/* packages to a supported major, or rerun the install with --legacy-peer-deps.',
+      );
+    }
+    throw new Error(`install failed — run \`${cmd}\` manually`);
+  }
 }
 
 /* ── atoll init ─────────────────────────────────────────────────────────── */
@@ -84,39 +91,60 @@ export async function runInit(ctx: Ctx): Promise<number> {
     force: hasFlag(ctx.args, 'force'),
   });
 
-  await offerInstall(ctx, project, ATOLL_DEPS[project.framework]);
-
-  // A working spine: contract + worker + client, already wired together.
+  // A working spine — written BEFORE the install so a failed install still
+  // leaves a complete, retryable scaffold. NestJS gets the DI-native spine
+  // (service facade + registerPool module + worker entry); other hosts get
+  // the contract + worker + client trio.
   const atollDir = join(project.srcDir, 'atoll');
   const host = hostOf(project.framework);
   const name = flag(ctx.args, 'name') ?? 'app';
   const files: OutFile[] = [
     { path: `${rel(atollDir)}/${name}.memory.ts`, content: T.memoryContract(name) },
-    {
-      path: `${rel(atollDir)}/${name}.worker.ts`,
-      content: T.workerEntry(name, {
-        host,
-        memoryImport: `./${name}.memory`,
-        memoryName: `${camel(name)}Memory`,
-        demoMemoryWrite: true,
-      }),
-    },
-    {
-      path: `${rel(atollDir)}/${name}.ts`,
-      content: T.workerClientFile(name, {
-        host,
-        memoryImport: `./${name}.memory`,
-        memoryName: `${camel(name)}Memory`,
-        // src/atoll/x.ts → <root>/dist/x.worker.js
-        distUrl: `${relative(atollDir, join(project.root, 'dist')).replaceAll('\\', '/')}/${name}.worker.js`,
-      }),
-    },
   ];
+  if (project.framework === 'nestjs') {
+    files.push(
+      ...T.nestjsServiceFiles(name, rel(atollDir), {
+        import_: `./${name}.memory`,
+        export_: `${camel(name)}Memory`,
+      }),
+    );
+  } else {
+    files.push(
+      {
+        path: `${rel(atollDir)}/${name}.worker.ts`,
+        content: T.workerEntry(name, {
+          host,
+          memoryImport: `./${name}.memory`,
+          memoryName: `${camel(name)}Memory`,
+          demoMemoryWrite: true,
+        }),
+      },
+      {
+        path: `${rel(atollDir)}/${name}.ts`,
+        content: T.workerClientFile(name, {
+          host,
+          memoryImport: `./${name}.memory`,
+          memoryName: `${camel(name)}Memory`,
+          // src/atoll/x.ts → <root>/dist/x.worker.js
+          distUrl: `${relative(atollDir, join(project.root, 'dist')).replaceAll('\\', '/')}/${name}.worker.js`,
+        }),
+      },
+    );
+  }
   await writeTree(ctx.io, ctx.cwd, files, { force: hasFlag(ctx.args, 'force') });
+
+  await offerInstall(ctx, project, ATOLL_DEPS[project.framework]);
 
   ctx.io.print('');
   ctx.io.print(ctx.io.fmt.strong('next steps:'));
-  if (host === 'node') {
+  if (project.framework === 'nestjs') {
+    ctx.io.print(
+      `  import ${ctx.io.fmt.accent(`${pascal(name)}Module`)} into AppModule, then inject ${ctx.io.fmt.accent(`${pascal(name)}Service`)} — ${ctx.io.fmt.accent(`service.echo('hi')`)} runs in a worker`,
+    );
+    ctx.io.print(
+      `  worker entries emit as ${ctx.io.fmt.accent(`${name}.worker.js`)} — declare them as build inputs (see docs/frameworks/nestjs.md)`,
+    );
+  } else if (host === 'node') {
     ctx.io.print(
       `  bundle the worker entry (see the comment in ${name}.ts), then call ${ctx.io.fmt.accent(`${camel(name)}.echo('hi')`)}`,
     );
@@ -127,6 +155,139 @@ export async function runInit(ctx: Ctx): Promise<number> {
   }
   ctx.io.print(
     `  ${ctx.io.fmt.accent('atoll add worker|memory|island <name>')} grows it · ${ctx.io.fmt.accent('atoll doctor')} checks the setup`,
+  );
+  return 0;
+}
+
+/* ── atoll convert vite ─────────────────────────────────────────────────── */
+
+/** Repoint `new URL('./x.worker.ts', import.meta.url)` literals at the emitted
+ * bundles — Vite SSR build takes workers as explicit inputs, so pool
+ * factories reference `./x.worker.js`. Returns the files it changed. */
+function rewriteWorkerUrls(srcDir: string): string[] {
+  const urlRe = /(new URL\(\s*['"`][^'"`]*?\.worker)\.ts(['"`])/g;
+  const changed: string[] = [];
+  const walk = (dir: string) => {
+    for (const e of readdirSync(dir, { withFileTypes: true })) {
+      const p = join(dir, e.name);
+      if (e.isDirectory()) walk(p);
+      else if (e.name.endsWith('.ts')) {
+        const src = readFileSync(p, 'utf8');
+        const next = src.replace(urlRe, '$1.js$2');
+        if (next !== src) {
+          writeFileSync(p, next);
+          changed.push(p);
+        }
+      }
+    }
+  };
+  walk(srcDir);
+  return changed;
+}
+
+export async function runConvert(ctx: Ctx): Promise<number> {
+  const target = ctx.args._[1];
+  if (target !== 'vite') {
+    ctx.io.error(
+      `unknown convert target ${ctx.io.fmt.accent(target ?? '(missing)')} — expected 'vite'`,
+    );
+    return 1;
+  }
+  const project = detectProject(ctx.cwd);
+  if (!project.root || !project.pkg) {
+    ctx.io.error('no package.json found — cd into the project to convert');
+    return 1;
+  }
+  if (project.framework !== 'nestjs') {
+    ctx.io.error(
+      `convert vite supports nestjs projects — detected "${project.framework}"`,
+    );
+    return 1;
+  }
+  const root = project.root;
+  const rel = (abs: string) => relative(ctx.cwd, abs).replaceAll('\\', '/');
+  const force = hasFlag(ctx.args, 'force');
+  const srcDir = project.srcDir;
+
+  // Build files: SSR multi-entry config + the watch dev loop.
+  await writeTree(
+    ctx.io,
+    ctx.cwd,
+    [
+      { path: rel(join(root, 'vite.config.ts')), content: T.nestjsViteConfig() },
+      { path: rel(join(root, 'dev.mjs')), content: T.devServerScript() },
+    ],
+    { force },
+  );
+
+  // Pool factories reference the emitted worker bundles now.
+  const rewritten = rewriteWorkerUrls(srcDir);
+  for (const p of rewritten) ctx.io.print(`  rewrote worker URL — ${rel(p)}`);
+
+  // package.json: ESM, vite scripts, vite devDep.
+  const pkgPath = join(root, 'package.json');
+  const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'));
+  pkg.type = 'module';
+  pkg.scripts = {
+    ...pkg.scripts,
+    dev: 'node dev.mjs',
+    build: 'tsc --noEmit && vite build',
+    start: 'node dist/main.js',
+  };
+  pkg.devDependencies = { ...pkg.devDependencies, vite: pkg.devDependencies?.vite ?? '^8.3.1' };
+  writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
+  ctx.io.print(`  package.json — type:module, dev/build/start scripts, vite devDep`);
+
+  // tsconfig: bundler resolution so extensionless imports keep typechecking;
+  // typecheck-only (noEmit) since vite owns emit.
+  const tsconfigPath = join(root, 'tsconfig.json');
+  try {
+    const raw = readFileSync(tsconfigPath, 'utf8')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/(^|\s)\/\/.*$/gm, '$1')
+      .replace(/,(\s*[}\]])/g, '$1');
+    const tsconfig = JSON.parse(raw);
+    tsconfig.compilerOptions ??= {};
+    Object.assign(tsconfig.compilerOptions, {
+      module: 'ESNext',
+      moduleResolution: 'bundler',
+      noEmit: true,
+    });
+    tsconfig.include = [...new Set([...(tsconfig.include ?? ['src']), 'vite.config.ts'])];
+    writeFileSync(tsconfigPath, JSON.stringify(tsconfig, null, 2) + '\n');
+    ctx.io.print(`  tsconfig.json — module ESNext, moduleResolution bundler, noEmit`);
+  } catch {
+    ctx.io.warn(
+      'could not patch tsconfig.json — set module: ESNext, moduleResolution: bundler, noEmit: true manually',
+    );
+  }
+
+  // esbuild drops the metadata decorators need only when emitDecoratorMetadata
+  // carries injections — the shim is still required before any decorated class.
+  const mainTs = join(srcDir, 'main.ts');
+  if (existsSync(mainTs)) {
+    const src = readFileSync(mainTs, 'utf8');
+    if (!src.includes('reflect-metadata')) {
+      writeFileSync(mainTs, `import 'reflect-metadata';\n${src}`);
+      ctx.io.print(`  main.ts — prepended import 'reflect-metadata'`);
+    }
+  }
+
+  for (const leftover of ['nest-cli.json', 'webpack.config.js', 'webpack.config.cjs']) {
+    if (existsSync(join(root, leftover))) {
+      ctx.io.print(ctx.io.fmt.dim(`  ${leftover} is no longer used — safe to delete`));
+    }
+  }
+
+  await offerInstall(ctx, project, ['vite'], true);
+
+  ctx.io.print('');
+  ctx.io.print(ctx.io.fmt.strong('converted to a Vite SSR build:'));
+  ctx.io.print(
+    `  ${ctx.io.fmt.accent('npm run dev')} — vite build --watch + node --watch dist/main.js`,
+  );
+  ctx.io.print(
+    `  ${ctx.io.fmt.accent('npm run build')} → dist/ · ${ctx.io.fmt.accent('npm start')} — node dist/main.js`,
   );
   return 0;
 }

@@ -95,4 +95,9 @@ export function installWorkerListener(): void {
   };
 }
 
-installWorkerListener();
+// Deferred to a microtask so the whole worker entry graph evaluates first:
+// bundlers that flatten modules into shared chunks (rolldown/rollup) cannot
+// guarantee this module runs after a `self`-binding shim, and deferring
+// still beats the first inbound port message, which arrives on a later
+// macrotask.
+queueMicrotask(installWorkerListener);

@@ -12,7 +12,7 @@
  */
 import { consoleIo, type Fmt, type Io } from './io.ts';
 import { hasFlag, parseArgs } from './parse.ts';
-import { runAdd, runCreate, runDevtools, runDoctor, runInit, type Ctx } from './commands.ts';
+import { runAdd, runConvert, runCreate, runDevtools, runDoctor, runInit, type Ctx } from './commands.ts';
 
 const HELP = (fmt: Fmt) => `${fmt.strong('atoll')} — bootstrap multithreading ${fmt.dim('(experimental)')}
 
@@ -43,6 +43,11 @@ const HELP = (fmt: Fmt) => `${fmt.strong('atoll')} — bootstrap multithreading 
 
       Frameworks: react vue solid svelte angular nestjs nextjs node
       [--dir <path>] [--memory <name>|--no-memory] [--variant <v>] [--force]
+
+  ${fmt.accent('atoll convert vite')} [--force]
+      Convert a NestJS project from the webpack build to a Vite SSR build —
+      vite.config.ts + dev.mjs, worker URLs repointed at emitted bundles,
+      package.json/tsconfig patched.
 
   ${fmt.accent('atoll doctor')} [--fix]
       Check the setup — deps, lockfile, .npmrc policy, bundler-detectable
@@ -77,6 +82,8 @@ export async function runCli(argv: readonly string[], io: Io, cwd: string): Prom
         return await runInit(ctx);
       case 'add':
         return await runAdd(ctx);
+      case 'convert':
+        return await runConvert(ctx);
       case 'doctor':
         return runDoctor(ctx);
       case 'devtools':

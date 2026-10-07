@@ -24,7 +24,7 @@ import { ReportService } from './report.service';
       name: 'reports',
       // Resolved lazily — IncidentsAtollModule registers 'incidents' first.
       worker: withSharedBuffer(
-        () => new Worker(new URL('./facade.worker.ts', import.meta.url)),
+        () => new Worker(new URL('./facade.worker.js', import.meta.url)),
         () => getAtollPool('incidents')?.sharedBuffer,
       ),
       poolSize: 2,

@@ -22,8 +22,8 @@ const rec = {} as Incident;
  * Inside a worker, runAtollWorker resolves this class with DI (telemetry is
  * a real per-worker instance) and the bodies execute.
  *
- * @Inject on the ctor param is explicit — webpack/ts-loader does emit
- * design:paramtypes, so this is belt-and-suspenders rather than required.
+ * @Inject on the ctor param is explicit — vite/esbuild emits
+ * design:paramtypes too, so this is belt-and-suspenders rather than required.
  */
 @Injectable()
 @AtollService({ pool: 'incidents' })
