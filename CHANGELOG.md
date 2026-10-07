@@ -1,6 +1,79 @@
 # Changelog
 
-## Unreleased
+## 0.1.9
+
+### `@atolljs/nestjs`: Nest 12 support
+
+- **Peer range widened to `^11.1.0 || ^12.0.0`** for `@nestjs/common` and
+  `@nestjs/core`. The APIs the binding touches (`Module`, `Injectable`,
+  `DiscoveryService`, `NestFactory` application contexts) are stable across
+  11 to 12; the example and the package test suite run on 12.1.2.
+- **Fix: worker listener lost under bundlers that flatten chunks.**
+  `runAtollWorker`'s module now calls `installWorkerListener()` explicitly
+  at module scope: rolldown/rollup shared-chunk order can evaluate
+  `workerBootstrap` before the `@atolljs/node/shim` import binds `self`, so
+  the import-time wire silently skipped and pool dispatches hung. The
+  explicit call runs after this module's own deps evaluate; on the main
+  thread it's a no-op.
+
+### `@atolljs/core`: worker bootstrap wiring is bundler-order safe
+
+- `workerBootstrap`'s automatic listener install now runs on a microtask
+  (`queueMicrotask(installWorkerListener)`) instead of synchronously at
+  import: flattening bundlers can't guarantee the module evaluates after a
+  `self`-binding shim, and the deferral still precedes the first inbound
+  port message. `installWorkerListener()` remains idempotent and safe to
+  call directly.
+
+### `@atolljs/cli`: nestjs init spine, `convert vite`, `.npmrc` exclude
+
+- **`atoll init` on a NestJS project emits the DI-native spine** (memory
+  contract + `@AtollService` facade + `registerPool` module + worker
+  entry) instead of the generic `createNodePool` + "bundle it yourself"
+  node spine, which was unreachable under the webpack module graph.
+- **New `atoll convert vite`**: migrates a NestJS project off the webpack
+  build to a Vite SSR build. Writes `vite.config.ts` (main + globbed
+  `*.worker.ts` inputs, flat `dist/` output) and `dev.mjs` (programmatic
+  vite watcher + `node --watch`; spawning `npx.cmd` on Windows throws
+  EINVAL since Node 20.12), rewrites `new URL('./x.worker.ts', …)` literals
+  to the emitted `.worker.js` names, and patches
+  `package.json`/`tsconfig.json` for `type: module` + bundler resolution.
+- **Generated `.npmrc` gains `min-release-age-exclude[]=@atolljs/*`** so a
+  freshly scaffolded project can install the atoll packages themselves
+  inside the 7-day release-age window.
+- **`init` installs dependencies last** (after the spine files are
+  written), so a failed install leaves a complete scaffold; on failure a
+  Nest-specific hint points at the supported `@nestjs/*` majors and
+  `--legacy-peer-deps`.
+- nestjs templates point pool factories at the emitted `./x.worker.js`
+  bundle, with a comment noting the `./x.worker.ts` literal for webpack
+  builds.
+- Fix: generated memory contracts emitted `mz.*` long after the export was
+  renamed; templates now emit `reef.*`.
+
+### Examples & docs
+
+- `examples/nestjs` upgraded to Nest 12.1.2 and switched from the Nest
+  webpack build to a Vite SSR build (`"type": "module"`, multi-entry
+  `vite.config.ts`, flat `dist/`). This also sidesteps the webpack ≥5.108
+  codegen regression that mangled `new Worker(new URL(...))` into
+  `ns.Worker__webpack_require__.wc`; the `<5.108` pin and the
+  `nodeExternals` allowlist for the ESM-only dist stay documented for
+  consumers on `nest build`.
+- `docs/frameworks/nestjs.md` documents the Vite path, the ESM match with
+  Nest 12's default scaffold, and the `poolSize: 'auto'` eager-spawn cost.
+- Dependency audit: `solid-js` 1.9.16, `seroval` 1.6.8, `source-map-js`
+  1.2.2 across every lockfile. The solid-js fix release was one day old at
+  the time, inside the `min-release-age` window; it was applied with a
+  one-shot `--min-release-age=0` and the 7-day policy is unchanged.
+
+### CI
+
+- `.gitlab-ci.yml` mirrors the GitHub Actions jobs (checks, four test
+  shards, coverage merge, audit, tag-triggered publish + docs snapshot,
+  manual Pages deploy) so a GitLab remote can serve as a backup repo.
+  Snapshots upload to the GitLab generic package registry; npm auth uses
+  OIDC `id_tokens` or a `NODE_AUTH_TOKEN` variable.
 
 ### `@atolljs/devtools`: overlay resize and clamping
 
