@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.2.0
+## 0.1.10
 
 ### `@atolljs/islands`: event payloads carry `zrX`/`zrY` and `relatedTarget`
 
