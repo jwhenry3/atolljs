@@ -23,6 +23,13 @@
   correctly. The sub-island forwarder strips it with the other enriched
   keys so nested islands re-enrich against their own tree.
 
+### Security Vulnerabilities Addressed
+
+- `examples/nextjs`: `next` 16.3.8 patches six high-severity advisories
+  (cache poisoning, SSRF in Image Optimization, draft-mode and metadata
+  information disclosure). The fix release was past the `min-release-age`
+  window, so a plain `npm audit fix` sufficed.
+
 ## 0.1.9
 
 ### `@atolljs/nestjs`: Nest 12 support
