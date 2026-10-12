@@ -179,9 +179,10 @@ describe('post-dispose scheduler notify', () => {
 
     // The timer → signal write → scheduler notify runs AFTER dispose; the
     // queued tick must find componentRef === null and return quietly — no
-    // ops are applied, so the rendered text stays at its pre-arm value.
+    // ops are applied and nothing throws. The unmount batch destroy()
+    // replays has already cleared the container by then.
     await new Promise((r) => setTimeout(r, 60));
-    expect(text(el, '.ticks')).toBe('0');
+    expect(el.querySelector('.ticks')).toBeNull();
   });
 });
 

@@ -145,9 +145,9 @@ describe('createIsland — lifecycle edges', () => {
     await vi.waitFor(() => expect(worker.terminated).toBe(true));
     expect(island.status[0]()).toBe('mounting');
     // The mount batch already applied before the disposed check — destroy's
-    // `clear` op is discarded (`void client.unmount`), so the DOM the dead
-    // island wrote stays behind.
-    expect(el.querySelector('.echo')).not.toBeNull();
+    // replayed unmount batch wipes what the dead island wrote, so nothing
+    // stale is left behind.
+    expect(el.querySelector('.echo')).toBeNull();
   });
 
   it('disposing during the catch-up updateProps leaves status mounting', async () => {

@@ -922,6 +922,10 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
   function mergeStyle(node: Element, id: number, changes: Record<string, string>): void {
     const elStyle = (node as HTMLElement).style;
     const elStyleMap = elStyle as unknown as Record<string, string>;
+    // Real DOM keeps the (now-empty) style attribute after the last property
+    // clears; happy-dom drops it. Preserve the distinction a never-styled
+    // element has — absence only when the attribute never existed.
+    const hadStyleAttr = node.hasAttribute('style');
     const prev = prevProps.get(id) ?? {};
     const merged = { ...((prev.style ?? {}) as Record<string, string>) };
     for (const [k, v] of Object.entries(changes)) {
@@ -940,6 +944,7 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
       }
       merged[k] = v;
     }
+    if (hadStyleAttr && !node.hasAttribute('style')) node.setAttribute('style', '');
     prev.style = merged;
     prevProps.set(id, prev);
   }
