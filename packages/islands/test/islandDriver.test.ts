@@ -296,3 +296,44 @@ describe('handle surface', () => {
     }
   });
 });
+
+describe('measure channel (measure ops → setRects pushes)', () => {
+  /** happy-dom has no layout — stub getBoundingClientRect on the Element
+   *  prototype so measured ids report real, distinguishable boxes. */
+  const stubRects = () => {
+    const el = realDoc.createElement('div');
+    let proto: object | null = el;
+    while (proto !== null && !Object.prototype.hasOwnProperty.call(proto, 'getBoundingClientRect')) {
+      proto = Object.getPrototypeOf(proto);
+    }
+    if (proto === null) throw new Error('getBoundingClientRect not found on prototype chain');
+    return vi.spyOn(proto as Element, 'getBoundingClientRect').mockImplementation(function (
+      this: Element,
+    ): DOMRect {
+      const cls = (this as HTMLElement).className;
+      const w = cls === 'geom' ? 320 : cls === 'ro-target' ? 111 : 0;
+      return {
+        x: 10, y: 20, top: 20, left: 10, right: 10 + w, bottom: 20 + w / 2,
+        width: w, height: w / 2, toJSON: () => ({}),
+      } as DOMRect;
+    });
+  };
+
+  it('pushed driver rects reach observeSize callbacks, the ResizeObserver shim, and getComputedStyle', async () => {
+    const spy = stubRects();
+    try {
+      const el = host();
+      const island = await mountIsland({ worker: renderWorker, el, app: 'measure' });
+      // The measure ops ride the mount batch; the driver's rect push comes
+      // back through setRects → observer callbacks → utext ops on the DOM.
+      await vi.waitFor(() => {
+        expect(el.querySelector('.rect-readout')?.textContent).toBe('320');
+        expect(el.querySelector('.style-readout')?.textContent).toBe('320px');
+        expect(el.querySelector('.ro-readout')?.textContent).toBe('111');
+      });
+      island.destroy();
+    } finally {
+      spy.mockRestore();
+    }
+  });
+});

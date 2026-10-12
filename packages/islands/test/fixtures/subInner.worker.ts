@@ -32,6 +32,33 @@ export const innerApp = islandApp('inner', {
   },
 });
 
+/**
+ * 'measurer' — reports geometry through the sub-island's forwarded channel:
+ * onResize sees the MOUNT ELEMENT's real box (not the parent container's),
+ * and an observeSize on its own root tunnels its measure op up through the
+ * parent island to the real driver and back.
+ */
+export const measurerApp = islandApp('measurer', {
+  imperative: (doc: ProxyDocument): void => {
+    const root = doc.createElement('div');
+    root.className = 'inner';
+    const size = doc.createElement('span');
+    size.className = 'inner-size';
+    size.textContent = 'size:?';
+    const rect = doc.createElement('span');
+    rect.className = 'inner-rect';
+    rect.textContent = 'rect:?';
+    doc.onResize((w, h) => {
+      size.textContent = `size:${w}x${h}`;
+    });
+    doc.observeSize(root, (r) => {
+      rect.textContent = `rect:${r.w}`;
+    });
+    root.append(size, rect);
+    doc.body.append(root);
+  },
+});
+
 export const subInnerWorker = definePolyWorker({
-  apps: { inner: innerApp },
+  apps: { inner: innerApp, measurer: measurerApp },
 });

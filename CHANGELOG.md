@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.11
 
 ### `@atolljs/islands`: `destroy()` replays the unmount batch so slots unmount
 
@@ -12,6 +12,34 @@
   `clientMounts` never reached zero, and the worker never terminated.
   Both destroy branches now replay the batch before handing back or
   terminating the client.
+
+### `@atolljs/islands`: real element geometry through the measure channel
+
+- **Per-element rects over the wire.** New `measure`/`unmeasure` ops ask
+  the driver to `getBoundingClientRect` a node and observe it with a
+  `ResizeObserver`; measured boxes push back through a new `setRects`
+  task into a per-element store. `doc.observeSize(el, cb)` subscribes
+  (detacher emits `unmeasure`), and geometry reads on the element —
+  `clientWidth`/`offsetWidth`/`getBoundingClientRect` (with real `x`/`y`),
+  `getComputedStyle().width|height` — serve the last pushed rect. A bare
+  geometry read on an unmarked connected element lazily emits one
+  `measure` request too, so reads turn real once the push lands; the
+  honest-0 contract and once-per-doc warnings remain.
+- **`ResizeObserver` shim.** Inside an instance the global resolves to a
+  shim over the same channel (also `window.ResizeObserver`), so libraries
+  that size off ResizeObserver — echarts, recharts `ResponsiveContainer` —
+  get real boxes unmodified.
+- **Sub-islands get real boxes.** A nested mount now observes its proxy
+  mount element and forwards the REAL measured box as the sub-island's
+  `setSize` instead of the parent container's box (which stays the
+  fallback until the first nonzero rect lands). `measure` ops from the
+  sub-worker tunnel up through the parent's op stream and pushed rects
+  forward back down as `setRects` — chart and layout libraries inside
+  nested islands now size correctly.
+- Rects update on element resize only (position moves don't retrigger);
+  `scroll*` reads stay honest 0. Sub-worker entries and drivers ignore
+  unknown ops/methods, so mixed-version pairs degrade to the old
+  honest-0 behavior.
 
 ## 0.1.10
 

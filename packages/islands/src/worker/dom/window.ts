@@ -23,6 +23,7 @@ import {
   type ProxyDocument,
 } from './document';
 import { ProxyElement } from './element';
+import { ProxyResizeObserver } from './resizeObserver';
 import {
   ProxyNode,
   ProxyText,
@@ -58,6 +59,9 @@ export interface WindowShim {
   ): number;
   clearInterval(id?: number): void;
   getComputedStyle(el: unknown): Record<string, never>;
+  /** ResizeObserver over the pushed-measure channel — observe() registers
+   *  a doc.observeSize subscription, pushed rects arrive as entries. */
+  ResizeObserver: typeof ProxyResizeObserver;
   /** Media queries can't be answered worker-side — always `matches: false`. */
   matchMedia(query: string): MediaQueryList;
   addEventListener(
@@ -251,9 +255,14 @@ const buildWindowFacade = (internal: InternalDocument): WindowFacadeBundle => {
       intervals.delete(id);
       globalClearInterval(id);
     },
-    // No measurement channel — an empty declaration, same honesty rule as
-    // doc.getComputedStyle (which warns once); the facade stays silent.
-    getComputedStyle: () => ({}),
+    // Delegates to doc.getComputedStyle — measured elements report real
+    // width/height ('NNpx'), the unmeasured path warns once doc-side.
+    getComputedStyle: (el: unknown) =>
+      (el instanceof ProxyElement ? internal.getComputedStyle(el) : {}) as Record<string, never>,
+    // The measure channel as a DOM-standard observer — chart/map libraries
+    // that size off ResizeObserver (echarts, recharts ResponsiveContainer)
+    // get real pushed boxes unmodified.
+    ResizeObserver: ProxyResizeObserver,
     // No preference/quiz surface exists worker-side — media queries never
     // match. The shape is complete enough for feature-detection code.
     matchMedia: (query: string) =>
@@ -356,6 +365,7 @@ export function installInstanceDispatcher(): void {
   const prevComment = g.Comment;
   const prevMedia = g.HTMLMediaElement;
   const prevCustomElements = g.customElements;
+  const prevResizeObserver = g.ResizeObserver;
   // Explicit assignments override the fallback (never the in-instance doc) —
   // keeps pre-dispatcher semantics for out-of-instance code, and lets test
   // harnesses/suites restore globals by plain assignment.
@@ -438,6 +448,9 @@ export function installInstanceDispatcher(): void {
     prevCustomElements !== undefined ? prevCustomElements : CUSTOM_ELEMENTS_STUB,
     prevCustomElements,
   );
+  // A REAL ResizeObserver (happy-dom tests) keeps serving out-of-instance
+  // code; in-instance resolves to the measure-channel shim.
+  installClassGlobal('ResizeObserver', ProxyResizeObserver, prevResizeObserver);
 }
 
 /**
@@ -492,6 +505,7 @@ export function installDomShim(doc: ProxyDocument): () => void {
   const prevComment = g.Comment;
   const prevMedia = g.HTMLMediaElement;
   const prevCustomElements = g.customElements;
+  const prevResizeObserver = g.ResizeObserver;
 
   // The installed document becomes the ambient one for out-of-instance
   // readers: the explicit assignment wins the dispatcher's resolution,
@@ -506,6 +520,7 @@ export function installDomShim(doc: ProxyDocument): () => void {
   g.Comment = ProxyComment;
   if (typeof g.HTMLMediaElement !== 'function') g.HTMLMediaElement = HTML_MEDIA_STUB;
   if (g.customElements === undefined) g.customElements = CUSTOM_ELEMENTS_STUB;
+  if (g.ResizeObserver === undefined) g.ResizeObserver = ProxyResizeObserver;
 
   const uninstall = (): void => {
     bundle.teardown();
@@ -518,6 +533,7 @@ export function installDomShim(doc: ProxyDocument): () => void {
     g.Comment = prevComment;
     g.HTMLMediaElement = prevMedia;
     g.customElements = prevCustomElements;
+    g.ResizeObserver = prevResizeObserver;
     markInstanceActive(prevInstance);
     if (activeShimUninstall === uninstall) activeShimUninstall = null;
   };

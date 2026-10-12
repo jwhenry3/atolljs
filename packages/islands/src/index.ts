@@ -49,6 +49,7 @@ export type {
   EventPayload,
   EventRef,
   IslandWorkerMethods,
+  MeasuredRect,
   Op,
   WireProps,
 } from './ops';

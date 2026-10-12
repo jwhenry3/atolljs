@@ -36,6 +36,7 @@ import {
   isEventRef,
   type EventPayload,
   type IslandWorkerMethods,
+  type MeasuredRect,
   type Op,
   type WireProps,
 } from './ops';
@@ -512,6 +513,69 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
   /** instance id → slot name, for elements carrying `data-atoll-slot`. */
   const slotNodes = new Map<number, string>();
 
+  /* ── Per-element measure channel (measure ops → setRects pushes) ──────────
+   *
+   * Declared before applyOp's first run: a mount batch may already carry
+   * `measure` ops (an app calling doc.observeSize / reading geometry during
+   * mount), and every reference below is initialized by the time the first
+   * op applies. The pushes themselves defer to a macrotask — islandCall is
+   * initialized by then regardless of which op batch requested them. The
+   * ~100ms throttle matches the container-size channel (leading + trailing). */
+  /** ids the worker asked to be measured — RO targets + unmeasure/remove hygiene. */
+  const measuredIds = new Set<number>();
+  /** instance id → rect awaiting the next setRects flush. */
+  const pendingRects = new Map<number, MeasuredRect>();
+  /** Shared observer for every measured element — created on first use so
+   *  islands that never measure pay nothing (and environments without
+   *  ResizeObserver just get the one-time initial rect per element). */
+  let rectObserver: ResizeObserver | null = null;
+  let rectTimer: number | null = null;
+  let rectLastPush = -Infinity;
+
+  function flushRects(): void {
+    rectTimer = null;
+    if (pendingRects.size === 0 || destroyed) return;
+    rectLastPush = Date.now();
+    const batch = [...pendingRects.values()];
+    pendingRects.clear();
+    void islandCall('setRects', client.setRects(instance, batch)).then((ops) =>
+      applyOps(ops, 'setRects'),
+    );
+  }
+
+  function scheduleRectFlush(): void {
+    if (rectTimer !== null) return;
+    const elapsed = Date.now() - rectLastPush;
+    rectTimer = window.setTimeout(flushRects, elapsed >= 100 ? 0 : 100 - elapsed);
+  }
+
+  const queueRect = (id: number, node: Element): void => {
+    // getBoundingClientRect (not the RO entry's contentRect) so x/y are
+    // viewport-relative — the coordinates getBoundingClientRect reads
+    // worker-side must match.
+    const r = node.getBoundingClientRect();
+    pendingRects.set(id, { id, x: r.x, y: r.y, w: r.width, h: r.height });
+    scheduleRectFlush();
+  };
+
+  const ensureRectObserver = (): void => {
+    if (rectObserver === null && typeof ResizeObserver === 'function') {
+      rectObserver = new ResizeObserver((entries) => {
+        for (const entry of entries) {
+          const id = nodeIds.get(entry.target as Node);
+          if (id !== undefined) queueRect(id, entry.target as Element);
+        }
+      });
+    }
+  };
+
+  const unmeasure = (id: number): void => {
+    if (!measuredIds.delete(id)) return;
+    pendingRects.delete(id);
+    const node = nodes.get(id);
+    if (node !== undefined) rectObserver?.unobserve(node as Element);
+  };
+
   /** Hand a live element to its slot mount callback (or drop it silently). */
   const mountSlot = (node: HTMLElement, id: number, name: string): void => {
     // Always set the attribute — nested-remove detection below finds slot
@@ -549,6 +613,90 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
     }
   };
 
+  /* ── Detached-node tombstones ─────────────────────────────────────────────
+   * A `remove` op detaches the real node, but the worker may re-append the
+   * same id later (renderers reorder siblings: zrender restacks displayables,
+   * list libraries shuffle rows, `clear`+`append` remounts reuse their ids).
+   * Entries move into `detached` instead of vanishing so a later `append`
+   * can restore them; the cap bounds churn from create/remove cycles
+   * (tooltip text, transient overlays) that never comes back. Lookups
+   * promote on demand via nodeById — an op may reference a tombstoned
+   * descendant before its ancestor's re-append lands. */
+  const DETACHED_CAP = 1024;
+  interface Tombstone {
+    node: Node;
+    props?: WireProps;
+    listeners?: Map<string, EventListener>;
+    slot?: string;
+  }
+  const detached = new Map<number, Tombstone>();
+  /** tombstoned node → id — promote walks find subtree ids without nodeIds. */
+  const detachedIds = new Map<Node, number>();
+
+  const tombstoneId = (id: number, node: Node): void => {
+    // Drop the RO observation while the live map still resolves the node —
+    // after nodes.delete the unobserve would be a silent no-op and the
+    // observer would pin the detached element.
+    unmeasure(id);
+    detachedIds.set(node, id);
+    detached.set(id, {
+      node,
+      props: prevProps.get(id),
+      listeners: nodeListeners.get(id),
+      // The slot name survives unmountSlot's slotNodes.delete only on the
+      // element's marker attribute — read it from the DOM, not the map.
+      slot: isElementNode(node) ? (node.getAttribute('data-atoll-slot') ?? undefined) : undefined,
+    });
+    nodes.delete(id);
+    nodeIds.delete(node);
+    prevProps.delete(id);
+    nodeListeners.delete(id);
+    if (detached.size > DETACHED_CAP) {
+      // Map order is insertion order — evict the oldest tombstone. A later
+      // op referencing an evicted id takes the normal missing-node path.
+      const oldest = detached.keys().next().value;
+      if (oldest !== undefined) {
+        const dead = detached.get(oldest);
+        detached.delete(oldest);
+        if (dead !== undefined) detachedIds.delete(dead.node);
+      }
+    }
+  };
+
+  /** Move a node AND its whole subtree into tombstones. */
+  const tombstoneSubtree = (rootId: number, root: Node): void => {
+    const walk = (node: Node): void => {
+      const id = node === root ? rootId : nodeIds.get(node);
+      if (id !== undefined && id !== 0) tombstoneId(id, node);
+      for (const child of Array.from(node.childNodes)) walk(child);
+    };
+    walk(root);
+  };
+
+  /** Restore a tombstoned node + descendants (re-append after remove). */
+  const promoteSubtree = (id: number): Node | undefined => {
+    const tomb = detached.get(id);
+    if (tomb === undefined) return nodes.get(id);
+    detached.delete(id);
+    detachedIds.delete(tomb.node);
+    nodes.set(id, tomb.node);
+    nodeIds.set(tomb.node, id);
+    if (tomb.props !== undefined) prevProps.set(id, tomb.props);
+    if (tomb.listeners !== undefined) nodeListeners.set(id, tomb.listeners);
+    if (tomb.slot !== undefined) {
+      slotNodes.set(id, tomb.slot);
+      opts.slots?.[tomb.slot]?.(tomb.node as HTMLElement);
+    }
+    for (const child of Array.from(tomb.node.childNodes)) {
+      const cid = detachedIds.get(child);
+      if (cid !== undefined) promoteSubtree(cid);
+    }
+    return tomb.node;
+  };
+
+  /** nodes.get that promotes tombstoned entries on demand. */
+  const nodeById = (id: number): Node | undefined => nodes.get(id) ?? promoteSubtree(id);
+
   let opsApplied = 0;
   let flushCalls = 0;
   let mode: Mode = initialMode ?? 'push';
@@ -556,8 +704,38 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
   let pollTimer: number | null = null;
   let destroyed = false;
 
+  /* ── Dispatch queue ───────────────────────────────────────────────────────
+   * Every real event used to fire its own postMessage the moment it landed:
+   * a pointer sweep queues round-trips faster than the worker drains them,
+   * and each in-flight call pins its payload + the island's maps. The queue
+   * preserves DOM order while bounding in-flight calls. Move-type events
+   * coalesce — a queued move superseded by a newer one for the same
+   * (handler, type) is dropped before it hits the wire; only the freshest
+   * position matters for pointer tracking. Boundary events (out/over/down/
+   * up/wheel) never merge and never overtake a queued move, so enter/leave
+   * edges stay ordered after the moves they coalesce past. */
+  const COALESCE_EVENTS = new Set(['mousemove', 'pointermove', 'touchmove', 'drag', 'dragover']);
+  const MAX_IN_FLIGHT_DISPATCH = 4;
+  const dispatchQueue: Array<{ handlerId: number; key: string | null; payload: EventPayload }> = [];
+  let inFlightDispatches = 0;
+
+  const pumpDispatches = (): void => {
+    while (!destroyed && inFlightDispatches < MAX_IN_FLIGHT_DISPATCH && dispatchQueue.length > 0) {
+      const next = dispatchQueue.shift()!;
+      inFlightDispatches++;
+      void islandCall('dispatch', client.dispatch(next.handlerId, next.payload))
+        .then((ops) => applyOps(ops, 'dispatch'))
+        .catch((err) => console.error(`[island ${instance}] dispatch failed`, err))
+        .finally(() => {
+          inFlightDispatches--;
+          pumpDispatches();
+        });
+    }
+  };
+
   function listenerFor(handlerId: number): EventListener {
     return (e: Event) => {
+      if (destroyed) return;
       const target = e.target;
       const payload = buildEventPayload(
         e,
@@ -565,11 +743,13 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
         target !== null ? nodeIds.get(target as Node) : undefined,
         nodeIds.get((e as MouseEvent).relatedTarget as Node),
       );
-      // The whole point: an event = one postMessage round-trip. The worker
-      // re-renders, we apply whatever ops come back.
-      void islandCall('dispatch', client.dispatch(handlerId, payload))
-        .then((ops) => applyOps(ops, 'dispatch'))
-        .catch((err) => console.error(`[island ${instance}] dispatch failed`, err));
+      const key = COALESCE_EVENTS.has(e.type) ? `${handlerId}:${e.type}` : null;
+      if (key !== null) {
+        const stale = dispatchQueue.findIndex((q) => q.key === key);
+        if (stale !== -1) dispatchQueue.splice(stale, 1);
+      }
+      dispatchQueue.push({ handlerId, key, payload });
+      pumpDispatches();
     };
   }
 
@@ -794,8 +974,8 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
         break;
       }
       case 'append': {
-        let parent = nodes.get(op.parent);
-        const child = nodes.get(op.child);
+        let parent = nodeById(op.parent);
+        const child = nodeById(op.child);
         if (!parent || !child) {
           console.error(`[island] append skipped: parent=${op.parent}→${String(parent)} child=${op.child}→${String(child)}`);
           break;
@@ -807,18 +987,24 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
         if (isElementNode(parent) && parent.tagName === 'TEMPLATE') {
           parent = (parent as HTMLTemplateElement).content;
         }
-        const before = op.before !== undefined ? (nodes.get(op.before) ?? null) : null;
+        const before = op.before !== undefined ? (nodeById(op.before) ?? null) : null;
         parent.insertBefore(child, before);
         break;
       }
       case 'remove': {
-        const child = nodes.get(op.child);
-        if (child !== undefined) unmountSlotSubtree(child);
+        const child = nodeById(op.child);
+        if (child !== undefined) {
+          unmountSlotSubtree(child);
+          // unmeasure + every map eviction happens inside tombstoneSubtree:
+          // descendants get no remove op of their own, so the walk is the
+          // only place they can leave nodes/prevProps/nodeListeners.
+          tombstoneSubtree(op.child, child);
+        }
         child?.parentNode?.removeChild(child);
         break;
       }
       case 'update': {
-        const node = nodes.get(op.id);
+        const node = nodeById(op.id);
         if (!isElementNode(node)) break;
         const prev = prevProps.get(op.id) ?? {};
         applyProps(node, op.id, prev, op.props);
@@ -826,24 +1012,24 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
         break;
       }
       case 'utext': {
-        const node = nodes.get(op.id);
+        const node = nodeById(op.id);
         if (node) node.textContent = op.text;
         break;
       }
       case 'attr': {
-        const node = nodes.get(op.id);
+        const node = nodeById(op.id);
         if (!isElementNode(node)) break;
         setAttr(node, op.id, op.name, op.value);
         break;
       }
       case 'style': {
-        const node = nodes.get(op.id);
+        const node = nodeById(op.id);
         if (!isElementNode(node)) break;
         mergeStyle(node, op.id, op.props);
         break;
       }
       case 'listen': {
-        const node = nodes.get(op.id);
+        const node = nodeById(op.id);
         if (!isElementNode(node)) break;
         // Keyed by type + handler id so proxy listeners can't collide with
         // the React-prop listener for the same event name, and so unlisten
@@ -861,7 +1047,7 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
         break;
       }
       case 'unlisten': {
-        const node = nodes.get(op.id);
+        const node = nodeById(op.id);
         if (!isElementNode(node)) break;
         const key = `${op.type}#${op.handler}`;
         const listener = nodeListeners.get(op.id)?.get(key);
@@ -881,6 +1067,12 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
         // like a `remove` op would so slots callbacks see null and
         // slotNodes doesn't leak.
         unmountSlotSubtree(el);
+        // Children detach with their ids tombstoned — a remount's following
+        // `append` re-promotes them rather than leaking map entries.
+        for (const child of Array.from(el.childNodes)) {
+          const id = nodeIds.get(child);
+          if (id !== undefined) tombstoneSubtree(id, child);
+        }
         el.replaceChildren();
         break;
       }
@@ -901,10 +1093,26 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
         onEvent?.(op.name, op.payload);
         break;
       }
+      case 'measure': {
+        const node = nodeById(op.id);
+        if (!isElementNode(node)) break;
+        measuredIds.add(op.id);
+        ensureRectObserver();
+        rectObserver?.observe(node);
+        // The initial rect ships immediately — ResizeObserver only ticks on
+        // later resizes (and on mount for a detached-then-appended node),
+        // so without it a read-heavy mount would wait a frame for nothing.
+        queueRect(op.id, node);
+        break;
+      }
+      case 'unmeasure': {
+        unmeasure(op.id);
+        break;
+      }
     }
   }
 
-  function applyOps(ops: Op[], via: 'mount' | 'updateProps' | 'dispatch' | 'setSize' | 'flush' | 'unmount'): void {
+  function applyOps(ops: Op[], via: 'mount' | 'updateProps' | 'dispatch' | 'setSize' | 'setRects' | 'flush' | 'unmount'): void {
     opsApplied += ops.length;
     onActivity?.();
     const t0 = performance.now();
@@ -923,7 +1131,7 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
 
   /** Times a main→worker round-trip for the devtools inspector. */
   const islandCall = <T>(
-    method: 'mount' | 'whoami' | 'dispatch' | 'setSize' | 'updateProps' | 'flush' | 'unmount',
+    method: 'mount' | 'whoami' | 'dispatch' | 'setSize' | 'setRects' | 'updateProps' | 'flush' | 'unmount',
     p: Promise<T>,
   ): Promise<T> => {
     const t0 = performance.now();
@@ -1101,8 +1309,12 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
       emitDevtools({ type: 'island:unmount', instance });
       unsubscribe?.();
       resizeObserver?.disconnect();
+      rectObserver?.disconnect();
       if (pollTimer !== null) clearInterval(pollTimer);
       if (sizeTimer !== null) clearTimeout(sizeTimer);
+      if (rectTimer !== null) clearTimeout(rectTimer);
+      pendingRects.clear();
+      measuredIds.clear();
       const remaining = (clientMounts.get(client) ?? 1) - 1;
       clientMounts.set(client, remaining);
       if (remaining > 0) {

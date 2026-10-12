@@ -16,6 +16,7 @@ import type { EventPayload, Op } from '../../ops';
 import {
   ProxyNode,
   ProxyFragment,
+  camelize,
   listenerOptsForWire,
   normalizeListenerOptions,
   type ProxyEventHandler,
@@ -437,16 +438,18 @@ export class ProxyElement extends ProxyNode {
     return copy;
   }
 
-  /* ── Pushed-size geometry. The ONLY measured box is the island container:
-   *  `doc.body`/`documentElement` and markContainer()ed elements report the
-   *  last setSize push; everything else keeps the honest 0 and warns once
-   *  per document per API. A marked element reports the CONTAINER's box —
-   *  the driver can only measure the island's root, so "marked" means
-   *  "pretend my box is the container's", which is only honest for elements
-   *  that genuinely fill it. ── */
+  /* ── Geometry. Two pushed channels: the island container's setSize box
+   *  (root + markContainer()ed elements) and per-element setRects boxes for
+   *  elements the worker asked the driver to measure — via doc.observeSize,
+   *  a ResizeObserver shim, or lazily by any of the reads below. Until the
+   *  first push lands a read keeps the honest 0 and warns once per doc per
+   *  API; a marked element keeps reporting the CONTAINER's box — "marked"
+   *  still means "pretend my box is the container's" and is only honest
+   *  for elements that genuinely fill it. ── */
   getBoundingClientRect(): DOMRect {
-    const size = this.doc._sizeFor(this);
-    if (size === undefined) {
+    const rect = this.doc._rectFor(this);
+    if (rect === undefined) {
+      this.doc._requestMeasure(this);
       this.doc._warn('getBoundingClientRect');
       return {
         x: 0, y: 0, top: 0, left: 0, right: 0, bottom: 0, width: 0, height: 0,
@@ -454,22 +457,23 @@ export class ProxyElement extends ProxyNode {
       } as DOMRect;
     }
     return {
-      x: 0, y: 0, top: 0, left: 0, right: size.w, bottom: size.h,
-      width: size.w, height: size.h,
+      x: rect.x, y: rect.y, top: rect.y, left: rect.x,
+      right: rect.x + rect.w, bottom: rect.y + rect.h,
+      width: rect.w, height: rect.h,
       toJSON: () => ({}),
     } as DOMRect;
   }
   get clientWidth(): number {
-    return this._geom('clientWidth', (s) => s.w);
+    return this._geom('clientWidth', (r) => r.w);
   }
   get clientHeight(): number {
-    return this._geom('clientHeight', (s) => s.h);
+    return this._geom('clientHeight', (r) => r.h);
   }
   get offsetWidth(): number {
-    return this._geom('offsetWidth', (s) => s.w);
+    return this._geom('offsetWidth', (r) => r.w);
   }
   get offsetHeight(): number {
-    return this._geom('offsetHeight', (s) => s.h);
+    return this._geom('offsetHeight', (r) => r.h);
   }
   /** Border edge widths — honestly 0 (the pushed box doesn't measure borders). */
   get clientLeft(): number {
@@ -489,25 +493,25 @@ export class ProxyElement extends ProxyNode {
     return null;
   }
   get scrollTop(): number {
-    this.doc._warn('scrollTop');
+    this.doc._scrollWarn('scrollTop');
     return 0;
   }
   set scrollTop(_v: number) {
-    this.doc._warn('scrollTop');
+    this.doc._scrollWarn('scrollTop');
   }
   get scrollLeft(): number {
-    this.doc._warn('scrollLeft');
+    this.doc._scrollWarn('scrollLeft');
     return 0;
   }
   set scrollLeft(_v: number) {
-    this.doc._warn('scrollLeft');
+    this.doc._scrollWarn('scrollLeft');
   }
   get scrollHeight(): number {
-    this.doc._warn('scrollHeight');
+    this.doc._scrollWarn('scrollHeight');
     return 0;
   }
   get scrollWidth(): number {
-    this.doc._warn('scrollWidth');
+    this.doc._scrollWarn('scrollWidth');
     return 0;
   }
 
@@ -622,20 +626,50 @@ export class ProxyElement extends ProxyNode {
   }
 
   /* internals */
-  /** Geometry read shared by the pushed-size getters above. */
-  _geom(feature: string, pick: (size: { w: number; h: number }) => number): number {
-    const size = this.doc._sizeFor(this);
-    if (size === undefined) {
+  /** Geometry read shared by the size getters above. */
+  _geom(
+    feature: string,
+    pick: (rect: { x: number; y: number; w: number; h: number }) => number,
+  ): number {
+    const rect = this.doc._rectFor(this);
+    if (rect === undefined) {
+      // Lazy measure request — the read keeps its honest 0 for now, but
+      // the driver's setRects push makes later reads real (and observeSize
+      // subscribers fire).
+      this.doc._requestMeasure(this);
       this.doc._warn(feature);
       return 0;
     }
-    return pick(size);
+    return pick(rect);
   }
   _writeStyle(key: string, value: string): void {
     this.doc._assertAlive();
+    // '' is the protocol's "clear this key" — tracked as an empty entry so
+    // `key in style` stays true for touched props, like real CSSOM.
     if (this._styleProps[key] === value) return;
     this._styleProps[key] = value;
     this._op({ t: 'style', id: this.instance.id, props: { [key]: value } });
+  }
+
+  /** style.cssText — a FULL replace, not another key. Parse the declarations
+   *  and write each through the dedup path; keys absent from the new text
+   *  clear. Storing the text under a 'cssText' key left stale per-key values
+   *  that deduped real writes away (a hide's `visibility:hidden` stuck after
+   *  a show's cssText replay). */
+  _replaceStyleText(cssText: string): void {
+    const next = new Map<string, string>();
+    for (const decl of cssText.split(';')) {
+      const sep = decl.indexOf(':');
+      if (sep <= 0) continue;
+      const raw = decl.slice(0, sep).trim();
+      const value = decl.slice(sep + 1).trim();
+      if (raw === '' || value === '') continue;
+      next.set(raw.startsWith('--') ? raw : camelize(raw), value);
+    }
+    for (const key of Object.keys(this._styleProps)) {
+      if (!next.has(key)) this._writeStyle(key, '');
+    }
+    for (const [key, value] of next) this._writeStyle(key, value);
   }
   private _setAttr(name: string, value: string): void {
     this.doc._assertAlive();

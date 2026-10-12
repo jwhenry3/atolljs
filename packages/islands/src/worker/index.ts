@@ -69,6 +69,7 @@ export {
   ProxyElement,
   ProxyFragment,
   ProxyNode,
+  ProxyResizeObserver,
   ProxyText,
   docForInstance,
 } from './proxyDom';
@@ -82,7 +83,7 @@ export type {
   WireListenerOpts,
 } from './proxyDom';
 
-export type { EventPayload, IslandWorkerMethods, Op, WireProps } from '../ops';
+export type { EventPayload, IslandWorkerMethods, MeasuredRect, Op, WireProps } from '../ops';
 export { isEventRef } from '../ops';
 export { renderMemory } from '../memory';
 export type { DoorbellSpec } from '../memory';

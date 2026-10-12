@@ -89,6 +89,7 @@ export function styleProxyFor(el: ProxyElement): CSSStyleDeclaration {
           };
         if (prop === 'cssText') {
           return Object.entries(t)
+            .filter(([, v]) => v !== '')
             .map(([k, v]) => `${hyphenate(k)}: ${v};`)
             .join(' ');
         }
@@ -96,7 +97,8 @@ export function styleProxyFor(el: ProxyElement): CSSStyleDeclaration {
         return undefined;
       },
       set: (_t, prop, v) => {
-        if (typeof prop === 'string') el._writeStyle(prop, String(v));
+        if (prop === 'cssText') el._replaceStyleText(String(v));
+        else if (typeof prop === 'string') el._writeStyle(prop, String(v));
         return true;
       },
       deleteProperty: (_t, prop) => {

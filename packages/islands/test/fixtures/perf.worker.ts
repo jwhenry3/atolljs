@@ -354,6 +354,42 @@ function RPortal(props: Record<string, unknown>) {
   );
 }
 
+/**
+ * 'measure' — exercises the pushed-measure channel end to end: observeSize
+ * on an element, the global ResizeObserver shim on a second element, and a
+ * getComputedStyle read of the measured box. Driver rects flow back as
+ * utext ops the test reads off the real DOM.
+ */
+export const measurerApp = islandApp('measure', {
+  imperative: (doc: ProxyDocument): void => {
+    const box = doc.createElement('div');
+    box.className = 'geom';
+    const size = doc.createElement('span');
+    size.className = 'rect-readout';
+    size.textContent = '?';
+    const style = doc.createElement('span');
+    style.className = 'style-readout';
+    style.textContent = '?';
+    box.append(size, style);
+    const roTarget = doc.createElement('div');
+    roTarget.className = 'ro-target';
+    const ro = doc.createElement('span');
+    ro.className = 'ro-readout';
+    ro.textContent = '?';
+    doc.body.append(box, roTarget, ro);
+    doc.observeSize(box, (r) => {
+      size.textContent = `${r.w}`;
+      style.textContent = doc.getComputedStyle(box).width;
+    });
+    const RO = (globalThis as Record<string, unknown>).ResizeObserver as new (
+      cb: (entries: Array<{ contentRect: { width: number } }>) => void,
+    ) => { observe(el: unknown): void };
+    new RO((entries) => {
+      for (const e of entries) ro.textContent = `${e.contentRect.width}`;
+    }).observe(roTarget);
+  },
+});
+
 export const perfWorker = definePolyWorker({
   apps: {
     tree: treeApp,
@@ -368,5 +404,6 @@ export const perfWorker = definePolyWorker({
     renderednu: renderedNoUpdateApp,
     rsuspend: reactIslandApp(RSuspend),
     rportal: reactIslandApp(RPortal),
+    measure: measurerApp,
   },
 });

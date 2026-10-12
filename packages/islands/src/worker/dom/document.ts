@@ -5,14 +5,17 @@ import {
   getActiveInstance,
   getLastActiveInstance,
   getInstanceSize,
+  getInstanceRect,
+  setInstanceRect,
   instances,
+  lookupInstance,
   markInstanceActive,
   pushOp,
   registerHandler,
   unregisterHandler,
 } from '../instance';
 import type { ElementInstance, HostInstance, TextInstance } from '../instance';
-import type { EventPayload, Op } from '../../ops';
+import type { EventPayload, MeasuredRect, Op } from '../../ops';
 
 import {
   ProxyNode,
@@ -106,6 +109,18 @@ export interface ProxyDocument {
    */
   markContainer(el: ProxyElement): void;
   /**
+   * Request REAL geometry for `el` — emits a `measure` op asking the driver
+   * to measure the actual node and ResizeObserver it. `cb` fires inside the
+   * instance's task scope on every `setRects` push (the first arrives as
+   * soon as the driver answers, then on every element resize), so observer
+   * mutations emit ops like onResize handlers. The element's geometry reads
+   * (`clientWidth`, `getBoundingClientRect`, …) serve the last pushed rect
+   * from then on. Returns a detacher — removing the last observer emits
+   * `unmeasure`. This backs the `ResizeObserver` shim; call it directly for
+   * the plain (rect) => void form.
+   */
+  observeSize(el: ProxyElement, cb: (rect: MeasuredRect) => void): () => void;
+  /**
    * Register a handler fired every time the driver pushes a new container
    * size — the app's resize signal. Handlers run inside the instance's task
    * scope, so their proxy-DOM mutations emit ops and `emit` routes.
@@ -140,6 +155,11 @@ export class InternalDocument implements ProxyDocument {
   readonly _containerIds = new Set<number>([0]);
   /** Handlers fired when a setSize task pushes a new container size. */
   private readonly _resizeHandlers = new Set<(w: number, h: number) => void>();
+  /** element id → observeSize callbacks, fired on each setRects push. */
+  private readonly _sizeObservers = new Map<number, Set<(rect: MeasuredRect) => void>>();
+  /** ids a `measure` op was already emitted for — dedupes observeSize and
+   *  the lazy auto-request a bare geometry read performs. */
+  readonly _measureRequested = new Set<number>();
   /** The window facade bundle — built lazily by windowFacadeFor, shared by
    *  installDomShim and the instance dispatcher. */
   _windowBundle?: WindowFacadeBundle;
@@ -198,11 +218,21 @@ export class InternalDocument implements ProxyDocument {
     }
   }
 
-  _warn(feature: string): void {
+  _warn(feature: string, message?: string): void {
     if (this._warned.has(feature)) return;
     this._warned.add(feature);
     console.warn(
-      `[proxyDom] '${feature}' has no measurement channel — the only geometry the worker sees is the pushed container size (setSize); reads on unmarked elements return 0/empty.`,
+      message ??
+        `[proxyDom] '${feature}' has no synchronous answer — a measure request was emitted and reads return real geometry once the driver pushes it; subscribe via doc.observeSize or a ResizeObserver for updates.`,
+    );
+  }
+
+  /** Scroll-geometry warn — the measure channel delivers border boxes, not
+   *  scroll offsets/overflow extents, so scroll* reads stay honest 0. */
+  _scrollWarn(feature: string): void {
+    this._warn(
+      feature,
+      `[proxyDom] '${feature}' has no channel — the worker sees border-box geometry only (setSize/measure pushes); scroll offsets and overflow extents read 0.`,
     );
   }
 
@@ -212,13 +242,71 @@ export class InternalDocument implements ProxyDocument {
   }
 
   /**
-   * The size a geometry read on `el` may report: the pushed container box
-   * when `el` is the root or was markContainer()ed, undefined otherwise
+   * Emit `measure` for `el` exactly once — shared by observeSize (explicit
+   * subscription) and by geometry reads on unmarked connected elements (the
+   * lazy path: a library reading clientWidth gets the honest 0 for now, and
+   * REAL geometry on subsequent reads once the driver's push lands).
+   * Disconnected/phantom nodes have no driver-side element to measure;
+   * requesting is skipped until the read happens while connected.
+   */
+  _requestMeasure(el: ProxyElement): void {
+    if (!el.isConnected) return;
+    const id = el.instance.id;
+    if (this._measureRequested.has(id)) return;
+    this._measureRequested.add(id);
+    el._op({ t: 'measure', id });
+  }
+
+  observeSize(el: ProxyElement, cb: (rect: MeasuredRect) => void): () => void {
+    this._assertAlive();
+    const id = el.instance.id;
+    let set = this._sizeObservers.get(id);
+    if (set === undefined) this._sizeObservers.set(id, (set = new Set()));
+    set.add(cb);
+    // Connected or not, request now: the driver's ResizeObserver delivers
+    // the first rect when the element mounts, so an early observe is safe.
+    if (!this._measureRequested.has(id)) {
+      this._measureRequested.add(id);
+      el._op({ t: 'measure', id });
+    }
+    return () => {
+      const observers = this._sizeObservers.get(id);
+      if (observers === undefined) return;
+      observers.delete(cb);
+      if (observers.size === 0) {
+        this._sizeObservers.delete(id);
+        this._measureRequested.delete(id);
+        el._op({ t: 'unmeasure', id });
+      }
+    };
+  }
+
+  /**
+   * Store pushed rects and fire per-element observers — the `setRects`
+   * task calls this inside the instance's scope, so observer mutations
+   * emit ops and ride back in the task's return batch.
+   */
+  _notifyRects(rects: MeasuredRect[]): void {
+    for (const rect of rects) {
+      setInstanceRect(this.instance, rect);
+      const observers = this._sizeObservers.get(rect.id);
+      if (observers !== undefined) for (const cb of [...observers]) cb(rect);
+    }
+  }
+
+  /**
+   * The rect a geometry read on `el` may report: the element's own measured
+   * box when a setRects push arrived for it, else the pushed CONTAINER box
+   * when `el` is the root or was markContainer()ed (the old contract — a
+   * marked element claims "my box is the container's"), undefined otherwise
    * (also undefined when nothing has been pushed yet — reads return 0).
    */
-  _sizeFor(el: ProxyElement): { w: number; h: number } | undefined {
+  _rectFor(el: ProxyElement): { x: number; y: number; w: number; h: number } | undefined {
+    const measured = getInstanceRect(this.instance, el.instance.id);
+    if (measured !== undefined) return measured;
     if (!this._containerIds.has(el.instance.id)) return undefined;
-    return getInstanceSize(this.instance);
+    const size = getInstanceSize(this.instance);
+    return size === undefined ? undefined : { x: 0, y: 0, ...size };
   }
 
   onResize(cb: (w: number, h: number) => void): void {
@@ -288,7 +376,7 @@ export class InternalDocument implements ProxyDocument {
     if (self !== undefined) out.currentTarget = self;
     const id = payload.targetId;
     if (typeof id === 'number') {
-      const instance = instances.get(id);
+      const instance = lookupInstance(id);
       if (instance !== undefined) {
         const node = this._wrap(instance);
         // Reflect the dispatched form state into the SHADOW attrs —
@@ -311,7 +399,7 @@ export class InternalDocument implements ProxyDocument {
     // (zrender's isLocalEl climbs parentNode to the listener root) to tell
     // "moved to a child" apart from "actually left".
     if (typeof payload.relatedTargetId === 'number') {
-      const related = instances.get(payload.relatedTargetId);
+      const related = lookupInstance(payload.relatedTargetId);
       if (related !== undefined) out.relatedTarget = this._wrap(related);
     }
     if (out.composedPath === undefined) {
@@ -528,11 +616,23 @@ export class InternalDocument implements ProxyDocument {
     return out;
   }
 
-  getComputedStyle(_el: ProxyElement): CSSStyleDeclaration {
-    this._warn('getComputedStyle');
-    // Every property reads ''; getPropertyValue('x') returns '' too.
-    return new Proxy({} as Record<string, unknown>, {
-      get: (_t, prop) => (prop === 'getPropertyValue' ? () => '' : ''),
+  getComputedStyle(el: ProxyElement): CSSStyleDeclaration {
+    // A measured box doubles as the computed box — 'width'/'height' are
+    // what layout libraries actually read (zrender's parseInt(stl.width),
+    // echarts' elementFromPoint-free sizing). Every other property stays
+    // the honest empty string.
+    const rect = this._rectFor(el);
+    const w = rect === undefined ? '' : `${rect.w}px`;
+    const h = rect === undefined ? '' : `${rect.h}px`;
+    if (rect === undefined) {
+      this._requestMeasure(el);
+      this._warn('getComputedStyle');
+    }
+    return new Proxy({ width: w, height: h } as Record<string, unknown>, {
+      get: (t, prop) =>
+        prop === 'getPropertyValue'
+          ? (k: string): string => (k === 'width' ? w : k === 'height' ? h : '')
+          : (t[prop as string] ?? ''),
     }) as unknown as CSSStyleDeclaration;
   }
 
@@ -544,6 +644,8 @@ export class InternalDocument implements ProxyDocument {
     this._disposed = true;
     if (instanceDocs.get(this.instance) === this) instanceDocs.delete(this.instance);
     this._resizeHandlers.clear();
+    this._sizeObservers.clear();
+    this._measureRequested.clear();
     for (const hid of this._handlerIds) unregisterHandler(hid);
     this._handlerIds.clear();
   }

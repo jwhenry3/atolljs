@@ -24,6 +24,9 @@ export {
   installInstanceDispatcher,
   installDomShim,
 } from './dom/window';
+export {
+  ProxyResizeObserver,
+} from './dom/resizeObserver';
 export type {
   WindowShim,
   WindowFacadeBundle,

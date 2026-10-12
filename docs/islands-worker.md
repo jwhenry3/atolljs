@@ -138,19 +138,38 @@ outermost instrumented frame records, so a `dom/*` method calling `pushOp`
 never double-counts. `instrumentPrototype` (applied by the bench to the
 `dom/*` classes) extends the same accounting to imperative-app shadow-tree
 work; the residual `workerMs − recordMs` is renderer/adapter time.
-`proxyInstanceStats()` snapshots the retained state (`instances` are never
-pruned, event dispatch may still resolve detached target ids, so
-`liveNodes` is nodes-ever-allocated; the bench diffs before/after per
-island). `proxyMetrics.enabled` defaults off and stays off in production.
+`proxyInstanceStats()` snapshots the retained state (removed subtrees leave
+`instances`/`handlers` for a bounded tombstone — event dispatch may still
+resolve recently-detached target ids, and re-append restores them — so
+`liveNodes` is attached-only; the bench diffs before/after per island).
+`proxyMetrics.enabled` defaults off and stays off in production.
 
-### Geometry: one honest box
+### Geometry: the container box, plus measured elements
 
-The proxy DOM is write-path plus container geometry: a `ResizeObserver` on the
-island container pushes its size into the instance, and
-`doc.body`/`documentElement`/elements marked `doc.markContainer(el)` report it
-from `clientWidth`/`offsetWidth`/`getBoundingClientRect`. Everything else
-returns honest 0/empty and warns once. `doc.onResize(cb)` re-fires on each
-push: Leaflet's `map.invalidateSize()` hooks it in the demo.
+Two pushed channels carry real geometry worker-side:
+
+- **Container size (always on).** A `ResizeObserver` on the island container
+  pushes its size into the instance via `setSize`;
+  `doc.body`/`documentElement`/elements marked `doc.markContainer(el)` report
+  it from `clientWidth`/`offsetWidth`/`getBoundingClientRect`.
+  `doc.onResize(cb)` re-fires on each push: Leaflet's `map.invalidateSize()`
+  hooks it in the demo.
+- **Per-element rects (on request).** `doc.observeSize(el, cb)` emits a
+  `measure` op; the driver measures the real node, observes it with a
+  `ResizeObserver`, and pushes `{x, y, w, h}` back through the `setRects`
+  task — once immediately, then on every element resize (throttled ~100ms).
+  From the first push the element's `clientWidth`/`offsetWidth`/
+  `getBoundingClientRect`/`getComputedStyle().width|height` reads serve real
+  values, and `cb` fires inside the instance so its mutations emit ops.
+  The returned detacher emits `unmeasure` when the last observer leaves.
+
+Libraries that read `window.ResizeObserver` get this automatically: inside an
+instance the global resolves to a shim over the same channel (echarts,
+recharts' `ResponsiveContainer`). A bare geometry read on an unmarked
+connected element also emits one `measure` request — the read keeps its
+honest 0 until the first push, then turns real. Position moves alone don't
+retrigger (rects update on resize), and `scroll*` reads stay honest 0: the
+channel carries border boxes, not scroll offsets.
 
 ### `installDomShim(doc)`: running real libraries
 
@@ -234,8 +253,13 @@ shared-client semantics are identical to a top-level mount.
   proxy `addEventListener`, emits a `listen` op to the page, and the real
   event's payload dispatches back down to the sub-worker — with
   `targetId` translated between the two proxy id spaces.
-- **Geometry forwards**: the parent instance's pushed container size is
-  forwarded as the sub-island's `setSize`, and re-pushed on resize.
+- **Geometry forwards**: the mount element's REAL measured box forwards as
+  the sub-island's `setSize` (via `observeSize` on the proxy target — the
+  main driver measures the real node), with the parent container's pushed
+  size as the fallback until the first nonzero rect lands. `measure` ops
+  from the sub-worker tunnel up the same way: translated to an
+  `observeSize` on the proxy node, with pushed rects forwarded back down
+  as `setRects` in the sub-worker's id space.
 - **Platform limit**: nested `new Worker` needs an engine that supports
   it — Chrome/Firefox/Node. Safari workers can't spawn workers, so design
   the nesting depth by capability, not aesthetics.

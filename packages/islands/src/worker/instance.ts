@@ -93,6 +93,63 @@ interface HandlerEntry {
 }
 /** handler id → prop function + owning instance. Lives worker-side; never serialized. */
 const handlers = new Map<number, HandlerEntry>();
+
+/* ── Detached-instance tombstones ───────────────────────────────────────────
+ * removeChild detaches a subtree but the app may re-append the same nodes
+ * later (zrender restacks displayables, list libs reorder rows). Records and
+ * handler entries move here instead of staying live forever — detached
+ * nodes can still materialize as dispatch targets (a click already in
+ * flight when its subtree left) and promote back on re-append. The cap
+ * bounds create/remove churn (tooltip text, transient overlays) that never
+ * returns. */
+const DETACHED_CAP = 4096;
+const detachedInstances = new Map<number, HostInstance>();
+const detachedHandlers = new Map<number, HandlerEntry>();
+
+const evictOldest = <V>(map: Map<number, V>): void => {
+  if (map.size <= DETACHED_CAP) return;
+  const oldest = map.keys().next().value;
+  if (oldest !== undefined) map.delete(oldest);
+};
+
+/** Move an instance record + its handler ids out of the live maps. */
+export const detachInstance = (id: number, handlerIds: number[]): void => {
+  const record = instances.get(id);
+  if (record === undefined) return;
+  instances.delete(id);
+  detachedInstances.set(id, record);
+  evictOldest(detachedInstances);
+  for (const hid of handlerIds) {
+    const entry = handlers.get(hid);
+    if (entry !== undefined) {
+      handlers.delete(hid);
+      detachedHandlers.set(hid, entry);
+      evictOldest(detachedHandlers);
+    }
+  }
+};
+
+/** Restore an instance record + handler ids on re-append (idempotent). */
+export const attachInstance = (id: number, handlerIds: number[]): void => {
+  const record = detachedInstances.get(id);
+  if (record !== undefined) {
+    detachedInstances.delete(id);
+    instances.set(id, record);
+  }
+  for (const hid of handlerIds) {
+    const entry = detachedHandlers.get(hid);
+    if (entry !== undefined) {
+      detachedHandlers.delete(hid);
+      handlers.set(hid, entry);
+    }
+  }
+};
+
+/** instances.get that also resolves detached records — stale dispatches and
+ *  relatedTarget materialization may still reference them. */
+export const lookupInstance = (id: number): HostInstance | undefined =>
+  instances.get(id) ?? detachedInstances.get(id);
+
 let nextId = 1;
 let nextHandlerId = 1;
 
@@ -229,9 +286,9 @@ export const takeOps = (instance: string): Op[] =>
 
 /**
  * Structural memory snapshot of the proxy layer — how much shadow state the
- * engine retains for live + previously-allocated nodes, handlers, and ops
- * still queued. `instances` is not pruned on removeChild (event dispatch may
- * still resolve detached target ids), so liveNodes is nodes-ever-allocated.
+ * engine retains for live nodes, handlers, and ops still queued. Removed
+ * nodes leave `instances` for a bounded tombstone (event dispatch may still
+ * resolve recently-detached target ids), so liveNodes is attached-only.
  */
 export const proxyInstanceStats = (): {
   liveNodes: number;
@@ -247,16 +304,19 @@ export const proxyInstanceStats = (): {
   ),
 });
 
-export const getHandler = (id: number): HandlerEntry | undefined => handlers.get(id);
+export const getHandler = (id: number): HandlerEntry | undefined =>
+  handlers.get(id) ?? detachedHandlers.get(id);
 
 /* ── Pushed container size (setSize channel) ────────────────────────────── */
 
 /**
  * instance key → the island container's last measured {w,h}, pushed by the
- * driver's `setSize` task. This is the ONLY geometry channel: the main
- * thread can only measure the island's root box, so the proxy DOM serves
- * this value to `doc.body`/`documentElement` and to elements explicitly
- * marked `doc.markContainer(el)` — every other element keeps the honest 0.
+ * driver's `setSize` task. This is the always-on geometry channel: the main
+ * thread measures the island's root box unconditionally, so the proxy DOM
+ * serves this value to `doc.body`/`documentElement` and to elements
+ * explicitly marked `doc.markContainer(el)`. Per-element rects arrive
+ * separately through `setRects`/`instanceRects` below; elements with neither
+ * keep the honest 0.
  * Module-level (not per-document) so it survives imperative rebuilds that
  * swap in a fresh proxy document.
  */
@@ -269,6 +329,40 @@ export const getInstanceSize = (instance: string): { w: number; h: number } | un
 /** Store the container size a `setSize` task pushed. */
 export const setInstanceSize = (instance: string, w: number, h: number): void => {
   instanceSizes.set(instance, { w, h });
+};
+
+/* ── Measured element rects (setRects channel) ──────────────────────────── */
+
+/**
+ * instance key → element id → last measured box, pushed by the driver's
+ * `setRects` task in answer to `measure` ops. Module-level for the same
+ * reason as `instanceSizes`: entries survive imperative doc rebuilds, and
+ * rects for reconciler-created elements are reachable the moment the id is
+ * adopted — no proxy document needs to exist.
+ */
+const instanceRects = new Map<string, Map<number, { x: number; y: number; w: number; h: number }>>();
+
+/** The last pushed rect for one element id, or undefined if never measured. */
+export const getInstanceRect = (
+  instance: string,
+  id: number,
+): { x: number; y: number; w: number; h: number } | undefined =>
+  instanceRects.get(instance)?.get(id);
+
+/** Store one element's measured box from a `setRects` push. */
+export const setInstanceRect = (
+  instance: string,
+  rect: { id: number; x: number; y: number; w: number; h: number },
+): void => {
+  let table = instanceRects.get(instance);
+  if (table === undefined) instanceRects.set(instance, (table = new Map()));
+  table.set(rect.id, { x: rect.x, y: rect.y, w: rect.w, h: rect.h });
+};
+
+/** Drop every measured rect for the instance — the unmount path calls this
+ *  so stale geometry can't answer reads on a re-mounted instance's ids. */
+export const clearInstanceRects = (instance: string): void => {
+  instanceRects.delete(instance);
 };
 
 /**
@@ -292,6 +386,7 @@ export const registerHandler = (
 export const unregisterHandler = (id: number): void => {
   timed(() => {
     handlers.delete(id);
+    detachedHandlers.delete(id);
   });
 };
 

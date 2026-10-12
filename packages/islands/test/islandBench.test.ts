@@ -118,7 +118,7 @@ const instrument = (
   client: IslandClient,
 ): { client: IslandClient; calls: CallTiming[] } => {
   const calls: CallTiming[] = [];
-  const TASK_METHODS = new Set(['mount', 'updateProps', 'dispatch', 'flush', 'setSize', 'unmount']);
+  const TASK_METHODS = new Set(['mount', 'updateProps', 'dispatch', 'flush', 'setSize', 'setRects', 'unmount']);
   const wrapped = new Proxy(client as object, {
     get(target, prop, recv) {
       const v = Reflect.get(target, prop, recv);

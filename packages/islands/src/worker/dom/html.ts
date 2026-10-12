@@ -94,6 +94,7 @@ export function serializeNode(node: ProxyNode): string {
   const tag = node.instance.type;
   const attrs = new Map(node._attrs);
   const styleText = Object.entries(node._styleProps)
+    .filter(([, v]) => v !== '')
     .map(([k, v]) => `${hyphenate(k)}: ${v};`)
     .join(' ');
   if (styleText !== '') attrs.set('style', styleText);

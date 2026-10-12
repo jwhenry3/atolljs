@@ -9,6 +9,7 @@ import {
   createProxyDocument,
   installDomShim,
   ProxyElement,
+  ProxyResizeObserver,
   type InternalDocument,
 } from '../src/worker/proxyDom';
 import type { Op } from '../src/ops';
@@ -442,6 +443,126 @@ describe('pushed container size (setSize channel)', () => {
     } finally {
       uninstall();
     }
+    doc.dispose();
+  });
+});
+
+describe('measured element rects (setRects channel)', () => {
+  it('observeSize emits measure once; pushed rects answer reads and fire observers; last detach emits unmeasure', () => {
+    const instance = 'measured';
+    const doc = createProxyDocument(instance) as InternalDocument;
+    const el = doc.createElement('div');
+    doc.body.appendChild(el);
+    takeOps(instance);
+
+    const seen: Array<{ w: number; h: number }> = [];
+    const un = doc.observeSize(el, (r) => seen.push({ w: r.w, h: r.h }));
+    expect(takeOps(instance).filter((o) => o.t === 'measure')).toEqual([
+      { t: 'measure', id: el.instance.id },
+    ]);
+
+    // A second observer on the same element doesn't re-request.
+    const un2 = doc.observeSize(el, () => {});
+    expect(takeOps(instance).filter((o) => o.t === 'measure')).toEqual([]);
+
+    // Still honest-0 until the first setRects push lands.
+    expect(el.clientWidth).toBe(0);
+
+    runInInstance(instance, () =>
+      doc._notifyRects([{ id: el.instance.id, x: 12, y: 34, w: 200, h: 100 }]),
+    );
+    expect(seen).toEqual([{ w: 200, h: 100 }]);
+    expect(el.clientWidth).toBe(200);
+    expect(el.offsetHeight).toBe(100);
+    const rect = el.getBoundingClientRect();
+    expect([rect.x, rect.y, rect.width, rect.height, rect.right, rect.bottom]).toEqual([
+      12, 34, 200, 100, 212, 134,
+    ]);
+
+    // getComputedStyle serves the measured box for the props libraries read.
+    expect(doc.getComputedStyle(el).width).toBe('200px');
+    expect(doc.getComputedStyle(el).getPropertyValue('height')).toBe('100px');
+
+    // One observer left: no unmeasure yet; the last detach emits it.
+    un();
+    expect(takeOps(instance).filter((o) => o.t === 'unmeasure')).toEqual([]);
+    un2();
+    expect(takeOps(instance).filter((o) => o.t === 'unmeasure')).toEqual([
+      { t: 'unmeasure', id: el.instance.id },
+    ]);
+    doc.dispose();
+  });
+
+  it('a bare geometry read lazily requests measurement once, then serves pushed rects', () => {
+    const instance = 'lazy-measure';
+    const doc = createProxyDocument(instance) as InternalDocument;
+    const el = doc.createElement('div');
+    doc.body.appendChild(el);
+    takeOps(instance);
+
+    expect(el.clientWidth).toBe(0); // honest 0 for this read…
+    expect(el.offsetWidth).toBe(0); // …but the request already went out once
+    expect(takeOps(instance).filter((o) => o.t === 'measure')).toEqual([
+      { t: 'measure', id: el.instance.id },
+    ]);
+
+    runInInstance(instance, () =>
+      doc._notifyRects([{ id: el.instance.id, x: 0, y: 0, w: 88, h: 44 }]),
+    );
+    expect(el.clientWidth).toBe(88);
+    doc.dispose();
+  });
+
+  it('a measured rect beats the container box; disconnected reads request nothing', () => {
+    const instance = 'rect-precedence';
+    const doc = createProxyDocument(instance) as InternalDocument;
+    const el = doc.createElement('div');
+    const detached = doc.createElement('div');
+    doc.body.appendChild(el);
+    takeOps(instance);
+
+    setInstanceSize(instance, 640, 480);
+    doc.markContainer(el);
+    expect(el.clientWidth).toBe(640); // container box until a real rect arrives
+    runInInstance(instance, () =>
+      doc._notifyRects([{ id: el.instance.id, x: 1, y: 2, w: 50, h: 25 }]),
+    );
+    expect(el.clientWidth).toBe(50); // the real rect wins
+
+    expect(detached.clientWidth).toBe(0);
+    expect(takeOps(instance).filter((o) => o.t === 'measure')).toEqual([]);
+    doc.dispose();
+  });
+
+  it('the ResizeObserver shim registers subscriptions and delivers entries', () => {
+    const instance = 'ro-shim';
+    const doc = createProxyDocument(instance) as InternalDocument;
+    const el = doc.createElement('div');
+    doc.body.appendChild(el);
+    takeOps(instance);
+
+    const seen: Array<{ w: number; h: number; target: unknown }> = [];
+    const ro = new ProxyResizeObserver((entries) => {
+      for (const e of entries) {
+        const r = e.contentRect as { width: number; height: number };
+        seen.push({ w: r.width, h: r.height, target: e.target });
+      }
+    });
+    // Inside the instance so the ambient-doc resolution is unambiguous.
+    runInInstance(instance, () => ro.observe(el as unknown as Element));
+    expect(takeOps(instance).filter((o) => o.t === 'measure')).toEqual([
+      { t: 'measure', id: el.instance.id },
+    ]);
+
+    runInInstance(instance, () =>
+      doc._notifyRects([{ id: el.instance.id, x: 0, y: 0, w: 144, h: 72 }]),
+    );
+    expect(seen).toEqual([{ w: 144, h: 72, target: el }]);
+
+    runInInstance(instance, () => ro.unobserve(el as unknown as Element));
+    expect(takeOps(instance).filter((o) => o.t === 'unmeasure')).toEqual([
+      { t: 'unmeasure', id: el.instance.id },
+    ]);
     doc.dispose();
   });
 });

@@ -108,7 +108,7 @@ export type DevtoolsEvent =
       type: 'island:task';
       instance: string;
       /** The client call behind the round-trip — the island's "request". */
-      method: 'mount' | 'whoami' | 'dispatch' | 'setSize' | 'updateProps' | 'flush' | 'unmount';
+      method: 'mount' | 'whoami' | 'dispatch' | 'setSize' | 'setRects' | 'updateProps' | 'flush' | 'unmount';
       /** Round-trip ms: call → ops returned (worker render + transport). */
       ms: number;
       /** Op count in the returned batch (response size in ops). */
@@ -119,7 +119,7 @@ export type DevtoolsEvent =
       type: 'island:ops';
       instance: string;
       /** The client call that produced the batch. */
-      via: 'mount' | 'updateProps' | 'dispatch' | 'setSize' | 'flush' | 'unmount';
+      via: 'mount' | 'updateProps' | 'dispatch' | 'setSize' | 'setRects' | 'flush' | 'unmount';
       count: number;
       /** Main-thread replay time; worker-side render time rides call timings. */
       replayMs?: number;

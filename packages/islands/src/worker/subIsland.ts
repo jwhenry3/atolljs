@@ -149,6 +149,8 @@ export async function mountSubIsland(opts: MountSubIslandOptions): Promise<SubIs
   const prevProps = new Map<number, WireProps>();
   /** sub-id → 'type#handler' → attached proxy listener (kept for removal). */
   const nodeListeners = new Map<number, Map<string, { fn: ProxyEventHandler; capture?: boolean }>>();
+  /** sub-id → the parent-doc observeSize detacher a `measure` op registered. */
+  const measureCleanups = new Map<number, () => void>();
 
   /**
    * sub-id → slot name for anchors THIS mount's `slots` claimed. A claimed
@@ -345,6 +347,8 @@ export async function mountSubIsland(opts: MountSubIslandOptions): Promise<SubIs
       }
       case 'remove': {
         nodes.get(op.child)?.remove();
+        measureCleanups.get(op.child)?.();
+        measureCleanups.delete(op.child);
         releaseDetachedSlots();
         break;
       }
@@ -421,7 +425,32 @@ export async function mountSubIsland(opts: MountSubIslandOptions): Promise<SubIs
       }
       case 'clear': {
         el.replaceChildren();
+        for (const cleanup of measureCleanups.values()) cleanup();
+        measureCleanups.clear();
         releaseDetachedSlots();
+        break;
+      }
+      case 'measure': {
+        const node = nodes.get(op.id);
+        if (!(node instanceof ProxyElement) || measureCleanups.has(op.id)) break;
+        // The sub-worker's measure request tunnels through the parent's own
+        // channel: observe the translated proxy node — the real driver
+        // measures the real element — and forward each pushed rect down as
+        // a setRects batch in the SUB worker's id space.
+        measureCleanups.set(
+          op.id,
+          doc.observeSize(node, (rect) => {
+            void islandCall(
+              'setRects',
+              client.setRects(instance, [{ id: op.id, x: rect.x, y: rect.y, w: rect.w, h: rect.h }]),
+            ).then((ops) => applyOps(ops, 'setRects'));
+          }),
+        );
+        break;
+      }
+      case 'unmeasure': {
+        measureCleanups.get(op.id)?.();
+        measureCleanups.delete(op.id);
         break;
       }
       case 'emit': {
@@ -443,7 +472,7 @@ export async function mountSubIsland(opts: MountSubIslandOptions): Promise<SubIs
     }
   }
 
-  function applyOps(ops: Op[], via: 'mount' | 'updateProps' | 'dispatch' | 'setSize' | 'flush'): void {
+  function applyOps(ops: Op[], via: 'mount' | 'updateProps' | 'dispatch' | 'setSize' | 'setRects' | 'flush'): void {
     opsApplied += ops.length;
     onActivity?.();
     const t0 = performance.now();
@@ -465,7 +494,7 @@ export async function mountSubIsland(opts: MountSubIslandOptions): Promise<SubIs
 
   /** Times a worker→sub-worker round-trip for the devtools inspector. */
   const islandCall = <T>(
-    method: 'mount' | 'whoami' | 'dispatch' | 'setSize' | 'updateProps' | 'flush' | 'unmount',
+    method: 'mount' | 'whoami' | 'dispatch' | 'setSize' | 'setRects' | 'updateProps' | 'flush' | 'unmount',
     p: Promise<T>,
   ): Promise<T> => {
     const t0 = performance.now();
@@ -562,16 +591,27 @@ export async function mountSubIsland(opts: MountSubIslandOptions): Promise<SubIs
   setMode(mode);
 
   /* ── Pushed-size forwarding ─────────────────────────────────────────────
-   * The only geometry channel that exists is the parent island's measured
-   * box — forward it as the sub-island's container size (same claim
-   * `doc.markContainer` makes: "pretend my box is the container's"). Sub
-   * apps that genuinely fill their mount get a usable size; others see the
-   * parent's box — honest enough, and the alternative is permanent zeros. */
+   * The sub-island's container IS `el` — its real box is what the sub app's
+   * layout should size to. observeSize emits a measure op up the parent's
+   * queue so the main driver's ResizeObserver tracks the REAL element and
+   * forwards its box; until the first nonzero rect lands the parent's own
+   * container box forwards as the fallback (the same claim markContainer
+   * makes). An all-zero measured rect stays fallback-eligible: "no layout
+   * yet" is indistinguishable from "no real layout engine" (in-process
+   * tests), and the parent box is the better answer in both. */
+  let measuredEl = false;
   const pushSize = (w: number, h: number): void => {
     if (destroyed) return;
     void islandCall('setSize', client.setSize(instance, w, h)).then((ops) => applyOps(ops, 'setSize'));
   };
-  doc.onResize(pushSize);
+  const unobserveEl = doc.observeSize(el, (rect) => {
+    if (rect.w === 0 && rect.h === 0) return;
+    measuredEl = true;
+    pushSize(rect.w, rect.h);
+  });
+  doc.onResize((w, h) => {
+    if (!measuredEl) pushSize(w, h);
+  });
   const initial = getInstanceSize(parentInstance);
   if (initial !== undefined) pushSize(initial.w, initial.h);
 
@@ -602,6 +642,9 @@ export async function mountSubIsland(opts: MountSubIslandOptions): Promise<SubIs
       destroyed = true;
       emitDevtools({ type: 'island:unmount', instance });
       for (const subId of [...slotNodes.keys()]) unmountSlot(subId);
+      unobserveEl();
+      for (const cleanup of measureCleanups.values()) cleanup();
+      measureCleanups.clear();
       unsubscribe?.();
       if (pollTimer !== null) clearInterval(pollTimer);
       const remaining = (clientMounts.get(client) ?? 1) - 1;

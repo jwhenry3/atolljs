@@ -25,7 +25,8 @@ Source: `packages/islands/src/island.ts` (driver), `src/ops.ts` (protocol),
 ```
 ┌───────────────────────────── main thread ─────────────────────────────┐
 │  mountIsland driver: replays op batches onto real DOM in `el`,        │
-│  dispatches real events back, pushes container size via ResizeObserver │
+│  dispatches real events back, pushes container + measured-element     │
+│  geometry via ResizeObserver                                         │
 └──────────────┬─────────────────────────────────▲──────────────────────┘
    EXECUTE_TASK │ postMessage          op batches │ (task results) + flush
    (mount/update│                      emits     │
@@ -42,7 +43,11 @@ DOM-free host surface; every commit serializes to an op stream. Imperative
 (non-framework) apps get a proxy `document` whose mutations emit the same ops.
 Events work the other direction: a worker-side `addEventListener` becomes a
 `listen` op, the driver attaches a real listener, and each dispatch
-round-trips back to the worker as an instance-scoped task.
+round-trips back to the worker as an instance-scoped task. Dispatches ride
+an ordered, bounded queue (four in flight per island): move-type events
+(`mousemove`, `pointermove`, `touchmove`, `drag`, `dragover`) coalesce to the
+freshest queued position while boundary events never merge, so a pointer
+sweep can't pile up round-trips faster than the worker drains them.
 
 The shared-memory contract here is only a *doorbell*: a commit counter the
 main thread `observe()`s to trigger `flush()` as a push. Ops themselves always

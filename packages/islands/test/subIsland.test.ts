@@ -207,3 +207,45 @@ describe('mountIsland into a proxy element (nested island)', () => {
     island.destroy();
   });
 });
+
+describe('nested measure channel', () => {
+  it('the sub-island sees its mount element real box via setSize, and per-element rects via tunneled measure ops', async () => {
+    const el = host();
+    const island = await outerIsland(el);
+    // happy-dom has no layout — stub gBCR: the mount host reports 640x320,
+    // the sub app's own root 300x150, everything else zero.
+    let proto: object | null = el;
+    while (proto !== null && !Object.prototype.hasOwnProperty.call(proto, 'getBoundingClientRect')) {
+      proto = Object.getPrototypeOf(proto);
+    }
+    if (proto === null) throw new Error('getBoundingClientRect not found on prototype chain');
+    const spy = vi.spyOn(proto as Element, 'getBoundingClientRect').mockImplementation(function (
+      this: Element,
+    ): DOMRect {
+      const cls = (this as HTMLElement).className;
+      const w = cls === 'sub-host' ? 640 : cls === 'inner' ? 300 : 0;
+      return {
+        x: 0, y: 0, top: 0, left: 0, right: w, bottom: w / 2,
+        width: w, height: w / 2, toJSON: () => ({}),
+      } as DOMRect;
+    });
+    try {
+      const sub = await mountIsland({
+        el: hostRef.el!,
+        worker: innerWorker,
+        app: 'measurer',
+      });
+      await island.flush();
+      // Two hops: mount-el rect → setSize down; inner measure op → up →
+      // real driver → setRects down → observeSize cb in the sub-worker.
+      await vi.waitFor(() => {
+        expect(el.querySelector('.inner-size')?.textContent).toBe('size:640x320');
+        expect(el.querySelector('.inner-rect')?.textContent).toBe('rect:300');
+      });
+      island.destroy();
+      sub.destroy();
+    } finally {
+      spy.mockRestore();
+    }
+  });
+});

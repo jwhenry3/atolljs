@@ -1,6 +1,8 @@
 import {
   allocId,
+  attachInstance,
   bumpOpsVersion,
+  detachInstance,
   getActiveInstance,
   getLastActiveInstance,
   getInstanceSize,
@@ -251,11 +253,21 @@ export class ProxyNode {
       this._children.splice(index, 0, child);
       if (ref.instance.id > 0) beforeId = ref.instance.id;
     }
+    // Restore instance/handler records if this child was previously
+    // tombstoned by a removeChild — re-append is legal (renderers reorder).
+    child._attachRecords();
     // Phantom nodes (fragments, shadow-only texts) have NEGATIVE ids and no
     // driver-side counterpart — skip ops when either endpoint is phantom.
     // Id 0 is NOT phantom: it's the island's real root container.
     if (this.instance.id >= 0 && child.instance.id > 0) {
       this._op({ t: 'append', parent: this.instance.id, child: child.instance.id, before: beforeId });
+      // A `remove` op unobserved this element driver-side — if it was still
+      // measure-requested worker-side, re-request so the driver's RO
+      // re-arms on the fresh attachment. Subtree descendants keep their
+      // driver-side observation (only the removed ROOT unobserved).
+      if (child.nodeType === 1 && this.doc._measureRequested.has(child.instance.id)) {
+        child._op({ t: 'measure', id: child.instance.id });
+      }
     }
     return child;
   }
@@ -268,6 +280,9 @@ export class ProxyNode {
     }
     this._children.splice(index, 1);
     child._parent = null;
+    // Tombstone the subtree's instance/handler records — without this the
+    // shared maps retain every node ever created. Re-append restores them.
+    child._detachRecords();
     if (this.instance.id >= 0 && child.instance.id > 0) {
       this._op({ t: 'remove', child: child.instance.id });
     }
@@ -350,6 +365,27 @@ export class ProxyNode {
     const i = this._children.indexOf(child);
     if (i !== -1) this._children.splice(i, 1);
     child._parent = null;
+  }
+
+  /** Handler ids this node's records own: addEventListener hids (element
+   *  subclass only) plus the prop-listener slots on the instance record. */
+  _recordHandlerIds(): number[] {
+    const listeners = (this as { _listeners?: Array<{ hid: number }> })._listeners;
+    const slots = (this.instance as ElementInstance).listenerSlots;
+    return [...(listeners?.map((l) => l.hid) ?? []), ...Object.values(slots ?? {})];
+  }
+
+  /** Tombstone this subtree's instance/handler records (removeChild). */
+  _detachRecords(): void {
+    if (this.instance.id > 0) detachInstance(this.instance.id, this._recordHandlerIds());
+    for (const c of this._children) c._detachRecords();
+  }
+
+  /** Restore this subtree's records on re-append (idempotent — a live node
+   *  is simply not in the tombstone maps). */
+  _attachRecords(): void {
+    if (this.instance.id > 0) attachInstance(this.instance.id, this._recordHandlerIds());
+    for (const c of this._children) c._attachRecords();
   }
 }
 

@@ -84,7 +84,39 @@ export type Op =
    * `onEvent(name, payload)` instead of mutating the DOM. Payloads must be
    * structured-cloneable — same rule as props.
    */
-  | { t: 'emit'; name: string; payload?: unknown };
+  | { t: 'emit'; name: string; payload?: unknown }
+  /**
+   * Request real geometry for `id` — the worker-side proxy DOM emits this
+   * when `doc.observeSize(el, cb)` registers (and once, lazily, when an
+   * unmarked element's geometry is read). The driver measures the real
+   * node, observes it with a ResizeObserver, and pushes rects back through
+   * the `setRects` task. Fire-and-forget: reads keep returning the honest 0
+   * until the first push lands. Older drivers ignore the op; the reads stay
+   * 0 — same degradation as an element that never gets measured.
+   */
+  | { t: 'measure'; id: number }
+  /**
+   * Cancel a `measure` request — emitted when the last `observeSize`
+   * observer for `id` detaches. Elements auto-requested by a geometry read
+   * stay observed for the element's lifetime (the driver also unobserves
+   * on `remove`/`clear`).
+   */
+  | { t: 'unmeasure'; id: number };
+
+/**
+ * One measured box, pushed main→worker by the `setRects` task. `x`/`y` are
+ * the node's viewport-relative position (getBoundingClientRect), `w`/`h`
+ * its size — worker-side reads derive top/left/right/bottom from these.
+ * Updates fire on element RESIZE (the driver's ResizeObserver); position-only
+ * moves don't retrigger, matching what chart/map libraries actually consume.
+ */
+export interface MeasuredRect {
+  id: number;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
 
 /**
  * Wire-serialized props. Functions named `on*` (onClick, onInput, …) cross as
@@ -220,16 +252,25 @@ export type IslandWorkerMethods = {
   /** Invoke the worker handler a `__evt` ref or `listen` op points at. */
   dispatch(handlerId: number, payload: EventPayload): Op[];
   /**
-   * Push the island container's measured box into the instance — the ONLY
-   * geometry channel that exists. The driver observes the island's `el`
-   * with a ResizeObserver and calls this once at mount and on resizes
-   * (throttled ~100ms). The instance stores {w,h}; proxy-DOM geometry reads on
-   * `doc.body`/`documentElement` and on elements marked via
-   * `doc.markContainer(el)` then return it — deeper elements keep the
-   * honest 0. Handlers registered via `doc.onResize` re-run on each push;
-   * their ops ride back in this method's return batch.
+   * Push the island container's measured box into the instance — the
+   * always-on geometry channel (per-element rects additionally flow through
+   * `setRects` for elements that requested measurement). The driver observes
+   * the island's `el` with a ResizeObserver and calls this once at mount and
+   * on resizes (throttled ~100ms). The instance stores {w,h}; proxy-DOM
+   * geometry reads on `doc.body`/`documentElement` and on elements marked via
+   * `doc.markContainer(el)` then return it. Handlers registered via
+   * `doc.onResize` re-run on each push; their ops ride back in this method's
+   * return batch.
    */
   setSize(instance: string, width: number, height: number): Op[];
+  /**
+   * Push freshly measured element rects — the answer to `measure` ops and
+   * the driver's per-element ResizeObserver ticks. Each rect updates the
+   * instance's per-element store and fires the element's `observeSize`
+   * callbacks inside the instance's scope, so their ops ride back in this
+   * method's return batch like `setSize`'s onResize handlers.
+   */
+  setRects(instance: string, rects: MeasuredRect[]): Op[];
   /** Drain ops committed outside a task (passive effects, timers). */
   flush(instance: string): Op[];
   /**

@@ -79,9 +79,11 @@ import {
   setDoorbellContract,
   setInstanceContract,
   setInstanceSize,
+  setInstanceRect,
+  clearInstanceRects,
   takeOps,
 } from './instance';
-import type { EventPayload, IslandWorkerMethods, Op } from '../ops';
+import type { EventPayload, IslandWorkerMethods, MeasuredRect, Op } from '../ops';
 
 /**
  * Registry value shapes:
@@ -574,6 +576,31 @@ function createIslandRuntime(
       },
 
       /**
+       * The measured-element channel: rects the driver pushed in answer to
+       * `measure` ops. Stored in the instance-level map FIRST so geometry
+       * reads answer even for mounts without a materialized proxy document
+       * (a React element adopted later sees its rect immediately); then
+       * per-element observeSize callbacks fire inside the instance's scope,
+       * their ops riding back in the batch like onResize handlers.
+       */
+      setRects(instance: string, rects: MeasuredRect[]): Op[] {
+        const mounted = mounts.get(instance);
+        const doc =
+          mounted !== undefined && isImperativeInstance(mounted)
+            ? mounted.imperative.doc
+            : peekInstanceDoc(instance);
+        if (doc === undefined) {
+          // No doc yet — store rects raw so adopted elements still answer.
+          for (const rect of rects) setInstanceRect(instance, rect);
+          return takeOps(instance);
+        }
+        return runInInstance(mounted?.key ?? instance, () => {
+          (doc as InternalDocument)._notifyRects(rects);
+          return takeOps(instance);
+        });
+      },
+
+      /**
        * Tear down ONE instance while the worker keeps serving its others —
        * the multi-island-per-worker counterpart to process death: disposes
        * the renderer handle (or the imperative instance's proxy document),
@@ -585,6 +612,7 @@ function createIslandRuntime(
         if (mounted === undefined) return [];
         mounts.delete(instance);
         setInstanceContract(instance, undefined);
+        clearInstanceRects(instance);
         return runInInstance(instance, () => {
           if (isImperativeInstance(mounted)) {
             // The app's dispose hook cancels deferred work (library timers,

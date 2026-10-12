@@ -152,16 +152,19 @@ so `createElementNS` lands correctly, including through portals),
 `ProxyElement` refs as react-dom `createPortal` containers via
 `getPublicInstance`, instance-resolved `document`/`window` for
 selector/`getComputedStyle` calls, and `currentTarget` synthesis for mouse
-middleware. Use fixed chart dimensions, `ResponsiveContainer` has no layout
-to observe, and prefer `isAnimationActive={false}` to skip
-measurement-feedback render passes that converge but cost op volume.
+middleware. `ResponsiveContainer` works through the `ResizeObserver` shim —
+the first render still sees 0 and re-renders when the driver's measure push
+lands, so prefer `isAnimationActive={false}` to skip measurement-feedback
+render passes that converge but cost op volume.
 
 ### Known limits for DOM-heavy libraries
 
-- **Geometry is one box.** Only the island container is measured (pushed);
-  libraries that measure arbitrary elements still get 0: SVG-specific reads
-  (`getBBox`, `getTotalLength`, `getComputedTextLength`) too, which is why
-  recharts text truncation/animation sizing degrades to stub values.
+- **Geometry is async.** `observeSize`/`ResizeObserver` subscriptions and
+  lazily requested reads get real element boxes once the driver's push lands;
+  a first synchronous read still answers 0. SVG-specific reads (`getBBox`,
+  `getTotalLength`, `getComputedTextLength`) have no measurement channel at
+  all, which is why recharts text truncation/animation sizing degrades to
+  stub values.
 - **`preventDefault`/`stopPropagation` are no-ops**: the real event already
   dispatched on the main thread; the worker can't cancel it.
 - **Async-library callbacks that mutate DOM or emit outside a task** must
