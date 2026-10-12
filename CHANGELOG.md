@@ -1,5 +1,28 @@
 # Changelog
 
+## Unreleased
+
+### `@atolljs/islands`: event payloads carry `zrX`/`zrY` and `relatedTarget`
+
+- **`zrX`/`zrY` on `EventPayload`**: pointer coords in the listener
+  element's local space (`clientX/Y − event.currentTarget.getBoundingClientRect()`),
+  computed main-thread where real rects exist. The proxy DOM has no
+  measurement channel, so worker-side hit-testing libraries cannot derive
+  local coords themselves: zrender's four-marker `getBoundingClientRect`
+  transform degenerates and `e.offsetX` is absent anyway. The fields carry
+  zrender's names because its `normalizeEvent` early-returns on
+  `e.zrX != null`: charts on the SVG renderer (echarts) get working axis
+  pointers and tooltips, and any other library can read them the same way.
+- **`relatedTargetId` on the wire, `relatedTarget` as a proxy node
+  worker-side**: over/out handlers walk it (zrender's `isLocalEl` climbs
+  `parentNode` to the listener root) to tell "moved to a child" from
+  "actually left". Without it every child-to-child transition read as a
+  real leave: hit-tested UIs (charts, layered SVG) flickered as hover
+  state cycled hide/show on each `mouseout`. A `relatedTarget` outside
+  the island maps to no node, so real leaves still fire `globalout`
+  correctly. The sub-island forwarder strips it with the other enriched
+  keys so nested islands re-enrich against their own tree.
+
 ## 0.1.9
 
 ### `@atolljs/nestjs`: Nest 12 support
