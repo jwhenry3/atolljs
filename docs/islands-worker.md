@@ -364,10 +364,18 @@ the shell owns the contents: real DOM, real events, zero wire.
 A worker-side `addEventListener` emits a `listen` op; the driver attaches a
 real listener and each dispatch posts back as an instance-scoped task. The
 payload is spec-shaped for pointer-family events, clientX/Y, screenX/Y,
+zrX/zrY (clientX/Y minus `currentTarget.getBoundingClientRect()` — listener-
+local pointer coords, computed main-thread because the proxy DOM has no
+measurement channel; zrender's `normalizeEvent` early-returns on them, which
+is what echarts SVG charts need for axis pointers and tooltips),
 button, `which` (button+1), modifiers, wheel deltaX/Y/deltaMode, pointerType,
 scrollTop, with absent numerics normalized to 0 rather than leaking
 `undefined` into library math. `target`/`currentTarget` materialize as proxy
-nodes (id-0 listeners get the instance root), `e.target.value`/`checked` are
+nodes (id-0 listeners get the instance root), `relatedTarget` materializes
+as a proxy node too when it maps to an op-created element (so over/out
+handlers can tell "moved to a child" from "actually left" — without it
+every child transition reads as a real leave and hit-tested UIs flicker),
+`e.target.value`/`checked` are
 stamped from the dispatched form state, and a synthesized `composedPath()`
 exists for delegated-propagation runtimes. `preventDefault`/`stopPropagation`
 are no-ops: the real event already dispatched on the main thread; renderers

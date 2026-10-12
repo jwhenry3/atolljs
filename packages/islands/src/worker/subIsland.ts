@@ -81,6 +81,7 @@ const clientMounts = new WeakMap<object, number>();
  */
 const ENRICHED_KEYS = new Set([
   'target',
+  'relatedTarget',
   'currentTarget',
   'composedPath',
   'preventDefault',

@@ -307,6 +307,13 @@ export class InternalDocument implements ProxyDocument {
         out.target = node;
       }
     }
+    // Materialize relatedTarget the same way — over/out handlers walk it
+    // (zrender's isLocalEl climbs parentNode to the listener root) to tell
+    // "moved to a child" apart from "actually left".
+    if (typeof payload.relatedTargetId === 'number') {
+      const related = instances.get(payload.relatedTargetId);
+      if (related !== undefined) out.relatedTarget = this._wrap(related);
+    }
     if (out.composedPath === undefined) {
       const path: unknown[] = [];
       let n = out.target as ProxyNode | undefined;

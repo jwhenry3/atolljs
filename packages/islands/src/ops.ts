@@ -124,6 +124,19 @@ export interface EventPayload {
   clientY?: number;
   screenX?: number;
   screenY?: number;
+  /**
+   * Pointer coords in the LISTENER element's local space:
+   * `clientX/Y − event.currentTarget.getBoundingClientRect()` computed
+   * main-thread where real rects exist. The proxy DOM has no measurement
+   * channel, so worker-side hit-testing libraries cannot derive local
+   * coords themselves: zrender's four-marker getBoundingClientRect
+   * transform degenerates, and e.offsetX is absent anyway. zrender's
+   * normalizeEvent early-returns on `e.zrX != null`, which is why the
+   * fields carry its names — charts (echarts SVG renderer) get working
+   * axis pointers/tooltips, any library can read them the same way.
+   */
+  zrX?: number;
+  zrY?: number;
   button?: number;
   /**
    * UIEvent.which — non-standard but set by every browser (1 = left button,
@@ -154,6 +167,15 @@ export interface EventPayload {
   /** The worker instance id of `event.target`, when it maps to one. */
   targetId?: number;
   /**
+   * The worker instance id of `event.relatedTarget` (MouseEvent/FocusEvent),
+   * when it maps to an op-created node. Lets over/out/leave/enter handlers
+   * distinguish "moved to a child" from "actually left the element" —
+   * zrender's mouseout gate (`toElement || relatedTarget` → isLocalEl walk)
+   * is the canonical consumer; without it every child transition looks like
+   * a real leave and charts flicker as tooltips hide/show.
+   */
+  relatedTargetId?: number;
+  /**
    * The proxy-DOM node for `targetId` — SYNTHESIZED worker-side by the proxy
    * DOM when it wraps a listener (it never crosses the wire). Lets delegated
    * handlers written for the real DOM — `e.target.closest('.row')`,
@@ -162,6 +184,13 @@ export interface EventPayload {
    * same proxy document.
    */
   target?: unknown;
+  /**
+   * The proxy-DOM node for `relatedTargetId` — SYNTHESIZED worker-side like
+   * `target` (never crosses the wire). Handler code can walk
+   * `relatedTarget.parentNode` — e.g. zrender's isLocalEl — to test
+   * whether the pointer moved within the listener's subtree.
+   */
+  relatedTarget?: unknown;
   /**
    * Synthesized NO-OPS — added worker-side by the proxy DOM when it wraps a
    * listener's payload (they never cross the wire). They exist so library

@@ -194,6 +194,25 @@ export const driverApp = islandApp('drive', {
     doc.body.append(gone);
     doc.addEventListener('ping', () => {});
 
+    // Echo the dispatched pointer fields back into the DOM so the driver
+    // test can assert zrX/zrY (listener-local coords) crossed the wire.
+    const probe = doc.createElement('div');
+    probe.className = 'probe';
+    probe.addEventListener('mousemove', (e) => {
+      const ev = e as unknown as {
+        zrX?: number;
+        zrY?: number;
+        clientX?: number;
+        clientY?: number;
+      };
+      probe.textContent = `zr:${ev.zrX},${ev.zrY} c:${ev.clientX},${ev.clientY}`;
+    });
+    probe.addEventListener('mouseout', (e) => {
+      const ev = e as unknown as { relatedTarget?: { nodeName?: string } | null };
+      probe.textContent = `rel:${ev.relatedTarget ? ev.relatedTarget.nodeName : 'null'}`;
+    });
+    doc.body.append(probe);
+
     // Malformed ops — the driver logs and skips each instead of throwing.
     pushOp(instance, { t: 'append', parent: 99999, child: 99998 });
     pushOp(instance, { t: 'append', parent: 0, child: 99998 });

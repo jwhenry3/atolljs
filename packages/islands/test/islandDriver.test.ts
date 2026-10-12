@@ -86,6 +86,47 @@ describe('attr/style op application', () => {
     island.destroy();
   });
 
+  it('event payloads carry zrX/zrY — pointer coords in listener-element space', async () => {
+    const el = host();
+    const island = await mountIsland({ worker: renderWorker, el, app: 'drive' });
+    const probe = el.querySelector('.probe')!;
+    probe.dispatchEvent(
+      new (realDoc.defaultView as typeof window).MouseEvent('mousemove', {
+        bubbles: true,
+        clientX: 42,
+        clientY: 17,
+      }),
+    );
+    // happy-dom rects are 0-origin, so listener-local coords equal clientX/Y.
+    await vi.waitFor(() => expect(probe.textContent).toBe('zr:42,17 c:42,17'));
+    island.destroy();
+  });
+
+  it('mouseout materializes relatedTarget as a proxy node when it maps to one', async () => {
+    const el = host();
+    const island = await mountIsland({ worker: renderWorker, el, app: 'drive' });
+    const probe = el.querySelector('.probe')!;
+    const boom = el.querySelector('.boom')!;
+    // Pointer "moved to" another island node → worker sees the proxy node;
+    // over/out handlers (zrender's isLocalEl) can tell it's a local move.
+    probe.dispatchEvent(
+      new (realDoc.defaultView as typeof window).MouseEvent('mouseout', {
+        bubbles: true,
+        relatedTarget: boom,
+      }),
+    );
+    await vi.waitFor(() => expect(probe.textContent).toBe('rel:BUTTON'));
+    // Pointer "moved to" real shell DOM → unmapped → undefined.
+    probe.dispatchEvent(
+      new (realDoc.defaultView as typeof window).MouseEvent('mouseout', {
+        bubbles: true,
+        relatedTarget: realDoc.body,
+      }),
+    );
+    await vi.waitFor(() => expect(probe.textContent).toBe('rel:null'));
+    island.destroy();
+  });
+
   it('a throwing worker listener surfaces via console.error, not a crash', async () => {
     const el = host();
     const errors: unknown[][] = [];

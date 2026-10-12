@@ -227,6 +227,7 @@ function buildEventPayload(
   e: Event,
   target: EventTarget | null,
   targetId: number | undefined,
+  relatedTargetId?: number,
 ): EventPayload {
   const input = target as HTMLInputElement | null;
   const mouse = e as MouseEvent;
@@ -243,6 +244,18 @@ function buildEventPayload(
   const coord = (v: unknown): number | undefined =>
     num(v) ?? (pointerFam ? 0 : undefined);
   const button = num(mouse.button) ?? (pointerFam ? 0 : undefined);
+  // currentTarget is the element this listener was attached to — the exact
+  // element hit-testing libraries normalize pointer coords against
+  // (zrender's `normalizeEvent(this.dom, e)`). Checked structurally, not
+  // via `instanceof Element`: in in-process embeddings the worker-side
+  // dispatcher may point the global at ProxyElement.
+  const ct = e.currentTarget as Element | null;
+  const localRect =
+    ct && typeof ct.getBoundingClientRect === 'function'
+      ? ct.getBoundingClientRect()
+      : null;
+  const local = (v: number | undefined, origin: number): number | undefined =>
+    localRect && typeof v === 'number' ? v - origin : undefined;
   return {
     type: e.type,
     value: input && 'value' in input ? input.value : undefined,
@@ -252,6 +265,8 @@ function buildEventPayload(
     clientY: coord(mouse.clientY),
     screenX: coord(mouse.screenX),
     screenY: coord(mouse.screenY),
+    zrX: local(mouse.clientX, localRect?.left ?? 0),
+    zrY: local(mouse.clientY, localRect?.top ?? 0),
     button,
     which:
       typeof mouse.which === 'number' && mouse.which !== 0
@@ -273,6 +288,7 @@ function buildEventPayload(
     pointerType: typeof pointer.pointerType === 'string' ? pointer.pointerType : undefined,
     scrollTop: input instanceof HTMLElement ? input.scrollTop : undefined,
     targetId,
+    relatedTargetId,
   };
 }
 
@@ -547,6 +563,7 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
         e,
         target,
         target !== null ? nodeIds.get(target as Node) : undefined,
+        nodeIds.get((e as MouseEvent).relatedTarget as Node),
       );
       // The whole point: an event = one postMessage round-trip. The worker
       // re-renders, we apply whatever ops come back.
