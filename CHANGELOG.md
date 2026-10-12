@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+### `@atolljs/islands`: `destroy()` replays the unmount batch so slots unmount
+
+- **Shared-client destroy leaked slot render roots.** When a sibling
+  island kept the client alive, `destroy()` dropped the `unmount` task's
+  returned ops — but that batch's `clear` op is what walks the subtree
+  and fires `slots[name](null)`. Slot content (a sibling island on the
+  same client, or any render root) stayed mounted on a detached element,
+  `clientMounts` never reached zero, and the worker never terminated.
+  Both destroy branches now replay the batch before handing back or
+  terminating the client.
+
 ## 0.1.10
 
 ### `@atolljs/islands`: event payloads carry `zrX`/`zrY` and `relatedTarget`

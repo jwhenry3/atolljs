@@ -246,6 +246,29 @@ describe('handle surface', () => {
     await vi.waitFor(() => expect(worker.terminated).toBe(true));
   });
 
+  it('destroy on a shared client still unmounts slots — the clear op must replay', async () => {
+    const client = connectIslandWorker({ worker: renderWorker });
+    const slotCalls: Array<HTMLElement | null> = [];
+    const a = await mountIsland({
+      client,
+      el: host(),
+      app: 'rprops',
+      props: { phase: 1 },
+      slots: { plug: (n) => slotCalls.push(n) },
+    });
+    // A sibling keeps the client alive past a's destroy — exactly the case
+    // where the old code dropped the unmount batch and leaked the slot.
+    const b = await mountIsland({ client, el: host(), app: 'rcounter' });
+    expect(slotCalls.at(-1)).toBeInstanceOf(realDoc.defaultView!.HTMLElement);
+
+    a.destroy();
+    await vi.waitFor(() => expect(slotCalls.at(-1)).toBeNull());
+
+    b.destroy();
+    const worker = InProcessWorker.created.at(-1)!;
+    await vi.waitFor(() => expect(worker.terminated).toBe(true));
+  });
+
   it('ResizeObserver ticks throttle: a fast second tick schedules the trailing push', async () => {
     let roCb: (() => void) | null = null;
     class FakeRO {

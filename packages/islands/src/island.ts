@@ -904,7 +904,7 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
     }
   }
 
-  function applyOps(ops: Op[], via: 'mount' | 'updateProps' | 'dispatch' | 'setSize' | 'flush'): void {
+  function applyOps(ops: Op[], via: 'mount' | 'updateProps' | 'dispatch' | 'setSize' | 'flush' | 'unmount'): void {
     opsApplied += ops.length;
     onActivity?.();
     const t0 = performance.now();
@@ -1106,11 +1106,14 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
       const remaining = (clientMounts.get(client) ?? 1) - 1;
       clientMounts.set(client, remaining);
       if (remaining > 0) {
-        // The worker still serves sibling mounts — hand this one back. The
-        // detach ops are irrelevant if our element is already gone, so the
-        // return batch is dropped. Best-effort: the instance map and its
-        // handlers release regardless.
-        void islandCall('unmount', client.unmount(instance)).catch(() => {});
+        // The worker still serves sibling mounts — hand this one back, but
+        // replay the teardown batch anyway: the `clear` op unmounts slot
+        // anchors inside our tree, firing slots[name](null) so slot render
+        // roots come down. Dropping it would leave a slot-hosted sibling
+        // mounted on this client and pin the worker alive.
+        void islandCall('unmount', client.unmount(instance))
+          .then((ops) => applyOps(ops, 'unmount'))
+          .catch(() => {});
       } else {
         // Last island — still run the instance's teardown first so the app's
         // dispose hook cancels deferred work (library timers, animation
@@ -1119,6 +1122,7 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
         // death is teardown — but in-process workers need this or the
         // instance zombies on and its pending callbacks mutate foreign docs.
         void islandCall('unmount', client.unmount(instance))
+          .then((ops) => applyOps(ops, 'unmount'))
           .catch(() => {})
           .finally(() => {
             // A remount may have registered while teardown was in flight

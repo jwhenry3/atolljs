@@ -123,7 +123,7 @@ properties and kebab-case keys go through `setProperty`.
 | `updateProps(props)` | Shell→island channel: re-renders the root with new serialized props. Framework renderers patch fine-grained; imperative apps rebuild (dispose + clear + re-mount on a fresh document). |
 | `setMode(mode)` | Switch push↔poll after mount. Doorbell rebinds re-watch transparently. |
 | `flush()` | Manual drain of ops committed outside task calls: poll mode's mechanism, rarely needed under push. |
-| `destroy()` | Releases the instance via `unmount`; terminates the worker when this island owns the client, leaves siblings running when it's shared. |
+| `destroy()` | Releases the instance via `unmount`; terminates the worker when this island owns the client, leaves siblings running when it's shared. The unmount's `clear` op still replays locally, so `slots[name]` callbacks fire with `null` and slot render roots unmount even while the worker keeps serving siblings. |
 | `opsApplied` / `flushCalls` | Replay counters: the demo's aggregate stats read these. |
 
 ### Devtools hooks
