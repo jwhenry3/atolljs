@@ -269,6 +269,49 @@ describe('handle surface', () => {
     await vi.waitFor(() => expect(worker.terminated).toBe(true));
   });
 
+  it('destroy force-terminates when the unmount call never settles', async () => {
+    // A wedged worker task must not gate terminate() — destroy races the
+    // unmount batch against UNMOUNT_GRACE_MS and kills the worker anyway.
+    const real = connectIslandWorker({ worker: renderWorker });
+    const wedged = new Proxy(real as object, {
+      get(t, k) {
+        if (k === 'unmount') return () => new Promise(() => {});
+        return Reflect.get(t, k);
+      },
+    }) as typeof real;
+    const el = host();
+    const island = await mountIsland({ client: wedged, el, app: 'rcounter' });
+    expect(el.querySelector('button.btn')).not.toBeNull();
+    island.destroy();
+    const worker = InProcessWorker.created.at(-1)!;
+    await vi.waitFor(() => expect(worker.terminated).toBe(true), { timeout: 4000 });
+  });
+
+  it('keepAlive: destroy unmounts the instance but leaves the worker resident for a warm remount', async () => {
+    const client = connectIslandWorker({ worker: renderWorker, keepAlive: true });
+    const worker = () => InProcessWorker.created.at(-1)!;
+    const el = host();
+    const island = await mountIsland({ client, el, app: 'rcounter' });
+    expect(el.querySelector('button.btn')).not.toBeNull();
+
+    island.destroy();
+    // The instance tears down — its DOM clears — but the thread stays up.
+    await vi.waitFor(() => expect(el.querySelector('button.btn')).toBeNull());
+    expect(worker().terminated).toBe(false);
+
+    // Remount on the same client lands on the same resident worker.
+    const first = worker();
+    const el2 = host();
+    const again = await mountIsland({ client, el: el2, app: 'rcounter' });
+    expect(el2.querySelector('button.btn')).not.toBeNull();
+    expect(worker()).toBe(first);
+    again.destroy();
+    await vi.waitFor(() => expect(el2.querySelector('button.btn')).toBeNull());
+    expect(worker().terminated).toBe(false);
+    client.terminate();
+    expect(worker().terminated).toBe(true);
+  });
+
   it('ResizeObserver ticks throttle: a fast second tick schedules the trailing push', async () => {
     let roCb: (() => void) | null = null;
     class FakeRO {

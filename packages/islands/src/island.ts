@@ -83,20 +83,40 @@ export interface ConnectIslandWorkerConfig extends IslandWorkerOptions {
    * polling and the page needs no special headers.
    */
   doorbell?: boolean;
+  /**
+   * Default false — when true, the last island to destroy on this client
+   * leaves the worker ALIVE but idle: the instance still unmounts (dispose
+   * hooks run, timers clear, ops stop, driver state releases) but the
+   * thread, its module graph, and any worker-side caches stay resident, so
+   * the next `mount` on this client is a warm start. Nothing runs while
+   * idle — the instance is gone; only the process survives.
+   */
+  keepAlive?: boolean;
 }
+
+/* Clients opted out of idle-termination by `keepAlive` — a WeakSet so the
+ * flag never pins a client that would otherwise collect. */
+const keepAliveClients = new WeakSet<object>();
+
+/** True when this client stays resident after its last island destroys. */
+export const isKeepAliveClient = (client: object): boolean => keepAliveClients.has(client);
 
 /** One island client: one dedicated worker, one doorbell buffer. */
 export const connectIslandWorker = <W extends IslandWorkerDefinition = IslandWorkerDefinition>({
   worker,
   doorbell,
+  keepAlive,
   ...options
-}: ConnectIslandWorkerConfig): WorkerClient<W, DoorbellSpec> =>
-  connectWorker<W, DoorbellSpec>({
+}: ConnectIslandWorkerConfig): WorkerClient<W, DoorbellSpec> => {
+  const client = connectWorker<W, DoorbellSpec>({
     ...options,
     sharedMemory: doorbell === false ? undefined : makeDoorbell(),
     worker,
     workers: 1,
   });
+  if (keepAlive) keepAliveClients.add(client);
+  return client;
+};
 
 interface MountIslandBaseOptions {
   /**
@@ -716,6 +736,10 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
    * edges stay ordered after the moves they coalesce past. */
   const COALESCE_EVENTS = new Set(['mousemove', 'pointermove', 'touchmove', 'drag', 'dragover']);
   const MAX_IN_FLIGHT_DISPATCH = 4;
+  /* How long destroy() waits for the worker's unmount batch before force-
+   * tearing down. Generous enough for a busy worker draining real tasks;
+   * short enough that a wedged worker is visibly gone soon. */
+  const UNMOUNT_GRACE_MS = 1500;
   const dispatchQueue: Array<{ handlerId: number; key: string | null; payload: EventPayload }> = [];
   let inFlightDispatches = 0;
 
@@ -1322,32 +1346,39 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
       measuredIds.clear();
       const remaining = (clientMounts.get(client) ?? 1) - 1;
       clientMounts.set(client, remaining);
-      if (remaining > 0) {
-        // The worker still serves sibling mounts — hand this one back, but
-        // replay the teardown batch anyway: the `clear` op unmounts slot
-        // anchors inside our tree, firing slots[name](null) so slot render
-        // roots come down. Dropping it would leave a slot-hosted sibling
-        // mounted on this client and pin the worker alive.
-        void islandCall('unmount', client.unmount(instance))
-          .then((ops) => applyOps(ops, 'unmount'))
-          .catch(() => {});
-      } else {
-        // Last island — still run the instance's teardown first so the app's
-        // dispose hook cancels deferred work (library timers, animation
-        // loops) and the proxy doc unwinds. In a real worker terminate may
-        // kill the thread before unmount lands — equally fine, process
-        // death is teardown — but in-process workers need this or the
-        // instance zombies on and its pending callbacks mutate foreign docs.
-        void islandCall('unmount', client.unmount(instance))
-          .then((ops) => applyOps(ops, 'unmount'))
-          .catch(() => {})
-          .finally(() => {
-            // A remount may have registered while teardown was in flight
-            // (app/client input swap does destroy → mount back-to-back) —
-            // terminate only when the client is still truly idle.
-            if ((clientMounts.get(client) ?? 0) === 0) client.terminate();
-          });
-      }
+      /* One bounded teardown for both cases. The worker's unmount batch is
+       * still awaited so the app's dispose hook cancels deferred work and
+       * the `clear` op can fire slots[name](null) for slot anchors — but
+       * the wait is capped by UNMOUNT_GRACE_MS. A wedged worker (a task
+       * that never settles) must not pin the worker, this island's driver
+       * state, or the pending-call closures forever. finish() releases the
+       * maps eagerly so ops arriving late replay against empty maps (all
+       * lookups miss → no-ops), and on the last mount it terminates the
+       * worker unconditionally — as long as no remount registered while
+       * teardown was in flight (app/client swap does destroy → mount
+       * back-to-back; terminate only when the client is truly idle). */
+      let finished = false;
+      const finish = () => {
+        if (finished) return;
+        finished = true;
+        nodes.clear();
+        detached.clear();
+        detachedIds.clear();
+        prevProps.clear();
+        nodeListeners.clear();
+        cbTable.clear();
+        slotNodes.clear();
+        dispatchQueue.length = 0;
+        // keepAlive clients stay resident — the instance is unmounted but
+        // the thread idles so the next mount is a warm start.
+        if (remaining <= 0 && !isKeepAliveClient(client) && (clientMounts.get(client) ?? 0) === 0)
+          client.terminate();
+      };
+      void islandCall('unmount', client.unmount(instance))
+        .then((ops) => applyOps(ops, 'unmount'))
+        .catch(() => {})
+        .finally(finish);
+      setTimeout(finish, UNMOUNT_GRACE_MS);
     },
   };
   // Dashboard commands (`island.*`) — registered only while devtools is on.

@@ -37,6 +37,7 @@ import {
   assertCloneableProps,
   connectIslandWorker,
   cssStyleValue,
+  isKeepAliveClient,
   registerSubIslandMounter,
   type ConnectIslandWorkerConfig,
   type IslandClient,
@@ -649,7 +650,10 @@ export async function mountSubIsland(opts: MountSubIslandOptions): Promise<SubIs
       if (pollTimer !== null) clearInterval(pollTimer);
       const remaining = (clientMounts.get(client) ?? 1) - 1;
       clientMounts.set(client, remaining);
-      if (givenClient === undefined || remaining <= 0) client.terminate();
+      // keepAlive clients release the instance but keep the thread warm;
+      // worker-owned and last-mount clients terminate outright.
+      if (!isKeepAliveClient(client) && (givenClient === undefined || remaining <= 0))
+        client.terminate();
       else void islandCall('unmount', client.unmount(instance)).catch(() => {});
     },
   };

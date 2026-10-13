@@ -98,6 +98,15 @@ is released when its last island destroys. The choice between the two is
 the topology decision: a `worker:` mount spawns a worker, a `client:` mount
 doesn't (see [Definitions, workers, instances](#definitions-workers-instances)).
 
+`connectIslandWorker({ worker, keepAlive: true })` keeps the thread
+resident when the last island destroys: the instance still unmounts —
+dispose hooks run, timers clear, ops stop, driver state releases — but the
+worker process, its module graph, and worker-side caches survive, so the
+next `mount` on that client is a warm start. Nothing runs while idle: the
+instance is gone, only the process remains. `client.terminate()` still
+kills it explicitly. Use it for heavy pages revisited often (a routed
+worker page) where respawn cost dominates re-entry.
+
 ## `mountIsland` options
 
 | Option | Notes |
@@ -128,7 +137,7 @@ properties and kebab-case keys go through `setProperty`.
 | `updateProps(props)` | Shell→island channel: re-renders the root with new serialized props. Framework renderers patch fine-grained; imperative apps rebuild (dispose + clear + re-mount on a fresh document). |
 | `setMode(mode)` | Switch push↔poll after mount. Doorbell rebinds re-watch transparently. |
 | `flush()` | Manual drain of ops committed outside task calls: poll mode's mechanism, rarely needed under push. |
-| `destroy()` | Releases the instance via `unmount`; terminates the worker when this island owns the client, leaves siblings running when it's shared. The unmount's `clear` op still replays locally, so `slots[name]` callbacks fire with `null` and slot render roots unmount even while the worker keeps serving siblings. |
+| `destroy()` | Releases the instance via `unmount`; terminates the worker when this island owns the client, leaves siblings running when it's shared. The unmount's `clear` op still replays locally, so `slots[name]` callbacks fire with `null` and slot render roots unmount even while the worker keeps serving siblings. The unmount wait is bounded (`UNMOUNT_GRACE_MS`, 1500ms): if the worker never settles the call (a task stuck pending), the island's driver state releases anyway and the last mount's client still terminates. |
 | `opsApplied` / `flushCalls` | Replay counters: the demo's aggregate stats read these. |
 
 ### Devtools hooks
