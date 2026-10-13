@@ -121,6 +121,7 @@ worker page) where respawn cost dominates re-entry.
 | `onOps` | `(ops, elapsedMs)` after each replay: pair with client timing to split worker-vs-main cost before committing a workload to an island. |
 | `mode` | `'push'` (default: SAB doorbell) or `'poll'` (50ms drain). With the `worker` shorthand, `'poll'` also builds a doorbell-free client: no SharedArrayBuffer, no isolation headers. |
 | `mountTimeout` | Bounds the mount handshake: default 15s, `0` disables. A worker entry that loads but never answers rejects with a named error instead of pending forever; hard failures reject immediately. A failed mount releases the instance and terminates an island-owned client. |
+| `keepAlive` | This mount's `destroy()` leaves the client resident-but-idle instead of terminating — the mount-level version of `connectIslandWorker({ keepAlive: true })`. Either flag marks the client warm for this island's teardown. |
 
 Driver-side prop application follows DOM conventions: `class`/`className`
 write the property, `onX` refs become real listeners, and `style` objects

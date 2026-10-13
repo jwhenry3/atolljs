@@ -312,6 +312,47 @@ describe('handle surface', () => {
     expect(worker().terminated).toBe(true);
   });
 
+  it('keepAlive: the LAST of several mounts still leaves the worker resident', async () => {
+    const client = connectIslandWorker({ worker: renderWorker, keepAlive: true });
+    const elA = host();
+    const elB = host();
+    const a = await mountIsland({ client, el: elA, app: 'rcounter' });
+    const b = await mountIsland({ client, el: elB, app: 'rcounter' });
+    a.destroy();
+    b.destroy();
+    const worker = InProcessWorker.created.at(-1)!;
+    await vi.waitFor(() => {
+      expect(elA.querySelector('button.btn')).toBeNull();
+      expect(elB.querySelector('button.btn')).toBeNull();
+    });
+    expect(worker.terminated).toBe(false);
+    client.terminate();
+    expect(worker.terminated).toBe(true);
+  });
+
+  it('keepAlive: a wedged unmount releases driver state but never terminates the worker', async () => {
+    const real = connectIslandWorker({ worker: renderWorker });
+    const wedged = new Proxy(real as object, {
+      get(t, k) {
+        if (k === 'unmount') return () => new Promise(() => {});
+        return Reflect.get(t, k);
+      },
+    }) as typeof real;
+    const el = host();
+    // Mount-level keepAlive: even though the unmount never settles past the
+    // grace window, the warm worker must stay resident.
+    const island = await mountIsland({ client: wedged, el, app: 'rcounter', keepAlive: true });
+    island.destroy();
+    const worker = InProcessWorker.created.at(-1)!;
+    // Past the grace window (UNMOUNT_GRACE_MS, 1500ms) the worker must
+    // STILL be resident — keepAlive trades the wedged instance for an
+    // idle thread, not a dead one.
+    await new Promise((r) => setTimeout(r, 2100));
+    expect(worker.terminated).toBe(false);
+    real.terminate();
+    expect(worker.terminated).toBe(true);
+  });
+
   it('ResizeObserver ticks throttle: a fast second tick schedules the trailing push', async () => {
     let roCb: (() => void) | null = null;
     class FakeRO {

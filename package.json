@@ -41,7 +41,8 @@
     "build:extension": "node packages/devtools-extension/scripts/build.mjs",
     "assemble:pages": "node scripts/assemble-pages.mjs",
     "serve:pages": "node scripts/serve-pages.mjs",
-    "serve:static": "node scripts/serve-static.mjs"
+    "serve:static": "node scripts/serve-static.mjs",
+    "approve:staged": "node scripts/approve-staged.mjs"
   },
   "devDependencies": {
     "@angular/core": "^22.2.0",

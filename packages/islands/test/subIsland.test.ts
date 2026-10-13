@@ -140,6 +140,26 @@ describe('mountIsland into a proxy element (nested island)', () => {
     islandB.destroy();
   });
 
+  it('keepAlive: a shared warm client leaves the sub-worker resident after its last sub-island destroys', async () => {
+    const el = host();
+    const island = await outerIsland(el);
+    const sub = await mountIsland({
+      el: hostRef.el!,
+      client: connectIslandWorker({ worker: innerWorker, keepAlive: true }),
+      app: 'inner',
+      props: { label: 'warm' },
+    });
+    await island.flush();
+    expect(el.querySelector('.inner-label')!.textContent).toBe('warm:0');
+
+    const spawned = InProcessWorker.created.at(-1)!;
+    sub.destroy();
+    // Worker-owned sub-clients terminate; a keepAlive client must not.
+    await island.flush();
+    expect(spawned.terminated).toBe(false);
+    island.destroy();
+  });
+
   it('push mode: sub-island ops ring the outer doorbell and reach the page without manual flush', async () => {
     // Regression: each pool's INIT_MEMORY rebinds every defined contract in
     // this module graph, so the outer island's doorbell observe must re-arm

@@ -423,8 +423,8 @@ interface ScaffoldSpec {
 
 const SCAFFOLDS: Record<string, ScaffoldSpec> = {
   react: {
-    deps: { react: '^19.3.0', 'react-dom': '^19.3.0', 'react-reconciler': '^0.34.0', '@atolljs/core': '^0.1.0', '@atolljs/react': '^0.1.0', '@atolljs/react-island': '^0.1.0', zod: '^4.6.5' },
-    devDeps: { vite: '^8.3.1', typescript: '^7.0.2', '@vitejs/plugin-react': '^6.1.1', '@atolljs/vite': '^0.1.0', '@types/react': '^19.3.0', '@types/react-dom': '^19.3.0' },
+    deps: { react: '^19.3.0', 'react-dom': '^19.3.0', 'react-reconciler': '^0.34.0', '@atolljs/core': '^0.1.12', '@atolljs/react': '^0.1.12', '@atolljs/react-island': '^0.1.12', zod: '^4.6.5' },
+    devDeps: { vite: '^8.3.1', typescript: '^7.0.2', '@vitejs/plugin-react': '^6.1.1', '@atolljs/vite': '^0.1.12', '@types/react': '^19.3.0', '@types/react-dom': '^19.3.0' },
     // `exclude` replaces the plugin's default /node_modules/ — keep it, and
     // add *.worker.*: fast-refresh injects `/@react-refresh` (which reads
     // `window` unguarded) into every transformed module, including worker
@@ -432,19 +432,19 @@ const SCAFFOLDS: Record<string, ScaffoldSpec> = {
     vitePlugin: { pkg: '@vitejs/plugin-react', import_: `import react from '@vitejs/plugin-react';`, call: 'react({ exclude: [/\\/node_modules\\//, /\\.worker\\./] })' },
   },
   vue: {
-    deps: { vue: '^3.5.43', '@atolljs/core': '^0.1.0', '@atolljs/vue': '^0.1.0', '@atolljs/vue-island': '^0.1.0', zod: '^4.6.5' },
-    devDeps: { vite: '^8.3.1', typescript: '^7.0.2', '@vitejs/plugin-vue': '^6.0.9', '@atolljs/vite': '^0.1.0' },
+    deps: { vue: '^3.5.43', '@atolljs/core': '^0.1.12', '@atolljs/vue': '^0.1.12', '@atolljs/vue-island': '^0.1.12', zod: '^4.6.5' },
+    devDeps: { vite: '^8.3.1', typescript: '^7.0.2', '@vitejs/plugin-vue': '^6.0.9', '@atolljs/vite': '^0.1.12' },
     vitePlugin: { pkg: '@vitejs/plugin-vue', import_: `import vue from '@vitejs/plugin-vue';`, call: 'vue()' },
   },
   solid: {
-    deps: { 'solid-js': '^1.9.15', '@atolljs/core': '^0.1.0', '@atolljs/solidjs': '^0.1.0', '@atolljs/solid-island': '^0.1.0', zod: '^4.6.5' },
-    devDeps: { vite: '^8.3.1', typescript: '^7.0.2', 'vite-plugin-solid': '^2.11.14', '@atolljs/vite': '^0.1.0' },
+    deps: { 'solid-js': '^1.9.15', '@atolljs/core': '^0.1.12', '@atolljs/solidjs': '^0.1.12', '@atolljs/solid-island': '^0.1.12', zod: '^4.6.5' },
+    devDeps: { vite: '^8.3.1', typescript: '^7.0.2', 'vite-plugin-solid': '^2.11.14', '@atolljs/vite': '^0.1.12' },
     atollCall: `atoll({ jsxImportSource: 'solid-js' })`,
     vitePlugin: { pkg: 'vite-plugin-solid', import_: `import solid from 'vite-plugin-solid';`, call: 'solid()' },
   },
   svelte: {
-    deps: { svelte: '^5.57.1', '@atolljs/core': '^0.1.0', '@atolljs/svelte': '^0.1.0', '@atolljs/svelte-island': '^0.1.0', zod: '^4.6.5' },
-    devDeps: { vite: '^8.3.1', typescript: '^7.0.2', '@sveltejs/vite-plugin-svelte': '^7.3.1', '@atolljs/vite': '^0.1.0' },
+    deps: { svelte: '^5.57.1', '@atolljs/core': '^0.1.12', '@atolljs/svelte': '^0.1.12', '@atolljs/svelte-island': '^0.1.12', zod: '^4.6.5' },
+    devDeps: { vite: '^8.3.1', typescript: '^7.0.2', '@sveltejs/vite-plugin-svelte': '^7.3.1', '@atolljs/vite': '^0.1.12' },
     vitePlugin: { pkg: '@sveltejs/vite-plugin-svelte', import_: `import { svelte } from '@sveltejs/vite-plugin-svelte';`, call: 'svelte()' },
   },
 };
@@ -726,7 +726,7 @@ export function nodeScaffoldFiles(appName: string): OutFile[] {
               bundle:
                 'esbuild src/atoll/tasks.worker.ts --bundle --platform=node --format=esm --packages=external --outfile=dist/tasks.worker.js',
             },
-            dependencies: { '@atolljs/core': '^0.1.0', '@atolljs/node': '^0.1.0', zod: '^4.6.5' },
+            dependencies: { '@atolljs/core': '^0.1.12', '@atolljs/node': '^0.1.12', zod: '^4.6.5' },
             devDependencies: { esbuild: '^0.28.2', tsx: '^4.23.15', typescript: '^7.0.2', '@types/node': '^26.6.3' },
           },
           null,

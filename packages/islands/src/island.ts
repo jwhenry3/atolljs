@@ -181,6 +181,14 @@ interface MountIslandBaseOptions {
    * hard failures (module error, crash) already reject immediately.
    */
   mountTimeout?: number;
+  /**
+   * This mount's `destroy()` never terminates the client: the instance
+   * unmounts (dispose hooks, `clear` op replay) but the thread stays
+   * resident and idle for a warm remount. The mount-level version of
+   * `connectIslandWorker({ keepAlive: true })` — either flag marks the
+   * client warm for this island's teardown.
+   */
+  keepAlive?: boolean;
 }
 
 /**
@@ -1369,9 +1377,11 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
         cbTable.clear();
         slotNodes.clear();
         dispatchQueue.length = 0;
-        // keepAlive clients stay resident — the instance is unmounted but
-        // the thread idles so the next mount is a warm start.
-        if (remaining <= 0 && !isKeepAliveClient(client) && (clientMounts.get(client) ?? 0) === 0)
+        // keepAlive (client-level flag or this mount's override) keeps the
+        // thread resident — the instance is unmounted but the worker idles
+        // so the next mount is a warm start.
+        const warm = opts.keepAlive === true || isKeepAliveClient(client);
+        if (remaining <= 0 && !warm && (clientMounts.get(client) ?? 0) === 0)
           client.terminate();
       };
       void islandCall('unmount', client.unmount(instance))

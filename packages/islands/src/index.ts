@@ -11,7 +11,7 @@
  *     app: 'controls',
  *   });
  */
-export { connectIslandWorker, mountIsland } from './island';
+export { connectIslandWorker, isKeepAliveClient, mountIsland } from './island';
 export type {
   ConnectIslandWorkerConfig,
   IslandClient,

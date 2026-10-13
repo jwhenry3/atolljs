@@ -650,10 +650,11 @@ export async function mountSubIsland(opts: MountSubIslandOptions): Promise<SubIs
       if (pollTimer !== null) clearInterval(pollTimer);
       const remaining = (clientMounts.get(client) ?? 1) - 1;
       clientMounts.set(client, remaining);
-      // keepAlive clients release the instance but keep the thread warm;
-      // worker-owned and last-mount clients terminate outright.
-      if (!isKeepAliveClient(client) && (givenClient === undefined || remaining <= 0))
-        client.terminate();
+      // keepAlive (client-level or this mount's override) releases the
+      // instance but keeps the thread warm; worker-owned and last-mount
+      // clients terminate outright.
+      const warm = opts.keepAlive === true || isKeepAliveClient(client);
+      if (!warm && (givenClient === undefined || remaining <= 0)) client.terminate();
       else void islandCall('unmount', client.unmount(instance)).catch(() => {});
     },
   };
