@@ -1,5 +1,65 @@
 # Changelog
 
+## 0.1.12
+
+### `@atolljs/islands`: `connectIslandWorker({ keepAlive: true })` keeps the worker warm
+
+- **The thread survives the last unmount.** The instance still tears down
+  fully — dispose hooks run, timers clear, ops stop, driver state
+  releases — but the worker process, its module graph, and worker-side
+  caches stay resident, so the next `mount` on that client is a warm
+  start. Nothing runs while idle; `client.terminate()` still kills it
+  explicitly. Sub-island destroys honor the flag the same way. Meant for
+  heavy pages revisited often where respawn cost dominates re-entry.
+
+### `@atolljs/islands`: bounded unmount wait in `destroy()`
+
+- **A wedged worker can no longer pin teardown.** `destroy()` waits at
+  most `UNMOUNT_GRACE_MS` (1500ms) for the worker's unmount batch, then
+  force-releases driver state — nodes, tombstones, props, listeners,
+  slots, and the dispatch queue — so ops arriving late replay against
+  empty maps as no-ops. The last mount's client still terminates (a
+  remount during teardown is still respected). Previously a task that
+  never settled held the island's maps, pending-call closures, and the
+  worker alive forever.
+
+### `@atolljs/islands`: detached-node tombstones bound retained memory
+
+- **Removed subtrees no longer pin live state forever.** Driver-side
+  `remove` moves the node, its props, listeners, and slot binding into a
+  capped tombstone map (1024) instead of staying in the live maps; a
+  later `append` of the same id promotes the whole subtree back, which
+  renderers that reorder siblings (zrender restacks, keyed list shuffles)
+  now exercise safely. Ops referencing a tombstoned id resolve on demand.
+- **Worker side mirrors it.** `removeChild` tombstones the subtree's
+  instance records and handler entries (cap 4096); `lookupInstance` still
+  resolves them so an event already in flight when its subtree detached
+  materializes its target correctly, and re-append restores everything.
+  `proxyInstanceStats().liveNodes` now counts attached nodes only.
+
+### `@atolljs/islands`: ordered, bounded dispatch queue with move coalescing
+
+- **Pointer sweeps no longer pile up round-trips.** Real events used to
+  each fire their own `postMessage` immediately, pinning payloads and
+  island maps while in flight. Dispatches now ride a per-island queue
+  with four calls in flight; queued move-type events (`mousemove`,
+  `pointermove`, `touchmove`, `drag`, `dragover`) coalesce to the
+  freshest position per handler, while boundary events (`over`/`out`/
+  `down`/`up`/`wheel`) never merge and never overtake a queued move, so
+  enter/leave edges stay ordered after the moves they coalesce past.
+
+### `@atolljs/islands`: `style.cssText` is a real replace
+
+- **cssText writes no longer leave stale keys.** The proxy used to store
+  the text under a `cssText` style key; a later cssText replay deduped
+  real per-key writes away (a hide's `visibility:hidden` survived a
+  show's replay). `_replaceStyleText` now parses declarations and writes
+  each through the dedup path, clearing keys absent from the new text.
+- **Driver keeps the emptied `style` attribute.** Per-key clears that
+  empty a real element's inline style preserve `style=""` like browser
+  DOM (some DOMs drop the attribute); a never-styled element still has
+  no attribute.
+
 ## 0.1.11
 
 ### `@atolljs/islands`: `destroy()` replays the unmount batch so slots unmount
