@@ -1,0 +1,130 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="45%" r="75%">
+      <stop offset="0%" stop-color="#14455e"/><stop offset="100%" stop-color="#081420"/>
+    </radialGradient>
+    <linearGradient id="bMain" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#8fd4ec"/>
+      <stop offset="100%" stop-color="#8fd4ec" stop-opacity="0.25"/>
+    </linearGradient>
+    <linearGradient id="bWorker" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#f0b35c"/>
+      <stop offset="60%" stop-color="#f0b35c" stop-opacity="0.45"/>
+      <stop offset="100%" stop-color="#f0b35c" stop-opacity="0.3"/>
+    </linearGradient>
+    <linearGradient id="bAtoll" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#cfe9f7"/>
+      <stop offset="100%" stop-color="#8fd4ec" stop-opacity="0.4"/>
+    </linearGradient>
+    <linearGradient id="rowPos" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#4ade80" stop-opacity="0.10"/>
+      <stop offset="100%" stop-color="#4ade80" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="rowNeg" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#f87171" stop-opacity="0.09"/>
+      <stop offset="100%" stop-color="#f87171" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="rowConv" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#8fd4ec" stop-opacity="0.14"/>
+      <stop offset="100%" stop-color="#8fd4ec" stop-opacity="0"/>
+    </linearGradient>
+    <path id="tick" d="M0 5 L3.5 8.5 L10 0" fill="none" stroke="#4ade80" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+    <g id="cross" stroke="#f87171" stroke-width="2.4" stroke-linecap="round"><path d="M0 0 L8 8 M8 0 L0 8" fill="none"/></g>
+  </defs>
+  <rect width="1200" height="630" fill="url(#bg)"/>
+
+  <text x="600" y="52" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif"
+        font-weight="700" font-size="26" fill="#bfe9f5" letter-spacing="5">EVERY FRAMEWORK. OFF THE MAIN THREAD.</text>
+
+  <!-- ══ Main-thread UI card ══ -->
+  <g>
+    <rect x="60" y="76" width="500" height="306" rx="14" fill="#0d2438" stroke="url(#bMain)" stroke-width="2"/>
+    <g transform="translate(88 90)" stroke="#8fd4ec" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="0" y="0" width="26" height="18" rx="3"/>
+      <path d="M8 24 h10 M13 18 v6"/>
+    </g>
+    <text x="130" y="116" font-family="system-ui, -apple-system, sans-serif"
+          font-weight="800" font-size="28" fill="#8fd4ec" letter-spacing="1.5">MAIN-THREAD UI</text>
+    <rect x="88" y="130" width="444" height="1" fill="#8fd4ec" fill-opacity="0.35"/>
+
+    <text x="88" y="160" font-family="system-ui, -apple-system, sans-serif"
+          font-weight="700" font-size="13" fill="#4ade80" letter-spacing="2.5">STRENGTHS</text>
+    <g font-family="system-ui, -apple-system, sans-serif" font-size="17" fill="#cfe9f7">
+      <rect x="80" y="169" width="460" height="26" rx="6" fill="url(#rowPos)"/><use href="#tick" transform="translate(90 177) scale(1.15)"/><text x="110" y="188">Familiar component models</text>
+      <rect x="80" y="197" width="460" height="26" rx="6" fill="url(#rowPos)"/><use href="#tick" transform="translate(90 205) scale(1.15)"/><text x="110" y="216">Massive ecosystems &amp; tooling</text>
+      <rect x="80" y="225" width="460" height="26" rx="6" fill="url(#rowPos)"/><use href="#tick" transform="translate(90 233) scale(1.15)"/><text x="110" y="244">Direct DOM access</text>
+    </g>
+
+    <text x="88" y="272" font-family="system-ui, -apple-system, sans-serif"
+          font-weight="700" font-size="13" fill="#f87171" letter-spacing="2.5">TRADE-OFFS</text>
+    <g font-family="system-ui, -apple-system, sans-serif" font-size="17" fill="#9db9c9">
+      <rect x="80" y="277" width="460" height="26" rx="6" fill="url(#rowNeg)"/><use href="#cross" transform="translate(91 286) scale(1.1)"/><text x="110" y="296">Heavy work blocks the UI</text>
+      <rect x="80" y="305" width="460" height="26" rx="6" fill="url(#rowNeg)"/><use href="#cross" transform="translate(91 314) scale(1.1)"/><text x="110" y="324">Rendering competes with input</text>
+      <rect x="80" y="333" width="460" height="26" rx="6" fill="url(#rowNeg)"/><use href="#cross" transform="translate(91 342) scale(1.1)"/><text x="110" y="352">Everything fights for one thread</text>
+    </g>
+  </g>
+
+  <!-- ══ Web Workers card ══ -->
+  <g>
+    <rect x="640" y="76" width="500" height="306" rx="14" fill="#0d2438" stroke="url(#bWorker)" stroke-width="2"/>
+    <g transform="translate(668 90)" stroke="#f0b35c" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="4" y="4" width="18" height="18" rx="4"/>
+      <path d="M9 0 v4 M17 0 v4 M9 22 v4 M17 22 v4 M0 9 h4 M0 17 h4 M22 9 h4 M22 17 h4"/>
+    </g>
+    <text x="706" y="116" font-family="system-ui, -apple-system, sans-serif"
+          font-weight="800" font-size="28" fill="#f0b35c" letter-spacing="1.5">WEB WORKERS</text>
+    <rect x="668" y="130" width="444" height="1" fill="#f0b35c" fill-opacity="0.35"/>
+
+    <text x="668" y="160" font-family="system-ui, -apple-system, sans-serif"
+          font-weight="700" font-size="13" fill="#4ade80" letter-spacing="2.5">STRENGTHS</text>
+    <g font-family="system-ui, -apple-system, sans-serif" font-size="17" fill="#cfe9f7">
+      <rect x="660" y="169" width="460" height="26" rx="6" fill="url(#rowPos)"/><use href="#tick" transform="translate(670 177) scale(1.15)"/><text x="690" y="188">True parallelism, real threads</text>
+      <rect x="660" y="197" width="460" height="26" rx="6" fill="url(#rowPos)"/><use href="#tick" transform="translate(670 205) scale(1.15)"/><text x="690" y="216">Isolated memory per worker</text>
+      <rect x="660" y="225" width="460" height="26" rx="6" fill="url(#rowPos)"/><use href="#tick" transform="translate(670 233) scale(1.15)"/><text x="690" y="244">Heavy compute stays off the UI</text>
+    </g>
+
+    <text x="668" y="272" font-family="system-ui, -apple-system, sans-serif"
+          font-weight="700" font-size="13" fill="#f87171" letter-spacing="2.5">TRADE-OFFS</text>
+    <g font-family="system-ui, -apple-system, sans-serif" font-size="17" fill="#9db9c9">
+      <rect x="660" y="277" width="460" height="26" rx="6" fill="url(#rowNeg)"/><use href="#cross" transform="translate(671 286) scale(1.1)"/><text x="690" y="296">No DOM access</text>
+      <rect x="660" y="305" width="460" height="26" rx="6" fill="url(#rowNeg)"/><use href="#cross" transform="translate(671 314) scale(1.1)"/><text x="690" y="324">postMessage plumbing everywhere</text>
+      <rect x="660" y="333" width="460" height="26" rx="6" fill="url(#rowNeg)"/><use href="#cross" transform="translate(671 342) scale(1.1)"/><text x="690" y="352">Hard to wire UI to workers</text>
+    </g>
+  </g>
+
+  <!-- ══ Convergence lines ══ -->
+  <g fill="none" stroke="#8fd4ec" stroke-width="3" stroke-opacity="0.8">
+    <path d="M 310,382 C 310,412 500,410 560,420"/>
+    <path d="M 890,382 C 890,412 700,410 640,420"/>
+  </g>
+  <circle cx="310" cy="382" r="3.5" fill="#8fd4ec"/>
+  <circle cx="890" cy="382" r="3.5" fill="#f0b35c"/>
+  <circle cx="600" cy="420" r="5" fill="#8fd4ec"/>
+
+  <!-- ══ AtollJS card ══ -->
+  <g>
+    <rect x="190" y="424" width="820" height="190" rx="14" fill="#0f2c44" stroke="url(#bAtoll)" stroke-width="2"/>
+    <g transform="translate(207.6 442.3) scale(0.165)">
+      <path d="M 250 140 L 170 310 H 205 L 222 272 H 278 L 295 310 H 330 Z M 235 242 L 250 205 L 265 242 Z" fill="#cfe9f7"/>
+      <circle cx="250" cy="225" r="130" fill="none" stroke="#cfe9f7" stroke-width="8"/>
+      <circle cx="250" cy="95" r="16" fill="#cfe9f7"/>
+      <circle cx="363" cy="160" r="16" fill="#cfe9f7"/>
+      <circle cx="363" cy="290" r="16" fill="#cfe9f7"/>
+      <circle cx="250" cy="355" r="16" fill="#cfe9f7"/>
+      <circle cx="137" cy="290" r="16" fill="#cfe9f7"/>
+      <circle cx="137" cy="160" r="16" fill="#cfe9f7"/>
+    </g>
+    <text x="296" y="466" font-family="system-ui, -apple-system, sans-serif"
+          font-weight="800" font-size="38" letter-spacing="0.5" fill="#cfe9f7">Atoll<tspan fill="#8fd4ec">JS</tspan></text>
+    <text x="298" y="496" font-family="system-ui, -apple-system, sans-serif"
+          font-weight="700" font-size="13" fill="#8fd4ec" letter-spacing="2.5">THE BRIDGE</text>
+    <g font-family="system-ui, -apple-system, sans-serif" font-size="17" fill="#cfe9f7">
+      <rect x="290" y="503" width="334" height="26" rx="6" fill="url(#rowConv)"/><use href="#tick" transform="translate(300 511) scale(1.15)"/><text x="320" y="522">Proxy DOM + op protocol</text>
+      <rect x="290" y="531" width="334" height="26" rx="6" fill="url(#rowConv)"/><use href="#tick" transform="translate(300 539) scale(1.15)"/><text x="320" y="550">Typed shared-memory tasks</text>
+      <rect x="290" y="559" width="334" height="26" rx="6" fill="url(#rowConv)"/><use href="#tick" transform="translate(300 567) scale(1.15)"/><text x="320" y="578">5 framework island adapters</text>
+      <rect x="642" y="503" width="346" height="26" rx="6" fill="url(#rowConv)"/><use href="#tick" transform="translate(652 511) scale(1.15)"/><text x="672" y="522">Nested &amp; keep-alive workers</text>
+      <rect x="642" y="531" width="346" height="26" rx="6" fill="url(#rowConv)"/><use href="#tick" transform="translate(652 539) scale(1.15)"/><text x="672" y="550">DevTools instrumentation</text>
+      <rect x="642" y="559" width="346" height="26" rx="6" fill="url(#rowConv)"/><use href="#tick" transform="translate(652 567) scale(1.15)"/><text x="672" y="578">atoll CLI + Vite plugin</text>
+    </g>
+  </g>
+</svg>

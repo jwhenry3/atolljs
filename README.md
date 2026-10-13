@@ -16,6 +16,10 @@ fabric, so work is offloaded as typed method calls while large state stays put
 
 **[Atoll — package documentation](https://jwhenry3.github.io/atolljs/consumer/quickstart/)**
 
+<p align="center">
+  <img alt="AtollJS bridges main-thread UI and web workers" src="assets/atoll-convergence.png" width="1100">
+</p>
+
 ## Install
 
 ```bash
