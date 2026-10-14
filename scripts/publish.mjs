@@ -183,7 +183,12 @@ for (const { dir, pkg } of selected) {
   }
   for (const field of ['dependencies', 'peerDependencies', 'devDependencies']) {
     for (const dep of Object.keys(pkg[field] ?? {})) {
-      if (names.has(dep)) pkg[field][dep] = version;
+      if (!names.has(dep)) continue;
+      // Peers stamp as ^version — the release is the floor, newer releases
+      // satisfy it. An exact pin makes consumers ERESOLVE the moment they
+      // pair this package with a later core/islands release. dependencies
+      // stay exact: the lockstep train guarantees the stamped version exists.
+      pkg[field][dep] = field === 'peerDependencies' ? `^${version}` : version;
     }
   }
   if (!dryRun) {
