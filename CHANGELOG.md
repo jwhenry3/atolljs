@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.1.14
+
+### Release tooling
+
+- **Internal `peerDependencies` now stamp as `^<version>`, not exact.** A
+  published `@atolljs/islands@x` used to require literally `core@x` — pairing
+  it with any newer core/islands release ERESOLVEd, which defeats the point
+  of a peer (one shared instance, satisfied by a range). The release version
+  is now the floor. `dependencies` stay exact: the lockstep train guarantees
+  the stamped version exists, and `@atolljs/nx`'s `@atolljs/cli` dep should
+  track it precisely.
+
+### Tests & CI
+
+- `packages/devtools/test/roundtrip.test.ts` no longer sleeps then reads —
+  a fixed `wait(100)` raced the WS handshake under coverage instrumentation
+  (and vitest suppresses the coverage report when a test fails, so the
+  `coverage` step died silently). Waits are now `until()` polls on the
+  actual condition: session registration, batch arrival, viewer hello.
+- `packages/nx/**` excluded from the coverage thresholds — its
+  generators/executors are subprocess-spawning adapters over the CLI, the
+  same shape as the already-excluded `packages/cli/**`.
+
 ## 0.1.13
 
 ### `@atolljs/nx`: Nx plugin — generators and executors wrapping the CLI
