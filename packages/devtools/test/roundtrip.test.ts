@@ -11,6 +11,14 @@ import { createDevtoolsServer, type DevtoolsServer } from '@atolljs/devtools/ser
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+/** Poll until cond() — a fixed wait() loses the race under load (coverage
+ * instrumentation slows WS handshakes past 100ms). Times out silently; the
+ * following expect reports the real diff. */
+const until = async (cond: () => boolean, ms = 2000) => {
+  const deadline = Date.now() + ms;
+  while (!cond() && Date.now() < deadline) await wait(10);
+};
+
 /** One WebSocket to /view collecting parsed viewer messages. */
 const viewer = (url: string) => {
   const ws = new WebSocket(`${url}/view`);
@@ -40,13 +48,13 @@ describe('devtools server + client', () => {
     sockets.push(v.ws);
 
     conn = connectDevtools({ url: `${wsUrl}/events`, session: { name: 'roundtrip' }, flushMs: 10 });
-    await wait(100); // hello + handshake
+    await until(() => server!.sessions().some((s) => s.name === 'roundtrip'));
 
     emitDevtools({ type: 'task:enqueue', poolId: 'pool-1', callId: 1, taskId: 'ping' });
     emitDevtools({
       type: 'task:settle', poolId: 'pool-1', callId: 1, taskId: 'ping', outcome: 'ok', runMs: 3,
     });
-    await wait(100); // flush + fan-out
+    await until(() => v.msgs.some((m) => m.type === 'batch')); // flush + fan-out
 
     expect(server.sessions().map((s) => s.name)).toContain('roundtrip');
     const batches = v.msgs.filter((m) => m.type === 'batch');
@@ -74,13 +82,13 @@ describe('devtools server + client', () => {
     server = await createDevtoolsServer({ port: 0, replayBatches: 10 });
     const wsUrl = server.url.replace('http://', 'ws://');
     conn = connectDevtools({ url: `${wsUrl}/events`, session: { name: 'early' }, flushMs: 10 });
-    await wait(100);
+    await until(() => server!.sessions().some((s) => s.name === 'early'));
     emitDevtools({ type: 'pool:terminate', poolId: 'pool-9' });
     await wait(100);
 
     const v = viewer(wsUrl);
     sockets.push(v.ws);
-    await wait(100);
+    await until(() => v.msgs.some((m) => m.type === 'batch'));
     const kinds = v.msgs.map((m) => m.type);
     expect(kinds[0]).toBe('sessions');
     expect(v.msgs[0].sessions.map((s: any) => s.name)).toContain('early');
@@ -91,7 +99,7 @@ describe('devtools server + client', () => {
     server = await createDevtoolsServer({ port: 0, replayBatches: 50 });
     const wsUrl = server.url.replace('http://', 'ws://');
     conn = connectDevtools({ url: `${wsUrl}/events`, session: { name: 'short-lived' }, flushMs: 10 });
-    await wait(100);
+    await until(() => server!.sessions().some((s) => s.name === 'short-lived'));
     const sessionId = conn.session.id;
     emitDevtools({ type: 'pool:terminate', poolId: 'pool-1' });
     await wait(100);
@@ -101,12 +109,15 @@ describe('devtools server + client', () => {
 
     const v = viewer(wsUrl);
     sockets.push(v.ws);
-    await wait(100);
+    await until(() => v.msgs.some((m) => m.type === 'batch' && m.session.id === sessionId));
     expect(v.msgs[0].sessions.some((s: any) => s.id === sessionId)).toBe(true);
     expect(v.msgs.some((m) => m.type === 'batch' && m.session.id === sessionId)).toBe(true);
 
     v.ws.send(JSON.stringify({ type: 'dismiss', sessionId }));
-    await wait(100);
+    await until(() => {
+      const s = v.msgs.filter((m) => m.type === 'sessions').at(-1);
+      return s ? !s.sessions.some((x: any) => x.id === sessionId) : false;
+    });
 
     const last = v.msgs.filter((m) => m.type === 'sessions').at(-1);
     expect(last.sessions.some((s: any) => s.id === sessionId)).toBe(false);
@@ -114,7 +125,7 @@ describe('devtools server + client', () => {
     // A fresh viewer sees neither the session nor its replayed batches.
     const v2 = viewer(wsUrl);
     sockets.push(v2.ws);
-    await wait(100);
+    await until(() => v2.msgs.length > 0);
     expect(v2.msgs[0].sessions.some((s: any) => s.id === sessionId)).toBe(false);
     expect(v2.msgs.some((m) => m.type === 'batch' && m.session.id === sessionId)).toBe(false);
   });
@@ -127,7 +138,7 @@ describe('devtools server + client', () => {
 
     // A pinned session that survives the sweep.
     conn = connectDevtools({ url: `${wsUrl}/events`, session: { name: 'pinned-app' }, flushMs: 10 });
-    await wait(100);
+    await until(() => server!.sessions().some((s) => s.name === 'pinned-app'));
     const pinnedId = conn.session.id;
     emitDevtools({ type: 'pool:terminate', poolId: 'pool-1' });
     await wait(50);
@@ -138,10 +149,12 @@ describe('devtools server + client', () => {
 
     // An unpinned session that the sweep evicts.
     const conn2 = connectDevtools({ url: `${wsUrl}/events`, session: { name: 'ephemeral' }, flushMs: 10 });
-    await wait(100);
+    await until(() => server!.sessions().some((s) => s.name === 'ephemeral'));
     const deadId = conn2.session.id;
     conn2.close();
     await wait(400); // > closedTtlMs + a few sweep ticks
+
+    await until(() => v.msgs.some((m) => m.type === 'sessions'));
 
     const last = v.msgs.filter((m) => m.type === 'sessions').at(-1);
     const kept = last.sessions.find((s: any) => s.id === pinnedId);
@@ -167,12 +180,12 @@ describe('devtools server + client', () => {
       type: 'batch',
       events: [{ type: 'task:enqueue', poolId: 'pool-1', callId: 1, taskId: 'x', at: 0, thread: 'main' }],
     }));
-    await wait(100);
+    await until(() => server!.sessions().some((s) => s.name === 'node-ws'));
     expect(server.sessions().map((s) => s.name)).toContain('node-ws');
 
     const v = viewer(wsUrl);
     sockets.push(v.ws);
-    await wait(100);
+    await until(() => v.msgs.some((m) => m.type === 'batch'));
     const replayed = v.msgs
       .filter((m) => m.type === 'batch')
       .flatMap((m) => m.events.map((e: any) => e.type));

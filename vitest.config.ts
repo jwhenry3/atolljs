@@ -111,6 +111,10 @@ export default mergeConfig(
           '**/test/**',
           '**/testing/**',
           'packages/cli/**',
+          // nx generators/executors are thin adapters that spawn the cli —
+          // the subprocess boundary makes them no more coverable than the
+          // bin itself.
+          'packages/nx/**',
           'packages/devtools/src/bin.ts',
           // chrome.devtools.* glue: only runs inside a DevTools window
           'packages/devtools-extension/src/bridge.js',
