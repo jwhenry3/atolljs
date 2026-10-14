@@ -30,10 +30,12 @@ atoll new <dir> [--framework react|vue|solid|svelte|node] [--mfe] [--pm npm]
     self-contained remote bundle) + a dev harness mounting the
     island through the contract.
 
-atoll init
+atoll init [--name app] [--dir <path>] [--framework <fw>]
     Wire Atoll into the current project: .npmrc, installs the @atolljs/*
     packages your framework needs, and generates a working spine —
-    app.memory.ts + app.worker.ts + app.ts under src/atoll/.
+    app.memory.ts + app.worker.ts + app.ts under src/atoll/. --dir
+    relocates the spine; --framework overrides detection (monorepos
+    where the root package.json doesn't describe the target project).
 
 atoll add worker <name>   pooled worker + typed client (browser or node)
 atoll add memory <name>   shared-memory contract module
@@ -53,3 +55,7 @@ atoll doctor [--fix]      verify deps, lockfile, .npmrc policy,
 
 Existing files are never overwritten without `--force`; missing answers
 prompt interactively (or take defaults under `--yes` / no TTY).
+
+**Nx workspaces:** use `@atolljs/nx` — `nx g @atolljs/nx:init`,
+`nx g @atolljs/nx:worker <name>`, and `nx run <p>:atoll-doctor` wrap these
+commands with project/`sourceRoot` scoping. See `packages/nx/README.md`.

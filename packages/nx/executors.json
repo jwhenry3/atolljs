@@ -1,0 +1,14 @@
+{
+  "executors": {
+    "doctor": {
+      "implementation": "./dist/index.cjs#doctorExecutor",
+      "schema": "./src/schemas/doctor.json",
+      "description": "atoll doctor — verify deps, lockfile, .npmrc policy, worker-entry detectability, COOP/COEP headers"
+    },
+    "devtools": {
+      "implementation": "./dist/index.cjs#devtoolsExecutor",
+      "schema": "./src/schemas/devtools-serve.json",
+      "description": "atoll devtools — serve the local devtools dashboard (pools, task timings, shared-memory writes, island traffic)"
+    }
+  }
+}

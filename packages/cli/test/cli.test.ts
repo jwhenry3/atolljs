@@ -90,6 +90,27 @@ describe('atoll init', () => {
     expect(code).toBe(1);
     expect(io.output.join('\n')).toContain('no package.json');
   });
+
+  it('init --dir relocates the spine (monorepo project layout)', async () => {
+    const dir = tmp();
+    mkdirSync(join(dir, 'apps/web/src'), { recursive: true });
+    writePkg(dir, { name: 'ws', dependencies: { react: '^19' } });
+    const code = await run(['init', '--dir', 'apps/web/src/atoll', '--no-install'], dir);
+    expect(code).toBe(0);
+    expect(existsSync(join(dir, 'apps/web/src/atoll/app.worker.ts'))).toBe(true);
+    // .npmrc still lands at the detected project root
+    expect(readFileSync(join(dir, '.npmrc'), 'utf8')).toContain('min-release-age=7');
+  });
+
+  it('init --framework overrides detection', async () => {
+    const dir = tmp();
+    mkdirSync(join(dir, 'src'));
+    writePkg(dir, { name: 'ws', dependencies: { react: '^19' } });
+    const code = await run(['init', '--framework', 'node'], dir, [false]);
+    expect(code).toBe(0);
+    const client = readFileSync(join(dir, 'src/atoll/app.ts'), 'utf8');
+    expect(client).toContain('createNodePool');
+  });
 });
 
 describe('atoll add', () => {
@@ -616,6 +637,16 @@ describe('nextjs add kinds', () => {
     const inst = readFileSync(join(dir, 'src/instrumentation.ts'), 'utf8');
     expect(inst).toContain('NEXT_RUNTIME');
     expect(inst).toContain(`import('./app/api/digest/pool')`);
+  });
+
+  it('instrumentation --dir relocates the bootstrap file', async () => {
+    const dir = tmp();
+    mkdirSync(join(dir, 'apps/web/src'), { recursive: true });
+    nextPkg(dir);
+    const code = await run(['add', 'instrumentation', 'digest', '--dir', 'apps/web/src'], dir);
+    expect(code).toBe(0);
+    expect(existsSync(join(dir, 'apps/web/src/instrumentation.ts'))).toBe(true);
+    expect(existsSync(join(dir, 'src/instrumentation.ts'))).toBe(false);
   });
 
   it('add nextjs worker emits browser pool + client component bindings', async () => {

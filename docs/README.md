@@ -29,6 +29,7 @@ repository: internals, contracts, and conventions.
 | `examples/mfe-publish` + `examples/mfe-consumer`, publish/consume pair | [islands-remote.md](islands-remote.md) |
 | Writing a new `packages/<fw>` binding or `<fw>-island` renderer | [porting.md](porting.md) |
 | `packages/cli`, the `atoll` scaffold/doctor bin | `packages/cli/README.md` |
+| `packages/nx`, Nx generators/executors wrapping the CLI | `packages/nx/README.md` |
 | `packages/vite`: dev worker bundling (no refresh/HMR in workers) | [vite-plugin.md](vite-plugin.md) |
 | `packages/devtools`, `app/` dashboard, `emitDevtools`/sink seam, `ATOLL_DEVTOOLS` forwarding | [devtools.md](devtools.md) |
 | Dashboard outside `vite dev`, aggregate server hosting, production debugging | [devtools-deploy.md](devtools-deploy.md) |

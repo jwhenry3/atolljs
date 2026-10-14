@@ -1,0 +1,42 @@
+{
+  "name": "@atolljs/nx",
+  "version": "0.0.0",
+  "description": "Nx plugin for the atoll CLI — generators (init, worker, island, mfe, ...) and executors (doctor, devtools) that drive `atoll` inside an Nx workspace",
+  "homepage": "https://jwhenry3.github.io/atolljs/consumer/quickstart/",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "generators": "./generators.json",
+  "executors": "./executors.json",
+  "files": [
+    "src",
+    "dist",
+    "generators.json",
+    "executors.json"
+  ],
+  "scripts": {
+    "build": "esbuild src/index.ts --bundle --format=cjs --platform=node --target=node20.12 --external:@nx/* --external:@atolljs/* --outfile=dist/index.cjs"
+  },
+  "engines": {
+    "node": ">=20.12"
+  },
+  "dependencies": {
+    "@atolljs/cli": "0.0.0"
+  },
+  "peerDependencies": {
+    "@nx/devkit": ">=19",
+    "nx": ">=19"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jwhenry3/atolljs",
+    "directory": "packages/nx"
+  },
+  "bugs": {
+    "url": "https://github.com/jwhenry3/atolljs/issues"
+  },
+  "license": "MIT"
+}

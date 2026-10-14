@@ -80,28 +80,40 @@ export async function runInit(ctx: Ctx): Promise<number> {
     return 1;
   }
   const rel = (abs: string) => relative(ctx.cwd, abs).replaceAll('\\', '/');
+  // --framework overrides detection (monorepos where the root package.json
+  // doesn't describe the target project — e.g. Nx workspaces, where the nx
+  // plugin also supplies --dir for the same reason).
+  const framework = (flag(ctx.args, 'framework') as Framework | undefined) ?? project.framework;
   ctx.io.print(
     ctx.io.fmt.dim(
-      `detected: ${project.framework} · ${project.pm} · root ${project.root}`,
+      `detected: ${framework} · ${project.pm} · root ${project.root}`,
     ),
   );
 
-  // Supply-chain baseline — the same .npmrc this repo ships.
-  await writeTree(ctx.io, ctx.cwd, [{ path: rel(join(project.root, '.npmrc')), content: T.NPMRC }], {
-    force: hasFlag(ctx.args, 'force'),
-  });
+  // Supply-chain baseline — the same .npmrc this repo ships. Written at the
+  // detected project root, which may sit ABOVE cwd (the nx plugin invokes
+  // the CLI inside a project dir) — bound the write guard to the root.
+  const within = project.root;
+  await writeTree(
+    ctx.io,
+    ctx.cwd,
+    [{ path: rel(join(project.root, '.npmrc')), content: T.NPMRC }],
+    { force: hasFlag(ctx.args, 'force'), within },
+  );
 
   // A working spine — written BEFORE the install so a failed install still
   // leaves a complete, retryable scaffold. NestJS gets the DI-native spine
   // (service facade + registerPool module + worker entry); other hosts get
   // the contract + worker + client trio.
-  const atollDir = join(project.srcDir, 'atoll');
-  const host = hostOf(project.framework);
+  const atollDir = flag(ctx.args, 'dir')
+    ? join(ctx.cwd, flag(ctx.args, 'dir')!)
+    : join(project.srcDir, 'atoll');
+  const host = hostOf(framework);
   const name = flag(ctx.args, 'name') ?? 'app';
   const files: OutFile[] = [
     { path: `${rel(atollDir)}/${name}.memory.ts`, content: T.memoryContract(name) },
   ];
-  if (project.framework === 'nestjs') {
+  if (framework === 'nestjs') {
     files.push(
       ...T.nestjsServiceFiles(name, rel(atollDir), {
         import_: `./${name}.memory`,
@@ -131,13 +143,13 @@ export async function runInit(ctx: Ctx): Promise<number> {
       },
     );
   }
-  await writeTree(ctx.io, ctx.cwd, files, { force: hasFlag(ctx.args, 'force') });
+  await writeTree(ctx.io, ctx.cwd, files, { force: hasFlag(ctx.args, 'force'), within });
 
-  await offerInstall(ctx, project, ATOLL_DEPS[project.framework]);
+  await offerInstall(ctx, project, ATOLL_DEPS[framework]);
 
   ctx.io.print('');
   ctx.io.print(ctx.io.fmt.strong('next steps:'));
-  if (project.framework === 'nestjs') {
+  if (framework === 'nestjs') {
     ctx.io.print(
       `  import ${ctx.io.fmt.accent(`${pascal(name)}Module`)} into AppModule, then inject ${ctx.io.fmt.accent(`${pascal(name)}Service`)} — ${ctx.io.fmt.accent(`service.echo('hi')`)} runs in a worker`,
     );
@@ -546,7 +558,7 @@ export async function runAdd(ctx: Ctx): Promise<number> {
           ...files,
           { path: publishCfg, content: T.mfePublishConfig(name, framework, dirFromRoot) },
         ],
-        force,
+        { ...force, within: project.root! },
       );
       if (missingDeps(project.pkg, ['vite']).length) {
         ctx.io.warn(
@@ -639,7 +651,8 @@ export async function runAdd(ctx: Ctx): Promise<number> {
       await writeTree(
         ctx.io,
         ctx.cwd,
-        [T.nextjsInstrumentationFile(name, rel(project.srcDir))],
+        // --dir names the dir instrumentation.ts lands in (default: srcDir).
+        [T.nextjsInstrumentationFile(name, flag(ctx.args, 'dir') ?? rel(project.srcDir))],
         force,
       );
       ctx.io.print(

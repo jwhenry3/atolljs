@@ -106,6 +106,9 @@ packages/cli/         the `atoll` bin — init/add/new/doctor scaffolder
                       (TS sources dev-run via Node type stripping; the
                       published bin is `dist/cli.js` bundled by esbuild —
                       keep `.ts` import extensions and erasable syntax)
+packages/nx/          Nx plugin — generators/executors spawn the atoll bin
+                      (single CJS bundle dist/index.cjs — Nx loads factories
+                      via require(path#export); NX_DRY_RUN gates side effects)
 packages/vite/        vite dev plugin — worker entries served as esbuild
                       bundles (rebuild + respawn, no per-module HMR); ships
                       dist/ like cli, see docs/vite-plugin.md

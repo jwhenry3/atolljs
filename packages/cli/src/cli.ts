@@ -21,9 +21,11 @@ const HELP = (fmt: Fmt) => `${fmt.strong('atoll')} — bootstrap multithreading 
       or a tsx Node service with a pooled worker. --mfe scaffolds a
       publishable MFE package (contract + worker + bundle build).
 
-  ${fmt.accent('atoll init')} [--name app] [--force]
+  ${fmt.accent('atoll init')} [--name app] [--dir <path>] [--framework <fw>] [--force]
       Wire Atoll into the current project: hardened .npmrc, package
       install, and a contract + worker + client spine under src/atoll/.
+      --dir relocates the spine, --framework overrides detection — both
+      are how monorepo integrations (e.g. @atolljs/nx) scope it.
 
   ${fmt.accent('atoll add [framework] <kind> [variant] [name]')}
       worker      pool + typed client (+ framework bindings on UI projects)

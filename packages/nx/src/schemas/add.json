@@ -1,0 +1,52 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "atoll-add",
+  "title": "atoll add",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Basename for the generated files (kebab-case, e.g. incidents-report).",
+      "$default": { "$source": "argv", "index": 0 },
+      "x-prompt": "Name (kebab-case):"
+    },
+    "project": {
+      "type": "string",
+      "description": "Nx project to generate into — files land under its sourceRoot.",
+      "x-dropdown": "projects"
+    },
+    "directory": {
+      "type": "string",
+      "description": "Output dir (workspace-root-relative) — overrides the project-derived default."
+    },
+    "framework": {
+      "type": "string",
+      "description": "Framework override — detection reads the project's package.json otherwise.",
+      "enum": ["angular", "nestjs", "nextjs", "node", "react", "solid", "svelte", "vanilla", "vue"]
+    },
+    "variant": {
+      "type": "string",
+      "description": "Kind variant — island: facade|mono · route: task|client.",
+      "enum": ["facade", "mono", "task", "client"]
+    },
+    "memory": {
+      "type": "string",
+      "description": "Shared-memory contract name to wire into a generated worker."
+    },
+    "noMemory": {
+      "type": "boolean",
+      "default": false,
+      "description": "Skip auto-wiring a same-named *.memory.ts contract (worker/service/module/component)."
+    },
+    "force": {
+      "type": "boolean",
+      "default": false,
+      "description": "Overwrite existing files."
+    },
+    "install": {
+      "type": "boolean",
+      "default": true,
+      "description": "Offer to install missing dependencies (devtools)."
+    }
+  }
+}

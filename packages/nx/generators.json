@@ -1,0 +1,71 @@
+{
+  "name": "atoll",
+  "version": "0.0.0",
+  "generators": {
+    "init": {
+      "factory": "./dist/index.cjs#initGenerator",
+      "schema": "./src/schemas/init.json",
+      "description": "atoll init — hardened .npmrc, deps, and a contract + worker + client spine under the project's src/atoll/"
+    },
+    "worker": {
+      "factory": "./dist/index.cjs#workerGenerator",
+      "schema": "./src/schemas/add.json",
+      "description": "atoll add worker — pooled worker entry + typed client"
+    },
+    "memory": {
+      "factory": "./dist/index.cjs#memoryGenerator",
+      "schema": "./src/schemas/add.json",
+      "description": "atoll add memory — shared-memory contract module (defineSharedMemory)"
+    },
+    "island": {
+      "factory": "./dist/index.cjs#islandGenerator",
+      "schema": "./src/schemas/add.json",
+      "description": "atoll add island — worker-rendered UI (facade | mono variants)"
+    },
+    "mfe": {
+      "factory": "./dist/index.cjs#mfeGenerator",
+      "schema": "./src/schemas/add.json",
+      "description": "atoll add mfe — publishable micro-frontend: island contract + worker + vite.mfe.config.ts"
+    },
+    "service": {
+      "factory": "./dist/index.cjs#serviceGenerator",
+      "schema": "./src/schemas/add.json",
+      "description": "atoll add service — nestjs: @AtollService class facade + pool module + worker"
+    },
+    "method": {
+      "factory": "./dist/index.cjs#methodGenerator",
+      "schema": "./src/schemas/add.json",
+      "description": "atoll add method — nestjs: @AtollTask method-level offload"
+    },
+    "module": {
+      "factory": "./dist/index.cjs#moduleGenerator",
+      "schema": "./src/schemas/add.json",
+      "description": "atoll add module — nestjs: registerPool boundary module + worker entry"
+    },
+    "housed": {
+      "factory": "./dist/index.cjs#housedGenerator",
+      "schema": "./src/schemas/add.json",
+      "description": "atoll add housed — nestjs: route subtree served entirely inside workers"
+    },
+    "route": {
+      "factory": "./dist/index.cjs#routeGenerator",
+      "schema": "./src/schemas/add.json",
+      "description": "atoll add route — nextjs: api route pool (task | client variants)"
+    },
+    "component": {
+      "factory": "./dist/index.cjs#componentGenerator",
+      "schema": "./src/schemas/add.json",
+      "description": "atoll add component — nextjs: 'use client' hooks component over a pool"
+    },
+    "instrumentation": {
+      "factory": "./dist/index.cjs#instrumentationGenerator",
+      "schema": "./src/schemas/add.json",
+      "description": "atoll add instrumentation — nextjs: server bootstrap that warms route pools"
+    },
+    "devtools": {
+      "factory": "./dist/index.cjs#devtoolsGenerator",
+      "schema": "./src/schemas/devtools.json",
+      "description": "atoll add devtools — init module + @atolljs/devtools install"
+    }
+  }
+}

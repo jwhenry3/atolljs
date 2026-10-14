@@ -214,6 +214,9 @@ const order = [
   '@atolljs/react-island',
   // devtools peers on core — stage after it so its stamped dep resolves.
   '@atolljs/devtools',
+  // nx depends on the cli package — stage the bin first.
+  '@atolljs/cli',
+  '@atolljs/nx',
 ];
 const sorted = [...selected].sort(
   (a, b) => (order.indexOf(a.pkg.name) === -1 ? 99 : order.indexOf(a.pkg.name)) -
