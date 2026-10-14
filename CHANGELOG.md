@@ -1,5 +1,72 @@
 # Changelog
 
+## 0.1.13
+
+### `@atolljs/nx`: Nx plugin — generators and executors wrapping the CLI
+
+- **New package.** `nx g @atolljs/nx:<generator>` drives the `atoll` bin
+  inside an Nx workspace instead of reimplementing it: `init` (also run by
+  `nx add`) plus one generator per `atoll add` kind — `worker`, `memory`,
+  `island`, `mfe`, `devtools`, the nestjs kinds (`service`, `method`,
+  `module`, `housed`) and the nextjs kinds (`route`, `component`,
+  `instrumentation`).
+- **`--project` scopes output to an Nx project.** The generator resolves
+  the project's `sourceRoot`, runs the CLI inside the project dir so a
+  project-level `package.json` wins framework detection, and translates to
+  `--dir` (`src/atoll` for pools/contracts, `src/islands`, `src/mfe`,
+  `src/app/api/<name>` for routes). `--directory` overrides outright,
+  `--framework` overrides detection, and `NX_DRY_RUN` prints the command
+  instead of writing.
+- **Executors** register as project targets: `@atolljs/nx:doctor` (with
+  `fix`) and `@atolljs/nx:devtools` (serves the dashboard; `port`, `otlp`,
+  `otlpHeaders`, `otlpService`) — `nx run web:atoll-doctor`,
+  `nx run-many -t atoll-doctor`.
+- Ships a single CJS bundle (`dist/index.cjs`) because Nx loads factories
+  via `require(path#export)`; `@atolljs/cli` is a real dependency so the
+  bin resolves inside consumer workspaces. `atoll new` and
+  `atoll convert vite` stay plain CLI invocations.
+
+### `@atolljs/cli`: monorepo scoping flags
+
+- **`atoll init` gains `--dir` and `--framework`.** `--dir` relocates the
+  generated spine off `src/atoll`; `--framework` overrides detection when
+  the workspace-root `package.json` doesn't describe the target project —
+  both are how the nx plugin scopes `init` to one project.
+- **`atoll add instrumentation` honors `--dir`** — the Next.js bootstrap
+  file lands where the project wants it, not always `srcDir`.
+- **`writeTree` gains a `within` bound** (default `cwd`). Commands invoked
+  from a subdirectory — the nx plugin running the CLI inside a project
+  dir — pass the detected project root, so artifacts that belong there
+  (`.npmrc`, `vite.mfe.config.ts`) no longer trip the escape guard's
+  "outside the project" refusal.
+- Scaffold templates pin the generated `@atolljs/*` deps to `^0.1.12`
+  (was `^0.1.0`).
+
+### `@atolljs/islands`: mount-level `keepAlive`
+
+- `mountIsland` / `mountSubIsland` take `keepAlive?: boolean` — this
+  mount's `destroy()` unmounts the instance (dispose hooks, unmount-batch
+  replay) but leaves the worker resident and idle for a warm remount, the
+  mount-level version of `connectIslandWorker({ keepAlive: true })`. Either
+  flag marks the client warm for teardown; `isKeepAliveClient` is now
+  exported.
+
+### Release tooling
+
+- **`npm run approve:staged`** (`scripts/approve-staged.mjs`) approves
+  staged `@atolljs/*` versions in dependency order — the counterpart to
+  publish.mjs's `npm stage publish` step, since staged packages aren't
+  installable until approved. `--otp=` shares one TOTP across approvals,
+  `--dry-run` lists the queue without touching it.
+- `publish.mjs` stages `@atolljs/cli` before `@atolljs/nx` so the plugin's
+  dependency is already out when consumers reach for it.
+
+### Site & docs
+
+- The README gains the convergence diagram (`assets/atoll-convergence.*`),
+  and `pages-landing` ships a matching "The bridge" section showing how the
+  main thread and workers meet in the framework.
+
 ## 0.1.12
 
 ### `@atolljs/islands`: `connectIslandWorker({ keepAlive: true })` keeps the worker warm
