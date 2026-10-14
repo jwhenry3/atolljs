@@ -89,6 +89,16 @@ export async function bundleEntries(dir, entries) {
     platform: 'node',
     target: 'node20.12',
     packages: 'external',
+    // Package tsconfigs map @atolljs/* back to repo sources via `paths`,
+    // which esbuild applies before the packages-external check — without an
+    // explicit external, sibling code (core registries, contracts) gets
+    // inlined into dist and forks module identity for consumers.
+    external: ['@atolljs/*'],
+    // Bundler-facing packages carry .tsx sources written for the automatic
+    // JSX runtime (tsconfig jsx: react-jsx) — esbuild's default 'transform'
+    // would emit React.createElement calls with no React in scope.
+    jsx: 'automatic',
+    jsxImportSource: 'react',
     logLevel: 'warning',
   });
 }
@@ -173,7 +183,8 @@ export function rewriteExportsLeaf(dir, leaf, isTypes) {
     } catch {
       return leaf; // no dist dir — leave the src mapping alone
     }
-    return isTypes ? `./dist/${sub}/*.d.ts` : `./dist/${sub}/*.js`;
+    const prefix = sub ? `./dist/${sub}` : './dist';
+    return isTypes ? `${prefix}/*.d.ts` : `${prefix}/*.js`;
   }
   const name = rel.replace(/\.tsx?$/, '');
   if (!existsSync(join(dir, 'dist', `${name}.js`))) return leaf;
@@ -182,18 +193,21 @@ export function rewriteExportsLeaf(dir, leaf, isTypes) {
 
 // An entry: bare string → {types, default} conditional; a conditional object
 // → each leaf rewritten by its condition key (types→.d.ts, else→.js).
-function rewriteExportsVal(dir, val, isTypes = false) {
+// Leaves inside a conditions object never gain another wrapper — nesting a
+// {types,default} under an existing condition would resolve the same way but
+// is needlessly opaque.
+function rewriteExportsVal(dir, val, isTypes = false, nested = false) {
   if (typeof val === 'string') {
     const js = rewriteExportsLeaf(dir, val, isTypes);
     // A top-level leaf that rewrote gains a types condition pointing at the
     // emitted .d.ts.
-    if (js !== val && !isTypes) {
+    if (js !== val && !isTypes && !nested) {
       return { types: rewriteExportsLeaf(dir, val, true), default: js };
     }
     return js;
   }
   return Object.fromEntries(
-    Object.entries(val).map(([k, v]) => [k, rewriteExportsVal(dir, v, isTypes || k === 'types')]),
+    Object.entries(val).map(([k, v]) => [k, rewriteExportsVal(dir, v, isTypes || k === 'types', true)]),
   );
 }
 

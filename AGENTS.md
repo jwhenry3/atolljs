@@ -118,11 +118,13 @@ packages/devtools/    instrumentation dashboard — core event bus
                       WS client + dependency-free local server + static app,
                       `atoll devtools` subcommand; Node-facing dist conventions
 packages/nestjs/      NestJS module + decorators
-                      — node/nestjs/nextjs/incidents are Node-facing: they ship
-                      compiled dist/ (esbuild + real .d.ts, scripts/build-lib.mjs)
-                      because bare Node won't type-strip .ts under node_modules.
-                      Repo exports stay → ./src/ for dev; publish.mjs rewrites
-                      → ./dist/ at stage time. Bundler-only packages ship src/.
+                      — every publishable package ships compiled dist/: the
+                      framework/island bindings, node/nestjs/nextjs/devtools/
+                      incidents via scripts/build-lib.mjs (esbuild + real
+                      .d.ts), core via vite preserveModules, cli/vite/nx via
+                      their own bundles. Bare Node won't type-strip .ts under
+                      node_modules, so repo exports stay → ./src/ for dev and
+                      publish.mjs rewrites → ./dist/ at stage time.
 examples/<fw>/        demo apps; examples/react-dom-worker/ is the islands demo;
                       examples/http-offload/ serves HTTP inside pool workers (Node ≥26)
 examples/express|fastify|hono|koa   plain-Node REST APIs on @atolljs/node

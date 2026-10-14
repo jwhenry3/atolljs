@@ -67,6 +67,36 @@
   and `pages-landing` ships a matching "The bridge" section showing how the
   main thread and workers meet in the framework.
 
+### Packaging
+
+- **Every published package now ships compiled JS.** The framework and island
+  bindings (`react`, `vue`, `solidjs`, `svelte`, `angular`, `islands`,
+  `*-island`) build `dist/` through the shared `build-lib.mjs` pipeline
+  (esbuild bundle + real `.d.ts`), joining `node`/`nestjs`/`nextjs`/`devtools`.
+  Core's vite build now emits every non-test `src` module (preserveModules),
+  so the `"./*"` export maps to `./dist/*.js` — deep imports like
+  `@atolljs/core/testing/inProcessWorker` and `@atolljs/core/worker/workerBootstrap`
+  resolve to compiled files for consumers, not raw `.ts`. Repo exports still
+  point at `./src/` for dev; publish.mjs rewrites them at stage time.
+- `@atolljs/*` specifiers are now forced external in `build-lib.mjs` —
+  package tsconfig `paths` were resolving sibling sources before the
+  packages-external check, inlining core code into dependents' dist and
+  forking module identity (registries, contracts) for consumers.
+
+### Security Vulnerabilities Addressed
+
+- Root devDeps `nx` + `@nx/devkit` bumped to 23.3.0 — 22.x/23.x pre-release
+  builds sat inside advisories for `axios` (<1.20.0: SSRF, header
+  injection, prototype-pollution gadgets), `smol-toml` (malformed-TOML
+  DoS), and `brace-expansion` (quadratic expansion DoS); nx 23.3.0 drops
+  all three dependencies. `audit fix` alone couldn't get there — it
+  resolves nx *down* into the older 22.7.9 range — so the bump is an
+  explicit pin.
+- `overrides` scopes `undici` 7.29.1 to nx's subtree (its exact 7.29.0 pin
+  sits inside the `>=7.0.0 <7.29.1` advisories: WebSocket DoS, response
+  splitting, Set-Cookie cross-user caching). All fix releases were past
+  the `min-release-age` window; no policy exception was needed.
+
 ## 0.1.12
 
 ### `@atolljs/islands`: `connectIslandWorker({ keepAlive: true })` keeps the worker warm
