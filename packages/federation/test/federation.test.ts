@@ -17,10 +17,23 @@ let satisfiesVersion: typeof import('../src/index').satisfiesVersion;
 let useShared: typeof import('../src/index').useShared;
 let sharedDeps: typeof import('../src/index').sharedDeps;
 let parseRemoteManifest: typeof import('../src/index').parseRemoteManifest;
+let fetchRemoteManifest: typeof import('../src/index').fetchRemoteManifest;
+let provideShared: typeof import('../src/index').provideShared;
+let resolveRemoteModule: typeof import('../src/index').resolveRemoteModule;
+let defineFederationHost: typeof import('../src/worker').defineFederationHost;
 
 beforeAll(async () => {
-  ({ connectFederation, satisfiesVersion, useShared, sharedDeps, parseRemoteManifest } =
-    await import('../src/index'));
+  ({
+    connectFederation,
+    satisfiesVersion,
+    useShared,
+    sharedDeps,
+    parseRemoteManifest,
+    fetchRemoteManifest,
+    provideShared,
+    resolveRemoteModule,
+  } = await import('../src/index'));
+  ({ defineFederationHost } = await import('../src/worker'));
 });
 
 const hostWorker = () =>
@@ -110,6 +123,112 @@ describe('contract enforcement through the seam', () => {
   });
 });
 
+describe('remote-ref forms', () => {
+  // data: module URLs exercise the same import() path a remote URL would —
+  // Node imports them natively, no fetch or CORS needed.
+  const dataApp = (text: string): string =>
+    `data:text/javascript,${encodeURIComponent(
+      `export default { imperative: (doc) => { const el = doc.createElement('div'); el.textContent = ${JSON.stringify(text)}; doc.body.append(el); } };`,
+    )}`;
+
+  it('string ref — the specifier imports lazily on mount', async () => {
+    // Per-test definers re-register the task surface (last defineWorker
+    // wins) — this is how each ref form gets its own remotes map.
+    defineFederationHost({
+      remotes: { datafed: dataApp('via-string') },
+    });
+    const client = connectFederation({ worker: hostWorker });
+    const ops = await client.mount('datafed@1', {});
+    expect(ops.some((o) => o.t === 'create')).toBe(true);
+    client.terminate();
+  });
+
+  it('{ url } ref — the ref URL imports and its requires overlay applies', async () => {
+    defineFederationHost({
+      remotes: { urlfed: { url: dataApp('via-url'), requires: { greeting: '^1' } } },
+    });
+    const client = connectFederation({ worker: hostWorker });
+    const ops = await client.mount('urlfed@1', {});
+    expect(ops.some((o) => o.t === 'create')).toBe(true);
+    client.terminate();
+  });
+
+  it('{ manifest: object } — apps[name] resolves through the manifest', async () => {
+    defineFederationHost({
+      remotes: {
+        manfed: {
+          manifest: { name: 'm', apps: { manfed: dataApp('via-manifest') } },
+        },
+      },
+    });
+    const client = connectFederation({ worker: hostWorker });
+    const ops = await client.mount('manfed@1', {});
+    expect(ops.some((o) => o.t === 'create')).toBe(true);
+    client.terminate();
+  });
+
+  it('{ manifest: url } — fetched once, app specifiers resolve against it', async () => {
+    const manifestUrl = 'https://mfe.test/mfe.manifest.json';
+    const fetchSpy = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        name: 'remote-m',
+        apps: { netfed: dataApp('via-net') },
+      }),
+    }));
+    // Restore fetch only — unstubAllGlobals would drop the Worker stub too.
+    const origFetch = globalThis.fetch;
+    vi.stubGlobal('fetch', fetchSpy);
+    defineFederationHost({
+      remotes: { netfed: { manifest: manifestUrl }, netfed2: { manifest: manifestUrl } },
+    });
+    const client = connectFederation({ worker: hostWorker });
+    const ops = await client.mount('netfed@1', {});
+    expect(ops.some((o) => o.t === 'create')).toBe(true);
+    await expect(client.mount('netfed2@1', {})).rejects.toThrow(/no "netfed2"/);
+    expect(fetchSpy).toHaveBeenCalledOnce(); // manifest cached per URL
+    client.terminate();
+    globalThis.fetch = origFetch;
+  });
+
+  it('manifest missing the app key rejects with the exposed list', async () => {
+    defineFederationHost({
+      remotes: {
+        ghost: { manifest: { name: 'm', apps: { other: dataApp('x') } } },
+      },
+    });
+    const client = connectFederation({ worker: hostWorker });
+    await expect(client.mount('ghost@1', {})).rejects.toThrow(/no "ghost" app.*other/s);
+    client.terminate();
+  });
+});
+
+describe('resolveRemoteModule + scope edges', () => {
+  it('falls back to default and named exports; throws naming the exports it saw', () => {
+    const app = { imperative: () => {} };
+    expect(resolveRemoteModule({ default: app }, 'x').app).toBe(app);
+    expect(resolveRemoteModule({ x: app }, 'x').app).toBe(app);
+    expect(() => resolveRemoteModule({ notAnApp: 1 }, 'x')).toThrow(
+      /exposes no island app.*notAnApp/s,
+    );
+  });
+
+  it('stamped requires merge over module-level requires', () => {
+    const app = { imperative: () => {} };
+    (app as Record<string, unknown>).atollRemoteApp = { requires: { b: '~2' } };
+    const { requires } = resolveRemoteModule({ requires: { a: '^1' }, default: app }, 'x');
+    expect(requires).toEqual({ a: '^1', b: '~2' });
+  });
+
+  it('re-providing a shared dep warns and keeps the first entry', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    provideShared('greeting', { text: 'again' }, '9.9.9');
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('already provided'));
+    expect(useShared<{ text: string }>('greeting')).toEqual({ text: 'hello' });
+    warn.mockRestore();
+  });
+});
+
 describe('manifests + version matcher', () => {
   it('satisfiesVersion covers the supported range forms', () => {
     expect(satisfiesVersion('1.2.0', '*')).toBe(true);
@@ -129,5 +248,28 @@ describe('manifests + version matcher', () => {
     expect(() => parseRemoteManifest({})).toThrow(/name/);
     expect(() => parseRemoteManifest({ name: 'm', apps: { a: 1 } })).toThrow(/apps/);
     expect(() => parseRemoteManifest('x')).toThrow(/object/);
+    expect(() =>
+      parseRemoteManifest({ name: 'm', apps: { a: './a.js' }, requires: { r: 2 } }),
+    ).toThrow(/requires/);
+    expect(() =>
+      parseRemoteManifest({ name: 'm', apps: { a: './a.js' }, version: 3 }),
+    ).toThrow(/version/);
+  });
+
+  it('fetchRemoteManifest fetches + validates; non-ok status rejects', async () => {
+    const origFetch = globalThis.fetch;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) =>
+        url.includes('good')
+          ? { ok: true, json: async () => ({ name: 'm', apps: { a: './a.js' } }) }
+          : { ok: false, status: 404 },
+      ),
+    );
+    await expect(fetchRemoteManifest('https://x/good.json')).resolves.toMatchObject({
+      name: 'm',
+    });
+    await expect(fetchRemoteManifest('https://x/bad.json')).rejects.toThrow(/404/);
+    globalThis.fetch = origFetch;
   });
 });

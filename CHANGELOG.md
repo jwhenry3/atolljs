@@ -62,6 +62,11 @@
   `audit fix` alone would have downgraded `@nx/devkit` to 18.x).
 - `fast-uri` (ajv scheme spoofing) and `seroval` (solid-js serialization
   code injection) ride the parents' ranges to 4.2.3/3.1.9 and 1.6.12.
+- Example lockfiles swept too: `vite` → 8.3.5 and `zod` → 4.6.7 everywhere,
+  `seroval` → 1.6.12, `@angular/build`/`@angular/cli` → 22.2.5 (their own
+  vite/zod pins were the vulnerable ones), `next` → 16.4.4 (critical image
+  RCE + server-action DoS advisories), `body-parser` → 2.4.0, `multer` via
+  `@nestjs/platform-express`, `qs` → 6.17.1, `fastify` → 5.12.6.
 - Residual: `deepmerge` (via `@sveltejs/vite-plugin-svelte`) has no fixed
   release upstream — low severity, dev-only, accepted.
 

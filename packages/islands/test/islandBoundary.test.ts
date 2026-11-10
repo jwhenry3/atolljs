@@ -178,6 +178,121 @@ describe('runtime-crash boundary', () => {
   });
 });
 
+describe('handle surface + delegation', () => {
+  it('handle.retry() remounts directly (no render fn needed)', async () => {
+    const handle = await mountIsland({
+      worker: contractWorker,
+      el: host(),
+      app: 'checkout',
+      props: {},
+      boundary: { error: errorNode },
+    });
+    expect(handle.state).toBe('error');
+    expect(handle.instance).toBe('checkout@?');
+    expect(handle.pid).toBe('unmounted');
+    expect(handle.opsApplied).toBe(0);
+    await handle.updateProps({ count: 3 }); // stashes for the next attempt
+    handle.retry();
+    await vi.waitFor(() => expect(handle.state).toBe('mounted'));
+    handle.destroy();
+  });
+
+  it('flush/setMode/mode delegate to the mounted island', async () => {
+    const handle = await mountIsland({
+      worker: contractWorker,
+      el: host(),
+      app: 'checkout',
+      props: { count: 1 },
+      boundary: { error: errorNode },
+    });
+    await handle.flush();
+    handle.setMode('poll');
+    expect(handle.mode).toBe('poll');
+    handle.setMode('push');
+    expect(handle.opsApplied).toBeGreaterThan(0);
+    handle.destroy();
+  });
+
+  it('an omitted error render fn still flips state and clears the el', async () => {
+    const el = host();
+    const handle = await mountIsland({
+      worker: contractWorker,
+      el,
+      app: 'checkout',
+      props: {},
+      boundary: {},
+    });
+    expect(handle.state).toBe('error');
+    expect(el.childElementCount).toBe(0);
+    handle.destroy();
+  });
+
+  it('a retry fn returning a delay auto-remounts', async () => {
+    const policy = vi.fn(() => 0);
+    const handle = await mountIsland({
+      worker: contractWorker,
+      el: host(),
+      app: 'checkout',
+      props: { count: 1 },
+      boundary: { error: errorNode, retry: policy },
+    });
+    InProcessWorker.created.at(-1)!.crash();
+    await vi.waitFor(() => expect(handle.state).toBe('mounted'), { timeout: 5000 });
+    expect(policy).toHaveBeenCalled();
+    handle.destroy();
+  });
+
+  it('manual retry while an auto-retry is pending cancels the timer', async () => {
+    const handle = await mountIsland({
+      worker: contractWorker,
+      el: host(),
+      app: 'checkout',
+      props: { count: 1 },
+      boundary: { error: errorNode, retry: () => 5000 },
+    });
+    InProcessWorker.created.at(-1)!.crash();
+    await vi.waitFor(() => expect(handle.state).toBe('error'));
+    handle.retry(); // clears the pending 5s timer and mounts now
+    await vi.waitFor(() => expect(handle.state).toBe('mounted'), { timeout: 5000 });
+    handle.destroy();
+  });
+
+  it('setMode while failed is remembered for the remount', async () => {
+    const handle = await mountIsland({
+      worker: contractWorker,
+      el: host(),
+      app: 'checkout',
+      props: { count: 1 },
+      boundary: { error: errorNode },
+    });
+    InProcessWorker.created.at(-1)!.crash();
+    await vi.waitFor(() => expect(handle.state).toBe('error'));
+    handle.setMode('poll');
+    handle.retry();
+    await vi.waitFor(() => expect(handle.state).toBe('mounted'), { timeout: 5000 });
+    expect(handle.mode).toBe('poll');
+    handle.destroy();
+  });
+
+  it('destroy during a pending auto-retry cancels it', async () => {
+    const createdBefore = InProcessWorker.created.length;
+    const handle = await mountIsland({
+      worker: contractWorker,
+      el: host(),
+      app: 'checkout',
+      props: { count: 1 },
+      boundary: { error: errorNode, retry: () => 60 },
+    });
+    InProcessWorker.created.at(-1)!.crash();
+    await vi.waitFor(() => expect(handle.state).toBe('error'));
+    handle.destroy(); // cancels the scheduled retry
+    await new Promise((r) => setTimeout(r, 120));
+    // Exactly mount-spawn + respawn — the cancelled retry spawned nothing more.
+    expect(InProcessWorker.created.length).toBe(createdBefore + 2);
+    expect(handle.state).toBe('error');
+  });
+});
+
 describe('shared-client boundaries', () => {
   it('a crash notifies every island boundary on the client', async () => {
     const client = connectIslandWorker({ worker: contractWorker });
