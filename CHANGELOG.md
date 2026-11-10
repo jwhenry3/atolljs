@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.1.15
+
+### `@atolljs/federation`: new package — controlled module federation
+
+- **A host worker whose registry is dynamic.** `defineFederationHost({ remotes, apps?, shared? })` builds a PolyWorker that imports remote *app modules* on first mount — unlike remote worker bundles, a remote carries no worker runtime and lands inside the host's realm, so shared dependencies dedupe by module identity: one framework copy, one store, guaranteed by ESM rather than convention.
+- **Shared-dependency scope.** `provideShared`/`useShared`/`sharedDeps` over `globalThis.__atollShared`, with `satisfiesVersion` matching `requires` ranges (`^`, `~`, `>=`, exact, `*`). A remote's `requires` is negotiated before registration — an unprovided or out-of-range dep rejects the mount with a named error, the shared-deps analogue of contract prop rejection.
+- **Remote format + manifests.** Remote modules expose apps via `exposes`/`default`/named exports, stamped with `defineRemoteApp`; `RemoteManifest` JSON maps app keys to module URLs and is fetched lazily, cached per URL, with specifiers resolved against the manifest's own URL.
+- **`atollFederation` Vite plugin** for publish builds: `shared` externalizes deps and rewrites specifiers to pinned URLs (the realm-dedupe contract both builds must agree on), and emits `mfe.manifest.json`.
+- Exports `.` (client, scope, remote metadata, manifests), `/worker` (`defineFederationHost`), `/vite` (the plugin). Peer on `@atolljs/core`, `@atolljs/islands`, optional `vite`.
+
+### `@atolljs/islands`: lazy app registration (`loadApp`) + error boundaries
+
+- **`PolyWorkerRegistry.loadApp`** — a lazy loader `mount` consults on an unregistered key; a defined result registers under that name for later mounts. `@atolljs/federation` builds remote imports on it. When present, the single-registered-app name-blind fallback is disabled so a loader host resolves mounts by exact key only — a typo'd app name can no longer silently mount "the only app". `registerIslandApp` is exported for manual warm-up outside a mount.
+- **`mountIsland({ boundary })`** — configurable error boundaries over every breakable point: worker boot, the mount handshake (`mountTimeout`, contract rejections, federation `loadApp` failures), and runtime worker crashes. `loading(ctx)`/`error(ctx)` state render functions return `Node | string` applied to the container; `error` ctx carries `{ app, el, attempt, error, phase, retry }`, `domOnError: 'preserve'` overlays the fallback on the stale frame, and `retry` (`N` or `(attempt, err) => ms | false`) remounts into the respawned realm. Resolves an `IslandBoundaryHandle` (`state`/`error`/`retry()`) after the first attempt instead of rejecting; `updateProps` while failed stashes into the next attempt. Ignored on nested mounts.
+- **Facade `boundary` props** forward through every binding: React `<Island>` + `islandComponent`/`lazyIsland`, Vue `useIsland`/`<AtollIsland>`/proxy components, Svelte `use:island`, Solid `createIsland`/`<Island>`, and the Angular `[boundary]` input.
+
+### `@atolljs/core`: worker lifecycle events
+
+- **`client.onWorkerEvent(fn)`** subscribes to `WorkerLifecycleEvent` transitions (`'error' | 'respawn' | 'terminate'`, with `poolId`/`slot`/`message`) on any `connectWorker` client — dedicated or pooled. Emitted by both `DedicatedWorker` and `WorkerPool` at their crash/respawn/terminate points, also available as `onLifecycle` on the connect/pool/dedicated configs. Subscriptions work pre-spawn and survive `terminate()`+respawn cycles. This is the crash-detection seam island boundaries build on — before it, a mid-life worker death was invisible to the driver (in-flight calls rejected, but the island's tree just went stale).
+
+### Docs
+
+- New pages: `docs/federation.md` (host/remotes/scope/manifests/failure modes), `docs/federation-getting-started.md` (end-to-end walkthrough), `docs/error-boundaries.md` (boundary phases, retry policy, shared-client semantics, the `onWorkerEvent` seam), and `docs/testing.md` (`InProcessWorker` internals and suite patterns). `islands.md` documents `loadApp` and `boundary`; `islands-remote.md` cross-links the two remote topologies.
+
 ## 0.1.14
 
 ### Release tooling
