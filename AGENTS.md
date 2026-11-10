@@ -118,6 +118,10 @@ packages/devtools/    instrumentation dashboard — core event bus
                       WS client + dependency-free local server + static app,
                       `atoll devtools` subcommand; Node-facing dist conventions
 packages/nestjs/      NestJS module + decorators
+packages/federation/  controlled module federation — defineFederationHost
+                      (dynamic-registry worker importing remote app modules
+                      into one realm), shared-dep scope, manifests, vite
+                      publish plugin (docs/federation.md)
                       — every publishable package ships compiled dist/: the
                       framework/island bindings, node/nestjs/nextjs/devtools/
                       incidents via scripts/build-lib.mjs (esbuild + real

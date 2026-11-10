@@ -171,6 +171,16 @@ export interface PolyWorkerRegistry {
    *  picks one per island. */
   apps: Record<string, IslandApp>;
   /**
+   * Lazy app loader — consulted by `mount` when the requested registry name
+   * isn't present yet. Returning an app registers it under that name (so a
+   * second mount is a registry hit); returning `undefined` lets the mount
+   * fail as unknown. Federation hosts pass a remote-module importer here —
+   * see `@atolljs/federation`. When set, the single-registered-app
+   * name-blind fallback is DISABLED: a loader host resolves every mount by
+   * its exact registry key, never by "the only app I have".
+   */
+  loadApp?: (name: string) => IslandApp | undefined | Promise<IslandApp | undefined>;
+  /**
    * The doorbell contract the worker exposes — defaults to the package's
    * `renderMemory`. Rarely needed: pass a different doorbell-SPEC instance
    * if your worker module already defines one (the main side always uses
@@ -259,7 +269,13 @@ const mounts = new Map<string, Instance>();
  */
 const APP_REGISTRY = new Map<string, IslandApp>();
 
-const registerSingleApp = (name: string, app: IslandApp): void => {
+/**
+ * Register an app into the module-level registry after the definer ran —
+ * the manual counterpart to `loadApp` (warm-up/preload outside a mount).
+ * Registers under `name` exactly; the mount-time name-blind fallback only
+ * applies to single-registry workers without a loader.
+ */
+export const registerIslandApp = (name: string, app: IslandApp): void => {
   APP_REGISTRY.set(name, app);
 };
 
@@ -292,6 +308,7 @@ const appNameOf = (instance: string): string => {
  */
 function createIslandRuntime(
   sharedMemory: SharedMemory<DoorbellSpec> = renderMemory,
+  loadApp?: PolyWorkerRegistry['loadApp'],
 ): WorkerDefinition<DoorbellSpec, IslandWorkerMethods> {
   // Point bumpOpsVersion at the declared contract (it's the same object as
   // renderMemory unless a custom doorbell instance was passed).
@@ -435,7 +452,20 @@ function createIslandRuntime(
         // marshalled function (fire-and-forget, doorbell-rung for out-of-
         // task callers like timers/promise continuations).
         props = unmarshalCallbackProps(props, callbackFactory(instance)) as Record<string, unknown>;
-        const App = resolveApp(appNameOf(instance));
+        const appName = appNameOf(instance);
+        let App = APP_REGISTRY.get(appName);
+        if (App === undefined && loadApp !== undefined) {
+          // Lazy registration — the loader imports a remote module (federation)
+          // or otherwise supplies the app; a defined result registers under
+          // the requested name so subsequent mounts resolve directly.
+          const loaded = await loadApp(appName);
+          if (loaded !== undefined) {
+            registerIslandApp(appName, loaded);
+            App = loaded;
+          }
+        } else if (App === undefined) {
+          App = resolveApp(appName); // sole-app fallback (no loader present)
+        }
         if (App === undefined) {
           throw new Error(
             `mount: unknown app "${instance}" — registry has: ${[...APP_REGISTRY.keys()].join(', ')}`,
@@ -684,9 +714,9 @@ export function definePolyWorker(
           `component-reference mounts resolve "${stamped}" and will fail. Fix the key or the stamp.`,
       );
     }
-    registerSingleApp(key, app);
+    registerIslandApp(key, app);
   }
-  return createIslandRuntime(registry.sharedMemory ?? options?.sharedMemory);
+  return createIslandRuntime(registry.sharedMemory ?? options?.sharedMemory, registry.loadApp);
 }
 
 /**
@@ -700,6 +730,6 @@ export function defineMonoWorker(
   options?: { sharedMemory?: SharedMemory<DoorbellSpec> },
 ): WorkerDefinition<DoorbellSpec, IslandWorkerMethods> {
   const stamp = (app as { islandAppName?: unknown }).islandAppName;
-  registerSingleApp(typeof stamp === 'string' && stamp !== '' ? stamp : 'main', app);
+  registerIslandApp(typeof stamp === 'string' && stamp !== '' ? stamp : 'main', app);
   return createIslandRuntime(options?.sharedMemory);
 }

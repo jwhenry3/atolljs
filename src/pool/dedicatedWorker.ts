@@ -1,7 +1,15 @@
 import type { MemoryManager } from './memory';
 import { TaskAbortedError, TaskTimeoutError, WorkerCrashedError } from './errors';
 import type { SharedAccess, SharedMemory, SharedSpec } from '../contract/sharedMemory';
-import type { MemoryPersistence, TaskContract, TaskMap, TaskResult, WorkerPoolConfig } from '../contract/types';
+import type {
+  MemoryPersistence,
+  TaskContract,
+  TaskMap,
+  TaskResult,
+  WorkerLifecycleEvent,
+  WorkerLifecycleListener,
+  WorkerPoolConfig,
+} from '../contract/types';
 import { devtoolsEnabled, emitDevtools, estimateCloneBytes, nextDevtoolsId, type EmittedDevtoolsEvent } from '../devtools';
 import { fmtBytes, scoped } from '../log';
 import { measureTaskCall } from '../userTiming';
@@ -66,6 +74,7 @@ export class DedicatedWorker<S extends SharedSpec = SharedSpec> {
   private readonly mem: ChannelMemory<S>;
   private readonly spawn: () => Worker;
   private readonly respawn: boolean;
+  private readonly onLifecycle?: WorkerLifecycleListener;
   private readonly taskTimeout?: number;
   private readonly label?: string;
   private worker: Worker | null = null;
@@ -87,6 +96,7 @@ export class DedicatedWorker<S extends SharedSpec = SharedSpec> {
     const url = config.workerUrl;
     this.spawn = config.createWorker ?? (() => new Worker(url!, { type: 'module' }));
     this.respawn = config.respawn ?? true;
+    this.onLifecycle = config.onLifecycle;
     this.taskTimeout = config.taskTimeout;
     this.label = config.name;
     this.poolId = nextDevtoolsId('worker', config.name);
@@ -178,12 +188,18 @@ export class DedicatedWorker<S extends SharedSpec = SharedSpec> {
     this.checkDrained();
   }
 
+  /** Fan out a lifecycle transition — error boundaries subscribe through this. */
+  private lifecycle(type: WorkerLifecycleEvent['type'], message?: string): void {
+    this.onLifecycle?.({ type, poolId: this.poolId, slot: 0, message });
+  }
+
   private handleError(event: unknown): void {
     if (this.closed) return;
     const e = event as { message?: string; error?: Error } | undefined;
     const message = e?.message ?? (e?.error ? String(e.error) : 'worker error');
     workerLog.warn(`worker error: ${message}`);
     emitDevtools({ type: 'worker:error', poolId: this.poolId, slot: 0, message });
+    this.lifecycle('error', message);
     this.rejectPending(message);
     this.worker?.terminate();
     this.worker = null;
@@ -191,6 +207,7 @@ export class DedicatedWorker<S extends SharedSpec = SharedSpec> {
       workerLog.info('respawning crashed worker');
       this.attach(this.spawn());
       emitDevtools({ type: 'worker:respawn', poolId: this.poolId, slot: 0 });
+      this.lifecycle('respawn');
     }
     this.checkDrained();
   }
@@ -320,6 +337,7 @@ export class DedicatedWorker<S extends SharedSpec = SharedSpec> {
   public terminate(): void {
     if (this.closed) return;
     this.closed = true;
+    this.lifecycle('terminate');
     this.devtoolsOff?.();
     void this.persistence?.stop()?.catch?.((e: unknown) => workerLog.warn('memory persistence stop failed', e));
     workerLog.info('terminating dedicated worker');

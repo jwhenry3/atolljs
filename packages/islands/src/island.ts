@@ -44,6 +44,8 @@ import {
 import { marshalCallbackProps, CALLBACK_EVENT } from './callbackProps';
 import { trackIslandForDevtools } from './devtoolsCommands';
 import { propsPreview } from './devtoolsPreview';
+import { mountIslandWithBoundary } from './boundary';
+import type { IslandBoundary } from './boundary';
 import type { ProxyElement } from './worker/dom/element';
 
 export type Mode = 'push' | 'poll';
@@ -189,6 +191,15 @@ interface MountIslandBaseOptions {
    * client warm for this island's teardown.
    */
   keepAlive?: boolean;
+  /**
+   * Error boundary — `loading`/`error` state render functions plus a retry
+   * policy, covering mount rejection, mountTimeout, and runtime worker
+   * crashes (detected via the client's lifecycle events). When set, the
+   * mount resolves to an `IslandBoundaryHandle` after the first attempt
+   * settles — errors render the fallback instead of rejecting. Ignored on
+   * nested (proxy-element) mounts. See boundary.ts / docs error-boundaries.
+   */
+  boundary?: IslandBoundary;
 }
 
 /**
@@ -475,6 +486,7 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
   const {
     el: target, onEvent, onActivity, onOps, slots, mode: initialMode, mountTimeout,
     client: givenClient, worker, app: givenApp, props: givenProps, framework,
+    boundary,
     ...workerConfig
   } = opts;
   if (isProxyMountTarget(target)) {
@@ -489,6 +501,12 @@ export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandl
   // Real DOM from here on (the proxy path delegated above) — the declared
   // type keeps closures honest; the guard did the proving.
   const el = target as HTMLElement;
+  if (boundary !== undefined) {
+    // Error-boundary path — mount/handshake failures and runtime worker
+    // crashes render state fallbacks instead of rejecting; the returned
+    // handle wraps the eventual island. Nested mounts ignore the option.
+    return mountIslandWithBoundary(opts as MountIslandOptions & { boundary: IslandBoundary });
+  }
   // Shell→worker callables: callbackProp() markers marshal to {__cb:id}
   // wire handles; the island's table keeps the real functions and the
   // driver's emit-case routes worker-side invocations back here.

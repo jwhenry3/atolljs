@@ -14,7 +14,7 @@
  * Framework-neutral by construction: this entry imports no framework — React's
  * reconciler adapter lives in `@atolljs/react-island/worker`.
  */
-export { definePolyWorker, defineMonoWorker } from './defineWorkers';
+export { definePolyWorker, defineMonoWorker, registerIslandApp } from './defineWorkers';
 export type {
   ImperativeIslandApp,
   Instance,

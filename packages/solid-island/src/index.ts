@@ -61,6 +61,7 @@ import {
 import type {
   IslandAppLike,
   IslandAppProps,
+  IslandBoundary,
   IslandClient,
   IslandContract,
   IslandContractEventHandler,
@@ -119,6 +120,12 @@ export interface CreateIslandOptions<A = string> {
   onReady?: (island: IslandHandle) => void;
   /** Mount/update errors surface here instead of an unhandled rejection. */
   onError?: (err: unknown) => void;
+  /**
+   * Error boundary — `loading`/`error` DOM render functions plus a retry
+   * policy covering mount failures and runtime worker crashes (the
+   * composable's `status`/`error` signals still track the outcome).
+   */
+  boundary?: IslandBoundary;
 }
 
 export interface CreateIslandResult {
@@ -259,6 +266,7 @@ export function createIsland<A = string>(
         onEvent: (name, payload) => options.onEvent?.(name, payload),
         onActivity: () => options.onActivity?.(),
         slots: options.slots,
+        boundary: options.boundary,
       });
     } catch (err) {
       if (!disposed) fail(err);

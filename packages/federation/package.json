@@ -1,0 +1,42 @@
+{
+  "name": "@atolljs/federation",
+  "version": "0.0.0",
+  "description": "Controlled module federation for Atoll islands — a host worker that imports remote app modules into one realm, a shared-dependency scope with version negotiation, and remote manifests",
+  "homepage": "https://jwhenry3.github.io/atolljs/consumer/quickstart/",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./worker": "./src/worker.ts",
+    "./vite": "./src/vite.ts"
+  },
+  "files": [
+    "src",
+    "dist"
+  ],
+  "scripts": {
+    "build": "node ../../scripts/build-lib.mjs"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  },
+  "peerDependencies": {
+    "@atolljs/core": "0.0.0",
+    "@atolljs/islands": "0.0.0",
+    "vite": ">=5"
+  },
+  "peerDependenciesMeta": {
+    "vite": {
+      "optional": true
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jwhenry3/atolljs",
+    "directory": "packages/federation"
+  },
+  "bugs": {
+    "url": "https://github.com/jwhenry3/atolljs/issues"
+  },
+  "license": "MIT"
+}

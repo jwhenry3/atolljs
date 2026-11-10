@@ -59,6 +59,7 @@ import {
 import type {
   IslandAppLike,
   IslandAppProps,
+  IslandBoundary,
   IslandClient,
   IslandContract,
   IslandContractEventHandler,
@@ -117,6 +118,12 @@ export interface UseIslandOptions {
   onReady?: (island: IslandHandle) => void;
   /** Mount/update errors surface here instead of an unhandled rejection. */
   onError?: (err: unknown) => void;
+  /**
+   * Error boundary — `loading`/`error` DOM render functions plus a retry
+   * policy covering mount failures and runtime worker crashes (the
+   * composable's own `status`/`error` state still tracks the outcome).
+   */
+  boundary?: IslandBoundary;
 }
 
 export interface UseIslandReturn {
@@ -196,6 +203,7 @@ export function useIsland(options: UseIslandOptions): UseIslandReturn {
         onEvent: (name, payload) => options.onEvent?.(name, payload),
         onActivity: () => options.onActivity?.(),
         slots: options.slots,
+        boundary: options.boundary,
       });
       if (gen !== generation) {
         mounted.destroy();
@@ -300,6 +308,8 @@ export interface AtollIslandProps {
   onReady?: (island: IslandHandle) => void;
   /** Mount/update errors surface here instead of an unhandled rejection. */
   onError?: (err: unknown) => void;
+  /** Error boundary — see UseIslandOptions.boundary. */
+  boundary?: IslandBoundary;
 }
 
 /**
@@ -370,6 +380,12 @@ export const AtollIsland = defineComponent({
       required: false,
       default: undefined,
     },
+    boundary: {
+      type: Object as PropType<IslandBoundary>,
+      required: false,
+      default: undefined,
+      skipCheck: true,
+    },
   },
   setup(props, { expose }) {
     // The props object Vue hands setup() is reactive — getters/wrappers
@@ -386,6 +402,7 @@ export const AtollIsland = defineComponent({
       onActivity: () => props.onActivity?.(),
       onReady: (islandHandle) => props.onReady?.(islandHandle),
       onError: (err) => props.onError?.(err),
+      boundary: props.boundary,
     });
     expose({ handle: island.handle, status: island.status, error: island.error });
     return () => h('div', { class: 'atoll-island', ref: island.host });
@@ -430,6 +447,8 @@ export interface IslandShellProps {
   /** Worker-DOM transclusion slots — element callbacks, NOT Vue slots
    *  (see AtollIslandProps.slots). */
   slots?: Record<string, (el: HTMLElement | null) => void>;
+  /** Error boundary — see UseIslandOptions.boundary. */
+  boundary?: IslandBoundary;
   /** Attributes for the island's container div (class/id/style/data-*). */
   containerProps?: Record<string, unknown>;
 }
@@ -445,6 +464,7 @@ const SHELL_PROP_KEYS: ReadonlySet<string> = new Set([
   'onError',
   'slots',
   'containerProps',
+  'boundary',
 ]);
 
 /**
@@ -486,6 +506,7 @@ function createIslandProxy(
         onActivity: () => (attrs.onActivity as UseIslandOptions['onActivity'])?.(),
         onReady: (islandHandle) => (attrs.onReady as UseIslandOptions['onReady'])?.(islandHandle),
         onError: (err) => (attrs.onError as UseIslandOptions['onError'])?.(err),
+        boundary: attrs.boundary as UseIslandOptions['boundary'],
       });
       expose({ handle: island.handle, status: island.status, error: island.error });
       return () => {

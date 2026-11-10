@@ -1,6 +1,10 @@
 import type { ServiceMethod, TaskRunner } from '../service';
 import type { SharedAccess, SharedMemory, SharedSpec } from '../contract/sharedMemory';
-import type { MemoryConfig, Prettify } from '../contract/types';
+import type {
+  MemoryConfig,
+  Prettify,
+  WorkerLifecycleListener,
+} from '../contract/types';
 import { WorkerPool, type RunOptions } from './workerPool';
 import { DedicatedWorker } from './dedicatedWorker';
 import type {
@@ -123,6 +127,13 @@ export interface ConnectWorkerConfig<S extends SharedSpec> {
   maxQueue?: number;
   /** Default true — a crashed worker is replaced and its in-flight calls reject. */
   respawn?: boolean;
+  /**
+   * Lifecycle observer — fires on worker 'error' (before respawn),
+   * 'respawn', and 'terminate'. For per-callsite subscriptions (island
+   * boundaries, telemetry) prefer `client.onWorkerEvent(fn)`, which can be
+   * attached after connect and supports multiple listeners.
+   */
+  onLifecycle?: WorkerLifecycleListener;
   /** Default per-call timeout ms (`client.with({ timeout })` overrides). */
   taskTimeout?: number;
   /** Default true: pool spawns on first method call (or start()). False spawns immediately. */
@@ -153,6 +164,13 @@ export type WorkerClient<W extends WorkerDefinition, S extends SharedSpec> = Wor
    */
   readonly pool: WorkerRunner<S> | null;
   readonly sharedMemory: ConnectWorkerConfig<S>['sharedMemory'] | undefined;
+  /**
+   * Subscribe to worker lifecycle transitions ('error' | 'respawn' |
+   * 'terminate') — the crash-detection seam error boundaries build on.
+   * Listeners attach lazily: subscribing before the pool spawns still sees
+   * every event. Returns the unsubscribe.
+   */
+  onWorkerEvent(fn: WorkerLifecycleListener): () => void;
 };
 
 /**
@@ -181,6 +199,9 @@ export function connectWorker<
   S extends SharedSpec = W extends WorkerDefinition<infer X> ? X : SharedSpec,
 >(config: ConnectWorkerConfig<S>): WorkerClient<W, S> {
   let pool: WorkerRunner<S> | null = null;
+  // Lifecycle subscribers register before/after spawn identically — the set
+  // outlives any single runner, and the runner's config fan-out reads it.
+  const lifecycleSubs = new Set<WorkerLifecycleListener>();
   const spawn = (): WorkerRunner<S> => {
     if (pool) return pool;
     const count = resolveWorkerCount(config.workers ?? config.poolSize);
@@ -195,6 +216,10 @@ export function connectWorker<
       memory: config.memory,
       respawn: config.respawn,
       taskTimeout: config.taskTimeout,
+      onLifecycle: (event: Parameters<WorkerLifecycleListener>[0]) => {
+        config.onLifecycle?.(event);
+        for (const fn of [...lifecycleSubs]) fn(event);
+      },
     };
     pool =
       count === 1
@@ -223,6 +248,10 @@ export function connectWorker<
     },
     get sharedMemory() {
       return config.sharedMemory;
+    },
+    onWorkerEvent: (fn: WorkerLifecycleListener): (() => void) => {
+      lifecycleSubs.add(fn);
+      return () => lifecycleSubs.delete(fn);
     },
   };
 

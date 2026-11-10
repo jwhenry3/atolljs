@@ -27,6 +27,9 @@ repository: internals, contracts, and conventions.
 | `examples/mfe`, `examples/*-host`, inter-framework contract demos | [islands-worker.md](islands-worker.md) (Contracts) |
 | Contract `worker` pointing at a CDN/remote bundle | [islands-remote.md](islands-remote.md) |
 | `examples/mfe-publish` + `examples/mfe-consumer`, publish/consume pair | [islands-remote.md](islands-remote.md) |
+| `packages/federation`, `defineFederationHost`, remote app modules, shared-dep scope | [federation.md](federation.md) · [federation-getting-started.md](federation-getting-started.md) |
+| `mountIsland({ boundary })`, facade `boundary` props, `onWorkerEvent` crash detection | [error-boundaries.md](error-boundaries.md) |
+| Writing tests — `InProcessWorker`, `handlerModules`, vitest/happy-dom patterns | [testing.md](testing.md) |
 | Writing a new `packages/<fw>` binding or `<fw>-island` renderer | [porting.md](porting.md) |
 | `packages/cli`, the `atoll` scaffold/doctor bin | `packages/cli/README.md` |
 | `packages/nx`, Nx generators/executors wrapping the CLI | `packages/nx/README.md` |
@@ -71,6 +74,10 @@ Framework bindings: **backend**:
 - [islands-worker.md](islands-worker.md), app kinds, proxy DOM, `installDomShim`, `emit`/`callbackProp`/`Slot`, instance discipline, testing
 - [islands-frameworks.md](islands-frameworks.md), the `*-island` packages, mixed registries, bundle composition, real-library limits
 - [islands-remote.md](islands-remote.md), worker bundles served from another origin (CORS/COEP, versioned URLs, contract pairing)
+- [federation.md](federation.md), `defineFederationHost` — remote app modules imported into one worker realm, shared-dependency scope, manifests
+  · [federation-getting-started.md](federation-getting-started.md), the end-to-end walkthrough
+- [error-boundaries.md](error-boundaries.md), `mountIsland({ boundary })` — state render fns, retry policy, the `onWorkerEvent` lifecycle seam
+- [testing.md](testing.md), `InProcessWorker` — the in-process `Worker` double, `handlerModules`, happy-dom patterns
 
 ## Deferred work
 

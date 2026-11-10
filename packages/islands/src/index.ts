@@ -22,6 +22,17 @@ export type {
   MountIslandOptions,
 } from './island';
 
+export { mountIslandWithBoundary } from './boundary';
+export type {
+  BoundaryContent,
+  IslandBoundary,
+  IslandBoundaryContext,
+  IslandBoundaryErrorContext,
+  IslandBoundaryHandle,
+  IslandBoundaryPhase,
+  IslandBoundaryState,
+} from './boundary';
+
 export { makeDoorbell } from './memory';
 export type { DoorbellSpec } from './memory';
 

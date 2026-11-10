@@ -62,6 +62,7 @@ import {
 import type {
   IslandAppLike,
   IslandAppProps,
+  IslandBoundary,
   IslandClient,
   IslandContract,
   IslandContractEventHandler,
@@ -127,6 +128,13 @@ export interface IslandProps<A = string>
   onReady?: (island: IslandHandle) => void;
   /** Mount/update errors surface here instead of an unhandled rejection. */
   onError?: (err: unknown) => void;
+  /**
+   * Error boundary — `loading`/`error` render functions (DOM nodes) plus a
+   * retry policy covering mount failures and runtime worker crashes. The
+   * render fns are framework-free; to fall back to JSX, render into a
+   * detached node with createRoot or portal it in yourself.
+   */
+  boundary?: IslandBoundary;
   /** The container div (React 19 ref-as-prop). */
   ref?: Ref<HTMLDivElement>;
 }
@@ -144,6 +152,7 @@ export function Island<A = string>({
   slots,
   onReady,
   onError,
+  boundary,
   ref,
   ...rest
 }: IslandProps<A>): ReactElement {
@@ -242,6 +251,7 @@ export function Island<A = string>({
           onEvent: (name, payload) => onEventRef.current?.(name, payload),
           onActivity: () => onActivityRef.current?.(),
           slots: slotProxy,
+          boundary,
         });
         if (cancelled) {
           handle.destroy();
@@ -322,6 +332,8 @@ export interface IslandShellProps {
   onError?: (err: unknown) => void;
   /** Transclusion slots — see IslandProps.slots. */
   slots?: Record<string, ReactNode>;
+  /** Error boundary — see IslandProps.boundary. */
+  boundary?: IslandBoundary;
   /** Rendered while the worker mounts — the lazy-side fallback. */
   fallback?: ReactNode;
   /**
@@ -343,6 +355,7 @@ const SHELL_PROP_KEYS: ReadonlySet<string> = new Set([
   'onError',
   'slots',
   'fallback',
+  'boundary',
   'containerProps',
 ]);
 
@@ -445,6 +458,7 @@ function ProxyIsland({
           setReady(true);
         }}
         onError={shell.onError}
+        boundary={shell.boundary}
         {...shell.containerProps}
       />
     </>

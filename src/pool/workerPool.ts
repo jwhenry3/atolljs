@@ -1,7 +1,7 @@
 import type { MemoryManager } from './memory';
 import { PoolQueueFullError, TaskAbortedError, TaskTimeoutError, WorkerCrashedError } from './errors';
 import { SharedAccess, SharedMemory, SharedSpec } from '../contract/sharedMemory';
-import { MemoryPersistence, PoolTasks, TaskContract, TaskMap, TaskResult, WorkerPoolConfig } from '../contract/types';
+import { MemoryPersistence, PoolTasks, TaskContract, TaskMap, TaskResult, WorkerLifecycleEvent, WorkerLifecycleListener, WorkerPoolConfig } from '../contract/types';
 import { devtoolsEnabled, emitDevtools, estimateCloneBytes, nextDevtoolsId, type EmittedDevtoolsEvent } from '../devtools';
 import { measureTaskCall } from '../userTiming';
 import { forwardWorkerDevtools, sendInit, setupChannelMemory, type ChannelMemory } from './workerChannel';
@@ -98,6 +98,7 @@ class WorkerPoolImpl<S extends SharedSpec = SharedSpec> {
   private readonly concurrency: number;
   private readonly maxQueue: number;
   private readonly respawn: boolean;
+  private readonly onLifecycle?: WorkerLifecycleListener;
   private readonly taskTimeout?: number;
   private closed = false;
   /** Dashboard fault injection (`pool.chaos`); null unless devtools set it. */
@@ -133,6 +134,7 @@ class WorkerPoolImpl<S extends SharedSpec = SharedSpec> {
     this.concurrency = config.concurrency ?? 1;
     this.maxQueue = config.maxQueue ?? Infinity;
     this.respawn = config.respawn ?? true;
+    this.onLifecycle = config.onLifecycle;
     this.taskTimeout = config.taskTimeout;
     this.label = config.name;
     this.poolId = nextDevtoolsId('pool', config.name);
@@ -264,6 +266,11 @@ class WorkerPoolImpl<S extends SharedSpec = SharedSpec> {
     this.checkDrained();
   }
 
+  /** Fan out a lifecycle transition — error boundaries subscribe through this. */
+  private lifecycle(type: WorkerLifecycleEvent['type'], slot?: number, message?: string): void {
+    this.onLifecycle?.({ type, poolId: this.poolId, slot, message });
+  }
+
   private handleWorkerError(slot: WorkerSlot, event: unknown) {
     if (this.closed) return; // pool terminated — a late error event can't respawn
     const e = event as { message?: string; error?: Error } | undefined;
@@ -271,6 +278,7 @@ class WorkerPoolImpl<S extends SharedSpec = SharedSpec> {
     poolLog.warn(`worker error: ${message}`);
     const idx = this.slots.indexOf(slot);
     emitDevtools({ type: 'worker:error', poolId: this.poolId, slot: idx, message });
+    this.lifecycle('error', idx >= 0 ? idx : undefined, message);
 
     // Reject the dead worker's in-flight tasks. Orphaned (already
     // aborted/timed-out) entries are dropped without re-counting.
@@ -293,6 +301,7 @@ class WorkerPoolImpl<S extends SharedSpec = SharedSpec> {
       poolLog.info('respawning crashed worker');
       this.addWorker(this.spawn());
       emitDevtools({ type: 'worker:respawn', poolId: this.poolId, slot: this.slots.length - 1 });
+      this.lifecycle('respawn', this.slots.length - 1);
     } else if (this.slots.length === 0) {
       // No workers left to ever serve the queue.
       for (const entry of this.queue.splice(0)) {
@@ -495,6 +504,7 @@ class WorkerPoolImpl<S extends SharedSpec = SharedSpec> {
 
   public terminate(): void {
     this.closed = true;
+    this.lifecycle('terminate');
     this.devtoolsOff?.();
     // Final flush + release — fire-and-forget; terminate() stays synchronous.
     void this.persistence?.stop()?.catch?.((e: unknown) =>

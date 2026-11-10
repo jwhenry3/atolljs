@@ -45,6 +45,7 @@ import {
 } from '@atolljs/islands';
 import type {
   IslandAppLike,
+  IslandBoundary,
   IslandClient,
   IslandContract,
   IslandContractEventHandler,
@@ -101,6 +102,11 @@ export interface IslandActionOptions {
   onReady?: (island: IslandHandle) => void;
   /** Mount/update errors surface here instead of an unhandled rejection. */
   onError?: (err: unknown) => void;
+  /**
+   * Error boundary — `loading`/`error` DOM render functions plus a retry
+   * policy covering mount failures and runtime worker crashes.
+   */
+  boundary?: IslandBoundary;
   /** Fired when Svelte destroys the action — before the island tears down. */
   onDestroy?: () => void;
 }
@@ -213,6 +219,7 @@ export const island: Action<HTMLElement, IslandActionOptions> = (node, options) 
         onEvent: (name, payload) => latest.onEvent?.(name, payload),
         onActivity: () => latest.onActivity?.(),
         slots: slotProxy,
+        boundary: latest.boundary,
       });
       if (destroyed) {
         mounted.destroy();

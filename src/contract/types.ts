@@ -41,6 +41,25 @@ export interface MemoryPersistence {
   stop(): void | Promise<void>;
 }
 
+/**
+ * A worker lifecycle transition, emitted by pools and dedicated workers
+ * through `onLifecycle`/`onWorkerEvent` — the seam error boundaries build
+ * on. `'error'` fires when a worker's error event lands (before respawn);
+ * `'respawn'` when the replacement is attached; `'terminate'` when the
+ * runner tears down deliberately.
+ */
+export interface WorkerLifecycleEvent {
+  type: 'error' | 'respawn' | 'terminate';
+  /** The emitting runner's devtools correlation id ('worker-N'/'pool-N'). */
+  poolId: string;
+  /** Worker slot in a pool; always 0 for a dedicated worker. */
+  slot?: number;
+  /** The crash/error message on 'error' events. */
+  message?: string;
+}
+
+export type WorkerLifecycleListener = (event: WorkerLifecycleEvent) => void;
+
 export interface WorkerPoolConfig<S extends SharedSpec = SharedSpec, T extends TaskMap = TaskMap> {
   /** Worker entry as a URL — e.g. `new URL('./worker.ts', import.meta.url)`. */
   workerUrl?: URL;
@@ -85,6 +104,13 @@ export interface WorkerPoolConfig<S extends SharedSpec = SharedSpec, T extends T
   maxQueue?: number;
   /** Default true — a worker 'error' rejects its in-flight tasks and spawns a replacement. */
   respawn?: boolean;
+  /**
+   * Lifecycle observer — called on worker 'error' (before respawn),
+   * 'respawn', and 'terminate'. Island boundaries subscribe through
+   * `client.onWorkerEvent` to detect crashes; config-level listeners get
+   * the same events.
+   */
+  onLifecycle?: WorkerLifecycleListener;
   /**
    * Default per-task timeout in ms (per-call `options.timeout` overrides).
    * The timer starts at enqueue, so it bounds queue-wait + execution together.

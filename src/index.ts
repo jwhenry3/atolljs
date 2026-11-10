@@ -48,6 +48,8 @@ export type {
   MemoryPersistence,
   SharedWorkerConfig,
   ViewType,
+  WorkerLifecycleEvent,
+  WorkerLifecycleListener,
   WorkerPoolConfig,
 } from './contract/types';
 

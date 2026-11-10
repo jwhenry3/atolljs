@@ -122,6 +122,7 @@ worker page) where respawn cost dominates re-entry.
 | `mode` | `'push'` (default: SAB doorbell) or `'poll'` (50ms drain). With the `worker` shorthand, `'poll'` also builds a doorbell-free client: no SharedArrayBuffer, no isolation headers. |
 | `mountTimeout` | Bounds the mount handshake: default 15s, `0` disables. A worker entry that loads but never answers rejects with a named error instead of pending forever; hard failures reject immediately. A failed mount releases the instance and terminates an island-owned client. |
 | `keepAlive` | This mount's `destroy()` leaves the client resident-but-idle instead of terminating — the mount-level version of `connectIslandWorker({ keepAlive: true })`. Either flag marks the client warm for this island's teardown. |
+| `boundary` | Error boundary — `loading`/`error` state render functions plus `retry`/`onError`, covering mount rejection and runtime worker crashes (detected via the client's lifecycle events). Resolves an `IslandBoundaryHandle` instead of rejecting. Ignored on nested mounts. See [error-boundaries.md](error-boundaries.md). |
 
 Driver-side prop application follows DOM conventions: `class`/`className`
 write the property, `onX` refs become real listeners, and `style` objects
@@ -171,7 +172,13 @@ Three levels, easy to conflate:
 
 The definition only declares what a worker *can* render. Both definers build
 the same runtime; they differ in the registry: many apps for a PolyWorker,
-exactly one for a MonoWorker. The **mount site** decides the topology:
+exactly one for a MonoWorker. The registry isn't fixed at define-time:
+`PolyWorkerRegistry.loadApp` is a lazy loader `mount` consults on an
+unregistered key (a defined result registers under that name for later
+mounts) — `@atolljs/federation` builds remote app imports on it, and its
+presence disables the single-registered-app name-blind fallback so a
+loader host resolves mounts by exact key only. The **mount site** decides
+the topology:
 
 ```ts
 // main thread: a factory over the PolyWorker entry (render.worker.ts)

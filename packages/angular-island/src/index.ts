@@ -79,6 +79,7 @@ import type {
 import { contractWorkerOf, islandAppNameOf, mountIsland } from '@atolljs/islands';
 import type {
   IslandAppLike,
+  IslandBoundary,
   IslandClient,
   IslandContract,
   IslandContractEvents,
@@ -257,6 +258,11 @@ export abstract class AtollIslandBase<C = unknown> implements OnInit, OnChanges,
   @Input() onReady?: (handle: IslandHandle) => void;
   /** Mount/update errors surface here instead of an unhandled rejection. */
   @Input() onError?: (err: unknown) => void;
+  /**
+   * Error boundary — `loading`/`error` DOM render functions plus a retry
+   * policy covering mount failures and runtime worker crashes.
+   */
+  @Input() boundary?: IslandBoundary;
 
   private readonly host = inject(ElementRef) as ElementRef<HTMLElement>;
   private island: IslandHandle | null = null;
@@ -343,6 +349,7 @@ export abstract class AtollIslandBase<C = unknown> implements OnInit, OnChanges,
             (this.onEvent as ((n: string, p: unknown) => void) | undefined)?.(name, payload),
           onActivity: () => this.onActivity?.(),
           slots: this.slotDelegate,
+          boundary: this.boundary,
         };
         const handle = await mountIsland(
           client != null

@@ -34,6 +34,11 @@ contract. The contract is still the binding, `app` key, prop schema, event
 schemas, worker factory, the remote URL only changes where the factory
 points.
 
+(The alternative remote topology — remote *app modules* imported into one
+host worker's realm, sharing dependencies — is federation:
+[federation.md](federation.md). Worker bundles maximize isolation;
+federation maximizes sharing.)
+
 A working end-to-end pair lives in [`examples/mfe-publish`](../examples/mfe-publish/)
 (producer, contract + `vite.mfe.config.ts` publish build) and
 [`examples/mfe-consumer`](../examples/mfe-consumer/) (shell, imports the
