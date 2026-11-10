@@ -45,7 +45,7 @@ import { marshalCallbackProps, CALLBACK_EVENT } from './callbackProps';
 import { trackIslandForDevtools } from './devtoolsCommands';
 import { propsPreview } from './devtoolsPreview';
 import { mountIslandWithBoundary } from './boundary';
-import type { IslandBoundary } from './boundary';
+import type { IslandBoundary, IslandBoundaryHandle } from './boundary';
 import type { ProxyElement } from './worker/dom/element';
 
 export type Mode = 'push' | 'poll';
@@ -482,6 +482,10 @@ export const registerSubIslandMounter = (
 const isProxyMountTarget = (el: unknown): el is ProxyElement =>
   typeof (el as { doc?: { instance?: unknown } } | null)?.doc?.instance === 'string';
 
+export function mountIsland(
+  opts: MountIslandOptions & { boundary: IslandBoundary },
+): Promise<IslandBoundaryHandle>;
+export function mountIsland(opts: MountIslandOptions): Promise<IslandHandle>;
 export async function mountIsland(opts: MountIslandOptions): Promise<IslandHandle> {
   const {
     el: target, onEvent, onActivity, onOps, slots, mode: initialMode, mountTimeout,

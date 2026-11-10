@@ -47,6 +47,24 @@
   generators/executors are subprocess-spawning adapters over the CLI, the
   same shape as the already-excluded `packages/cli/**`.
 
+### Security Vulnerabilities Addressed
+
+- Dev tooling bumped inside the `min-release-age` window: `vitest` +
+  `@vitest/coverage-v8` 4.1.12 (`@vitest/mocker` code injection, Windows
+  backslash traversal), `vite` 8.3.5 (launch-editor command injection,
+  `server.fs` escapes), `happy-dom` 21.0.4 (host code execution, SSRF,
+  cookie scope forgery), `zod` 4.6.7 (oversized-collection memory
+  exhaustion).
+- `overrides` bumps nx's `undici` pin to 7.30.1 (eight advisories under
+  `>=7.0.0 <7.30.1`: EventSource/decompress DoS, SRI bypass, cache
+  poisoning, TLS validation bypass, WS PONG flooding) and forces
+  `minimatch` 11.0.4 across the `@nx/devkit`/`nx` subtree (globparts DoS —
+  `audit fix` alone would have downgraded `@nx/devkit` to 18.x).
+- `fast-uri` (ajv scheme spoofing) and `seroval` (solid-js serialization
+  code injection) ride the parents' ranges to 4.2.3/3.1.9 and 1.6.12.
+- Residual: `deepmerge` (via `@sveltejs/vite-plugin-svelte`) has no fixed
+  release upstream — low severity, dev-only, accepted.
+
 ## 0.1.13
 
 ### `@atolljs/nx`: Nx plugin — generators and executors wrapping the CLI
